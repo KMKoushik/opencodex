@@ -24,6 +24,8 @@ Open a project using an absolute directory path (or `~/…`). Electron also prov
 
 The foundation includes service status, project selection, paginated real session lists, session metadata, and live list refresh. Chat, prompting, permission handling, terminals, and diffs are the next product layer.
 
+Themes live in **Settings → Appearance**. Choose Light, Dark, or System mode, then pick a separate light and dark theme, such as OpenCodex, Catppuccin (Latte, Mocha, Macchiato, Frappé), GitHub, Nord, Gruvbox, Solarized, Rosé Pine, Tokyo Night, Dracula, Everforest, or One. As in Codex, each theme is three seed colors — accent, background, and foreground — plus a contrast level; you can adjust any of them, and every other color is derived from them. Choices persist across launches.
+
 ## Build and run
 
 ```sh

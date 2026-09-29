@@ -70,20 +70,41 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
   page.on('pageerror', (error) => errors.push(error.message));
   try {
     await page.goto(gateway.url);
-    await expect(page.getByText('Connected · v2.0.19')).toBeVisible();
     await page.getByLabel('Project directory', { exact: true }).fill(directory);
     await page.getByRole('button', { name: 'Open', exact: true }).click();
     await page.getByRole('button', { name: 'Explore the project' }).click();
     await expect(page.getByRole('heading', { name: 'Explore the project' })).toBeVisible();
-    await expect(page.getByText('Live updates connected', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await expect(page.getByText('Connected · v2.0.19')).toBeVisible();
+    await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Back to app' }).click();
     upstream.update();
     await expect(
       page.getByRole('heading', { name: 'Updated through the event stream' }),
     ).toBeVisible();
+
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('button', { name: 'Toggle sidebar' }).click();
     await page.getByRole('button', { name: 'Close project' }).click();
-    await expect(page.getByRole('heading', { name: 'A place to build.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Open a project' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Toggle sidebar' }).click();
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: 'Toggle sidebar' }).click();
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await expect(page.getByRole('radio', { name: 'System' })).toBeChecked();
+    await page.getByRole('button', { name: 'Light theme' }).click();
+    await page.getByRole('option', { name: 'Catppuccin Latte' }).click();
+    await page.getByRole('button', { name: 'Dark theme' }).focus();
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('button', { name: 'Dark theme' })).toHaveText(/Catppuccin Mocha/);
+    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(239, 241, 245)');
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(30, 30, 46)');
+    await page.reload();
+    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(30, 30, 46)');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
@@ -119,8 +140,6 @@ test('Electron: bundled gateway, isolated renderer, and native folder bridge', a
       info.outputPath('profile'),
     );
     const page = await application.firstWindow();
-    await expect(page.getByText('Connected · v2.0.19')).toBeVisible();
-    await expect(page.getByText('Desktop', { exact: true })).toBeVisible();
     await application.evaluate(({ dialog }, selected) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [selected] });
     }, directory);
@@ -128,15 +147,22 @@ test('Electron: bundled gateway, isolated renderer, and native folder bridge', a
     await page.getByRole('button', { name: 'Explore the project' }).click();
     await expect(page.getByRole('heading', { name: 'Explore the project' })).toBeVisible();
     expect(await page.evaluate(() => 'require' in window || 'process' in window)).toBe(false);
-    await page.getByRole('button', { name: 'Switch to light theme' }).click();
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('radio', { name: 'Dark' }).click();
+    await page.getByRole('button', { name: 'Dark theme' }).click();
+    await page.getByRole('option', { name: 'Catppuccin Macchiato' }).click();
     await expect
-      .poll(() => page.evaluate(() => window.desktop?.getPreferences()))
-      .toMatchObject({ theme: 'light' });
+      .poll(async () => {
+        const preferences = await page.evaluate(() => window.desktop?.getPreferences());
+        return JSON.parse(preferences?.theme ?? '{}');
+      })
+      .toMatchObject({ mode: 'dark', dark: { preset: 'catppuccin-macchiato' } });
     await application.close();
     application = await launch();
     const reopened = await application.firstWindow();
-    await expect(reopened.getByRole('heading', { name: 'Welcome to project.' })).toBeVisible();
-    await expect(reopened.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expect(reopened.getByRole('heading', { name: 'project' })).toBeVisible();
+    await expect(reopened.locator('body')).toHaveCSS('background-color', 'rgb(36, 39, 58)');
   } finally {
     await application.close();
     await upstream.close();

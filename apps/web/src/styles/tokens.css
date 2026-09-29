@@ -1,29 +1,40 @@
+/*
+ * Semantic tokens. Colors are derived at runtime from the selected theme
+ * (see features/theme/theme.ts); these values are the default dark theme,
+ * used only until the first theme is applied. Components use these names
+ * only, never raw colors.
+ */
 :root {
   color-scheme: dark;
-  --background: #1b1c1b;
-  --sidebar: #171817;
-  --surface: #222321;
-  --surface-hover: #2a2c28;
-  --foreground: #e9eae5;
-  --muted: #969b90;
-  --border: #33362f;
-  --accent: #d9e5bb;
-  --accent-foreground: #293021;
-  --error: #eda698;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'SFMono-Regular', Consolas, monospace;
-}
+  --surface: #181818;
+  --surface-under: #141414;
+  --elevated: #232323;
+  --control: #2f2f2f;
+  --text: #ffffff;
+  --text-secondary: #bcbcbc;
+  --text-tertiary: #8a8a8a;
+  --border: rgb(255 255 255 / 0.084);
+  --border-heavy: rgb(255 255 255 / 0.156);
+  --hover: rgb(255 255 255 / 0.068);
+  --selected: rgb(255 255 255 / 0.1);
+  --secondary: rgb(255 255 255 / 0.052);
+  --secondary-hover: rgb(255 255 255 / 0.094);
+  --primary: #ffffff;
+  --primary-hover: #dfdfdf;
+  --on-primary: #181818;
+  --accent: #339cff;
+  --accent-soft: #1e3449;
+  --accent-text: #339cff;
+  --on-accent: #000000;
+  --error: #ff6764;
+  --success: #40c977;
+  --scrim: rgb(0 0 0 / 0.5);
+  --shadow: 0 12px 32px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.25);
 
-:root[data-theme='light'] {
-  color-scheme: light;
-  --background: #fafaf7;
-  --sidebar: #f0f1eb;
-  --surface: #ffffff;
-  --surface-hover: #e8ebe1;
-  --foreground: #24281f;
-  --muted: #696f61;
-  --border: #dddfd5;
-  --accent: #3d552f;
-  --accent-foreground: #f5f8ee;
-  --error: #a33a2d;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono:
+    ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --sidebar-width: 272px;
+  --toolbar-height: 46px;
+  --row-height: 30px;
 }

@@ -17,7 +17,10 @@ async function createWindow() {
     height: 840,
     minWidth: 760,
     minHeight: 560,
-    backgroundColor: '#1b1c1b',
+    backgroundColor: '#181818',
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 16, y: 15 } }
+      : {}),
     show: false,
     webPreferences: {
       preload: fileURLToPath(new URL('../preload/index.cjs', import.meta.url)),

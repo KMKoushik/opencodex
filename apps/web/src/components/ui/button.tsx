@@ -4,10 +4,10 @@ import { cn } from '../../lib/utils';
 
 const variants = cva('button', {
   variants: {
-    variant: { default: 'button-primary', secondary: 'button-secondary', ghost: 'button-ghost' },
-    size: { default: '', icon: 'button-icon' },
+    variant: { primary: 'button-primary', secondary: 'button-secondary', ghost: 'button-ghost' },
+    size: { default: '', sm: 'button-sm', icon: 'button-icon' },
   },
-  defaultVariants: { variant: 'default', size: 'default' },
+  defaultVariants: { variant: 'primary', size: 'default' },
 });
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof variants>;
