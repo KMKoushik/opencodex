@@ -1,0 +1,247 @@
+{
+  "canvas": { "width": 119, "height": 57 },
+  "boxes": [
+    {
+      "id": "ui",
+      "x": 2,
+      "y": 5,
+      "width": 72,
+      "height": 14,
+      "title": "SHARED UI / apps/web",
+      "color": "#7bb8ff"
+    },
+    {
+      "id": "browser",
+      "x": 5,
+      "y": 9,
+      "width": 30,
+      "height": 7,
+      "title": "BROWSER",
+      "color": "#7bb8ff"
+    },
+    {
+      "id": "renderer",
+      "x": 40,
+      "y": 9,
+      "width": 30,
+      "height": 7,
+      "title": "ELECTRON RENDERER",
+      "color": "#7bb8ff"
+    },
+    {
+      "id": "native",
+      "x": 89,
+      "y": 9,
+      "width": 28,
+      "height": 7,
+      "title": "ELECTRON MAIN",
+      "color": "#f6c177"
+    },
+    {
+      "id": "preferences",
+      "x": 89,
+      "y": 22,
+      "width": 28,
+      "height": 8,
+      "title": "DESKTOP PREFERENCES",
+      "color": "#f6c177"
+    },
+    {
+      "id": "gateway",
+      "x": 5,
+      "y": 24,
+      "width": 65,
+      "height": 8,
+      "title": "LOCAL GATEWAY",
+      "color": "#5eead4"
+    },
+    {
+      "id": "opencode",
+      "x": 5,
+      "y": 37,
+      "width": 65,
+      "height": 9,
+      "title": "OPENCODE 2.x SERVICE",
+      "color": "#c4a7ff"
+    },
+    {
+      "id": "contracts",
+      "x": 89,
+      "y": 34,
+      "width": 28,
+      "height": 10,
+      "title": "SHARED CONTRACTS",
+      "color": "#9ca6b5"
+    }
+  ],
+  "connectors": [
+    {
+      "points": [
+        [69, 12],
+        [88, 12]
+      ],
+      "color": "#f6c177"
+    },
+    {
+      "points": [
+        [103, 15],
+        [103, 21]
+      ],
+      "color": "#f6c177"
+    },
+    {
+      "points": [
+        [23, 18],
+        [23, 23]
+      ],
+      "color": "#7bb8ff"
+    },
+    {
+      "points": [
+        [55, 24],
+        [55, 19]
+      ],
+      "color": "#5eead4"
+    },
+    {
+      "points": [
+        [23, 31],
+        [23, 36]
+      ],
+      "color": "#7bb8ff"
+    },
+    {
+      "points": [
+        [55, 37],
+        [55, 32]
+      ],
+      "color": "#5eead4"
+    }
+  ],
+  "lines": [
+    {
+      "points": [
+        [2, 48],
+        [114, 48]
+      ],
+      "color": "#626c7a"
+    }
+  ],
+  "icons": [
+    { "id": "outline/browser", "x": 8, "y": 11, "width": 3, "height": 2, "color": "#7bb8ff" },
+    {
+      "id": "outline/device-desktop",
+      "x": 43,
+      "y": 11,
+      "width": 3,
+      "height": 2,
+      "color": "#7bb8ff"
+    },
+    {
+      "id": "outline/device-desktop",
+      "x": 92,
+      "y": 11,
+      "width": 3,
+      "height": 2,
+      "color": "#f6c177"
+    },
+    {
+      "id": "outline/file-settings",
+      "x": 92,
+      "y": 24,
+      "width": 3,
+      "height": 2,
+      "color": "#f6c177"
+    },
+    { "id": "outline/api", "x": 8, "y": 26, "width": 3, "height": 2, "color": "#5eead4" },
+    { "id": "outline/robot", "x": 8, "y": 39, "width": 3, "height": 2, "color": "#c4a7ff" },
+    {
+      "id": "outline/brackets-contain",
+      "x": 92,
+      "y": 36,
+      "width": 3,
+      "height": 2,
+      "color": "#9ca6b5"
+    }
+  ],
+  "texts": [
+    { "x": 2, "y": 0, "value": "OPENCODEX ARCHITECTURE", "color": "#ffffff" },
+    {
+      "x": 2,
+      "y": 2,
+      "value": "Two surfaces. One shared UI. One OpenCode backend.",
+      "color": "#aeb8c6"
+    },
+    { "x": 38, "y": 7, "value": "React + TypeScript + TanStack Query", "anchor": "center" },
+    { "x": 13, "y": 11, "value": "Browser app" },
+    { "x": 8, "y": 13, "value": "localStorage prefs" },
+    { "x": 8, "y": 14, "value": "Project + theme" },
+    { "x": 48, "y": 11, "value": "Desktop app" },
+    { "x": 43, "y": 13, "value": "Sandboxed renderer" },
+    { "x": 43, "y": 14, "value": "Native IPC available" },
+    { "x": 38, "y": 17, "value": "Project selection and session snapshots", "anchor": "center" },
+    { "x": 76, "y": 10, "value": "preload IPC", "color": "#f6c177" },
+    { "x": 76, "y": 14, "value": "native only", "color": "#f6c177" },
+    { "x": 97, "y": 11, "value": "apps/desktop" },
+    { "x": 92, "y": 13, "value": "Window lifecycle" },
+    { "x": 92, "y": 14, "value": "Native folder picker" },
+    { "x": 89, "y": 18, "value": "read / write", "color": "#f6c177" },
+    { "x": 97, "y": 24, "value": "User-data dir" },
+    { "x": 92, "y": 26, "value": "preferences.json" },
+    { "x": 92, "y": 27, "value": "Project + theme" },
+    { "x": 7, "y": 20, "value": "HTTP /api", "color": "#7bb8ff" },
+    { "x": 7, "y": 21, "value": "requests", "color": "#7bb8ff" },
+    { "x": 58, "y": 20, "value": "SSE", "color": "#5eead4" },
+    { "x": 58, "y": 21, "value": "refetch", "color": "#5eead4" },
+    { "x": 13, "y": 26, "value": "packages/gateway" },
+    { "x": 8, "y": 28, "value": "Hono routes + @opencode/client" },
+    { "x": 8, "y": 29, "value": "Service discovery; credentials stay here" },
+    { "x": 7, "y": 33, "value": "HTTP API", "color": "#7bb8ff" },
+    { "x": 7, "y": 34, "value": "official client", "color": "#7bb8ff" },
+    { "x": 58, "y": 33, "value": "Events", "color": "#5eead4" },
+    { "x": 13, "y": 39, "value": "Shared agent backend" },
+    { "x": 8, "y": 41, "value": "Owns session data and agent execution" },
+    { "x": 8, "y": 42, "value": "Model providers and tools live here" },
+    { "x": 8, "y": 43, "value": "Survives OpenCodex shutdown" },
+    { "x": 97, "y": 36, "value": "Shared types" },
+    { "x": 92, "y": 38, "value": "packages/contracts" },
+    { "x": 92, "y": 40, "value": "Zod API schemas" },
+    { "x": 92, "y": 41, "value": "Native bridge types" },
+    { "x": 89, "y": 45, "value": "Code, not a service", "color": "#aeb8c6" },
+    { "x": 2, "y": 50, "value": "RUNTIME HOSTING", "color": "#ffffff" },
+    { "x": 2, "y": 52, "value": "DEV", "color": "#7bb8ff" },
+    { "x": 15, "y": 52, "value": "Vite :5173 proxies /api to the gateway on :4310." },
+    { "x": 2, "y": 53, "value": "WEB BUILD", "color": "#5eead4" },
+    { "x": 15, "y": 53, "value": "Node gateway serves the UI and API on one loopback origin." },
+    { "x": 2, "y": 54, "value": "DESKTOP", "color": "#f6c177" },
+    {
+      "x": 15,
+      "y": 54,
+      "value": "Electron main hosts the gateway and built UI on a free loopback port."
+    }
+  ],
+  "requiredLabels": [
+    "OPENCODEX ARCHITECTURE",
+    "SHARED UI / apps/web",
+    "BROWSER",
+    "ELECTRON RENDERER",
+    "ELECTRON MAIN",
+    "preload IPC",
+    "packages/gateway",
+    "HTTP /api",
+    "SSE",
+    "OPENCODE 2.x SERVICE",
+    "Survives OpenCodex shutdown",
+    "packages/contracts",
+    "preferences.json",
+    "localStorage prefs",
+    "RUNTIME HOSTING"
+  ],
+  "style": {
+    "background": "#000000",
+    "foreground": "#f2f2f2",
+    "pointSize": 20,
+    "lineSpacing": 2,
+    "border": 36
+  }
+}

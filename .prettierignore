@@ -1,0 +1,9 @@
+.reference/
+node_modules/
+dist/
+out/
+release/
+coverage/
+bun.lock
+test-results/
+playwright-report/

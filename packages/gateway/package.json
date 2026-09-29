@@ -1,0 +1,20 @@
+{
+  "name": "@opencodex/gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/server.ts"
+  },
+  "scripts": {
+    "dev": "node --import tsx --watch src/cli.ts",
+    "start": "node --import tsx src/cli.ts --production"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.0",
+    "@opencode/client": "2.0.19",
+    "@opencodex/contracts": "workspace:*",
+    "hono": "^4.10.0",
+    "zod": "^4.1.0"
+  }
+}

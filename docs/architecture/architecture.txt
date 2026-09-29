@@ -1,0 +1,55 @@
+  OPENCODEX ARCHITECTURE
+
+  Two surfaces. One shared UI. One OpenCode backend.
+
+
+  ┌──────────────────────── SHARED UI / apps/web ────────────────────────┐
+  │                                                                      │
+  │                  React + TypeScript + TanStack Query                 │
+  │                                                                      │
+  │  ┌───────── BROWSER ──────────┐     ┌──── ELECTRON RENDERER ─────┐   │               ┌───── ELECTRON MAIN ──────┐
+  │  │                            │     │                            │   │  preload IPC  │                          │
+  │  │  <>   Browser app          │     │  <>   Desktop app          │   │               │  <>   apps/desktop       │
+  │  │                            │     │                            ├───┼──────────────▶│                          │
+  │  │  localStorage prefs        │     │  Sandboxed renderer        │   │               │  Window lifecycle        │
+  │  │  Project + theme           │     │  Native IPC available      │   │  native only  │  Native folder picker    │
+  │  └────────────────────────────┘     └────────────────────────────┘   │               └─────────────┬────────────┘
+  │                                                                      │                             │
+  │                Project selection and session snapshots               │                             │
+  └────────────────────┬─────────────────────────────────────────────────┘               read / write  │
+                       │                               ▲                                               │
+       HTTP /api       │                               │  SSE                                          │
+       requests        │                               │  refetch                                      ▼
+                       │                               │                                 ┌── DESKTOP PREFERENCES ───┐
+                       ▼                               │                                 │                          │
+     ┌──────────────────────── LOCAL GATEWAY ──────────┴─────────────┐                   │  <>   User-data dir      │
+     │                                                               │                   │                          │
+     │  <>   packages/gateway                                        │                   │  preferences.json        │
+     │                                                               │                   │  Project + theme         │
+     │  Hono routes + @opencode/client                               │                   │                          │
+     │  Service discovery; credentials stay here                     │                   └──────────────────────────┘
+     │                                                               │
+     └─────────────────┬─────────────────────────────────────────────┘
+                       │                               ▲
+       HTTP API        │                               │  Events
+       official client │                               │                                 ┌──── SHARED CONTRACTS ────┐
+                       │                               │                                 │                          │
+                       ▼                               │                                 │  <>   Shared types       │
+     ┌──────────────────── OPENCODE 2.x SERVICE ───────┴─────────────┐                   │                          │
+     │                                                               │                   │  packages/contracts      │
+     │  <>   Shared agent backend                                    │                   │                          │
+     │                                                               │                   │  Zod API schemas         │
+     │  Owns session data and agent execution                        │                   │  Native bridge types     │
+     │  Model providers and tools live here                          │                   │                          │
+     │  Survives OpenCodex shutdown                                  │                   └──────────────────────────┘
+     │                                                               │
+     └───────────────────────────────────────────────────────────────┘                   Code, not a service
+
+
+  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  RUNTIME HOSTING
+
+  DEV          Vite :5173 proxies /api to the gateway on :4310.
+  WEB BUILD    Node gateway serves the UI and API on one loopback origin.
+  DESKTOP      Electron main hosts the gateway and built UI on a free loopback port.
