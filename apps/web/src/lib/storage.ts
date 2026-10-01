@@ -1,6 +1,6 @@
 import type { DesktopPreferences, PreferenceKey } from '@opencodex/contracts/desktop';
 
-let nativePreferences: DesktopPreferences = { project: null, theme: null };
+let nativePreferences: DesktopPreferences = { project: null, projects: null, theme: null };
 
 export async function initializeStorage() {
   if (!window.desktop) return;
@@ -12,7 +12,7 @@ export async function initializeStorage() {
 }
 
 export function readStorage(key: PreferenceKey): string | null {
-  if (window.desktop) return nativePreferences[key];
+  if (window.desktop) return nativePreferences[key] ?? null;
   try {
     return localStorage.getItem(`opencodex:${key}`);
   } catch {

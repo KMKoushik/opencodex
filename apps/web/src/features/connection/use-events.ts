@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import type { OpenCodeEvent } from '@opencodex/contracts';
+import { updateStream, type LivePart } from '../chat/stream';
 
 export function useEvents(enabled: boolean) {
   const client = useQueryClient();
@@ -8,20 +10,83 @@ export function useEvents(enabled: boolean) {
     if (!enabled) return;
     const events = new EventSource('/api/events');
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let frame: number | undefined;
+    const pending = new Map<string, LivePart[]>();
+    const flushParts = () => {
+      frame = undefined;
+      for (const [id, parts] of pending) {
+        const key = ['chat', id, 'stream'];
+        if (client.getQueryCache().find({ queryKey: key, exact: true })?.getObserversCount())
+          client.setQueryData(key, parts);
+      }
+      pending.clear();
+    };
+    const changed = new Set<string>();
     const refresh = () => {
       if (timer) return;
       timer = setTimeout(() => {
         timer = undefined;
         void client.invalidateQueries({ queryKey: ['sessions'] });
+        void client.invalidateQueries({ queryKey: ['projects'] });
+        void client.invalidateQueries({ queryKey: ['active'] });
+        for (const id of changed)
+          void client.invalidateQueries({
+            queryKey: ['chat', id],
+            predicate: (query) => query.queryKey[2] !== 'stream',
+          });
+        changed.clear();
       }, 250);
     };
     events.addEventListener('ready', () => {
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      frame = undefined;
+      pending.clear();
       setLive(true);
       // Subscriptions are live-only. Refetch after every reconnect to recover missed changes.
       void client.invalidateQueries({ queryKey: ['connection'] });
+      client.setQueriesData<LivePart[]>(
+        { queryKey: ['chat'], predicate: (query) => query.queryKey[2] === 'stream' },
+        [],
+      );
+      client.setQueriesData(
+        { queryKey: ['chat'], predicate: (query) => query.queryKey[2] === 'execution-error' },
+        null,
+      );
+      void client.invalidateQueries({
+        queryKey: ['chat'],
+        predicate: (query) => query.queryKey[2] !== 'stream',
+      });
       refresh();
     });
-    events.addEventListener('sessions-changed', refresh);
+    events.addEventListener('opencode', (message: MessageEvent<string>) => {
+      const event: OpenCodeEvent = JSON.parse(message.data);
+      const data = 'data' in event ? event.data : undefined;
+      const id =
+        data && 'sessionID' in data && typeof data.sessionID === 'string'
+          ? data.sessionID
+          : event.type === 'form.created'
+            ? event.data.form.sessionID
+            : undefined;
+      if (id) {
+        const key = ['chat', id, 'stream'];
+        const query = client.getQueryCache().find({ queryKey: key, exact: true });
+        if (query?.getObserversCount()) {
+          const parts = pending.get(id) ?? client.getQueryData<LivePart[]>(key) ?? [];
+          const next = updateStream(parts, event);
+          if (next !== parts) {
+            pending.set(id, next);
+            if (frame === undefined) frame = requestAnimationFrame(flushParts);
+          }
+          if (event.type === 'session.execution.failed')
+            client.setQueryData(['chat', id, 'execution-error'], event.data.error.message);
+          if (event.type === 'session.execution.started')
+            client.setQueryData(['chat', id, 'execution-error'], null);
+        }
+        changed.add(id);
+      }
+      // Token deltas update only the overlay, never refetch entire transcripts per token.
+      if (!event.type.endsWith('.delta') && event.type !== 'session.tool.progress') refresh();
+    });
     const unavailable = () => {
       setLive(false);
       void client.invalidateQueries({ queryKey: ['connection'] });
@@ -31,6 +96,7 @@ export function useEvents(enabled: boolean) {
     return () => {
       events.close();
       clearTimeout(timer);
+      if (frame !== undefined) cancelAnimationFrame(frame);
       setLive(false);
     };
   }, [client, enabled]);

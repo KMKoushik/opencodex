@@ -6,8 +6,8 @@ export interface DesktopBridge {
   platform: string;
 }
 
-export type PreferenceKey = 'project' | 'theme';
-export type DesktopPreferences = { project: string | null; theme: string | null };
+export type PreferenceKey = 'project' | 'projects' | 'theme';
+export type DesktopPreferences = Record<PreferenceKey, string | null>;
 
 export const desktopChannels = {
   selectDirectory: 'desktop:select-directory',

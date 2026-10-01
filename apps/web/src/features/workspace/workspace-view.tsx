@@ -1,19 +1,21 @@
 import type { ReactNode } from 'react';
-import type { Project, Session } from '@opencodex/contracts';
+import type { Project } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { useConnection } from '../connection/use-connection';
 import { ProjectForm } from '../projects/project-form';
 
 export function WorkspaceView({
   project,
-  session,
-  sessionCount,
   onSelectProject,
+  onNewChat,
+  creating,
+  createError,
 }: {
   project: Project | null;
-  session: Session | undefined;
-  sessionCount: number | undefined;
   onSelectProject: (project: Project) => void;
+  onNewChat: () => void;
+  creating: boolean;
+  createError?: string;
 }) {
   const { connection, connect, connected } = useConnection();
 
@@ -61,35 +63,17 @@ export function WorkspaceView({
     );
   }
 
-  if (!session) {
-    return (
-      <EmptyState
-        title={project.name}
-        description={
-          sessionCount === 0
-            ? 'This project has no sessions yet.'
-            : 'Select a session from the sidebar.'
-        }
-      >
-        <code className="empty-path">{project.directory}</code>
-      </EmptyState>
-    );
-  }
-
   return (
-    <article className="session-view">
-      <dl className="session-meta">
-        <div>
-          <dt>Updated</dt>
-          <dd>{new Date(session.updatedAt).toLocaleString()}</dd>
-        </div>
-        <div>
-          <dt>Model</dt>
-          <dd>{session.model ?? 'Default'}</dd>
-        </div>
-      </dl>
-      <p className="session-note">Messages for this session aren’t shown in OpenCodex yet.</p>
-    </article>
+    <EmptyState title="Let’s build something" description={project.name}>
+      <Button onClick={onNewChat} disabled={creating}>
+        {creating ? 'Creating…' : 'New chat'}
+      </Button>
+      {createError && (
+        <p className="text-error" role="alert">
+          {createError}
+        </p>
+      )}
+    </EmptyState>
   );
 }
 

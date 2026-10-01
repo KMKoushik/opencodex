@@ -20,9 +20,13 @@ bun dev:desktop     # Electron, with the same UI and hot reload
 
 Run one development command at a time. Both use port **4310** for the gateway and **5173** for the UI. The shell renders without OpenCode; **Connect** discovers or starts the shared service. Closing OpenCodex leaves that shared service running.
 
-Open a project using an absolute directory path (or `~/…`). Electron also provides a native folder picker. Browser paths refer to the machine running the gateway. The selected project and theme are saved in browser storage on web and in the app's user-data directory on desktop, so desktop preferences survive gateway port changes.
+Open a project using an absolute directory path (or `~/…`). Electron also provides a native folder picker. Browser paths refer to the machine running the gateway. The opened-project list, selected project, and theme are saved in browser storage on web and in the app's user-data directory on desktop, so desktop preferences survive gateway port changes.
 
-The foundation includes service status, project selection, paginated real session lists, session metadata, and live list refresh. Chat, prompting, permission handling, terminals, and diffs are the next product layer.
+Theme preferences use `opencodex:theme` in browser localStorage. On desktop, `electron-store` saves them under `theme` in `<app.getPath('userData')>/preferences.json`, alongside `project` and `projects`. Existing preference files are read in place.
+
+The sidebar shows only folders you've opened in OpenCodex. Use **Open project** to add one, or the close button beside a project to remove it from the sidebar without deleting its sessions. Your previously selected folder is retained when upgrading. Select a project, then **New chat** to start a conversation. You can send messages, read existing conversations, see streamed responses and tool output, stop a run, and answer OpenCode's permission requests and questions. New sessions inherit OpenCode's configured agent and model. Configure providers and defaults in OpenCode.
+
+Messages sent during a run use OpenCode's native steering behavior. Drafts stay in memory while switching sessions; message history and pending inputs live in OpenCode. Failed sends keep the draft and are never automatically retried. Older messages load automatically as you scroll up. Agent activity is grouped into expandable summaries, with tool details inside. Terminals, diffs, file uploads, and model/agent pickers are not included yet.
 
 Themes live in **Settings → Appearance**. Choose Light, Dark, or System mode, then pick a separate light and dark theme, such as OpenCodex, Catppuccin (Latte, Mocha, Macchiato, Frappé), GitHub, Nord, Gruvbox, Solarized, Rosé Pine, Tokyo Night, Dracula, Everforest, or One. As in Codex, each theme is three seed colors — accent, background, and foreground — plus a contrast level; you can adjust any of them, and every other color is derived from them. Choices persist across launches.
 
@@ -32,7 +36,7 @@ Themes live in **Settings → Appearance**. Choose Light, Dark, or System mode, 
 bun build:web
 bun start            # Built web app: http://127.0.0.1:4310
 
-bun build            # Web + Electron bundles
+bun run build        # Web + Electron bundles
 bun package:desktop  # Installer for the current operating system
 ```
 
@@ -56,12 +60,12 @@ Optional `OPENCODE_USERNAME` (default `opencode`) and `OPENCODE_PASSWORD` suppor
 apps/web/             Shared React UI, features, components, design tokens
 apps/desktop/         Electron lifecycle and native-only preload bridge
 packages/gateway/     Local HTTP API, OpenCode adapter, event forwarding
-packages/contracts/   Runtime-validated app API shapes and native bridge types
+packages/contracts/   App input schemas, native OpenCode types, bridge types
 ```
 
 OpenCode owns sessions, tools, provider credentials, and agent execution. The gateway adapts its API and retains service credentials. React uses relative `/api` URLs through TanStack Query. Electron adds native capabilities; it does not create a second agent-data transport.
 
-The browser reconnects its event stream automatically and refetches session snapshots after reconnection. Temporary stream failures also enable polling. Request failures stay errors rather than becoming empty session lists.
+The gateway forwards native OpenCode events. The UI overlays live text on server snapshots, then refreshes those snapshots at durable changes and on reconnection. A stream joined mid-response waits for saved text instead of displaying a partial suffix as the full response. Temporary stream failures also enable polling. Request failures stay errors rather than becoming empty session lists. See the [ownership decisions](docs/architecture/README.md#ownership-decisions) before adding app-owned behavior.
 
 ## Checks
 

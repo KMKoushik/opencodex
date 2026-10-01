@@ -138,6 +138,63 @@ describe('gateway and the real OpenCode client', () => {
     });
   });
 
+  it('delegates prompts without retries and preserves native message pagination', async () => {
+    const calls: Array<{ path: string; body: string; auth?: string }> = [];
+    const url = await upstream((req, res) => {
+      let body = '';
+      req.on('data', (chunk) => {
+        body += chunk;
+      });
+      req.on('end', () => {
+        calls.push({ path: req.url!, body, auth: req.headers.authorization });
+        res.setHeader('Content-Type', 'application/json');
+        if (req.method === 'POST') {
+          res.statusCode = 503;
+          res.end('{"message":"private upstream detail"}');
+        } else
+          res.end(
+            JSON.stringify({
+              data: [{ type: 'user', id: 'message-1', time: { created: 1 }, text: 'hello' }],
+              cursor: { next: 'older-page' },
+            }),
+          );
+      });
+    });
+    const app = createApp(
+      new OpenCodeBackend(async () => ({
+        url,
+        auth: { type: 'basic', username: 'test', password: 'private' },
+      })),
+    );
+    const send = (text: string) =>
+      app.request('http://localhost/api/sessions/session-1/prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+    expect((await send('   ')).status).toBe(400);
+    expect(calls).toHaveLength(0);
+    const response = await send('hello');
+    expect(response.status).toBe(502);
+    expect(await response.text()).not.toContain('private');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toEqual({
+      path: '/api/session/session-1/prompt',
+      body: '{"text":"hello"}',
+      auth: `Basic ${Buffer.from('test:private').toString('base64')}`,
+    });
+    const messages = await app.request(
+      'http://localhost/api/sessions/session-1/messages?cursor=older-page',
+    );
+    expect(await messages.json()).toMatchObject({
+      data: [{ text: 'hello' }],
+      cursor: { next: 'older-page' },
+    });
+    const requested = new URL(calls[1]!.path, 'http://localhost');
+    expect(requested.searchParams.get('cursor')).toBe('older-page');
+    expect(requested.searchParams.has('order')).toBe(false);
+  });
+
   it('rejects a missing backend rather than returning an empty session list', async () => {
     const app = createApp(new OpenCodeBackend(async () => undefined));
     const response = await app.request(
@@ -174,10 +231,11 @@ describe('gateway and the real OpenCode client', () => {
     const response = await app.request('http://localhost/api/events');
     const body = await response.text();
     expect(body).toContain('event: ready');
-    expect(body).toContain('event: sessions-changed');
+    expect(body).toContain('event: opencode');
+    expect(body).toContain('"type":"session.updated"');
     expect(body).toContain('event: unavailable');
     for await (const event of backend.events(AbortSignal.timeout(2_000))) {
-      expect(['ready', 'sessions-changed']).toContain(event);
+      expect(['server.connected', 'session.updated']).toContain(event.type);
     }
     expect(discoveries).toBe(2);
   });

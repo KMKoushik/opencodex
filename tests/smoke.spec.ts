@@ -1,24 +1,52 @@
 import { test, expect } from '@playwright/test';
 import { createServer, type ServerResponse } from 'node:http';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { startGateway } from '../packages/gateway/src/server';
+import type {
+  SessionMessageInfo,
+  SessionMessageAssistantTool,
+  SessionInfo,
+  PermissionRequest,
+  FormInfo,
+} from '../packages/contracts/src';
 
 // A protocol fixture exercises the actual SDK and gateway without touching personal sessions.
 async function fixture(directory: string) {
   await mkdir(directory, { recursive: true });
+  await mkdir(`${directory}-other`, { recursive: true });
   const streams = new Set<ServerResponse>();
-  const sessions = [
+  const sessions: SessionInfo[] = [
     {
       id: 'fixture-session',
       title: 'Explore the project',
       location: { directory },
-      time: { updated: Date.now() },
-      model: { id: 'fixture-model' },
+      time: { created: Date.now(), updated: Date.now() },
+      projectID: 'project-1',
+      cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      model: { id: 'fixture-model', providerID: 'fixture' },
     },
   ];
-  const server = createServer((req, res) => {
+  const messages: SessionMessageInfo[] = [];
+  const messageRequests: string[] = [];
+  let running = false;
+  let permissions: PermissionRequest[] = [];
+  let forms: FormInfo[] = [];
+  let decision: string | undefined;
+  let answer: unknown;
+  let sentText = '';
+  let sessionID = 'fixture-session';
+  const emit = (event: object) => {
+    for (const stream of streams) stream.write(`data: ${JSON.stringify(event)}\n\n`);
+  };
+  const changed = () =>
+    emit({
+      type: 'session.status',
+      data: { sessionID, status: { type: running ? 'busy' : 'idle' } },
+    });
+  const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     if (url.pathname === '/api/event') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
@@ -28,13 +56,108 @@ async function fixture(directory: string) {
       return;
     }
     res.setHeader('Content-Type', 'application/json');
+    if (url.pathname === '/api/project')
+      return res.end(
+        JSON.stringify([
+          {
+            id: 'project-1',
+            canonical: directory,
+            name: 'Fixture project',
+            time: { created: 1, updated: 1 },
+            sandboxes: [],
+          },
+          {
+            id: 'project-before-git-init',
+            canonical: directory,
+            name: 'Old project name',
+            time: { created: 0, updated: 0 },
+            sandboxes: [],
+          },
+          {
+            id: 'different-folder-same-name',
+            canonical: `${directory}-other`,
+            name: 'Fixture project',
+            time: { created: 0, updated: 0 },
+            sandboxes: [],
+          },
+        ]),
+      );
     if (url.pathname === '/api/info') {
       res.end(JSON.stringify({ version: '2.0.19', pid: 1, urls: [], paths: { tmp: directory } }));
       return;
     }
     if (url.pathname === '/api/session') {
+      if (req.method === 'POST') {
+        sessionID = 'fixture-new';
+        const session = { ...sessions[0]!, id: sessionID, title: 'New chat' };
+        sessions.unshift(session);
+        return res.end(JSON.stringify({ data: session }));
+      }
       res.end(JSON.stringify({ data: sessions, cursor: {} }));
       return;
+    }
+    if (url.pathname === '/api/session/active')
+      return res.end(JSON.stringify({ data: running ? { [sessionID]: { type: 'running' } } : {} }));
+    const session = sessions.find((item) => url.pathname === `/api/session/${item.id}`);
+    if (session) return res.end(JSON.stringify({ data: session }));
+    if (url.pathname.endsWith('/message')) {
+      const cursor = url.searchParams.get('cursor') ?? '';
+      messageRequests.push(cursor);
+      const descending = messages.toReversed();
+      const start = cursor ? descending.findIndex((message) => message.id === cursor) : 0;
+      const data = descending.slice(start, start + 50);
+      return res.end(JSON.stringify({ data, cursor: { next: descending[start + 50]?.id } }));
+    }
+    if (url.pathname.endsWith('/inbox')) return res.end('{"data":[]}');
+    if (url.pathname.endsWith('/permission')) return res.end(JSON.stringify({ data: permissions }));
+    if (url.pathname.endsWith('/form')) return res.end(JSON.stringify({ data: forms }));
+    if (req.method === 'POST') {
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      const input = JSON.parse(body || '{}');
+      if (url.pathname.endsWith('/prompt')) {
+        sentText = input.text;
+        running = true;
+        messages.push({
+          type: 'user',
+          id: `user-${messages.length}`,
+          text: sentText,
+          time: { created: Date.now() },
+        });
+        res.end(
+          JSON.stringify({
+            data: {
+              type: 'user',
+              id: messages.at(-1)!.id,
+              sessionID,
+              time: { created: Date.now() },
+              payload: { text: sentText },
+              delivery: 'steer',
+            },
+          }),
+        );
+        changed();
+        return;
+      }
+      if (url.pathname.endsWith('/permission/permission-1/reply')) {
+        decision = input.decision;
+        permissions = [];
+        emit({ type: 'permission.replied', data: { sessionID } });
+        res.statusCode = 204;
+        return res.end();
+      }
+      if (url.pathname.endsWith('/form/form-1/reply')) {
+        answer = input.answer;
+        forms = [];
+        emit({ type: 'form.replied', data: { sessionID } });
+        res.statusCode = 204;
+        return res.end();
+      }
+      if (url.pathname.endsWith('/interrupt')) {
+        running = false;
+        changed();
+        return res.end(JSON.stringify({ interrupted: true }));
+      }
     }
     res.writeHead(404);
     res.end('{}');
@@ -44,10 +167,164 @@ async function fixture(directory: string) {
   if (!address || typeof address === 'string') throw new Error('Missing fixture port');
   return {
     url: `http://127.0.0.1:${address.port}`,
+    messageRequests,
+    seedLink(url: string) {
+      messages.push({
+        id: 'link-message',
+        type: 'assistant',
+        agent: 'build',
+        model: { id: 'fixture-model', providerID: 'fixture' },
+        time: { created: 1, completed: 2 },
+        content: [{ type: 'text', text: `[Fixture link](${url})\n\n${url}` }],
+      });
+    },
+    seedHistory(turns: number) {
+      for (let i = 0; i < turns; i++) {
+        messages.push({
+          id: `history-user-${i}`,
+          type: 'user',
+          text: `Review change ${i}`,
+          time: { created: i },
+        });
+        for (let step = 0; step < 2; step++)
+          messages.push({
+            id: `history-work-${i}-${step}`,
+            type: 'assistant',
+            agent: 'build',
+            model: { id: 'fixture-model', providerID: 'fixture' },
+            time: { created: i, completed: i + 1 },
+            content: [
+              { type: 'reasoning', text: 'Inspect the relevant files and verify the change.' },
+              ...Array.from({ length: 3 }, (_, j): SessionMessageAssistantTool => ({
+                type: 'tool' as const,
+                id: `history-tool-${i}-${step}-${j}`,
+                name: 'read',
+                time: { created: i, completed: i + 1 },
+                state: {
+                  status: 'completed' as const,
+                  input: { path: `src/feature-${step}-${j}.ts` },
+                  content: [{ type: 'text' as const, text: 'Detailed tool output.\n'.repeat(300) }],
+                },
+              })),
+            ],
+          });
+        messages.push({
+          id: `history-answer-${i}`,
+          type: 'assistant',
+          agent: 'build',
+          model: { id: 'fixture-model', providerID: 'fixture' },
+          time: { created: i, completed: i + 1 },
+          content: [
+            {
+              type: 'text',
+              text: `### Change ${i}\n\nThe implementation is ready.\n\n- Preserved the existing behavior.\n- Verified the gateway boundary.\n- Kept rendering scoped to the active row.`,
+            },
+          ],
+        });
+      }
+    },
     update() {
       sessions[0]!.title = 'Updated through the event stream';
       for (const stream of streams)
-        stream.write(`data: ${JSON.stringify({ type: 'session.updated' })}\n\n`);
+        stream.write(
+          `data: ${JSON.stringify({ type: 'session.renamed', data: { sessionID, title: sessions[0]!.title } })}\n\n`,
+        );
+    },
+    startText() {
+      messages.push({
+        type: 'assistant',
+        id: 'assistant-1',
+        agent: 'build',
+        model: { id: 'fixture-model', providerID: 'fixture' },
+        time: { created: Date.now() },
+        content: [{ type: 'text', text: '' }],
+      });
+      emit({
+        type: 'session.step.started',
+        data: { sessionID, assistantMessageID: 'assistant-1' },
+      });
+      emit({
+        type: 'session.text.started',
+        data: { sessionID, assistantMessageID: 'assistant-1', ordinal: 0 },
+      });
+    },
+    delta(text: string) {
+      emit({
+        type: 'session.text.delta',
+        data: { sessionID, assistantMessageID: 'assistant-1', ordinal: 0, delta: text },
+      });
+    },
+    finishText(text: string) {
+      const message = messages.find((item) => item.id === 'assistant-1');
+      if (message?.type !== 'assistant') throw new Error('Missing assistant message');
+      message.content = [
+        { type: 'text', text },
+        {
+          type: 'tool',
+          id: 'tool-1',
+          name: 'read',
+          time: { created: Date.now(), completed: Date.now() },
+          state: {
+            status: 'completed',
+            input: { path: 'README.md' },
+            content: [{ type: 'text', text: 'Project README contents' }],
+          },
+        },
+      ];
+      message.time.completed = Date.now();
+      running = false;
+      emit({
+        type: 'session.text.ended',
+        data: { sessionID, assistantMessageID: message.id, ordinal: 0, text },
+      });
+      changed();
+    },
+    ask() {
+      permissions = [
+        {
+          id: 'permission-1',
+          sessionID,
+          action: 'shell',
+          resources: ['git status'],
+          save: ['git *'],
+        },
+      ];
+      forms = [
+        {
+          id: 'form-1',
+          sessionID,
+          title: 'Choose scope',
+          fields: [
+            {
+              key: 'scope',
+              title: 'Scope',
+              type: 'string',
+              required: true,
+              options: [{ value: 'all', label: 'Whole project' }],
+            },
+          ],
+        },
+      ];
+      emit({ type: 'permission.asked', data: permissions[0] });
+      emit({ type: 'form.created', data: { form: forms[0] } });
+    },
+    reconnect() {
+      for (const stream of streams) stream.end();
+      const message = messages.find((item) => item.id === 'assistant-1');
+      if (message?.type === 'assistant')
+        message.content.push({ type: 'text', text: 'Recovered after reconnect.' });
+    },
+    get decision() {
+      return decision;
+    },
+    get answer() {
+      return answer;
+    },
+    get sentText() {
+      return sentText;
+    },
+    get running() {
+      return running;
     },
     close: () =>
       new Promise<void>((done) => {
@@ -70,8 +347,32 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
   page.on('pageerror', (error) => errors.push(error.message));
   try {
     await page.goto(gateway.url);
+    const projects = page.getByRole('navigation', { name: 'Projects', exact: true });
+    await expect(projects.getByText('Open a project to get started.')).toBeVisible();
+    await expect(projects.locator('.project-row')).toHaveCount(0);
     await page.getByLabel('Project directory', { exact: true }).fill(directory);
     await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await expect(
+      projects.getByRole('button', { name: 'Fixture project', exact: true }),
+    ).toHaveCount(1);
+    await page.getByRole('button', { name: 'Open project', exact: true }).click();
+    await expect(projects.locator('.project-row')).toHaveCount(1);
+    await page.getByLabel('Project directory', { exact: true }).fill(`${directory}-other`);
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await expect(
+      projects.getByRole('button', { name: 'Fixture project', exact: true }),
+    ).toHaveCount(2);
+    await page.reload();
+    await expect(projects.locator('.project-row')).toHaveCount(2);
+    await projects.getByTitle(directory, { exact: true }).click();
+    await projects
+      .locator('.project-group')
+      .filter({ has: page.getByTitle(`${directory}-other`, { exact: true }) })
+      .getByRole('button', { name: 'Close project Fixture project', exact: true })
+      .click();
+    await expect(projects.locator('.project-row')).toHaveCount(1);
+    await page.reload();
+    await expect(projects.locator('.project-row')).toHaveCount(1);
     await page.getByRole('button', { name: 'Explore the project' }).click();
     await expect(page.getByRole('heading', { name: 'Explore the project' })).toBeVisible();
     await page.getByRole('button', { name: 'Settings' }).click();
@@ -83,9 +384,85 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
       page.getByRole('heading', { name: 'Updated through the event stream' }),
     ).toBeVisible();
 
+    await expect(
+      projects.getByRole('button', { name: 'Fixture project', exact: true }),
+    ).toHaveCount(1);
+    await expect(projects.getByTitle(directory, { exact: true })).toHaveCount(1);
+    await expect(
+      projects.getByRole('button', { name: 'Old project name', exact: true }),
+    ).toHaveCount(0);
+    await page.getByRole('button', { name: 'New chat', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'New chat', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Let’s build something' })).toBeVisible();
+    await page.screenshot({ path: info.outputPath('new-thread.png') });
+    await page.getByRole('button', { name: 'Hide sidebar' }).click();
+    await expect(page.locator('.sidebar')).toBeHidden();
+    await page.getByRole('button', { name: 'Show sidebar' }).click();
+    await expect(page.locator('.sidebar')).toBeVisible();
+    await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Review the project');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await expect.poll(() => upstream.sentText).toBe('Review the project');
+    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('');
+    await expect(page.getByRole('article', { name: 'You', exact: true })).toHaveText(
+      'Review the project',
+    );
+    upstream.startText();
+    upstream.delta('Here is the **streaming');
+    await expect(page.getByRole('article', { name: 'Assistant' })).toContainText('streaming');
+    upstream.delta(' response**.');
+    await expect(page.getByRole('article', { name: 'Assistant' }).locator('strong')).toHaveText(
+      'streaming response',
+    );
+    upstream.ask();
+    await expect(page.getByRole('form', { name: 'Choose scope' })).toBeVisible();
+    await page.screenshot({ path: info.outputPath('chat-requests.png') });
+    await page.getByRole('button', { name: 'Allow once' }).click();
+    await expect.poll(() => upstream.decision).toBe('once');
+    await page.getByRole('combobox', { name: 'Scope', exact: true }).selectOption('all');
+    await page.getByRole('button', { name: 'Submit', exact: true }).click();
+    await expect.poll(() => upstream.answer).toEqual({ scope: 'all' });
+    upstream.finishText('Here is the **streaming response**.');
+    await expect(page.getByRole('button', { name: 'Stop', exact: true })).not.toBeVisible();
+    await page.getByRole('button', { name: 'Read 1 file', exact: true }).click();
+    await page.getByRole('button', { name: /Read README.md/ }).click();
+    await expect(page.getByText('Project README contents')).toBeVisible();
+    upstream.reconnect();
+    await expect(page.getByText('Recovered after reconnect.', { exact: true })).toBeVisible();
+    await page.reload();
+    await page
+      .getByRole('navigation', { name: 'Sessions', exact: true })
+      .getByRole('button', { name: /^New chat/ })
+      .click();
+    await expect(page.getByRole('article', { name: 'Assistant' }).locator('strong')).toHaveText(
+      'streaming response',
+    );
+    await expect(page.getByText('Recovered after reconnect.', { exact: true })).toBeVisible();
+    await page.getByRole('textbox', { name: 'Message', exact: true }).fill('One more thing');
+    await page
+      .getByRole('navigation', { name: 'Sessions', exact: true })
+      .getByRole('button', { name: /^Updated through/ })
+      .click();
+    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('');
+    await page
+      .getByRole('navigation', { name: 'Sessions', exact: true })
+      .getByRole('button', { name: /^New chat/ })
+      .click();
+    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue(
+      'One more thing',
+    );
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await page.getByRole('button', { name: 'Stop', exact: true }).click();
+    await expect.poll(() => upstream.running).toBe(false);
+    await expect(page.getByRole('button', { name: 'Stop', exact: true })).not.toBeVisible();
+    await page.screenshot({ path: info.outputPath('chat-desktop.png') });
+
     await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator('.sidebar')).toBeHidden();
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.screenshot({ path: info.outputPath('chat-mobile.png') });
+    await page.emulateMedia({ colorScheme: 'light' });
     await page.getByRole('button', { name: 'Toggle sidebar' }).click();
-    await page.getByRole('button', { name: 'Close project' }).click();
+    await page.getByRole('button', { name: 'Open project' }).click();
     await expect(page.getByRole('heading', { name: 'Open a project' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Toggle sidebar' }).click();
@@ -118,11 +495,127 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
   }
 });
 
+test('conversation: grouped activity and anchored automatic history', async ({ page }, info) => {
+  const directory = info.outputPath('project');
+  const upstream = await fixture(directory);
+  upstream.seedHistory(600);
+  const previous = process.env.OPENCODE_URL;
+  process.env.OPENCODE_URL = upstream.url;
+  const gateway = await startGateway({ assets: resolve('apps/web/dist') });
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  try {
+    await page.goto(gateway.url);
+    await page.getByLabel('Project directory', { exact: true }).fill(directory);
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await page.getByRole('button', { name: 'Explore the project' }).click();
+    await expect(page.getByRole('heading', { name: 'Change 599', exact: true })).toBeVisible();
+    expect(await page.locator('.timeline-row').count()).toBeLessThan(40);
+    await expect(page.locator('.tool-details')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0);
+    await page.screenshot({ path: info.outputPath('activity-collapsed.png') });
+    const latestGroup = page.locator('.activity-group > .disclosure-trigger').last();
+    await expect(latestGroup).toHaveText('Read 6 files');
+    await latestGroup.click();
+    await expect
+      .poll(async () => {
+        const group = await page.locator('.activity-group').last().boundingBox();
+        const answer = await page
+          .locator('[data-row-id="history-answer-599:text:0"]')
+          .boundingBox();
+        return (answer?.y ?? 0) - ((group?.y ?? 0) + (group?.height ?? 0));
+      })
+      .toBeGreaterThanOrEqual(0);
+    const tool = page.getByRole('button', { name: /Read src\/feature-0-0.ts/ }).last();
+    await tool.click();
+    await expect(page.locator('.tool-details')).toHaveCount(1);
+    await page.screenshot({ path: info.outputPath('activity-expanded.png') });
+
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route('**/api/sessions/*/messages?cursor=*', async (route) => {
+      await gate;
+      await route.continue();
+    });
+    const requested = page.waitForRequest((request) => request.url().includes('/messages?cursor='));
+    const scroll = page.locator('.timeline-scroll');
+    await scroll.evaluate((node) => {
+      node.scrollTop = 180;
+    });
+    await requested;
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    const anchor = await page.locator('.timeline-row').evaluateAll((nodes) => {
+      const viewport = document.querySelector('.timeline-scroll')!.getBoundingClientRect();
+      const node = nodes
+        .filter((element) => {
+          const box = element.getBoundingClientRect();
+          return box.top > viewport.top + 20 && box.top < viewport.bottom;
+        })
+        .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0]!;
+      return { id: node.getAttribute('data-row-id')!, top: node.getBoundingClientRect().top };
+    });
+    release();
+    await expect.poll(() => upstream.messageRequests.filter(Boolean).length).toBeGreaterThan(0);
+    await expect(page.getByText('Loading earlier messages…')).not.toBeVisible();
+    await expect
+      .poll(async () => {
+        const box = await page.locator(`[data-row-id="${anchor.id}"]`).boundingBox();
+        return Math.abs((box?.y ?? -1000) - anchor.top);
+      })
+      .toBeLessThan(3);
+    expect(await page.locator('.timeline-row').count()).toBeLessThan(40);
+    await page.getByRole('button', { name: 'Jump to latest' }).click();
+    await expect(page.getByRole('heading', { name: 'Change 599', exact: true })).toBeVisible();
+    await expect(page.locator('.activity-group > .disclosure-trigger').last()).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    await expect(page.locator('.tool-details')).toHaveCount(1);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator('.sidebar')).toBeHidden();
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.screenshot({ path: info.outputPath('activity-mobile.png') });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    expect(errors).toEqual([]);
+  } finally {
+    await page.close();
+    await gateway.close();
+    await upstream.close();
+    if (previous === undefined) delete process.env.OPENCODE_URL;
+    else process.env.OPENCODE_URL = previous;
+  }
+});
+
 test('Electron: bundled gateway, isolated renderer, and native folder bridge', async ({
   playwright,
 }, info) => {
   const directory = info.outputPath('project');
   const upstream = await fixture(directory);
+  const linkURL = 'https://example.com/session?org=fixture&view=chat';
+  upstream.seedLink(linkURL);
+  // The previous custom writer used this exact JSON shape and filename.
+  const savedProject = { directory, name: 'project' };
+  const savedPreferences = {
+    project: JSON.stringify(savedProject),
+    projects: JSON.stringify([savedProject]),
+    theme: JSON.stringify({
+      mode: 'dark',
+      light: { preset: 'catppuccin-latte' },
+      dark: { preset: 'catppuccin-mocha' },
+    }),
+  };
+  const preferencesFile = info.outputPath('profile/preferences.json');
+  await mkdir(info.outputPath('profile'), { recursive: true });
+  await writeFile(preferencesFile, JSON.stringify(savedPreferences));
   const require = createRequire(resolve('apps/desktop/package.json'));
   const executablePath: string = require('electron');
   const launch = () =>
@@ -140,13 +633,89 @@ test('Electron: bundled gateway, isolated renderer, and native folder bridge', a
       info.outputPath('profile'),
     );
     const page = await application.firstWindow();
+    expect(await page.evaluate(() => window.desktop!.getPreferences())).toEqual(savedPreferences);
+    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(30, 30, 46)');
+    await expect(page.locator('.toolbar-project')).toHaveText('project');
+    type LinkState = { opened: string[]; copied: string[]; menu?: Electron.Menu };
+    await application.evaluate(({ shell, clipboard, Menu }) => {
+      const state: LinkState = { opened: [], copied: [] };
+      (globalThis as typeof globalThis & { linkTest: LinkState }).linkTest = state;
+      shell.openExternal = async (url) => {
+        state.opened.push(url);
+      };
+      clipboard.writeText = async (text) => {
+        state.copied.push(text);
+      };
+      Menu.prototype.popup = function () {
+        state.menu = this;
+      };
+    });
     await application.evaluate(({ dialog }, selected) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [selected] });
     }, directory);
+    await page.getByRole('button', { name: 'Open project', exact: true }).click();
     await page.getByRole('button', { name: 'Browse for a project folder' }).click();
     await page.getByRole('button', { name: 'Explore the project' }).click();
     await expect(page.getByRole('heading', { name: 'Explore the project' })).toBeVisible();
     expect(await page.evaluate(() => 'require' in window || 'process' in window)).toBe(false);
+    const appURL = page.url();
+    const link = page.getByRole('link', { name: 'Fixture link', exact: true });
+    await link.click();
+    await expect
+      .poll(() =>
+        application.evaluate(
+          () => (globalThis as typeof globalThis & { linkTest: LinkState }).linkTest.opened,
+        ),
+      )
+      .toEqual([linkURL]);
+    expect(page.url()).toBe(appURL);
+    expect(application.windows()).toHaveLength(1);
+    await link.click({ button: 'right' });
+    await expect
+      .poll(() =>
+        application.evaluate(() =>
+          (globalThis as typeof globalThis & { linkTest: LinkState }).linkTest.menu?.items.map(
+            (item) => item.label,
+          ),
+        ),
+      )
+      .toEqual(['Open link', 'Copy link']);
+    for (const label of ['Copy link', 'Open link']) {
+      await application.evaluate(({ BrowserWindow }, label) => {
+        const menu = (globalThis as typeof globalThis & { linkTest: LinkState }).linkTest.menu!;
+        const item = menu.items.find((item) => item.label === label)!;
+        item.click(item, BrowserWindow.getAllWindows()[0], {} as Electron.KeyboardEvent);
+      }, label);
+    }
+    await expect
+      .poll(() =>
+        application.evaluate(() => {
+          const { opened, copied } = (globalThis as typeof globalThis & { linkTest: LinkState })
+            .linkTest;
+          return { opened, copied };
+        }),
+      )
+      .toEqual({ opened: [linkURL, linkURL], copied: [linkURL] });
+    // Same-window links also leave the app in place; non-web schemes never reach the OS.
+    // Electron cancels this navigation in main; avoid Playwright's navigation waiter.
+    await link.evaluate((element) => element.removeAttribute('target'));
+    await link.click({ noWaitAfter: true });
+    await expect
+      .poll(() =>
+        application.evaluate(
+          () => (globalThis as typeof globalThis & { linkTest: LinkState }).linkTest.opened.length,
+        ),
+      )
+      .toBe(3);
+    await page.evaluate(() => window.open('opencodex-test://blocked'));
+    expect(
+      await application.evaluate(
+        () => (globalThis as typeof globalThis & { linkTest: LinkState }).linkTest.opened,
+      ),
+    ).toEqual([linkURL, linkURL, linkURL]);
+    expect(page.url()).toBe(appURL);
+    // Reset Chromium's pending-navigation state after the main-process cancellation.
+    await page.reload();
     await page.getByRole('button', { name: 'Settings' }).click();
     await page.getByRole('button', { name: 'Appearance' }).click();
     await page.getByRole('radio', { name: 'Dark' }).click();
@@ -158,11 +727,37 @@ test('Electron: bundled gateway, isolated renderer, and native folder bridge', a
         return JSON.parse(preferences?.theme ?? '{}');
       })
       .toMatchObject({ mode: 'dark', dark: { preset: 'catppuccin-macchiato' } });
+    const storedPreferences = JSON.parse(await readFile(preferencesFile, 'utf8'));
+    expect(storedPreferences.project).toBe(savedPreferences.project);
+    expect(storedPreferences.projects).toBe(savedPreferences.projects);
+    expect(JSON.parse(storedPreferences.theme)).toMatchObject({
+      mode: 'dark',
+      dark: { preset: 'catppuccin-macchiato' },
+      light: { preset: 'catppuccin-latte' },
+    });
     await application.close();
     application = await launch();
     const reopened = await application.firstWindow();
-    await expect(reopened.getByRole('heading', { name: 'project' })).toBeVisible();
+    await expect(reopened.getByRole('heading', { name: 'Let’s build something' })).toBeVisible();
+    await expect(reopened.locator('.toolbar-project')).toHaveText('project');
     await expect(reopened.locator('body')).toHaveCSS('background-color', 'rgb(36, 39, 58)');
+    const projects = reopened.getByRole('navigation', { name: 'Projects', exact: true });
+    await expect(projects.locator('.project-row')).toHaveCount(1);
+    await expect(projects.getByTitle(directory, { exact: true })).toBeVisible();
+    await reopened.getByRole('button', { name: 'Settings', exact: true }).click();
+    await reopened.getByRole('button', { name: 'Close project', exact: true }).click();
+    await expect
+      .poll(async () => {
+        const preferences = await reopened.evaluate(() => window.desktop!.getPreferences());
+        return {
+          project: preferences.project,
+          projects: JSON.parse(preferences.projects ?? 'null'),
+        };
+      })
+      .toEqual({ project: null, projects: [] });
+    await reopened.reload();
+    await expect(projects.locator('.project-row')).toHaveCount(0);
+    await expect(reopened.getByRole('heading', { name: 'Open a project' })).toBeVisible();
   } finally {
     await application.close();
     await upstream.close();

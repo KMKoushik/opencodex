@@ -70,6 +70,23 @@ export class OpenCodeBackend {
     return client;
   }
 
+  async request<T>(
+    signal: AbortSignal,
+    operation: (client: OpenCodeClient, options: { signal: AbortSignal }) => Promise<T>,
+  ): Promise<T> {
+    const client = await this.requireClient();
+    try {
+      return await operation(client, {
+        signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
+      });
+    } catch {
+      throw new GatewayError(
+        'OpenCode could not complete this request. Check the service and retry.',
+        502,
+      );
+    }
+  }
+
   async sessions(
     directory: string,
     cursor: string | undefined,
@@ -78,7 +95,13 @@ export class OpenCodeBackend {
     const client = await this.requireClient();
     try {
       const result = await client.session.list(
-        { directory, cursor, limit: 50, order: 'desc', parentID: null },
+        {
+          directory,
+          cursor,
+          limit: 50,
+          ...(cursor ? {} : { order: 'desc' as const }),
+          parentID: null,
+        },
         { signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]) },
       );
       return {
@@ -100,8 +123,11 @@ export class OpenCodeBackend {
     const client = await this.requireClient();
     try {
       for await (const event of client.event.subscribe({ signal })) {
-        if (event.type === 'server.connected') yield 'ready';
-        if (event.type.startsWith('session.')) yield 'sessions-changed';
+        if (
+          event.type === 'server.connected' ||
+          /^(session|project|permission|form)\./.test(event.type)
+        )
+          yield event;
       }
     } finally {
       // A failed source must rediscover the service; cancellation by one browser must not reset it.

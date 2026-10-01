@@ -4,7 +4,7 @@ import { createPreferences, preferenceInputSchema } from './preferences';
 
 export function registerNativeHandlers(
   allowedOrigin: string,
-  preferences: Awaited<ReturnType<typeof createPreferences>>,
+  preferences: ReturnType<typeof createPreferences>,
 ) {
   function requireWindow(event: Electron.IpcMainInvokeEvent) {
     const frame = event.senderFrame;

@@ -1,14 +1,13 @@
 import { app, BrowserWindow, dialog } from 'electron';
 import { fileURLToPath } from 'node:url';
-import { join } from 'node:path';
 import { startGateway } from '@opencodex/gateway';
 import { registerNativeHandlers } from './ipc';
 import { createPreferences } from './preferences';
+import { registerLinkHandlers } from './links';
 
 let gateway: Awaited<ReturnType<typeof startGateway>> | undefined;
 let origin: string;
 let quitting = false;
-let preferences: Awaited<ReturnType<typeof createPreferences>> | undefined;
 
 async function createWindow() {
   const window = new BrowserWindow({
@@ -29,10 +28,7 @@ async function createWindow() {
       sandbox: true,
     },
   });
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  window.webContents.on('will-navigate', (event, url) => {
-    if (new URL(url).origin !== new URL(origin).origin) event.preventDefault();
-  });
+  registerLinkHandlers(window, new URL(origin).origin);
   window.once('ready-to-show', () => window.show());
   await window.loadURL(origin);
 }
@@ -48,7 +44,7 @@ app
       });
       origin = gateway.url;
     }
-    preferences = await createPreferences(join(app.getPath('userData'), 'preferences.json'));
+    const preferences = createPreferences();
     registerNativeHandlers(new URL(origin).origin, preferences);
     await createWindow();
     app.on('activate', () => {
@@ -72,5 +68,5 @@ app.on('before-quit', (event) => {
   event.preventDefault();
   quitting = true;
   // The gateway is app-owned. The shared OpenCode service is not.
-  void Promise.allSettled([gateway?.close(), preferences?.flush()]).then(() => app.quit());
+  void Promise.allSettled([gateway?.close()]).then(() => app.quit());
 });
