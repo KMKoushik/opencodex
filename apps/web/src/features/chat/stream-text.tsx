@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useRef } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { LivePart } from './stream';
+import { ResponseMarks } from './response-marks';
 
 const noParts: LivePart[] = [];
 export const StreamText = memo(function StreamText({
@@ -20,6 +21,7 @@ export const StreamText = memo(function StreamText({
   text: string;
   completed: boolean;
 }) {
+  const root = useRef<HTMLDivElement>(null);
   const select = useCallback(
     (parts: LivePart[]) =>
       completed
@@ -40,7 +42,12 @@ export const StreamText = memo(function StreamText({
   });
   if (!stream.data) return null;
   return (
-    <div className={kind === 'reasoning' ? 'reasoning-text' : 'markdown'}>
+    <div
+      className={kind === 'reasoning' ? 'reasoning-text' : 'markdown'}
+      ref={root}
+      data-response-id={kind === 'text' ? messageID : undefined}
+      data-response-ordinal={kind === 'text' ? ordinal : undefined}
+    >
       <Markdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -54,6 +61,15 @@ export const StreamText = memo(function StreamText({
       >
         {stream.data}
       </Markdown>
+      {kind === 'text' && (
+        <ResponseMarks
+          root={root}
+          sessionID={sessionID}
+          messageID={messageID}
+          ordinal={ordinal}
+          text={stream.data}
+        />
+      )}
     </div>
   );
 });

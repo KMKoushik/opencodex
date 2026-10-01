@@ -19,6 +19,7 @@ import { DisclosureProvider } from './disclosure';
 import { createTimelineProjector, type TimelineRow } from './timeline-model';
 import { Message } from './message';
 import { StreamText } from './stream-text';
+import { ResponseSelection } from './response-selection';
 
 export type TimelineHandle = { scrollToLatest: () => void };
 const followOutput = {
@@ -49,6 +50,7 @@ export function Timeline({
   const [project] = useState(createTimelineProjector);
   const rows = useMemo(() => project(messages), [project, messages]);
   const list = useRef<LegendListRef>(null);
+  const scope = useRef<HTMLDivElement>(null);
   const ready = useRef(false);
   const fetching = useRef(false);
   const [following, setFollowing] = useState(true);
@@ -82,6 +84,7 @@ export function Timeline({
     <DisclosureProvider>
       <div
         className="timeline"
+        ref={scope}
         onClickCapture={(event) => {
           if ((event.target as HTMLElement).closest('.disclosure-trigger')) setFollowing(false);
         }}
@@ -131,6 +134,7 @@ export function Timeline({
           }
           ListFooterComponent={<div className="timeline-footer">{footer}</div>}
         />
+        <ResponseSelection key={sessionID} scope={scope} sessionID={sessionID} />
         {!following && (
           <div className="jump-to-latest">
             <Button variant="secondary" size="sm" onClick={scrollToLatest}>

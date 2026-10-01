@@ -28,6 +28,13 @@
   --on-accent: #000000;
   --error: #ff6764;
   --success: #40c977;
+  --project-gray: #676767;
+  --project-blue: #397be5;
+  --project-green: #32815d;
+  --project-orange: #cf713c;
+  --project-pink: #c74795;
+  --project-purple: #7250d8;
+  --on-project: #ffffff;
   --scrim: rgb(0 0 0 / 0.5);
   --shadow: 0 12px 32px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.25);
 

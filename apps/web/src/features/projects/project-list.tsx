@@ -1,50 +1,43 @@
-import { useState, type ReactNode } from 'react';
-import {
-  ArrowDown01Icon,
-  ArrowRight01Icon,
-  Cancel01Icon,
-  Folder01Icon,
-} from '@hugeicons/core-free-icons';
+import { useState } from 'react';
+import { ArrowDown01Icon, ArrowRight01Icon, Cancel01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useQuery } from '@tanstack/react-query';
-import type { OpenCodeProject, Project } from '@opencodex/contracts';
+import type { Project } from '@opencodex/contracts';
 import { api } from '../../lib/api';
 import { Button } from '../../components/ui/button';
-
-function projectFolders(projects: OpenCodeProject[]): Map<string, Project> {
-  const folders = new Map<string, Project>();
-  // OpenCode can retain multiple identities for a folder (e.g. before and after
-  // git init). Navigation and session queries are directory-based. Keep the
-  // first record in the service's recency order, without merging by name.
-  for (const project of projects) {
-    if (folders.has(project.canonical)) continue;
-    folders.set(project.canonical, {
-      name:
-        project.name ||
-        project.canonical.split(/[\\/]/).filter(Boolean).at(-1) ||
-        project.canonical,
-      directory: project.canonical,
-    });
-  }
-  return folders;
-}
+import { projectFolder, projectFolders } from './project-metadata';
+import { ProjectIcon } from './project-icon';
+import { SessionList } from '../sessions/session-list';
 
 export function ProjectList({
   connected,
+  live,
   opened,
   current,
   onSelect,
   onClose,
-  children,
+  selectedID,
+  onSelectSession,
 }: {
   connected: boolean;
+  live: boolean;
   opened: Project[];
   current: Project | null;
   onSelect: (project: Project) => void;
   onClose: (directory: string) => void;
-  children: ReactNode;
+  selectedID: string | undefined;
+  onSelectSession: (project: Project, id: string) => void;
 }) {
-  const [collapsed, setCollapsed] = useState<string>();
+  const [expandedDirectories, setExpandedDirectories] = useState(
+    () => new Set(current ? [current.directory] : []),
+  );
+  const [previousDirectory, setPreviousDirectory] = useState(current?.directory);
+  if (previousDirectory !== current?.directory) {
+    setPreviousDirectory(current?.directory);
+    if (current && !expandedDirectories.has(current.directory)) {
+      setExpandedDirectories(new Set(expandedDirectories).add(current.directory));
+    }
+  }
   const projects = useQuery({
     queryKey: ['projects'],
     queryFn: ({ signal }) => api.projects(signal),
@@ -52,7 +45,10 @@ export function ProjectList({
     enabled: connected && opened.length > 0,
   });
   if (!connected) return null;
-  const items = opened.map((project) => projects.data?.get(project.directory) ?? project);
+  const items = opened.map((project) => {
+    const metadata = projects.data?.get(project.directory);
+    return metadata ? projectFolder(metadata) : project;
+  });
   return (
     <nav className="project-list" aria-label="Projects">
       <div className="sidebar-heading">Threads</div>
@@ -67,7 +63,7 @@ export function ProjectList({
       {!items.length && <p className="sidebar-note">Open a project to get started.</p>}
       {items.map((project) => {
         const active = current?.directory === project.directory;
-        const expanded = active && collapsed !== project.directory;
+        const expanded = expandedDirectories.has(project.directory);
         return (
           <div className="project-group" key={project.directory}>
             <div className="project-heading">
@@ -76,12 +72,20 @@ export function ProjectList({
                 aria-expanded={expanded}
                 title={project.directory}
                 onClick={() => {
-                  setCollapsed(expanded ? project.directory : undefined);
-                  if (!active) onSelect(project);
+                  setExpandedDirectories((previous) => {
+                    const next = new Set(previous);
+                    if (expanded) next.delete(project.directory);
+                    else next.add(project.directory);
+                    return next;
+                  });
+                  if (!expanded && !active) onSelect(project);
                 }}
               >
                 <HugeiconsIcon icon={expanded ? ArrowDown01Icon : ArrowRight01Icon} size={12} />
-                <HugeiconsIcon icon={Folder01Icon} size={16} />
+                <ProjectIcon
+                  name={project.name}
+                  icon={projects.data?.get(project.directory)?.icon}
+                />
                 <span className="truncate">{project.name}</span>
               </button>
               <Button
@@ -90,12 +94,27 @@ export function ProjectList({
                 size="icon"
                 aria-label={`Close project ${project.name}`}
                 title="Close project"
-                onClick={() => onClose(project.directory)}
+                onClick={() => {
+                  setExpandedDirectories((previous) => {
+                    const next = new Set(previous);
+                    next.delete(project.directory);
+                    return next;
+                  });
+                  onClose(project.directory);
+                }}
               >
                 <HugeiconsIcon icon={Cancel01Icon} size={14} />
               </Button>
             </div>
-            {expanded && children}
+            {expanded && (
+              <SessionList
+                directory={project.directory}
+                connected={connected}
+                live={live}
+                selectedID={selectedID}
+                onSelect={(id) => onSelectSession(project, id)}
+              />
+            )}
           </div>
         );
       })}

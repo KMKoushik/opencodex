@@ -2,6 +2,7 @@ import { OpenCode, type OpenCodeClient } from '@opencode/client';
 import { Service, type Endpoint } from '@opencode/client/service';
 import type { Connection, SessionPage } from '@opencodex/contracts';
 import { GatewayError } from './errors';
+import { previewFetch } from './preview-fetch';
 
 type ResolveEndpoint = (start: boolean) => Promise<Endpoint | undefined>;
 
@@ -14,6 +15,7 @@ export function localEndpointResolver(external?: Endpoint): ResolveEndpoint {
 }
 
 export class OpenCodeBackend {
+  private endpoint?: Endpoint;
   private client?: OpenCodeClient;
   private resolving?: Promise<OpenCodeClient | undefined>;
 
@@ -27,8 +29,13 @@ export class OpenCodeBackend {
       return this.resolve(true);
     }
     this.resolving = this.resolveEndpoint(start).then((endpoint) => {
+      this.endpoint = endpoint;
       this.client = endpoint
-        ? OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
+        ? OpenCode.make({
+            baseUrl: endpoint.url,
+            headers: Service.headers(endpoint),
+            fetch: previewFetch,
+          })
         : undefined;
       return this.client;
     });
@@ -79,7 +86,13 @@ export class OpenCodeBackend {
       return await operation(client, {
         signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
       });
-    } catch {
+    } catch (error) {
+      // The official client wraps errors from its custom fetch in ClientError.cause.
+      let cause = error;
+      for (let depth = 0; depth < 5 && cause instanceof Error; depth++) {
+        if (cause instanceof GatewayError) throw cause;
+        cause = cause.cause;
+      }
       throw new GatewayError(
         'OpenCode could not complete this request. Check the service and retry.',
         502,
@@ -125,7 +138,7 @@ export class OpenCodeBackend {
       for await (const event of client.event.subscribe({ signal })) {
         if (
           event.type === 'server.connected' ||
-          /^(session|project|permission|form|model|provider|credential|config|agent)\./.test(
+          /^(session|project|permission|form|model|provider|credential|config|agent|filesystem|vcs|mcp|skill|pty)\./.test(
             event.type,
           ) ||
           event.type === 'models-dev.refreshed'
@@ -136,5 +149,26 @@ export class OpenCodeBackend {
       // A failed source must rediscover the service; cancellation by one browser must not reset it.
       if (!signal.aborted && this.client === client) this.client = undefined;
     }
+  }
+
+  async terminalSocketURL(ptyID: string, directory: string, cursor: number, signal: AbortSignal) {
+    return this.request(signal, async (client, options) => {
+      const endpoint = this.endpoint;
+      if (!endpoint) throw new GatewayError('Connect to OpenCode first.', 503);
+      const result = await client.pty.connect.token(
+        { ptyID, location: { directory }, 'x-opencode-ticket': '1' },
+        options,
+      );
+      const base = new URL(endpoint.url);
+      if (!base.pathname.endsWith('/')) base.pathname += '/';
+      const url = new URL(`api/pty/${encodeURIComponent(ptyID)}/connect`, base);
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      url.search = new URLSearchParams({
+        'location[directory]': directory,
+        cursor: String(cursor),
+        ticket: result.data.ticket,
+      }).toString();
+      return url;
+    });
   }
 }

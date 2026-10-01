@@ -1,15 +1,22 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
+import { bodyLimit } from 'hono/body-limit';
 import {
   projectInputSchema,
+  projectUpdateSchema,
   promptInputSchema,
+  sessionActionSchema,
   permissionReplySchema,
   formReplySchema,
   modelInputSchema,
+  MAX_ATTACHMENTS,
+  MAX_FILE_BYTES,
 } from '@opencodex/contracts';
 import { OpenCodeBackend } from './opencode';
 import { GatewayError } from './errors';
 import { resolveProject } from './project';
+import { workspaceRoutes } from './workspace';
+import { terminalRoutes } from './terminals';
 
 export function createApp(
   backend = new OpenCodeBackend(),
@@ -34,6 +41,7 @@ export function createApp(
 
   app.get('/api/connection', async (c) => c.json(await backend.connection()));
   app.post('/api/connection', async (c) => c.json(await backend.connection(true)));
+  app.route('/api/terminals', terminalRoutes(backend));
 
   app.post('/api/projects/resolve', async (c) => {
     const input = projectInputSchema.safeParse(await c.req.json().catch(() => null));
@@ -46,6 +54,40 @@ export function createApp(
       await backend.request(c.req.raw.signal, (client, options) => client.project.list(options)),
     ),
   );
+
+  app.post('/api/projects', async (c) => {
+    const input = projectInputSchema.safeParse(await c.req.json().catch(() => null));
+    if (!input.success) return c.json({ message: 'Enter a project directory.' }, 400);
+    const folder = await resolveProject(input.data.directory);
+    return c.json(
+      await backend.request(c.req.raw.signal, async (client, options) => {
+        // Location discovery registers the project without creating a chat.
+        const location = await client.location.get(
+          { location: { directory: folder.directory } },
+          options,
+        );
+        const projects = await client.project.list(options);
+        const project = projects.find((item) => item.id === location.project.id);
+        if (!project)
+          throw new GatewayError('The project was not found after opening its folder.', 502);
+        return project;
+      }),
+    );
+  });
+  app.use('/api/projects/:id', bodyLimit({ maxSize: 2_100_000 }));
+  app.patch('/api/projects/:id', async (c) => {
+    const input = projectUpdateSchema.safeParse(await c.req.json().catch(() => null));
+    if (!input.success)
+      return c.json(
+        { message: input.error.issues[0]?.message ?? 'Invalid project settings.' },
+        400,
+      );
+    return c.json(
+      await backend.request(c.req.raw.signal, (client, options) =>
+        client.project.update({ projectID: c.req.param('id'), ...input.data }, options),
+      ),
+    );
+  });
 
   app.post('/api/sessions', async (c) => {
     const input = projectInputSchema.safeParse(await c.req.json().catch(() => null));
@@ -79,6 +121,78 @@ export function createApp(
             build.data.model ??
             (fallback.data ? { id: fallback.data.id, providerID: fallback.data.providerID } : null),
         };
+      }),
+    );
+  });
+  app.get('/api/commands', async (c) => {
+    const input = projectInputSchema.safeParse({ directory: c.req.query('directory') });
+    if (!input.success) return c.json({ message: 'Choose a project first.' }, 400);
+    return c.json(
+      await backend.request(
+        c.req.raw.signal,
+        async (client, options) =>
+          (await client.command.list({ location: { directory: input.data.directory } }, options))
+            .data,
+      ),
+    );
+  });
+  app.use('/api/sessions/:id/action', bodyLimit({ maxSize: 8192 }));
+  app.post('/api/sessions/:id/action', async (c) => {
+    const input = sessionActionSchema.safeParse(await c.req.json().catch(() => null));
+    if (!input.success) return c.json({ message: 'Invalid session action.' }, 400);
+    return c.json(
+      await backend.request(c.req.raw.signal, async (client, options) => {
+        const sessionID = c.req.param('id');
+        if (input.data.action === 'undo' || input.data.action === 'redo') {
+          const active = await client.session.active(options);
+          if (active[sessionID])
+            throw new GatewayError('Stop the current response before undoing or redoing.', 409);
+          if (input.data.action === 'undo')
+            await client.session.revert.stage(
+              { sessionID, messageID: input.data.messageID, files: true },
+              options,
+            );
+          else await client.session.revert.clear({ sessionID }, options);
+          return null;
+        }
+        if (input.data.action === 'fork')
+          return client.session.fork({ sessionID, before: input.data.before }, options);
+        if (input.data.action === 'compact') await client.session.compact({ sessionID }, options);
+        if (input.data.action === 'rename')
+          await client.session.update({ sessionID, title: input.data.title }, options);
+        return null;
+      }),
+    );
+  });
+  app.get('/api/sessions/:id/export', async (c) =>
+    c.json(
+      await backend.request(c.req.raw.signal, (client, options) =>
+        client.session.export({ sessionID: c.req.param('id') }, options),
+      ),
+    ),
+  );
+  const workspace = workspaceRoutes(backend);
+  app.route('/api/workspace', workspace.app);
+  app.get('/api/workspace/:resource', async (c) => {
+    const input = projectInputSchema.safeParse({ directory: c.req.query('directory') });
+    if (!input.success) return c.json({ message: 'Choose a project first.' }, 400);
+    const resource = c.req.param('resource');
+    if (!['vcs', 'mcp', 'skills'].includes(resource)) return c.notFound();
+    return c.json(
+      await backend.request(c.req.raw.signal, async (client, options) => {
+        const location = { directory: input.data.directory };
+        if (resource === 'vcs') {
+          const [info, files] = await Promise.all([
+            client.vcs.get({ location }, options),
+            client.vcs.status({ location }, options),
+          ]);
+          return { info: info.data, files: files.data };
+        }
+        if (resource === 'mcp') return (await client.mcp.list({ location }, options)).data;
+        // Skill bodies can be large; this view only needs catalog metadata.
+        return (await client.skill.list({ location }, options)).data.map(
+          ({ id, name, description }) => ({ id, name, description }),
+        );
       }),
     );
   });
@@ -123,17 +237,51 @@ export function createApp(
       ),
     ),
   );
+  app.use(
+    '/api/sessions/:id/prompt',
+    bodyLimit({
+      // Allow every valid attachment combination, including base64 expansion and JSON metadata.
+      maxSize: MAX_ATTACHMENTS * (Math.ceil(MAX_FILE_BYTES / 3) * 4 + 16_384) + 2_000_000,
+      onError: (c) => c.json({ message: 'Message exceeds the attachment request limit.' }, 413),
+    }),
+  );
   app.post('/api/sessions/:id/prompt', async (c) => {
     const input = promptInputSchema.safeParse(await c.req.json().catch(() => null));
-    if (!input.success || !input.data.text.trim())
-      return c.json({ message: 'Enter a message.' }, 400);
+    if (!input.success)
+      return c.json({ message: input.error.issues[0]?.message ?? 'Invalid message.' }, 400);
     return c.json(
       await backend.request(c.req.raw.signal, async (client, options) => {
         const sessionID = c.req.param('id');
         const session = await client.session.get({ sessionID }, options);
+        // V2 stages undo until the next explicit send; redo clears that stage.
+        if (session.revert) await client.session.revert.commit({ sessionID }, options);
         if (session.agent !== 'build')
           await client.session.switchAgent({ sessionID, agent: 'build' }, options);
-        return client.session.prompt({ sessionID, text: input.data.text }, options);
+        const model = input.data.model;
+        if (
+          model &&
+          (session.model?.id !== model.id ||
+            session.model?.providerID !== model.providerID ||
+            (session.model?.variant ?? 'default') !== (model.variant ?? 'default'))
+        ) {
+          await client.session.switchModel({ sessionID, model }, options);
+        }
+        if (input.data.command) {
+          await client.session.command(
+            { sessionID, name: input.data.command, text: input.data.text, files: input.data.files },
+            options,
+          );
+          return null;
+        }
+        return client.session.prompt(
+          {
+            sessionID,
+            text: input.data.text,
+            files: input.data.files,
+            skills: input.data.skill ? [{ id: input.data.skill }] : undefined,
+          },
+          options,
+        );
       }),
     );
   });
@@ -213,6 +361,8 @@ export function createApp(
       }, 15_000);
       try {
         for await (const event of backend.events(signal)) {
+          if (event.type === 'filesystem.changed' || event.type === 'vcs.branch.updated')
+            workspace.invalidate();
           await stream.writeSSE({
             event: event.type === 'server.connected' ? 'ready' : 'opencode',
             data: JSON.stringify(event),

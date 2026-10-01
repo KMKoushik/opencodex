@@ -1,0 +1,193 @@
+.session-panel-toggle {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.toolbar-status + .session-panel-toggle {
+  margin-left: 0;
+}
+.session-panel-toggle[aria-expanded='true'] {
+  background: var(--selected);
+  color: var(--text);
+}
+.session-panel {
+  position: fixed;
+  inset: calc(var(--toolbar-height) + 16px) 16px auto auto;
+  position-anchor: --chat-toolbar;
+  top: calc(anchor(bottom) + 8px);
+  right: calc(anchor(right) + 12px);
+  width: min(340px, calc(100vw - 32px));
+  max-width: calc(anchor-size(width) - 24px);
+  max-height: calc(100dvh - var(--toolbar-height) - 32px);
+  margin: 0;
+  padding: 0 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border-heavy);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  -webkit-app-region: no-drag;
+}
+.session-panel-heading,
+.session-panel-row,
+.session-panel-details > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.session-panel-heading {
+  justify-content: space-between;
+  padding-top: 10px;
+}
+.session-panel h2,
+.session-panel h3 {
+  font-size: inherit;
+  font-weight: 600;
+}
+.session-panel-row {
+  justify-content: space-between;
+}
+.session-panel-row > .truncate {
+  min-width: 0;
+}
+.session-panel-row > svg,
+.session-panel-details > summary > svg {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+.session-panel-section {
+  padding-block: 16px;
+}
+.session-panel-section + .session-panel-section {
+  border-top: 1px solid var(--border);
+}
+.session-panel-row > span,
+.session-project-row {
+  color: var(--text-secondary);
+}
+.session-context {
+  padding-top: 8px;
+}
+.session-context-meter {
+  display: block;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  margin-block: 10px;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--secondary-hover);
+  color: var(--success);
+}
+.session-context-meter::-webkit-progress-bar {
+  background: var(--secondary-hover);
+}
+.session-context-meter::-webkit-progress-value {
+  border-radius: 4px;
+  background: var(--success);
+}
+.session-context-meter::-moz-progress-bar {
+  border-radius: 4px;
+  background: var(--success);
+}
+.session-panel-note {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.session-project-row {
+  margin-top: 12px;
+}
+.session-project-row > span {
+  flex: 1;
+}
+.session-file-totals {
+  white-space: nowrap;
+}
+.session-additions,
+.session-resource-status[data-connected='true'] {
+  color: var(--success);
+}
+.session-panel-details > summary {
+  min-height: 20px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: 4px;
+}
+.session-panel-details > summary::-webkit-details-marker {
+  display: none;
+}
+.session-panel-details[open] > summary .session-details-chevron {
+  transform: rotate(90deg);
+}
+.session-details-value {
+  margin-left: auto;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.session-details-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 14px;
+}
+.session-stat-list {
+  display: grid;
+  gap: 6px;
+}
+.session-stat-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.session-stat-list dt {
+  font-weight: 500;
+}
+.session-stat-list dd {
+  margin: 0;
+  color: var(--text-secondary);
+}
+.session-resource-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.session-resource-list > li + li {
+  border-top: 1px solid var(--border);
+  margin-top: 10px;
+  padding-top: 10px;
+}
+.session-resource-status {
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+.session-panel-error {
+  color: var(--error);
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+@media (hover: hover) {
+  .session-panel-details > summary:hover {
+    color: var(--text-secondary);
+  }
+}
+@media (max-width: 720px) {
+  .session-panel {
+    font-size: 16px;
+  }
+  .session-panel-details > summary {
+    min-height: 44px;
+  }
+  .session-panel-heading .button,
+  .session-panel-toggle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

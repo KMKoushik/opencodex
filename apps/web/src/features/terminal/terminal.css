@@ -1,0 +1,56 @@
+.terminal-panel,
+.terminal-tabpanel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.terminal-add {
+  align-self: center;
+  flex: none;
+  margin-inline: 6px;
+}
+.terminal-tabs .wb-document-tab > button:hover {
+  background: transparent;
+}
+.terminal-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.terminal-toolbar > [role='status'] {
+  flex: none;
+}
+.terminal-viewport {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  margin: 4px 10px 10px;
+  overflow: hidden;
+  text-align: left;
+  /* Ghostty draws the cursor on canvas; its editable host must not draw a second caret. */
+  caret-color: transparent;
+}
+.terminal-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  color: var(--error);
+}
+.terminal-exited {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+@media (pointer: coarse) {
+  .terminal-add,
+  .wb-document-tab > button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

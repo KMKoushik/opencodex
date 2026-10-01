@@ -1,11 +1,20 @@
 import { useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { OpenCodeEvent } from '@opencodex/contracts';
+import { api } from '../../lib/api';
 import { updateStream, type LivePart } from '../chat/stream';
 
 export function useEvents(enabled: boolean) {
   const client = useQueryClient();
   const [live, setLive] = useState(false);
+  useQuery({
+    queryKey: ['active'],
+    queryFn: ({ signal }) => api.active(signal),
+    enabled,
+    refetchInterval: enabled && !live ? 5_000 : false,
+    // One recovery poller for sidebar and chat, without rerendering the app shell.
+    notifyOnChangeProps: [],
+  });
   useEffect(() => {
     if (!enabled) return;
     const events = new EventSource('/api/events');
@@ -22,6 +31,29 @@ export function useEvents(enabled: boolean) {
       pending.clear();
     };
     const changed = new Set<string>();
+    let workspaceTimer: ReturnType<typeof setTimeout> | undefined;
+    const workspaceChanged = new Map<string | undefined, Set<string>>();
+    const refreshWorkspace = (directory: string | undefined, resources: string[]) => {
+      const changed = workspaceChanged.get(directory) ?? new Set<string>();
+      for (const resource of resources) changed.add(resource);
+      workspaceChanged.set(directory, changed);
+      if (workspaceTimer) return;
+      workspaceTimer = setTimeout(() => {
+        workspaceTimer = undefined;
+        void client.invalidateQueries({
+          queryKey: ['workspace'],
+          predicate: (query) => {
+            const resource = String(query.queryKey[1]);
+            const directory = String(query.queryKey[2]);
+            return Boolean(
+              workspaceChanged.get(undefined)?.has(resource) ||
+              workspaceChanged.get(directory)?.has(resource),
+            );
+          },
+        });
+        workspaceChanged.clear();
+      }, 500);
+    };
     const refresh = () => {
       if (timer) return;
       timer = setTimeout(() => {
@@ -42,6 +74,7 @@ export function useEvents(enabled: boolean) {
       frame = undefined;
       pending.clear();
       setLive(true);
+      void client.invalidateQueries({ queryKey: ['workspace'] });
       // Subscriptions are live-only. Refetch after every reconnect to recover missed changes.
       void client.invalidateQueries({ queryKey: ['connection'] });
       void client.invalidateQueries({ queryKey: ['models'] });
@@ -61,6 +94,26 @@ export function useEvents(enabled: boolean) {
     });
     events.addEventListener('opencode', (message: MessageEvent<string>) => {
       const event: OpenCodeEvent = JSON.parse(message.data);
+      const directory = 'location' in event ? event.location?.directory : undefined;
+      if (event.type.startsWith('pty.')) {
+        refreshWorkspace(directory, ['terminals']);
+        return;
+      }
+      if (event.type === 'filesystem.changed' || event.type === 'vcs.branch.updated') {
+        refreshWorkspace(directory, ['vcs', 'diff', 'file', 'files']);
+        return;
+      }
+      if (event.type === 'mcp.status.changed') {
+        refreshWorkspace(directory, ['mcp']);
+        return;
+      }
+      if (event.type === 'skill.updated') {
+        refreshWorkspace(directory, ['skills', 'commands']);
+        return;
+      }
+      if (event.type === 'config.updated') {
+        refreshWorkspace(directory, ['mcp', 'skills', 'commands']);
+      }
       if (
         /^(model|provider|credential|config|agent)\./.test(event.type) ||
         event.type === 'models-dev.refreshed'
@@ -109,6 +162,7 @@ export function useEvents(enabled: boolean) {
     return () => {
       events.close();
       clearTimeout(timer);
+      clearTimeout(workspaceTimer);
       if (frame !== undefined) cancelAnimationFrame(frame);
       setLive(false);
     };

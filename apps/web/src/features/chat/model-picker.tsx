@@ -17,6 +17,8 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import type { ModelInfo, ModelProvider, ModelRef } from '@opencodex/contracts';
 import { ProviderLogo } from './provider-logo';
+import { useCommand } from '../shortcuts/use-command';
+import { shortcutProps } from '../shortcuts/commands';
 import './model-picker.css';
 
 type Entry = { key: string; model: ModelInfo; search: string };
@@ -96,9 +98,11 @@ export function ModelPicker({
     const above = rect.top > below;
     setPlacement({ above, height: Math.min(420, (above ? rect.top : below) - 12) });
   }
+  useCommand('model.choose', disabled ? undefined : open);
   return (
     <div
       className="select model-select"
+      data-shortcut-boundary={placement ? '' : undefined}
       ref={root}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) setPlacement(undefined);
@@ -110,7 +114,7 @@ export function ModelPicker({
         className="select-trigger"
         disabled={disabled}
         aria-label="Model"
-        title="Model"
+        {...shortcutProps('model.choose')}
         aria-haspopup="tree"
         aria-expanded={Boolean(placement)}
         aria-controls={placement ? id : undefined}

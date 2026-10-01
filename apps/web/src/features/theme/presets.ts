@@ -12,6 +12,15 @@ export type Preset = {
 
 export const defaultContrast = { light: 45, dark: 60 } satisfies Record<Variant, number>;
 
+export const projectIconSeeds = {
+  gray: '#676767',
+  blue: '#397be5',
+  green: '#32815d',
+  orange: '#cf713c',
+  pink: '#c74795',
+  purple: '#7250d8',
+} as const;
+
 function preset(
   id: string,
   name: string,

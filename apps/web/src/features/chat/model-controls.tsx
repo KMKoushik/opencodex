@@ -1,7 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import type { ModelInfo, ModelProvider, ModelRef } from '@opencodex/contracts';
 import { Select } from '../../components/ui/select';
 import { ModelPicker } from './model-picker';
+import { useCommand } from '../shortcuts/use-command';
+import { shortcutProps } from '../shortcuts/commands';
 
 const variantLabel = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 
@@ -40,6 +42,32 @@ export function ModelControls({
     [current],
   );
   const hasVariants = variants.length > 1;
+  // OpenCode can return its explicit default sentinel after a selection is saved.
+  const selectedVariant = model?.variant === 'default' ? '' : (model?.variant ?? '');
+  const thinking = useRef<HTMLButtonElement>(null);
+  useCommand(
+    'thinking.choose',
+    disabled || !hasVariants ? undefined : () => thinking.current?.click(),
+  );
+  function changeVariant(variant: string) {
+    if (model)
+      onChange({
+        id: model.id,
+        providerID: model.providerID,
+        ...(variant ? { variant } : {}),
+      });
+  }
+  useCommand(
+    'thinking.cycle',
+    disabled || !hasVariants || !model
+      ? undefined
+      : () => {
+          const index = variants.findIndex((variant) => variant.value === selectedVariant);
+          changeVariant(variants[(index + 1) % variants.length]!.value);
+        },
+  );
+  const chooseShortcut = shortcutProps('thinking.choose');
+  const cycleShortcut = shortcutProps('thinking.cycle');
   return (
     <div className="composer-controls">
       <ModelPicker
@@ -63,19 +91,17 @@ export function ModelControls({
         }}
       />
       <Select
+        triggerRef={thinking}
+        triggerProps={{
+          title: `${chooseShortcut.title}; ${cycleShortcut.title}`,
+          'aria-keyshortcuts': `${chooseShortcut['aria-keyshortcuts']} ${cycleShortcut['aria-keyshortcuts']}`,
+        }}
         label="Thinking level"
-        value={model?.variant ?? ''}
+        value={selectedVariant}
         options={variants}
         disabled={disabled || !hasVariants}
         placeholder={model?.variant ? variantLabel(model.variant) : 'Default'}
-        onChange={(variant) => {
-          if (model)
-            onChange({
-              id: model.id,
-              providerID: model.providerID,
-              ...(variant ? { variant } : {}),
-            });
-        }}
+        onChange={changeVariant}
         renderValue={(option) => (
           <span className="truncate">{hasVariants ? option.label : 'No thinking options'}</span>
         )}

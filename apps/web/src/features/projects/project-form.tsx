@@ -1,15 +1,30 @@
 import { useState, type FormEvent } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { FolderOpenIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import type { Project } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { api } from '../../lib/api';
+import { projectFolder } from './project-metadata';
 
-export function ProjectForm({ onSelect }: { onSelect: (project: Project) => void }) {
+export function ProjectForm({
+  onSelect,
+  register = false,
+}: {
+  onSelect: (project: Project) => void;
+  register?: boolean;
+}) {
   const [directory, setDirectory] = useState('');
   const [pickerError, setPickerError] = useState<string>();
-  const project = useMutation({ mutationFn: api.project, onSuccess: onSelect });
+  const client = useQueryClient();
+  const project = useMutation({
+    mutationFn: async (directory: string) =>
+      register ? projectFolder(await api.addProject(directory)) : api.project(directory),
+    onSuccess: (project) => {
+      void client.invalidateQueries({ queryKey: ['projects'] });
+      onSelect(project);
+    },
+  });
   const error = pickerError || project.error?.message;
   const submit = (event: FormEvent) => {
     event.preventDefault();

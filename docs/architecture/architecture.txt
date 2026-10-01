@@ -12,26 +12,26 @@
   │  │  <>   Browser app          │     │  <>   Desktop app          │   │               │  <>   apps/desktop       │
   │  │                            │     │                            ├───┼──────────────▶│                          │
   │  │  localStorage prefs        │     │  Sandboxed renderer        │   │  link events  │  Window lifecycle        │
-  │  │  Opened projects + theme   │     │  Native IPC available      ├───┼──────────────▶│  Native folder picker    │
+  │  │  Opened projects + theme   │     │  Native IPC available      ├───┼──────────────▶│  Folder picker + open in │
   │  └────────────────────────────┘     └────────────────────────────┘   │               │  OS browser + clipboard  │
   │                                                                      │               └─────────────┬────────────┘
-  │               Projects and chat with live text overlays              │                             │
-  └────────────────────┬─────────────────────────────────────────────────┘               read / write  │
-                       │                               ▲                                               │
-       HTTP /api       │                               │  SSE                                          │
-       requests        │                               │  deltas                                       ▼
-                       │                               │  refetch                        ┌── DESKTOP PREFERENCES ───┐
+  │             Zustand chat + editor drafts; Query API state            │                             │
+  │                                                                      │               read / write  │
+  │              Lazy panels: files, changes + Ghostty WASM              │                             │
+  └────────────────────┬─────────────────────────────────────────────────┘                             │
+       HTTP /api       │                               ▲  SSE + WS                                     ▼
+       + WS input      │                               │  output                         ┌── DESKTOP PREFERENCES ───┐
                        ▼                               │                                 │                          │
      ┌──────────────────────── LOCAL GATEWAY ──────────┴─────────────┐                   │  <>   User-data dir      │
      │                                                               │                   │       electron-store     │
      │  <>   packages/gateway                                        │                   │  preferences.json        │
-     │                                                               │                   │  Opened projects + theme │
-     │  Hono routes + @opencode/client                               │                   │                          │
-     │  Service discovery; credentials stay here                     │                   └──────────────────────────┘
-     │  Native chat and model-selection operations                   │
+     │                                                               │                   │  Projects, theme, opener │
+     │  Hono + V2 client; private service credentials                │                   │                          │
+     │  Bounded diff snapshots; version-checked file writes          │                   └──────────────────────────┘
+     │  Native APIs + origin-checked, ticketed PTY relay             │
      └─────────────────┬─────────────────────────────────────────────┘
                        │                               ▲
-       HTTP API        │                               │  Events
+       HTTP + WS       │                               │  Events + WS
        official client │                               │                                 ┌──── SHARED CONTRACTS ────┐
                        │                               │                                 │                          │
                        ▼                               │                                 │  <>   Shared types       │
@@ -39,10 +39,10 @@
      │                                                               │                   │  packages/contracts      │
      │  <>   Shared agent backend                                    │                   │                          │
      │                                                               │                   │  API types + schemas     │
-     │  Owns projects, sessions, and execution                       │                   │  Native bridge types     │
-     │  Model providers and tools live here                          │                   │                          │
+     │  Owns sessions, forks, commands + execution                   │                   │  Native bridge types     │
+     │  Providers, tools, VCS + filesystem operations                │                   │                          │
      │  Survives OpenCodex shutdown                                  │                   └──────────────────────────┘
-     │  Persists model and thinking choices per session              │
+     │  Durable sessions; PTY shells + bounded replay                │
      └───────────────────────────────────────────────────────────────┘                   Code, not a service
 
 

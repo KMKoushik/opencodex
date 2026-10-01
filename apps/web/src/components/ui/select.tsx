@@ -1,4 +1,14 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+  type Ref,
+  type ButtonHTMLAttributes,
+} from 'react';
 import { ArrowDown01Icon, Tick02Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 
@@ -14,6 +24,8 @@ export function Select<T extends Option>({
   renderValue = renderOption,
   placeholder,
   disabled = false,
+  triggerRef,
+  triggerProps,
 }: {
   label: string;
   value: string;
@@ -23,11 +35,14 @@ export function Select<T extends Option>({
   renderValue?: (option: T) => ReactNode;
   placeholder?: string;
   disabled?: boolean;
+  triggerRef?: Ref<HTMLButtonElement>;
+  triggerProps?: Pick<ButtonHTMLAttributes<HTMLButtonElement>, 'title' | 'aria-keyshortcuts'>;
 }) {
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLUListElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  useImperativeHandle(triggerRef, () => trigger.current!, []);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [above, setAbove] = useState(false);
@@ -94,6 +109,7 @@ export function Select<T extends Option>({
   return (
     <div
       className="select"
+      data-shortcut-boundary={open ? '' : undefined}
       ref={root}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
@@ -106,6 +122,7 @@ export function Select<T extends Option>({
         disabled={disabled}
         aria-label={label}
         title={label}
+        {...triggerProps}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={id}

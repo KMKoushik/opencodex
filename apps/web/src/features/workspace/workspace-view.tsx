@@ -3,6 +3,7 @@ import type { Project } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { useConnection } from '../connection/use-connection';
 import { ProjectForm } from '../projects/project-form';
+import { shortcutProps } from '../shortcuts/commands';
 
 export function WorkspaceView({
   project,
@@ -65,7 +66,7 @@ export function WorkspaceView({
 
   return (
     <EmptyState title="Let’s build something" description={project.name}>
-      <Button onClick={onNewChat} disabled={creating}>
+      <Button {...shortcutProps('chat.new')} onClick={onNewChat} disabled={creating}>
         {creating ? 'Creating…' : 'New chat'}
       </Button>
       {createError && (

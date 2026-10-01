@@ -28,7 +28,7 @@ Use the repositories in `.reference/` for inspiration when designing and impleme
 - `bun dev` runs the browser app; `bun dev:desktop` runs Electron. Both use the same development ports, so run one at a time.
 - `bun check` runs types, lint, gateway tests, and both builds. `bun format:check` checks formatting.
 - Keep feature-specific UI in `apps/web/src/features` and reusable primitives in `components/ui`. Components use only the semantic tokens named in `styles/tokens.css`; theme seed colors live in `features/theme/presets.ts`, and every other color is derived in `features/theme/theme.ts`.
-- Keep server state in TanStack Query and transient UI state in React. Refresh authoritative snapshots after event reconnection.
+- Keep server state and API mutation lifecycles in TanStack Query, shared session drafts in the app-scoped Zustand draft store, and component-local UI state in React. Capture draft revisions before sending and acknowledge only the captured revision. Use narrow store selectors; do not duplicate API snapshots in Zustand. Refresh authoritative snapshots after event reconnection.
 - Add tests for meaningful gateway behavior and runtime boundaries. Do not add placeholder tests or hide errors as empty data. this is really important, you can temproray smoke test how much ever you want but tests should be really really minimal, i'm fine with no test. only important stuff needs test
 
 ## Performance

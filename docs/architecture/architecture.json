@@ -6,7 +6,7 @@
       "x": 2,
       "y": 5,
       "width": 72,
-      "height": 14,
+      "height": 16,
       "title": "SHARED UI / apps/web",
       "color": "#7bb8ff"
     },
@@ -98,7 +98,7 @@
     },
     {
       "points": [
-        [23, 18],
+        [23, 20],
         [23, 23]
       ],
       "color": "#7bb8ff"
@@ -106,7 +106,7 @@
     {
       "points": [
         [55, 24],
-        [55, 19]
+        [55, 21]
       ],
       "color": "#5eead4"
     },
@@ -186,35 +186,45 @@
     { "x": 48, "y": 11, "value": "Desktop app" },
     { "x": 43, "y": 13, "value": "Sandboxed renderer" },
     { "x": 43, "y": 14, "value": "Native IPC available" },
-    { "x": 38, "y": 17, "value": "Projects and chat with live text overlays", "anchor": "center" },
+    {
+      "x": 38,
+      "y": 17,
+      "value": "Zustand chat + editor drafts; Query API state",
+      "anchor": "center"
+    },
+    {
+      "x": 38,
+      "y": 19,
+      "value": "Lazy panels: files, changes + Ghostty WASM",
+      "anchor": "center"
+    },
     { "x": 76, "y": 10, "value": "preload IPC", "color": "#f6c177" },
     { "x": 76, "y": 13, "value": "link events", "color": "#f6c177" },
     { "x": 97, "y": 11, "value": "apps/desktop" },
     { "x": 92, "y": 13, "value": "Window lifecycle" },
-    { "x": 92, "y": 14, "value": "Native folder picker" },
+    { "x": 92, "y": 14, "value": "Folder picker + open in" },
     { "x": 92, "y": 15, "value": "OS browser + clipboard" },
     { "x": 89, "y": 18, "value": "read / write", "color": "#f6c177" },
     { "x": 97, "y": 24, "value": "User-data dir" },
     { "x": 97, "y": 25, "value": "electron-store" },
     { "x": 92, "y": 26, "value": "preferences.json" },
-    { "x": 92, "y": 27, "value": "Opened projects + theme" },
-    { "x": 7, "y": 20, "value": "HTTP /api", "color": "#7bb8ff" },
-    { "x": 7, "y": 21, "value": "requests", "color": "#7bb8ff" },
-    { "x": 58, "y": 20, "value": "SSE", "color": "#5eead4" },
-    { "x": 58, "y": 21, "value": "deltas", "color": "#5eead4" },
-    { "x": 58, "y": 22, "value": "refetch", "color": "#5eead4" },
+    { "x": 92, "y": 27, "value": "Projects, theme, opener" },
+    { "x": 7, "y": 21, "value": "HTTP /api", "color": "#7bb8ff" },
+    { "x": 7, "y": 22, "value": "+ WS input", "color": "#7bb8ff" },
+    { "x": 58, "y": 21, "value": "SSE + WS", "color": "#5eead4" },
+    { "x": 58, "y": 22, "value": "output", "color": "#5eead4" },
     { "x": 13, "y": 26, "value": "packages/gateway" },
-    { "x": 8, "y": 28, "value": "Hono routes + @opencode/client" },
-    { "x": 8, "y": 29, "value": "Service discovery; credentials stay here" },
-    { "x": 8, "y": 30, "value": "Native chat and model-selection operations" },
-    { "x": 7, "y": 33, "value": "HTTP API", "color": "#7bb8ff" },
+    { "x": 8, "y": 28, "value": "Hono + V2 client; private service credentials" },
+    { "x": 8, "y": 29, "value": "Bounded diff snapshots; version-checked file writes" },
+    { "x": 8, "y": 30, "value": "Native APIs + origin-checked, ticketed PTY relay" },
+    { "x": 7, "y": 33, "value": "HTTP + WS", "color": "#7bb8ff" },
     { "x": 7, "y": 34, "value": "official client", "color": "#7bb8ff" },
-    { "x": 58, "y": 33, "value": "Events", "color": "#5eead4" },
+    { "x": 58, "y": 33, "value": "Events + WS", "color": "#5eead4" },
     { "x": 13, "y": 39, "value": "Shared agent backend" },
-    { "x": 8, "y": 41, "value": "Owns projects, sessions, and execution" },
-    { "x": 8, "y": 42, "value": "Model providers and tools live here" },
+    { "x": 8, "y": 41, "value": "Owns sessions, forks, commands + execution" },
+    { "x": 8, "y": 42, "value": "Providers, tools, VCS + filesystem operations" },
     { "x": 8, "y": 43, "value": "Survives OpenCodex shutdown" },
-    { "x": 8, "y": 44, "value": "Persists model and thinking choices per session" },
+    { "x": 8, "y": 44, "value": "Durable sessions; PTY shells + bounded replay" },
     { "x": 97, "y": 36, "value": "Shared types" },
     { "x": 92, "y": 38, "value": "packages/contracts" },
     { "x": 92, "y": 40, "value": "API types + schemas" },
@@ -241,7 +251,7 @@
     "preload IPC",
     "packages/gateway",
     "HTTP /api",
-    "SSE",
+    "SSE + WS",
     "OPENCODE 2.x SERVICE",
     "Survives OpenCodex shutdown",
     "packages/contracts",

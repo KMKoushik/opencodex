@@ -1,0 +1,47 @@
+.wb-rail {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 44px;
+  padding: 0 4px 6px;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+}
+.wb-rail > button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 6px;
+  color: var(--text-tertiary);
+}
+.wb-rail > button[aria-pressed='true'] {
+  color: var(--text);
+  background: var(--selected);
+}
+@media (hover: hover) {
+  .wb-rail > button:hover {
+    color: var(--text);
+    background: var(--hover);
+  }
+}
+@media (pointer: coarse) {
+  .wb-rail {
+    width: 52px;
+  }
+  .wb-rail > button {
+    width: 44px;
+    height: 44px;
+  }
+}
+.wb-rail-header {
+  display: grid;
+  place-items: center;
+  flex: none;
+  height: var(--toolbar-height);
+  width: calc(100% + 8px);
+  border-bottom: 1px solid var(--border);
+}

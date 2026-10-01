@@ -24,11 +24,45 @@ Open a project using an absolute directory path (or `~/…`). Electron also prov
 
 Theme preferences use `opencodex:theme` in browser localStorage. On desktop, `electron-store` saves them under `theme` in `<app.getPath('userData')>/preferences.json`, alongside `project` and `projects`. Existing preference files are read in place.
 
-The sidebar shows only folders you've opened in OpenCodex. Use **Open project** to add one, or the close button beside a project to remove it from the sidebar without deleting its sessions. Your previously selected folder is retained when upgrading. Select a project, then **New chat** to start a conversation. You can send messages, read existing conversations, see streamed responses and tool output, stop a run, and answer OpenCode's permission requests and questions. Chats use the Build agent. The composer offers a searchable model picker with collapsible provider groups, provider logos, and context-window sizes, alongside the selected model's supported thinking levels (OpenCode variants). Choices are saved in the OpenCode session; switching models resets thinking to that model's default. Configure providers and default models in OpenCode.
+The sidebar shows only folders you've opened in OpenCodex. Use **Open project** to add one, or the close button beside a project to remove it from the sidebar without deleting its sessions. Your previously selected folder is retained when upgrading. Select a project, then **New chat** to start a conversation. You can send messages, read existing conversations, see streamed responses and tool output, stop a run, and answer OpenCode's permission requests and questions. Chats use the Build agent. The composer offers a searchable model picker with collapsible provider groups, provider logos, and context-window sizes, alongside the selected model's supported thinking levels (OpenCode variants). Model and thinking choices stay local until you send, when only the final choice is applied to OpenCode. Unsent choices survive navigation but not reload. Switching models resets thinking to Default. Configure providers and default models in OpenCode.
 
-Messages sent during a run use OpenCode's native steering behavior. Drafts stay in memory while switching sessions; message history and pending inputs live in OpenCode. Failed sends keep the draft and are never automatically retried. Older messages load automatically as you scroll up. Agent activity is grouped into expandable summaries, with tool details inside. Terminals, diffs, and file uploads are not included yet.
+Messages sent during a run use OpenCode's native steering behavior. Drafts stay in memory while switching sessions; message history and pending inputs live in OpenCode. Failed sends keep the draft and are never automatically retried. Older messages load automatically as you scroll up. Agent activity is grouped into expandable summaries, with tool details inside.
+
+Use the paperclip, paste from the clipboard, or drop files onto the composer to attach images, PDFs, and text/code files. Images show thumbnails; each attachment can be removed before sending. You can send attachments with or without text, up to 100 files per message: 10 MiB per image, 80 MiB total images, and 50 MiB per other file, matching T3 Code's limits. Files stay local until you send, survive switching chats, and remain available after a failed send. Reloading discards unsent drafts and attachments.
 
 Themes live in **Settings → Appearance**. Choose Light, Dark, or System mode, then pick a separate light and dark theme, such as OpenCodex, Catppuccin (Latte, Mocha, Macchiato, Frappé), GitHub, Nord, Gruvbox, Solarized, Rosé Pine, Tokyo Night, Dracula, Everforest, or One. As in Codex, each theme is three seed colors — accent, background, and foreground — plus a contrast level; you can adjust any of them, and every other color is derived from them. Choices persist across launches.
+
+### Review and edit your workspace
+
+Use the **Files** and **Changes** icons on the far-right rail to open the workspace panel. Click the active icon again to close it. **Changes** shows uncommitted files (including staged and untracked files), or changes from the base branch. Select a file to review its diff; click a line number, or Shift-click a range, then **Comment** to add feedback to your chat draft. Nothing is sent automatically.
+
+**Files** keeps an expandable tree beside the editor. Single-click a file to preview it; double-click the file or its tab to keep it open. Tabs and folder expansion survive switching views and closing/reopening the panel. **Changes** uses the same tree navigation, with unified and split diffs. Select text to comment on its lines, or choose **Edit file** and **Save** (Cmd/Ctrl+S). Up to eight unsaved files survive panel and chat navigation in memory; save them before reloading. Saves reject detected disk changes and preserve your edits. Text editing and image previews support files up to 2 MiB; larger files are left untouched.
+
+The first control at the top of the right rail is **Open in…**, followed by Files, Changes, and Terminal underneath. Its menu copies the project path or opens it in an installed desktop app. On macOS it shows native app icons for Finder, Terminal, Ghostty, Cursor, Zed, VS Code, and iTerm when installed, and remembers the selected app. Windows/Linux desktop offers the system file manager; the browser offers Copy Path.
+
+### Project terminals
+
+Choose **Terminal** on the right rail, then **New terminal** or **+** to open a shell in the project's directory. Each tab is a separate shell; tabs are shared across chats in that directory. Drag the panel's left edge to resize it. Hiding the panel, switching tabs, or closing OpenCodex keeps shells running in OpenCode; reopening restores recent output. A tab's **×** ends that shell. Terminals last until explicitly closed or the OpenCode service stops.
+
+### Keyboard shortcuts
+
+Use **Settings → Shortcuts** (Cmd/Ctrl+/) for the full list. Shortcuts work throughout the focused browser or desktop app. Cmd on macOS becomes Ctrl on Windows/Linux.
+
+| Action         | Shortcut                     |
+| -------------- | ---------------------------- |
+| Toggle sidebar | Cmd/Ctrl+B                   |
+| New chat       | Cmd/Ctrl+N or Cmd/Ctrl+Alt+N |
+| Open project   | Cmd/Ctrl+O                   |
+| Settings       | Cmd/Ctrl+,                   |
+| Focus message  | Cmd/Ctrl+Shift+L             |
+| Choose model   | Cmd/Ctrl+Shift+M             |
+| Thinking level | Cmd/Ctrl+Shift+E             |
+| Cycle thinking | Ctrl+T                       |
+| Stop response  | Esc Esc                      |
+
+New chat requires an open project. Chat shortcuts use the active conversation. Press Escape twice within half a second to stop a running response, including while typing. Escape closes the focused menu first, or leaves settings/closes the mobile sidebar when outside an input; those dismissals do not count toward stopping. Both new-chat shortcuts work in Electron; use Cmd/Ctrl+Alt+N in browsers that reserve Cmd/Ctrl+N for a new window.
+
+Ctrl+T uses the Control key on every platform and cycles through the current model's supported thinking levels, wrapping back to Default.
 
 ## Build and run
 
@@ -70,7 +104,7 @@ The gateway forwards native OpenCode events. The UI overlays live text on server
 ## Checks
 
 ```sh
-bun check             # Types, lint, focused gateway tests, both builds
+bun check             # Types, lint, focused tests, both builds
 bun format:check
 bun test:smoke        # Built browser + Electron integration tests (requires Chrome)
 ```

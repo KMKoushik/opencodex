@@ -1,18 +1,35 @@
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '../../components/ui/button';
-import type { useSessions } from './use-sessions';
+import { api } from '../../lib/api';
+import { useSessions } from './use-sessions';
 
 export function SessionList({
   connected,
-  sessions,
+  directory,
+  live,
   selectedID,
   onSelect,
 }: {
   connected: boolean;
-  sessions: ReturnType<typeof useSessions>;
+  directory: string;
+  live: boolean;
   selectedID: string | undefined;
   onSelect: (id: string) => void;
 }) {
-  const items = sessions.data?.pages.flatMap((page) => page.sessions) ?? [];
+  const sessions = useSessions(directory, connected, live);
+  const [visibleCount, setVisibleCount] = useState(6);
+  const active = useQuery({
+    queryKey: ['active'],
+    queryFn: ({ signal }) => api.active(signal),
+    enabled: connected,
+    refetchOnMount: false,
+  });
+  const items = useMemo(
+    () => sessions.data?.pages.flatMap((page) => page.sessions) ?? [],
+    [sessions.data],
+  );
+  const hasHidden = items.length > visibleCount;
   return (
     <nav className="session-list" aria-label="Sessions">
       {connected && sessions.isPending && <p className="sidebar-note">Loading…</p>}
@@ -27,7 +44,7 @@ export function SessionList({
       {connected && sessions.isSuccess && items.length === 0 && (
         <p className="sidebar-note">No threads yet</p>
       )}
-      {items.map((session) => (
+      {items.slice(0, visibleCount).map((session) => (
         <button
           key={session.id}
           className="nav-row session-row"
@@ -39,13 +56,27 @@ export function SessionList({
           <time dateTime={new Date(session.updatedAt).toISOString()}>
             {formatAge(session.updatedAt)}
           </time>
+          {connected && active.data?.[session.id] && (
+            <span
+              className="session-activity"
+              role="img"
+              aria-label="Responding"
+              title="Responding…"
+            />
+          )}
         </button>
       ))}
-      {sessions.hasNextPage && (
+      {(hasHidden || sessions.hasNextPage) && (
         <button
           className="nav-row session-more"
-          disabled={sessions.isFetchingNextPage || !connected}
-          onClick={() => void sessions.fetchNextPage()}
+          disabled={sessions.isFetchingNextPage || (!hasHidden && !connected)}
+          onClick={async () => {
+            if (!hasHidden) {
+              const result = await sessions.fetchNextPage();
+              if (result.isError) return;
+            }
+            setVisibleCount((count) => count + 6);
+          }}
         >
           {sessions.isFetchingNextPage ? 'Loading…' : 'Show more'}
         </button>

@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import type { LivePart } from './stream';
+import { messageQuery } from './message-query';
 
 export function useChat(sessionID: string, live: boolean) {
   const key = ['chat', sessionID];
@@ -11,16 +12,13 @@ export function useChat(sessionID: string, live: boolean) {
     refetchInterval,
   });
   const messages = useInfiniteQuery({
-    queryKey: [...key, 'messages'],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam, signal }) => api.messages(sessionID, pageParam, signal),
-    getNextPageParam: (page) => page.cursor.next ?? undefined,
+    ...messageQuery(sessionID),
     refetchInterval,
   });
   const active = useQuery({
     queryKey: ['active'],
     queryFn: ({ signal }) => api.active(signal),
-    refetchInterval,
+    // The event subscription owns recovery polling for this shared snapshot.
   });
   const inbox = useQuery({
     queryKey: [...key, 'inbox'],

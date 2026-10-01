@@ -71,7 +71,13 @@ function WorkItem({ entry, sessionID }: { entry: WorkEntry; sessionID: string })
       (value) => typeof value === 'string',
     );
   const shell = /^(shell|bash|exec|execute)$/.test(tool.name);
-  const title = /^(read|read_file)$/.test(tool.name) ? 'Read' : shell ? 'Run' : tool.name;
+  const title = /^(read|read_file)$/.test(tool.name)
+    ? 'Read'
+    : shell
+      ? 'Run'
+      : tool.name === 'question'
+        ? 'Question'
+        : tool.name;
   const status =
     state.status === 'error'
       ? 'Failed'
@@ -92,7 +98,7 @@ function WorkItem({ entry, sessionID }: { entry: WorkEntry; sessionID: string })
             className="activity-target truncate"
             title={typeof target === 'string' ? target : undefined}
           >
-            {typeof target === 'string' ? target : tool.name}
+            {typeof target === 'string' ? target : tool.name === 'question' ? '' : tool.name}
           </span>
           {state.status === 'completed' || state.status === 'error' ? (
             <HugeiconsIcon

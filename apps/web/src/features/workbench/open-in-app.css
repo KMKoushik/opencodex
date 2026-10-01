@@ -1,0 +1,98 @@
+.open-app {
+  display: inline-flex;
+  flex: none;
+  align-items: stretch;
+  height: 36px;
+  anchor-name: --open-app;
+  -webkit-app-region: no-drag;
+}
+.open-app-trigger {
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  position: relative;
+  width: 36px;
+  border-radius: 6px;
+}
+.open-app-trigger[aria-expanded='true'] {
+  background: var(--selected);
+}
+.open-app img {
+  flex: none;
+  object-fit: contain;
+}
+.open-app-menu {
+  position: fixed;
+  position-anchor: --open-app;
+  inset: auto;
+  top: calc(anchor(bottom) + 6px);
+  right: anchor(right);
+  margin: 0;
+  width: 224px;
+  max-width: calc(100vw - 24px);
+  max-height: min(480px, calc(100dvh - 64px));
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid var(--border-heavy);
+  border-radius: 12px;
+  background: var(--elevated);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  -webkit-app-region: no-drag;
+}
+.open-app-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  text-align: left;
+}
+.open-app-check {
+  margin-left: auto;
+  color: var(--accent-text);
+}
+.open-app-menu [role='separator'] {
+  height: 1px;
+  margin: 5px -5px;
+  background: var(--border);
+}
+.open-app-menu button:focus-visible {
+  background: var(--selected);
+}
+.open-app-note {
+  padding: 8px 9px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.open-app-note.text-error {
+  color: var(--error);
+}
+.open-app-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (hover: hover) {
+  .open-app button:hover:not(:disabled) {
+    background: var(--hover);
+  }
+}
+@media (pointer: coarse) {
+  .open-app {
+    height: 44px;
+  }
+  .open-app-trigger {
+    width: 44px;
+  }
+  .open-app-menu button {
+    min-height: 44px;
+  }
+}

@@ -96,7 +96,11 @@ export function createTimelineProjector() {
               type: 'message',
               message: { ...message, content: [] },
             });
-        } else if (message.type !== 'idle')
+        } else if (
+          message.type !== 'idle' &&
+          message.type !== 'system' &&
+          message.type !== 'synthetic'
+        )
           entries.push({ id: message.id, type: 'message', message });
         cache.set(message, entries);
       }
@@ -120,6 +124,7 @@ function summarizeWork(entries: WorkEntry[]) {
     searches = 0,
     commands = 0,
     edits = 0,
+    questions = 0,
     other = 0,
     errors = 0;
   let active = false;
@@ -135,6 +140,7 @@ function summarizeWork(entries: WorkEntry[]) {
     else if (/^(grep|glob|search|list|ls)$/.test(tool.name)) searches++;
     else if (/^(shell|bash|exec|execute)$/.test(tool.name)) commands++;
     else if (/^(edit|write|patch|apply_patch|write_file)$/.test(tool.name)) edits++;
+    else if (tool.name === 'question') questions++;
     else other++;
   }
   const count = (n: number, singular: string, plural = `${singular}s`) =>
@@ -145,6 +151,7 @@ function summarizeWork(entries: WorkEntry[]) {
       searches ? count(searches, 'search', 'searches') : '',
       commands ? `ran ${count(commands, 'command')}` : '',
       edits ? count(edits, 'edit') : '',
+      questions ? count(questions, 'question') : '',
       other ? count(other, 'tool call') : '',
     ]
       .filter(Boolean)

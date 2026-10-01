@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { defaultContrast, defaultPresetID, findPreset, type Seed, type Variant } from './presets';
+import {
+  defaultContrast,
+  defaultPresetID,
+  findPreset,
+  projectIconSeeds,
+  type Seed,
+  type Variant,
+} from './presets';
 
 const hex = z.string().regex(/^#[0-9a-f]{6}$/i);
 const variantSchema = z.object({
@@ -90,6 +97,13 @@ export function deriveTokens(variant: Variant, preference: VariantPreference) {
   const success = rgb(preset.success ?? (light ? '#00a240' : '#40c977'));
 
   return {
+    ...Object.fromEntries(
+      Object.entries(projectIconSeeds).map(([name, seed]) => [
+        `project-${name}`,
+        css(mix(rgb(seed), surface, light ? 0 : 0.12)),
+      ]),
+    ),
+    'on-project': css(white),
     surface: css(surface),
     'surface-under': css(under),
     elevated: css(

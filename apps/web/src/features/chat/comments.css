@@ -1,0 +1,283 @@
+.comment-editor,
+.comment-card {
+  font: 13px/1.5 var(--font-sans);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  white-space: normal;
+  min-width: 0;
+}
+.comment-editor {
+  padding: 10px;
+  margin: 6px;
+}
+.comment-source {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.comment-editor textarea {
+  display: block;
+  width: 100%;
+  min-height: 64px;
+  max-height: 200px;
+  field-sizing: content;
+  resize: vertical;
+  margin: 8px 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+.comment-editor textarea:focus-visible {
+  outline: none;
+}
+.comment-editor blockquote {
+  margin: 8px 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+  color: var(--text-secondary);
+  max-height: 90px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.comment-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.comment-actions > span {
+  margin-right: auto;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+.comment-card {
+  display: flex;
+  align-items: center;
+  margin: 6px;
+}
+.comment-card-body {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  border: 0;
+  background: none;
+  color: inherit;
+  padding: 8px 10px;
+  cursor: pointer;
+  font: inherit;
+}
+.comment-summary {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.composer-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 0 8px;
+  anchor-name: --composer-context;
+}
+.composer-context-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font: 12px/1 var(--font-sans);
+}
+.composer-context-count {
+  color: var(--accent-text);
+  font-variant-numeric: tabular-nums;
+}
+.composer-context-chip[aria-expanded='true'] {
+  background: var(--selected);
+  border-color: var(--border-heavy);
+}
+.composer-context-preview {
+  position: fixed;
+  position-anchor: --composer-context;
+  inset: auto;
+  left: anchor(left);
+  bottom: calc(anchor(top) + 6px);
+  position-try-fallbacks: flip-inline, flip-block;
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  max-height: min(420px, calc(100dvh - 240px));
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--border-heavy);
+  border-radius: 12px;
+  background: var(--elevated);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font: 13px/1.5 var(--font-sans);
+}
+.context-entry + .context-entry {
+  border-top: 1px solid var(--border);
+}
+.context-entry header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px 6px 12px;
+  background: var(--secondary);
+}
+.context-entry-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.context-entry-action {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  color: var(--text-secondary);
+}
+.context-entry-content {
+  padding: 10px 12px;
+}
+.context-entry-content blockquote {
+  margin: 0;
+  padding-left: 10px;
+  max-height: 120px;
+  overflow: auto;
+  border-left: 2px solid var(--border-heavy);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.context-entry-content blockquote[data-code='true'] {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.context-entry-content p {
+  margin: 8px 0 0;
+  max-height: 120px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.context-entry-content textarea {
+  display: block;
+  width: 100%;
+  field-sizing: content;
+  resize: none;
+  min-height: 54px;
+  max-height: 160px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-heavy);
+  border-radius: 6px;
+  font: inherit;
+}
+@media (hover: hover) {
+  .composer-context-chip:hover,
+  .context-entry-action:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+}
+@media (pointer: coarse) {
+  .composer-context-chip {
+    min-height: 44px;
+  }
+  .context-entry-action {
+    width: 44px;
+    height: 44px;
+  }
+  .context-entry-content textarea {
+    font-size: 16px;
+  }
+}
+.response-selection {
+  position: fixed;
+  z-index: 30;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+}
+.response-selection-actions {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.response-selection .comment-editor {
+  width: 340px;
+  max-width: calc(100vw - 24px);
+  margin: 0;
+  box-shadow: var(--shadow);
+}
+.cm-comment-widget {
+  padding: 1px 8px;
+}
+.cm-comment-gutter button {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  font: inherit;
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .cm-comment-gutter button {
+    opacity: 0;
+  }
+  .cm-comment-gutter button:hover {
+    opacity: 1;
+  }
+  .cm-comment-gutter button:hover {
+    background: var(--accent-soft);
+    color: var(--accent-text);
+  }
+  .comment-card-body:hover {
+    background: var(--hover);
+    border-radius: 10px;
+  }
+}
+::highlight(response-comment) {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+::highlight(reviewed-response) {
+  background: var(--accent-soft);
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+}
+@media (pointer: coarse) {
+  .comment-editor textarea {
+    font-size: 16px;
+  }
+  .comment-card-body {
+    min-height: 44px;
+  }
+}

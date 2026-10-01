@@ -10,13 +10,41 @@ import type {
   SessionInfo,
   PermissionRequest,
   FormInfo,
+  PromptFileAttachment,
+  OpenCodeProject,
 } from '../packages/contracts/src';
+
+const pngBase64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAeElEQVR4nO3PUQkAIBTAwNfJunbVEH4cwmABbrP2+brhgga0oAEtaEALGtCCBrSgAS1oQAsa0IIGtKABLWhACxrQgga0oAEtaEALGtCCBrSgAS1oQAsa0IIGtKABLWhACxrQgga0oAEtaEALGtCCBrSgAS1oQAseu0MI4aWmCN4rAAAAAElFTkSuQmCC';
 
 // A protocol fixture exercises the actual SDK and gateway without touching personal sessions.
 async function fixture(directory: string) {
   await mkdir(directory, { recursive: true });
   await mkdir(`${directory}-other`, { recursive: true });
   const streams = new Set<ServerResponse>();
+  const projects: OpenCodeProject[] = [
+    {
+      id: 'project-1',
+      canonical: directory,
+      name: 'Fixture project',
+      time: { created: 1, updated: 1, active: 1 },
+      sandboxes: [],
+    },
+    {
+      id: 'project-before-git-init',
+      canonical: directory,
+      name: 'Old project name',
+      time: { created: 0, updated: 0, active: 0 },
+      sandboxes: [],
+    },
+    {
+      id: 'different-folder-same-name',
+      canonical: `${directory}-other`,
+      name: 'Fixture project',
+      time: { created: 0, updated: 0, active: 0 },
+      sandboxes: [],
+    },
+  ];
   const sessions: SessionInfo[] = [
     {
       id: 'fixture-session',
@@ -53,6 +81,7 @@ async function fixture(directory: string) {
   let decision: string | undefined;
   let answer: unknown;
   let sentText = '';
+  let sentFiles: Array<{ name: string; uri: string }> = [];
   let sessionID = 'fixture-session';
   const emit = (event: object) => {
     for (const stream of streams) stream.write(`data: ${JSON.stringify(event)}\n\n`);
@@ -98,32 +127,34 @@ async function fixture(directory: string) {
           data: models.map((model) => ({ ...model, enabled: true, limit: { context: 200_000 } })),
         }),
       );
-    if (url.pathname === '/api/project')
+    if (url.pathname === '/api/project') return res.end(JSON.stringify(projects));
+    if (url.pathname === '/api/location') {
+      const location = { directory: url.searchParams.get('location[directory]')! };
+      let project = projects.find((project) => project.canonical === location.directory);
+      if (!project) {
+        project = {
+          id: `project-${projects.length + 1}`,
+          canonical: location.directory,
+          time: { created: 1, updated: 1, active: 1 },
+          sandboxes: [],
+        };
+        projects.push(project);
+      }
       return res.end(
-        JSON.stringify([
-          {
-            id: 'project-1',
-            canonical: directory,
-            name: 'Fixture project',
-            time: { created: 1, updated: 1 },
-            sandboxes: [],
-          },
-          {
-            id: 'project-before-git-init',
-            canonical: directory,
-            name: 'Old project name',
-            time: { created: 0, updated: 0 },
-            sandboxes: [],
-          },
-          {
-            id: 'different-folder-same-name',
-            canonical: `${directory}-other`,
-            name: 'Fixture project',
-            time: { created: 0, updated: 0 },
-            sandboxes: [],
-          },
-        ]),
+        JSON.stringify({
+          directory: location.directory,
+          project: { id: project.id, canonical: project.canonical, directory: project.canonical },
+        }),
       );
+    }
+    if (req.method === 'PATCH' && url.pathname.startsWith('/api/project/')) {
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      const project = projects.find((project) => url.pathname === `/api/project/${project.id}`)!;
+      Object.assign(project, JSON.parse(body));
+      emit({ type: 'project.updated', data: project });
+      return res.end(JSON.stringify(project));
+    }
     if (url.pathname === '/api/info') {
       res.end(JSON.stringify({ version: '2.0.19', pid: 1, urls: [], paths: { tmp: directory } }));
       return;
@@ -150,7 +181,18 @@ async function fixture(directory: string) {
     if (url.pathname === '/api/session/active')
       return res.end(JSON.stringify({ data: running ? { [sessionID]: { type: 'running' } } : {} }));
     const session = sessions.find((item) => url.pathname === `/api/session/${item.id}`);
-    if (session) return res.end(JSON.stringify({ data: session }));
+    if (session)
+      return res.end(
+        JSON.stringify({
+          data: {
+            ...session,
+            // Native snapshots normalize an omitted variant to this sentinel.
+            model: session.model
+              ? { ...session.model, variant: session.model.variant ?? 'default' }
+              : undefined,
+          },
+        }),
+      );
     if (url.pathname.endsWith('/message')) {
       const cursor = url.searchParams.get('cursor') ?? '';
       messageRequests.push(cursor);
@@ -181,11 +223,19 @@ async function fixture(directory: string) {
       }
       if (url.pathname.endsWith('/prompt')) {
         sentText = input.text;
+        sentFiles = input.files ?? [];
+        const files: PromptFileAttachment[] = sentFiles.map((file) => ({
+          name: file.name,
+          mime: file.uri.slice(5, file.uri.indexOf(';')),
+          data: file.uri.slice(file.uri.indexOf(',') + 1),
+          source: { type: 'inline' },
+        }));
         running = true;
         messages.push({
           type: 'user',
           id: `user-${messages.length}`,
           text: sentText,
+          files,
           time: { created: Date.now() },
         });
         res.end(
@@ -195,7 +245,7 @@ async function fixture(directory: string) {
               id: messages.at(-1)!.id,
               sessionID,
               time: { created: Date.now() },
-              payload: { text: sentText },
+              payload: { text: sentText, files },
               delivery: 'steer',
             },
           }),
@@ -233,6 +283,7 @@ async function fixture(directory: string) {
     url: `http://127.0.0.1:${address.port}`,
     messageRequests,
     sessions,
+    projects,
     seedLink(url: string) {
       messages.push({
         id: 'link-message',
@@ -391,6 +442,9 @@ async function fixture(directory: string) {
     get running() {
       return running;
     },
+    get sentFiles() {
+      return sentFiles;
+    },
     close: () =>
       new Promise<void>((done) => {
         for (const stream of streams) stream.end();
@@ -398,6 +452,278 @@ async function fixture(directory: string) {
         server.closeAllConnections();
       }),
   };
+}
+
+test('projects: native metadata, icons, search, add and sidebar persistence', async ({
+  page,
+}, info) => {
+  const directory = info.outputPath('project');
+  const upstream = await fixture(directory);
+  for (const [index, name] of [
+    'opencodex',
+    'home',
+    'ronto',
+    'useSend',
+    'dawn',
+    'zenletter',
+    'opencode',
+    'notes',
+  ].entries()) {
+    upstream.projects.push({
+      id: `sample-${index}`,
+      canonical: `/projects/${name}`,
+      name,
+      icon: { color: ['gray', 'orange', 'gray', 'green', 'pink', 'purple'][index % 6] },
+      time: { created: 1, updated: 1, active: 1 },
+      sandboxes: [],
+    });
+  }
+  const previous = process.env.OPENCODE_URL;
+  process.env.OPENCODE_URL = upstream.url;
+  const gateway = await startGateway({ assets: resolve('apps/web/dist') });
+  try {
+    await page.goto(gateway.url);
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Projects', exact: true }).click();
+    const list = page.getByRole('list', { name: 'Project settings' });
+    await expect(list.getByRole('listitem')).toHaveCount(10);
+    await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await page.screenshot({ path: info.outputPath('projects-dark.png'), animations: 'disabled' });
+    await page.emulateMedia({ colorScheme: 'light' });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await page.screenshot({ path: info.outputPath('projects-light.png'), animations: 'disabled' });
+    const search = page.getByRole('searchbox', { name: 'Search projects' });
+    await search.fill('does-not-exist');
+    await expect(page.getByText('No projects match your search.')).toBeVisible();
+    await search.fill(`${directory}-other`);
+    await expect(list.getByRole('listitem')).toHaveCount(1);
+    await search.fill('');
+    await list.getByRole('button', { name: 'Actions for Fixture project' }).first().click();
+    await page.getByRole('menuitem', { name: 'Edit project', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: 'Edit project', exact: true });
+    await editor.getByRole('textbox', { name: 'Project name' }).fill('Design workspace');
+    await editor.getByRole('radio', { name: 'Purple icon' }).check();
+    await editor.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    await expect(list.getByRole('button', { name: 'Design workspace', exact: true })).toBeVisible();
+    expect(upstream.projects[0]?.icon?.color).toBe('purple');
+    await list.getByRole('button', { name: 'Design workspace', exact: true }).click();
+    await editor.getByLabel('Project icon', { exact: true }).setInputFiles({
+      name: 'icon.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(pngBase64, 'base64'),
+    });
+    await expect(editor.locator('.project-editor-icon img')).toBeVisible();
+    await page.screenshot({ path: info.outputPath('project-editor.png') });
+    await editor.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    expect(upstream.projects[0]?.icon?.override).toMatch(/^data:image\/png;base64,/);
+    await page.reload();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Projects', exact: true }).click();
+    await expect(
+      list.getByRole('button', { name: 'Design workspace', exact: true }).locator('img'),
+    ).toBeVisible();
+    await list.getByRole('button', { name: 'Actions for Design workspace' }).click();
+    await page.keyboard.press('Escape');
+    await expect(list.getByRole('button', { name: 'Actions for Design workspace' })).toBeFocused();
+    const added = `${directory}/new-project`;
+    await mkdir(added, { recursive: true });
+    await page.getByRole('button', { name: 'Add project', exact: true }).click();
+    const add = page.getByRole('dialog', { name: 'Add project', exact: true });
+    await add.getByRole('textbox', { name: 'Project directory' }).fill(added);
+    await add.getByRole('button', { name: 'Open', exact: true }).click();
+    await expect(add).toHaveCount(0);
+    await expect(list.getByRole('button', { name: 'new-project', exact: true })).toBeVisible();
+    expect(upstream.sessions).toHaveLength(1);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator('.sidebar')).toBeHidden();
+    await page.locator('.main').evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await page.screenshot({ path: info.outputPath('projects-mobile.png'), animations: 'disabled' });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
+      false,
+    );
+    await list.getByRole('button', { name: 'Actions for Design workspace' }).click();
+    await page.getByRole('menuitem', { name: 'Open project', exact: true }).click();
+    await page.getByRole('button', { name: 'Toggle sidebar' }).click();
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Projects', exact: true })
+        .getByRole('button', { name: 'Design workspace', exact: true })
+        .locator('img'),
+    ).toBeVisible();
+  } finally {
+    await gateway.close();
+    await upstream.close();
+    if (previous === undefined) delete process.env.OPENCODE_URL;
+    else process.env.OPENCODE_URL = previous;
+  }
+});
+
+for (const development of [false, true]) {
+  test(`composer${development ? ' (development)' : ''}: paste, drop, file picking, navigation and attachment-only retry`, async ({
+    page,
+  }, info) => {
+    const directory = info.outputPath('project');
+    const upstream = await fixture(directory);
+    const previous = process.env.OPENCODE_URL;
+    process.env.OPENCODE_URL = upstream.url;
+    const gateway = await startGateway({ assets: resolve('apps/web/dist') });
+    const require = createRequire(resolve('apps/web/package.json'));
+    const { createServer: createViteServer } = await import(require.resolve('vite'));
+    const dev = development
+      ? await createViteServer({
+          cacheDir: info.outputPath('vite-cache'),
+          root: resolve('apps/web'),
+          configFile: resolve('apps/web/vite.config.ts'),
+          server: { port: 0, strictPort: false, proxy: { '/api': { target: gateway.url } } },
+        })
+      : undefined;
+    try {
+      await dev?.listen();
+      await page.goto(dev?.resolvedUrls?.local[0] ?? gateway.url);
+      await page.getByLabel('Project directory', { exact: true }).fill(directory);
+      await page.getByRole('button', { name: 'Open', exact: true }).click();
+      await page.getByRole('button', { name: 'Explore the project' }).click();
+      const input = page.getByRole('textbox', { name: 'Message', exact: true });
+      const send = page.getByRole('button', { name: 'Send message' });
+      await expect(send).toBeDisabled();
+      const chooser = page.waitForEvent('filechooser');
+      await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+      await (
+        await chooser
+      ).setFiles({
+        name: 'notes.ts',
+        mimeType: '',
+        buffer: Buffer.from('export const answer = 42;'),
+      });
+      await expect(send).toBeEnabled();
+      const draftDownload = page.waitForEvent('download');
+      await page.getByRole('button', { name: 'Download notes.ts', exact: true }).click();
+      const draftFile = await draftDownload;
+      expect(draftFile.suggestedFilename()).toBe('notes.ts');
+      expect(await readFile((await draftFile.path())!, 'utf8')).toBe('export const answer = 42;');
+      await input.evaluate((element, base64) => {
+        const clipboardData = new DataTransfer();
+        clipboardData.items.add(
+          new File([Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))], 'pasted.png', {
+            type: 'image/png',
+          }),
+        );
+        element.dispatchEvent(
+          new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }),
+        );
+      }, pngBase64);
+      await expect(
+        page.locator('.composer').getByRole('img', { name: 'pasted.png' }),
+      ).toBeVisible();
+      await expect
+        .poll(() =>
+          page
+            .locator('.composer-attachments img')
+            .evaluate((image: HTMLImageElement) => image.naturalWidth),
+        )
+        .toBe(64);
+      const previewTrigger = page.getByRole('button', { name: 'Preview pasted.png', exact: true });
+      await previewTrigger.focus();
+      await page.keyboard.press('Enter');
+      const preview = page.getByRole('dialog', { name: 'Image preview: pasted.png', exact: true });
+      await expect(preview).toBeVisible();
+      await expect(preview.getByRole('img', { name: 'pasted.png', exact: true })).toHaveJSProperty(
+        'naturalWidth',
+        64,
+      );
+      await expect(preview.getByRole('button', { name: 'Close image preview' })).toBeFocused();
+      await page.screenshot({ path: info.outputPath('image-preview-desktop.png') });
+      await page.keyboard.press('Escape');
+      await expect(preview).toHaveCount(0);
+      await expect(previewTrigger).toBeFocused();
+      expect(upstream.sentFiles).toEqual([]);
+      const drop = await page.evaluateHandle(() => {
+        const data = new DataTransfer();
+        data.items.add(new File(['%PDF-1.7\nfixture'], 'spec.pdf', { type: 'application/pdf' }));
+        return data;
+      });
+      await page.locator('.composer').dispatchEvent('dragenter', { dataTransfer: drop });
+      await expect(page.getByText('Drop files to attach')).toBeVisible();
+      await page.locator('.composer').dispatchEvent('drop', { dataTransfer: drop });
+      await drop.dispose();
+      await expect(page.getByText('Drop files to attach')).toBeHidden();
+      await expect(page.getByRole('button', { name: 'Remove spec.pdf' })).toBeVisible();
+      await page.keyboard.press('ControlOrMeta+n');
+      await expect(page.getByRole('list', { name: 'Attachments', exact: true })).toHaveCount(0);
+      await page.getByRole('button', { name: 'Explore the project' }).click();
+      await expect(
+        page.getByRole('list', { name: 'Attachments', exact: true }).getByRole('listitem'),
+      ).toHaveCount(3);
+      await page.getByRole('button', { name: 'Remove spec.pdf' }).click();
+      await page.locator('input[type=file]').setInputFiles({
+        name: 'binary.bin',
+        mimeType: 'application/octet-stream',
+        buffer: Buffer.from([0, 255, 0]),
+      });
+      await send.click();
+      await expect(page.getByRole('alert')).toContainText('binary.bin is not a supported file');
+      expect(upstream.sentFiles).toEqual([]);
+      await page.getByRole('button', { name: 'Remove binary.bin' }).click();
+      await page.route('**/api/sessions/*/prompt', (route) =>
+        route.fulfill({
+          status: 502,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'Fixture admission failed.' }),
+        }),
+      );
+      await send.click();
+      await expect(page.getByRole('alert')).toContainText('Fixture admission failed.');
+      await expect(
+        page.getByRole('list', { name: 'Attachments', exact: true }).getByRole('listitem'),
+      ).toHaveCount(2);
+      await page.screenshot({ path: info.outputPath('attachments-desktop.png') });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(page.locator('.sidebar')).toBeHidden();
+      await expect(send).toBeInViewport();
+      await page.screenshot({ path: info.outputPath('attachments-mobile.png') });
+      await page.unroute('**/api/sessions/*/prompt');
+      await send.click();
+      await expect(page.getByRole('list', { name: 'Attachments', exact: true })).toHaveCount(0);
+      expect(upstream.sentText).toBe('');
+      expect(upstream.sentFiles).toEqual([
+        {
+          name: 'notes.ts',
+          uri: `data:text/plain;base64,${Buffer.from('export const answer = 42;').toString('base64')}`,
+        },
+        { name: 'pasted.png', uri: `data:image/png;base64,${pngBase64}` },
+      ]);
+      await expect(
+        page
+          .getByRole('article', { name: 'You', exact: true })
+          .getByRole('img', { name: 'pasted.png' }),
+      ).toBeVisible();
+      await page.getByRole('button', { name: 'Preview pasted.png', exact: true }).click();
+      await expect(preview).toBeVisible();
+      await page.screenshot({ path: info.outputPath('image-preview-mobile.png') });
+      await page.getByRole('button', { name: 'Close image preview' }).click();
+      await expect(preview).toHaveCount(0);
+      await page.getByRole('button', { name: 'Preview pasted.png', exact: true }).click();
+      await page.mouse.click(2, 2);
+      await expect(preview).toHaveCount(0);
+      expect(upstream.running).toBe(true);
+      const sentDownload = page.waitForEvent('download');
+      await page.getByRole('button', { name: 'Download notes.ts', exact: true }).click();
+      const sentFile = await sentDownload;
+      expect(sentFile.suggestedFilename()).toBe('notes.ts');
+      expect(await readFile((await sentFile.path())!, 'utf8')).toBe('export const answer = 42;');
+    } finally {
+      await dev?.close();
+      await gateway.close();
+      await upstream.close();
+      if (previous === undefined) delete process.env.OPENCODE_URL;
+      else process.env.OPENCODE_URL = previous;
+    }
+  });
 }
 
 test('browser: real gateway, projects, live sessions, and mobile navigation', async ({
@@ -456,25 +782,31 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
     await expect(
       projects.getByRole('button', { name: 'Old project name', exact: true }),
     ).toHaveCount(0);
-    await page.getByRole('button', { name: 'New chat', exact: true }).click();
+    await page.keyboard.press('ControlOrMeta+n');
     await expect(page.getByRole('heading', { name: 'New chat', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Let’s build something' })).toBeVisible();
     expect(upstream.sessions[0]?.agent).toBe('build');
     await expect(page.locator('.composer')).not.toContainText(/\b(build|plan)\b/i);
-    await page.route('**/api/sessions/*/model', (route) =>
-      route.fulfill({ status: 502, json: { message: 'Fixture selection failure' } }),
-    );
+    const selectionRequests: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/model'))
+        selectionRequests.push(request.url());
+    });
+    const thinkingLevel = page.getByRole('button', { name: 'Thinking level', exact: true });
+    const messageInput = page.getByRole('textbox', { name: 'Message', exact: true });
+    await messageInput.focus();
+    for (const label of Array.from({ length: 3 }, () => ['Low', 'High', 'Default']).flat()) {
+      await expect(thinkingLevel).toBeEnabled();
+      await page.keyboard.press('Control+t');
+      await expect(thinkingLevel).toHaveText(label);
+      await expect(messageInput).toBeFocused();
+    }
     await page.getByRole('button', { name: 'Thinking level', exact: true }).click();
     await page.getByRole('option', { name: 'High', exact: true }).click();
-    await expect(page.getByRole('alert')).toContainText('Could not change model settings');
-    await expect(page.getByRole('button', { name: 'Thinking level', exact: true })).toHaveText(
-      'Default',
-    );
-    await page.unroute('**/api/sessions/*/model');
-    await page.getByRole('button', { name: 'Thinking level', exact: true }).click();
-    await page.getByRole('option', { name: 'High', exact: true }).click();
-    await expect.poll(() => upstream.sessions[0]?.model?.variant).toBe('high');
-    await page.getByRole('button', { name: 'Model', exact: true }).click();
+    expect(upstream.sessions[0]?.model).toBeUndefined();
+    await page.keyboard.press('ControlOrMeta+Shift+m');
+    await page.keyboard.press('ControlOrMeta+b');
+    await expect(page.locator('.sidebar')).toBeVisible();
     const providerGroup = page.getByRole('treeitem', { name: 'Fixture Provider', exact: true });
     await providerGroup.click();
     await expect(providerGroup).toHaveAttribute('aria-expanded', 'false');
@@ -485,7 +817,7 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
     await expect(providerGroup).toHaveAttribute('aria-expanded', 'true');
     await page.keyboard.press('Enter');
     await expect(page.getByRole('button', { name: 'Thinking level', exact: true })).toBeDisabled();
-    expect(upstream.sessions[0]?.model).toEqual({ id: 'fast', providerID: 'fixture' });
+    expect(upstream.sessions[0]?.model).toBeUndefined();
     await page.getByRole('button', { name: 'Model', exact: true }).click();
     await page.getByRole('combobox', { name: 'Search model', exact: true }).fill('other');
     await page.keyboard.press('Enter');
@@ -495,10 +827,9 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
     await page.getByRole('button', { name: 'Thinking level', exact: true }).click();
     await expect(page.getByRole('option', { name: 'High', exact: true })).toHaveCount(0);
     await page.getByRole('option', { name: 'Medium', exact: true }).click();
-    await expect
-      .poll(() => upstream.sessions[0]?.model)
-      .toEqual({ id: 'fixture-model', providerID: 'other', variant: 'medium' });
-    await page.reload();
+    expect(upstream.sessions[0]?.model).toBeUndefined();
+    expect(selectionRequests).toEqual([]);
+    await page.getByRole('button', { name: /^Updated through/ }).click();
     await page
       .getByRole('navigation', { name: 'Sessions', exact: true })
       .getByRole('button', { name: /^New chat/ })
@@ -514,10 +845,46 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
     await expect(page.locator('.sidebar')).toBeHidden();
     await page.getByRole('button', { name: 'Show sidebar' }).click();
     await expect(page.locator('.sidebar')).toBeVisible();
+    await page.keyboard.press('ControlOrMeta+Shift+l');
+    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeFocused();
+    await page.keyboard.press('ControlOrMeta+b');
+    await expect(page.locator('.sidebar')).toBeHidden();
+    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeFocused();
+    await page.keyboard.press('ControlOrMeta+b');
+    await page.keyboard.press('ControlOrMeta+/');
+    await expect(page.getByRole('heading', { name: 'Shortcuts', exact: true })).toBeVisible();
+    await page.screenshot({ path: info.outputPath('shortcuts-desktop.png') });
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeVisible();
     await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Review the project');
+    const admitted = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    await page.route('**/api/sessions/*/prompt', async (route) => {
+      admitted.resolve();
+      await release.promise;
+      await route.continue();
+    });
     await page.getByRole('button', { name: 'Send message' }).click();
+    await admitted.promise;
+    await messageInput.fill('Newer draft');
+    await page.getByRole('button', { name: /^Updated through/ }).click();
+    await page
+      .getByRole('navigation', { name: 'Sessions', exact: true })
+      .getByRole('button', { name: /^New chat/ })
+      .click();
+    await expect(messageInput).toHaveValue('Newer draft');
+    await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    release.resolve();
     await expect.poll(() => upstream.sentText).toBe('Review the project');
-    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('');
+    expect(upstream.sessions[0]?.model).toEqual({
+      id: 'fixture-model',
+      providerID: 'other',
+      variant: 'medium',
+    });
+    await expect(page.getByRole('button', { name: 'Send message' })).toBeEnabled();
+    await expect(messageInput).toHaveValue('Newer draft');
+    await messageInput.fill('');
+    await page.unroute('**/api/sessions/*/prompt');
     await expect(page.getByRole('article', { name: 'You', exact: true })).toHaveText(
       'Review the project',
     );
@@ -566,12 +933,22 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
       'One more thing',
     );
     await page.getByRole('button', { name: 'Send message' }).click();
-    await page.getByRole('button', { name: 'Stop', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeEnabled();
+    await page.keyboard.press('ControlOrMeta+Shift+m');
+    await expect(page.getByRole('combobox', { name: 'Search model', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    expect(upstream.running).toBe(true);
+    await page.keyboard.press('Escape');
     await expect.poll(() => upstream.running).toBe(false);
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).not.toBeVisible();
     await page.screenshot({ path: info.outputPath('chat-desktop.png') });
 
     await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator('.sidebar')).toBeHidden();
+    await page.keyboard.press('ControlOrMeta+b');
+    await expect(page.locator('.sidebar')).toBeVisible();
+    await page.keyboard.press('ControlOrMeta+b');
     await expect(page.locator('.sidebar')).toBeHidden();
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.screenshot({ path: info.outputPath('chat-mobile.png') });
@@ -749,8 +1126,30 @@ test('Electron: bundled gateway, isolated renderer, and native folder bridge', a
     );
     const page = await application.firstWindow();
     expect(await page.evaluate(() => window.desktop!.getPreferences())).toEqual(savedPreferences);
+    const openApps = await page.evaluate(() => window.desktop!.listOpenApps());
+    expect(openApps.some((entry) => entry.id === 'finder')).toBe(true);
+    if (process.platform === 'darwin') {
+      expect(openApps.find((entry) => entry.id === 'finder')?.icon).toMatch(
+        /^data:image\/png;base64,/,
+      );
+      expect(openApps.some((entry) => entry.id === 'terminal')).toBe(true);
+    }
+    await expect(
+      page.evaluate(() => window.desktop!.openInApp('relative/path', 'finder')),
+    ).rejects.toThrow('Expected an absolute directory');
+    await expect(
+      page.evaluate((path) => window.desktop!.openInApp(path, 'finder'), preferencesFile),
+    ).rejects.toThrow('Choose a project directory');
     await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(30, 30, 46)');
-    await expect(page.locator('.toolbar-project')).toHaveText('project');
+    await expect(page.locator('.toolbar-project')).toHaveText('Fixture project');
+    await page.keyboard.press('ControlOrMeta+b');
+    await expect(page.locator('.sidebar')).toBeHidden();
+    await page.keyboard.press('ControlOrMeta+b');
+    await expect(page.locator('.sidebar')).toBeVisible();
+    await page.keyboard.press('ControlOrMeta+,');
+    await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'Open project', exact: true })).toBeVisible();
     type LinkState = { opened: string[]; copied: string[]; menu?: Electron.Menu };
     await application.evaluate(({ shell, clipboard, Menu }) => {
       const state: LinkState = { opened: [], copied: [] };
@@ -768,11 +1167,76 @@ test('Electron: bundled gateway, isolated renderer, and native folder bridge', a
     await application.evaluate(({ dialog }, selected) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [selected] });
     }, directory);
-    await page.getByRole('button', { name: 'Open project', exact: true }).click();
+    await page.keyboard.press('ControlOrMeta+o');
     await page.getByRole('button', { name: 'Browse for a project folder' }).click();
+    await expect(
+      page.locator('.sidebar-actions').getByRole('button', { name: 'New chat', exact: true }),
+    ).toBeEnabled();
+    const sessionCount = upstream.sessions.length;
+    await page.keyboard.press('ControlOrMeta+n');
+    await expect.poll(() => upstream.sessions.length).toBe(sessionCount + 1);
+    await expect(page.getByRole('heading', { name: 'New chat', exact: true })).toBeVisible();
+    await page.keyboard.press('ControlOrMeta+Alt+n');
+    await expect.poll(() => upstream.sessions.length).toBe(sessionCount + 2);
     await page.getByRole('button', { name: 'Explore the project' }).click();
     await expect(page.getByRole('heading', { name: 'Explore the project' })).toBeVisible();
     expect(await page.evaluate(() => 'require' in window || 'process' in window)).toBe(false);
+    await page.locator('input[type=file]').setInputFiles({
+      name: 'download.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('Original attachment bytes'),
+    });
+    for (const source of ['draft', 'sent']) {
+      if (source === 'sent') {
+        await page.getByRole('button', { name: 'Send message', exact: true }).click();
+        await expect(page.locator('.composer-attachments')).toHaveCount(0);
+      }
+      const downloadPath = info.outputPath(`download-${source}.txt`);
+      const downloaded = application.evaluate(
+        ({ BrowserWindow }, path) =>
+          new Promise<string>((resolve) => {
+            BrowserWindow.getAllWindows()[0]!.webContents.session.once(
+              'will-download',
+              (_event, item) => {
+                item.setSavePath(path);
+                item.once('done', (_event, state) => resolve(state));
+              },
+            );
+          }),
+        downloadPath,
+      );
+      await page.getByRole('button', { name: 'Download download.txt', exact: true }).click();
+      expect(await downloaded).toBe('completed');
+      expect(await readFile(downloadPath, 'utf8')).toBe('Original attachment bytes');
+    }
+    await application.evaluate(async ({ clipboard, ClipboardItem }, base64) => {
+      await clipboard.write([
+        new ClipboardItem({
+          'image/png': new Blob([Buffer.from(base64, 'base64')], { type: 'image/png' }),
+        }),
+      ]);
+    }, pngBase64);
+    await page.getByRole('textbox', { name: 'Message', exact: true }).focus();
+    await page.keyboard.press('ControlOrMeta+v');
+    await expect(page.locator('.composer-attachments img')).toHaveCount(1);
+    await expect
+      .poll(() =>
+        page
+          .locator('.composer-attachments img')
+          .evaluate((image: HTMLImageElement) => image.naturalWidth),
+      )
+      .toBe(64);
+    await page
+      .locator('.composer-attachments')
+      .getByRole('button', { name: /^Remove / })
+      .click();
+    await expect(page.locator('.composer-attachments')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Thinking level', exact: true })).toBeEnabled();
+    await page.getByRole('textbox', { name: 'Message', exact: true }).focus();
+    await page.keyboard.press('Control+t');
+    await expect(page.getByRole('button', { name: 'Thinking level', exact: true })).toHaveText(
+      'Low',
+    );
     const appURL = page.url();
     const link = page.getByRole('link', { name: 'Fixture link', exact: true });
     await link.click();
@@ -854,7 +1318,7 @@ test('Electron: bundled gateway, isolated renderer, and native folder bridge', a
     application = await launch();
     const reopened = await application.firstWindow();
     await expect(reopened.getByRole('heading', { name: 'Let’s build something' })).toBeVisible();
-    await expect(reopened.locator('.toolbar-project')).toHaveText('project');
+    await expect(reopened.locator('.toolbar-project')).toHaveText('Fixture project');
     await expect(reopened.locator('body')).toHaveCSS('background-color', 'rgb(36, 39, 58)');
     const projects = reopened.getByRole('navigation', { name: 'Projects', exact: true });
     await expect(projects.locator('.project-row')).toHaveCount(1);

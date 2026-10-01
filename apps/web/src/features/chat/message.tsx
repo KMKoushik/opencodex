@@ -1,18 +1,15 @@
 import { memo } from 'react';
 import type { SessionMessageInfo } from '@opencodex/contracts';
 import { Disclosure } from './disclosure';
+import { MessageAttachments } from './message-attachments';
 
 export const Message = memo(function Message({ message }: { message: SessionMessageInfo }) {
   switch (message.type) {
     case 'user':
       return (
         <article className="user-message" aria-label="You">
-          <p>{message.text}</p>
-          {message.files?.map((file, index) => (
-            <p className="message-note" key={index}>
-              Attachment: {file.name || file.mime}
-            </p>
-          ))}
+          {message.text && <p className="user-message-bubble">{message.text}</p>}
+          <MessageAttachments files={message.files} />
         </article>
       );
     case 'assistant':
@@ -57,9 +54,10 @@ export const Message = memo(function Message({ message }: { message: SessionMess
       return <p className="message-note">Directory: {message.location.directory}</p>;
     case 'system':
     case 'synthetic':
+      return null;
     case 'skill':
       return (
-        <Disclosure id={message.id} label={message.type === 'skill' ? 'Skill' : 'Context'}>
+        <Disclosure id={message.id} label="Skill">
           <p className="reasoning-text">{message.text}</p>
         </Disclosure>
       );

@@ -5,6 +5,7 @@ import {
   projectSchema,
   sessionPageSchema,
   type OpenCodeProject,
+  type ProjectUpdate,
   type SessionInfo,
   type SessionMessagesResponse,
   type SessionInboxInfo,
@@ -13,9 +14,19 @@ import {
   type PermissionRequest,
   type PermissionReply,
   type FormInfo,
+  type CommandInfo,
+  sessionActionSchema,
   type FormAnswer,
   type ModelCatalog,
   type ModelRef,
+  type PromptFiles,
+  type WorkspaceVcs,
+  type WorkspaceSkills,
+  type McpServer,
+  type WorkspaceFile,
+  type FileSystemEntry,
+  type FileDiffInfo,
+  type Pty,
 } from '@opencodex/contracts';
 
 async function nativeRequest<T>(path: string, options?: RequestInit): Promise<T> {
@@ -42,11 +53,71 @@ const sessionPath = (id: string) => `/sessions/${encodeURIComponent(id)}`;
 const post = (body?: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) });
 
 export const api = {
+  terminals: (directory: string, signal: AbortSignal) =>
+    nativeRequest<Pty[]>(`/terminals?${new URLSearchParams({ directory })}`, { signal }),
+  createTerminal: (directory: string) =>
+    nativeRequest<Pty>(`/terminals?${new URLSearchParams({ directory })}`, post()),
+  removeTerminal: (directory: string, id: string) =>
+    nativeRequest<{ ok: true }>(
+      `/terminals/${encodeURIComponent(id)}?${new URLSearchParams({ directory })}`,
+      { method: 'DELETE' },
+    ),
+  resizeTerminal: (
+    directory: string,
+    id: string,
+    size: { cols: number; rows: number },
+    signal: AbortSignal,
+  ) =>
+    nativeRequest<Pty>(
+      `/terminals/${encodeURIComponent(id)}?${new URLSearchParams({ directory })}`,
+      { method: 'PATCH', body: JSON.stringify({ size }), signal },
+    ),
+  commands: (directory: string, signal: AbortSignal) =>
+    nativeRequest<CommandInfo[]>(`/commands?${new URLSearchParams({ directory })}`, { signal }),
+  sessionAction: (id: string, input: z.infer<typeof sessionActionSchema>) =>
+    nativeRequest<SessionInfo | null>(`${sessionPath(id)}/action`, post(input)),
+  exportSession: (id: string) => nativeRequest<unknown>(`${sessionPath(id)}/export`),
+  files: (directory: string, path: string, query: string, signal: AbortSignal) =>
+    nativeRequest<FileSystemEntry[]>(
+      `/workspace/files?${new URLSearchParams({ directory, ...(path ? { path } : {}), ...(query ? { query } : {}) })}`,
+      { signal },
+    ),
+  file: (directory: string, path: string, signal: AbortSignal) =>
+    nativeRequest<WorkspaceFile>(`/workspace/file?${new URLSearchParams({ directory, path })}`, {
+      signal,
+    }),
+  saveFile: (input: { directory: string; path: string; text: string; version: string }) =>
+    nativeRequest<WorkspaceFile>('/workspace/file', { method: 'PUT', body: JSON.stringify(input) }),
+  changes: (directory: string, mode: 'working' | 'branch', signal: AbortSignal) =>
+    nativeRequest<WorkspaceVcs['files']>(
+      `/workspace/diff?${new URLSearchParams({ directory, mode })}`,
+      { signal },
+    ),
+  diff: (directory: string, mode: 'working' | 'branch', path: string, signal: AbortSignal) =>
+    nativeRequest<FileDiffInfo | null>(
+      `/workspace/diff?${new URLSearchParams({ directory, mode, path })}`,
+      { signal },
+    ),
+  workspaceVcs: (directory: string, signal: AbortSignal) =>
+    nativeRequest<WorkspaceVcs>(`/workspace/vcs?${new URLSearchParams({ directory })}`, { signal }),
+  workspaceMcp: (directory: string, signal: AbortSignal) =>
+    nativeRequest<McpServer[]>(`/workspace/mcp?${new URLSearchParams({ directory })}`, { signal }),
+  workspaceSkills: (directory: string, signal: AbortSignal) =>
+    nativeRequest<WorkspaceSkills>(`/workspace/skills?${new URLSearchParams({ directory })}`, {
+      signal,
+    }),
   models: (directory: string, signal: AbortSignal) =>
     nativeRequest<ModelCatalog>(`/models?${new URLSearchParams({ directory })}`, { signal }),
   selectModel: (id: string, model: ModelRef) =>
     nativeRequest(`${sessionPath(id)}/model`, post({ model })),
   projects: (signal: AbortSignal) => nativeRequest<OpenCodeProject[]>('/projects', { signal }),
+  addProject: (directory: string) =>
+    nativeRequest<OpenCodeProject>('/projects', post({ directory })),
+  updateProject: (id: string, input: ProjectUpdate) =>
+    nativeRequest<OpenCodeProject>(`/projects/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
   createSession: (directory: string) =>
     nativeRequest<SessionInfo>('/sessions', post({ directory })),
   session: (id: string, signal: AbortSignal) =>
@@ -60,8 +131,18 @@ export const api = {
     ),
   inbox: (id: string, signal: AbortSignal) =>
     nativeRequest<SessionInboxInfo[]>(`${sessionPath(id)}/inbox`, { signal }),
-  prompt: (id: string, text: string) =>
-    nativeRequest<SessionInboxUser>(`${sessionPath(id)}/prompt`, post({ text })),
+  prompt: (
+    id: string,
+    text: string,
+    model?: ModelRef,
+    files?: PromptFiles,
+    command?: string,
+    skill?: string,
+  ) =>
+    nativeRequest<SessionInboxUser | null>(
+      `${sessionPath(id)}/prompt`,
+      post({ text, model, files, command, skill }),
+    ),
   interrupt: (id: string) => nativeRequest(`${sessionPath(id)}/interrupt`, post()),
   permissions: (id: string, signal: AbortSignal) =>
     nativeRequest<PermissionRequest[]>(`${sessionPath(id)}/permissions`, { signal }),

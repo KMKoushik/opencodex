@@ -1,0 +1,81 @@
+import { expect, it } from 'vitest';
+import { createDraftStore } from './draft-store';
+import { reviewPrompt } from './review-comments';
+
+it('keeps review context separate and preserves comments edited during a send', () => {
+  const store = createDraftStore();
+  const actions = store.getState();
+  actions.editText('one', 'Please fix these');
+  const comment = {
+    id: 'comment',
+    target: { path: 'a.ts', start: 9, end: 10, side: 'old' as const, quote: 'old code' },
+    text: 'Keep this check',
+  };
+  actions.saveComment('one', comment);
+  const sent = actions.capture('one');
+  expect(sent.text).toBe('Please fix these');
+  expect(reviewPrompt(sent.text, sent.comments)).toContain('a.ts:9–10 (old)');
+  actions.saveComment('one', { ...comment, text: 'Use the new check' });
+  actions.acknowledge(sent);
+  expect(actions.capture('one').comments?.[0]?.text).toBe('Use the new check');
+  expect(sent.comments?.[0]?.text).toBe('Keep this check');
+  actions.editText('one', '');
+  expect(actions.capture('one').comments).toHaveLength(1);
+  actions.saveComment('two', {
+    id: 'quote',
+    target: { messageID: 'response', ordinal: 0, quote: 'response excerpt' },
+    text: '',
+  });
+  actions.removeComment('one', 'comment');
+  expect(store.getState().drafts.one).toBeUndefined();
+  const quote = actions.capture('two');
+  expect(reviewPrompt(quote.text, quote.comments)).toContain('> response excerpt');
+  actions.acknowledge(quote);
+  expect(store.getState().drafts.two).toBeUndefined();
+});
+
+it('acknowledges only the captured revision, even if newer text is identical', () => {
+  const store = createDraftStore();
+  const actions = store.getState();
+  actions.editText('one', 'hello');
+  actions.selectModel('one', { id: 'reasoner', providerID: 'provider', variant: 'high' });
+  actions.editText('two', 'another session');
+  const other = store.getState().drafts.two;
+  const sent = actions.capture('one');
+  actions.editText('one', 'newer text');
+  actions.editText('one', 'hello');
+  actions.acknowledge(sent);
+  expect(store.getState().drafts.one?.text).toBe('hello');
+  expect(store.getState().drafts.two).toBe(other);
+  expect(actions.capture('one').model).toBe(sent.model);
+  actions.acknowledge(actions.capture('one'));
+  expect(store.getState().drafts.one).toBeUndefined();
+  actions.editText('one', 'hello');
+  actions.acknowledge(sent);
+  expect(store.getState().drafts.one?.text).toBe('hello');
+});
+
+it('captures immutable send intent while edits preserve model selector identity', () => {
+  const store = createDraftStore();
+  const actions = store.getState();
+  actions.editText('one', 'send this');
+  actions.selectModel('one', { id: 'reasoner', providerID: 'provider', variant: 'low' });
+  const image = new File(['image'], 'image.png', { type: 'image/png' });
+  actions.attach('one', [image]);
+  const sent = actions.capture('one');
+  actions.editText('one', 'next message');
+  expect(store.getState().drafts.one?.model).toBe(sent.model);
+  actions.selectModel('one', { id: 'reasoner', providerID: 'provider', variant: 'high' });
+  expect(actions.capture('one').attachments).toBe(sent.attachments);
+  actions.removeAttachment('one', sent.attachments![0]!.id);
+  actions.attach('one', [new File(['next'], 'next.txt')]);
+  actions.acknowledge(sent);
+  expect(sent.text).toBe('send this');
+  expect(sent.model?.variant).toBe('low');
+  expect(sent.attachments?.[0]?.file).toBe(image);
+  expect(actions.capture('one').attachments?.[0]?.file.name).toBe('next.txt');
+  expect(actions.capture('one')).toMatchObject({
+    text: 'next message',
+    model: { variant: 'high' },
+  });
+});
