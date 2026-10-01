@@ -5,6 +5,7 @@ import {
   promptInputSchema,
   permissionReplySchema,
   formReplySchema,
+  modelInputSchema,
 } from '@opencodex/contracts';
 import { OpenCodeBackend } from './opencode';
 import { GatewayError } from './errors';
@@ -52,9 +53,46 @@ export function createApp(
     const project = await resolveProject(input.data.directory);
     return c.json(
       await backend.request(c.req.raw.signal, (client, options) =>
-        client.session.create({ location: { directory: project.directory } }, options),
+        client.session.create(
+          { location: { directory: project.directory }, agent: 'build' },
+          options,
+        ),
       ),
     );
+  });
+  app.get('/api/models', async (c) => {
+    const input = projectInputSchema.safeParse({ directory: c.req.query('directory') });
+    if (!input.success) return c.json({ message: 'Choose a project first.' }, 400);
+    return c.json(
+      await backend.request(c.req.raw.signal, async (client, options) => {
+        const location = { directory: input.data.directory };
+        const [models, fallback, build, providers] = await Promise.all([
+          client.model.list({ location }, options),
+          client.model.default({ location }, options),
+          client.agent.get({ location, agentID: 'build' }, options),
+          client.provider.list({ location }, options),
+        ]);
+        return {
+          ...models,
+          providers: providers.data.map(({ id, name, canonical }) => ({ id, name, canonical })),
+          defaultModel:
+            build.data.model ??
+            (fallback.data ? { id: fallback.data.id, providerID: fallback.data.providerID } : null),
+        };
+      }),
+    );
+  });
+  app.post('/api/sessions/:id/model', async (c) => {
+    const input = modelInputSchema.safeParse(await c.req.json().catch(() => null));
+    if (!input.success)
+      return c.json({ message: 'Choose a model and a supported thinking level.' }, 400);
+    await backend.request(c.req.raw.signal, (client, options) =>
+      client.session.switchModel(
+        { sessionID: c.req.param('id'), model: input.data.model },
+        options,
+      ),
+    );
+    return c.json({ ok: true });
   });
   app.get('/api/sessions/active', async (c) =>
     c.json(
@@ -90,9 +128,13 @@ export function createApp(
     if (!input.success || !input.data.text.trim())
       return c.json({ message: 'Enter a message.' }, 400);
     return c.json(
-      await backend.request(c.req.raw.signal, (client, options) =>
-        client.session.prompt({ sessionID: c.req.param('id'), text: input.data.text }, options),
-      ),
+      await backend.request(c.req.raw.signal, async (client, options) => {
+        const sessionID = c.req.param('id');
+        const session = await client.session.get({ sessionID }, options);
+        if (session.agent !== 'build')
+          await client.session.switchAgent({ sessionID, agent: 'build' }, options);
+        return client.session.prompt({ sessionID, text: input.data.text }, options);
+      }),
     );
   });
   app.post('/api/sessions/:id/interrupt', async (c) =>

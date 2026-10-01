@@ -44,6 +44,7 @@ export function useEvents(enabled: boolean) {
       setLive(true);
       // Subscriptions are live-only. Refetch after every reconnect to recover missed changes.
       void client.invalidateQueries({ queryKey: ['connection'] });
+      void client.invalidateQueries({ queryKey: ['models'] });
       client.setQueriesData<LivePart[]>(
         { queryKey: ['chat'], predicate: (query) => query.queryKey[2] === 'stream' },
         [],
@@ -60,6 +61,18 @@ export function useEvents(enabled: boolean) {
     });
     events.addEventListener('opencode', (message: MessageEvent<string>) => {
       const event: OpenCodeEvent = JSON.parse(message.data);
+      if (
+        /^(model|provider|credential|config|agent)\./.test(event.type) ||
+        event.type === 'models-dev.refreshed'
+      ) {
+        void client.invalidateQueries({ queryKey: ['models'] });
+        return;
+      }
+      if (event.type === 'session.model.selected' || event.type === 'session.agent.selected') {
+        void client.invalidateQueries({ queryKey: ['chat', event.data.sessionID, 'info'] });
+        void client.invalidateQueries({ queryKey: ['sessions'] });
+        return;
+      }
       const data = 'data' in event ? event.data : undefined;
       const id =
         data && 'sessionID' in data && typeof data.sessionID === 'string'

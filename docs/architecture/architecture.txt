@@ -28,7 +28,7 @@
      │                                                               │                   │  Opened projects + theme │
      │  Hono routes + @opencode/client                               │                   │                          │
      │  Service discovery; credentials stay here                     │                   └──────────────────────────┘
-     │                                                               │
+     │  Native chat and model-selection operations                   │
      └─────────────────┬─────────────────────────────────────────────┘
                        │                               ▲
        HTTP API        │                               │  Events
@@ -42,7 +42,7 @@
      │  Owns projects, sessions, and execution                       │                   │  Native bridge types     │
      │  Model providers and tools live here                          │                   │                          │
      │  Survives OpenCodex shutdown                                  │                   └──────────────────────────┘
-     │                                                               │
+     │  Persists model and thinking choices per session              │
      └───────────────────────────────────────────────────────────────┘                   Code, not a service
 
 

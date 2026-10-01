@@ -6,6 +6,8 @@ import { useChat } from './use-chat';
 import { PermissionCard, QuestionCard } from './requests';
 import { Composer } from './composer';
 import { Timeline, type TimelineHandle } from './timeline';
+import { ModelControls } from './model-controls';
+import { useModelSelection } from './use-model-selection';
 
 export function ChatView({
   sessionID,
@@ -20,6 +22,7 @@ export function ChatView({
 }) {
   const client = useQueryClient();
   const chat = useChat(sessionID, live);
+  const { catalog, selection, model } = useModelSelection(sessionID, chat.info.data);
   const timeline = useRef<TimelineHandle>(null);
   const key = ['chat', sessionID];
   const refresh = () =>
@@ -151,6 +154,19 @@ export function ChatView({
         </div>
       )}
       <div className="composer-area">
+        {catalog.isError && (
+          <div className="chat-error" role="alert">
+            <p>Could not load models. {catalog.error.message}</p>
+            <Button variant="ghost" size="sm" onClick={() => void catalog.refetch()}>
+              Retry
+            </Button>
+          </div>
+        )}
+        {selection.isError && (
+          <p className="text-error" role="alert">
+            Could not change model settings. {selection.error.message}
+          </p>
+        )}
         {send.isError && (
           <p className="text-error" role="alert">
             {send.error.message} Your draft is kept. Check the conversation before sending again.
@@ -166,12 +182,21 @@ export function ChatView({
           drafts={drafts}
           onSend={send.mutateAsync}
           sending={send.isPending}
-          ready={chat.info.isSuccess}
+          ready={chat.info.isSuccess && !selection.isPending}
           running={running}
           stopping={stop.isPending}
           onStop={() => stop.mutate()}
-          agent={chat.info.data?.agent}
-          model={chat.info.data?.model?.id}
+          controls={
+            <ModelControls
+              models={catalog.data?.data}
+              providers={catalog.data?.providers}
+              model={model}
+              disabled={!chat.info.isSuccess || send.isPending || selection.isPending}
+              loading={catalog.isPending}
+              failed={catalog.isError}
+              onChange={(next) => selection.mutate(next)}
+            />
+          }
         />
         <p className="composer-hint">
           {running

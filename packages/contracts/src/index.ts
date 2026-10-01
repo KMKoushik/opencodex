@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ModelListOutput, ModelRef, ProviderInfo } from '@opencode/client';
 
 export const connectionSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('connected'), version: z.string() }),
@@ -27,6 +28,11 @@ export type Connection = z.infer<typeof connectionSchema>;
 export type Project = z.infer<typeof projectSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type SessionPage = z.infer<typeof sessionPageSchema>;
+export type ModelProvider = Pick<ProviderInfo, 'id' | 'name' | 'canonical'>;
+export type ModelCatalog = ModelListOutput & {
+  defaultModel: ModelRef | null;
+  providers: ModelProvider[];
+};
 
 // OpenCode owns these wire contracts. Re-export types only; no client runtime in the UI.
 export type {
@@ -44,8 +50,18 @@ export type {
   FormInfo,
   FormField,
   FormAnswer,
+  ModelInfo,
+  ModelRef,
+  ModelListOutput,
 } from '@opencode/client';
 
+export const modelInputSchema = z.object({
+  model: z.object({
+    id: z.string().min(1).max(512),
+    providerID: z.string().min(1).max(512),
+    variant: z.string().min(1).max(512).optional(),
+  }),
+});
 export const promptInputSchema = z.object({ text: z.string().min(1).max(200_000) });
 export const permissionReplySchema = z.object({ decision: z.enum(['once', 'always', 'reject']) });
 export const formReplySchema = z.object({

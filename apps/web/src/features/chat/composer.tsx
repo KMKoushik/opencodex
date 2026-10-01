@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { ArrowUp02Icon, StopIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
@@ -12,8 +12,7 @@ export function Composer({
   running,
   stopping,
   onStop,
-  agent,
-  model,
+  controls,
 }: {
   sessionID: string;
   drafts: Map<string, string>;
@@ -23,8 +22,7 @@ export function Composer({
   running: boolean;
   stopping: boolean;
   onStop: () => void;
-  agent?: string;
-  model?: string;
+  controls: ReactNode;
 }) {
   const [draft, setDraft] = useState(() => drafts.get(sessionID) ?? '');
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -65,16 +63,7 @@ export function Composer({
         }}
       />
       <div className="composer-footer">
-        <div
-          className="composer-model"
-          title={`${agent || 'Default agent'} · ${model || 'Default model'}`}
-        >
-          <span>{agent || 'Default agent'}</span>
-          <span className="composer-model-separator" aria-hidden="true">
-            /
-          </span>
-          <span className="truncate">{model || 'Default model'}</span>
-        </div>
+        {controls}
         {running && (
           <Button
             variant="secondary"

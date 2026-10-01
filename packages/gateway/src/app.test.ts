@@ -148,7 +148,11 @@ describe('gateway and the real OpenCode client', () => {
       req.on('end', () => {
         calls.push({ path: req.url!, body, auth: req.headers.authorization });
         res.setHeader('Content-Type', 'application/json');
-        if (req.method === 'POST') {
+        if (req.url === '/api/session/session-1') {
+          res.end(JSON.stringify({ data: { id: 'session-1', agent: 'plan' } }));
+        } else if (req.url?.endsWith('/agent')) {
+          res.writeHead(204).end();
+        } else if (req.method === 'POST') {
           res.statusCode = 503;
           res.end('{"message":"private upstream detail"}');
         } else
@@ -177,8 +181,12 @@ describe('gateway and the real OpenCode client', () => {
     const response = await send('hello');
     expect(response.status).toBe(502);
     expect(await response.text()).not.toContain('private');
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toEqual({
+    expect(calls).toHaveLength(3);
+    expect(calls[1]).toMatchObject({
+      path: '/api/session/session-1/agent',
+      body: '{"agent":"build"}',
+    });
+    expect(calls[2]).toEqual({
       path: '/api/session/session-1/prompt',
       body: '{"text":"hello"}',
       auth: `Basic ${Buffer.from('test:private').toString('base64')}`,
@@ -190,9 +198,93 @@ describe('gateway and the real OpenCode client', () => {
       data: [{ text: 'hello' }],
       cursor: { next: 'older-page' },
     });
-    const requested = new URL(calls[1]!.path, 'http://localhost');
+    const requested = new URL(calls[3]!.path, 'http://localhost');
     expect(requested.searchParams.get('cursor')).toBe('older-page');
     expect(requested.searchParams.has('order')).toBe(false);
+  });
+
+  it('uses location-scoped native models and persists variant selection through OpenCode', async () => {
+    const calls: Array<{ path: string; body: string }> = [];
+    const url = await upstream((req, res) => {
+      let body = '';
+      req.on('data', (chunk) => {
+        body += chunk;
+      });
+      req.on('end', () => {
+        calls.push({ path: req.url!, body });
+        if (req.method === 'POST') return res.writeHead(204).end();
+        res.setHeader('Content-Type', 'application/json');
+        const path = new URL(req.url!, 'http://localhost').pathname;
+        if (path === '/api/provider')
+          return res.end(
+            JSON.stringify({
+              location: { directory },
+              data: [
+                {
+                  id: 'provider',
+                  name: 'Test Provider',
+                  canonical: 'openai',
+                  settings: { apiKey: 'private' },
+                },
+              ],
+            }),
+          );
+        if (path === '/api/agent/build')
+          return res.end(
+            JSON.stringify({
+              location: { directory },
+              data: { model: { id: 'reasoner', providerID: 'provider', variant: 'high' } },
+            }),
+          );
+        if (path === '/api/model/default')
+          return res.end(
+            JSON.stringify({
+              location: { directory },
+              data: { id: 'fallback', providerID: 'provider' },
+            }),
+          );
+        res.end(
+          JSON.stringify({
+            location: { directory },
+            data: [{ id: 'reasoner', variants: [{ id: 'high' }] }],
+          }),
+        );
+      });
+    });
+    const app = createApp(new OpenCodeBackend(async () => ({ url })));
+    const response = await app.request(
+      `http://localhost/api/models?${new URLSearchParams({ directory })}`,
+    );
+    const catalog = await response.json();
+    expect(catalog).toMatchObject({
+      data: [{ variants: [{ id: 'high' }] }],
+      defaultModel: { id: 'reasoner', providerID: 'provider', variant: 'high' },
+      providers: [{ id: 'provider', name: 'Test Provider', canonical: 'openai' }],
+    });
+    expect(catalog.providers).toEqual([
+      { id: 'provider', name: 'Test Provider', canonical: 'openai' },
+    ]);
+    const requested = new URL(calls[0]!.path, 'http://localhost');
+    expect(requested.pathname).toBe('/api/model');
+    expect(requested.searchParams.get('location[directory]')).toBe(directory);
+    const select = (model: unknown) =>
+      app.request('http://localhost/api/sessions/session-1/model', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model }),
+      });
+    expect((await select({ id: 'reasoner' })).status).toBe(400);
+    expect(calls).toHaveLength(4);
+    const model = { id: 'reasoner', providerID: 'provider', variant: 'high' };
+    expect((await select(model)).status).toBe(200);
+    expect(calls[4]).toEqual({
+      path: '/api/session/session-1/model',
+      body: JSON.stringify({ model }),
+    });
+    expect((await select({ id: 'reasoner', providerID: 'provider' })).status).toBe(200);
+    expect(JSON.parse(calls[5]!.body)).toEqual({
+      model: { id: 'reasoner', providerID: 'provider' },
+    });
   });
 
   it('rejects a missing backend rather than returning an empty session list', async () => {

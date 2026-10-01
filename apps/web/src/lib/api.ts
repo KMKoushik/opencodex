@@ -14,6 +14,8 @@ import {
   type PermissionReply,
   type FormInfo,
   type FormAnswer,
+  type ModelCatalog,
+  type ModelRef,
 } from '@opencodex/contracts';
 
 async function nativeRequest<T>(path: string, options?: RequestInit): Promise<T> {
@@ -40,6 +42,10 @@ const sessionPath = (id: string) => `/sessions/${encodeURIComponent(id)}`;
 const post = (body?: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) });
 
 export const api = {
+  models: (directory: string, signal: AbortSignal) =>
+    nativeRequest<ModelCatalog>(`/models?${new URLSearchParams({ directory })}`, { signal }),
+  selectModel: (id: string, model: ModelRef) =>
+    nativeRequest(`${sessionPath(id)}/model`, post({ model })),
   projects: (signal: AbortSignal) => nativeRequest<OpenCodeProject[]>('/projects', { signal }),
   createSession: (directory: string) =>
     nativeRequest<SessionInfo>('/sessions', post({ directory })),

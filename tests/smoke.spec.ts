@@ -27,9 +27,25 @@ async function fixture(directory: string) {
       cost: 0,
       tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
       model: { id: 'fixture-model', providerID: 'fixture' },
+      agent: 'plan',
     },
   ];
   const messages: SessionMessageInfo[] = [];
+  const models = [
+    {
+      id: 'fixture-model',
+      providerID: 'fixture',
+      name: 'Fixture Reasoner',
+      variants: [{ id: 'low' }, { id: 'high' }],
+    },
+    {
+      id: 'fixture-model',
+      providerID: 'other',
+      name: 'Other Reasoner',
+      variants: [{ id: 'medium' }],
+    },
+    { id: 'fast', providerID: 'fixture', name: 'Fast Model', variants: [] },
+  ];
   const messageRequests: string[] = [];
   let running = false;
   let permissions: PermissionRequest[] = [];
@@ -56,6 +72,32 @@ async function fixture(directory: string) {
       return;
     }
     res.setHeader('Content-Type', 'application/json');
+    if (url.pathname === '/api/provider')
+      return res.end(
+        JSON.stringify({
+          location: { directory },
+          data: [
+            { id: 'fixture', name: 'Fixture Provider', canonical: 'openai' },
+            { id: 'other', name: 'Other Provider', canonical: 'anthropic' },
+          ],
+        }),
+      );
+    if (url.pathname === '/api/agent/build')
+      return res.end(
+        JSON.stringify({
+          location: { directory },
+          data: { id: 'build', model: { id: 'fixture-model', providerID: 'fixture' } },
+        }),
+      );
+    if (url.pathname === '/api/model/default')
+      return res.end(JSON.stringify({ location: { directory }, data: models[2] }));
+    if (url.pathname === '/api/model')
+      return res.end(
+        JSON.stringify({
+          location: { directory },
+          data: models.map((model) => ({ ...model, enabled: true, limit: { context: 200_000 } })),
+        }),
+      );
     if (url.pathname === '/api/project')
       return res.end(
         JSON.stringify([
@@ -88,8 +130,17 @@ async function fixture(directory: string) {
     }
     if (url.pathname === '/api/session') {
       if (req.method === 'POST') {
+        let body = '';
+        for await (const chunk of req) body += chunk;
+        const input = JSON.parse(body);
         sessionID = 'fixture-new';
-        const session = { ...sessions[0]!, id: sessionID, title: 'New chat' };
+        const session = {
+          ...sessions[0]!,
+          id: sessionID,
+          title: 'New chat',
+          agent: input.agent,
+          model: undefined,
+        };
         sessions.unshift(session);
         return res.end(JSON.stringify({ data: session }));
       }
@@ -115,6 +166,19 @@ async function fixture(directory: string) {
       let body = '';
       for await (const chunk of req) body += chunk;
       const input = JSON.parse(body || '{}');
+      if (url.pathname.endsWith('/model') || url.pathname.endsWith('/agent')) {
+        const target = sessions.find((item) =>
+          url.pathname.startsWith(`/api/session/${item.id}/`),
+        )!;
+        if (input.model) target.model = input.model;
+        if (input.agent) target.agent = input.agent;
+        res.writeHead(204).end();
+        emit({
+          type: input.model ? 'session.model.selected' : 'session.agent.selected',
+          data: { sessionID: target.id, ...input },
+        });
+        return;
+      }
       if (url.pathname.endsWith('/prompt')) {
         sentText = input.text;
         running = true;
@@ -168,6 +232,7 @@ async function fixture(directory: string) {
   return {
     url: `http://127.0.0.1:${address.port}`,
     messageRequests,
+    sessions,
     seedLink(url: string) {
       messages.push({
         id: 'link-message',
@@ -394,6 +459,56 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
     await page.getByRole('button', { name: 'New chat', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'New chat', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Let’s build something' })).toBeVisible();
+    expect(upstream.sessions[0]?.agent).toBe('build');
+    await expect(page.locator('.composer')).not.toContainText(/\b(build|plan)\b/i);
+    await page.route('**/api/sessions/*/model', (route) =>
+      route.fulfill({ status: 502, json: { message: 'Fixture selection failure' } }),
+    );
+    await page.getByRole('button', { name: 'Thinking level', exact: true }).click();
+    await page.getByRole('option', { name: 'High', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('Could not change model settings');
+    await expect(page.getByRole('button', { name: 'Thinking level', exact: true })).toHaveText(
+      'Default',
+    );
+    await page.unroute('**/api/sessions/*/model');
+    await page.getByRole('button', { name: 'Thinking level', exact: true }).click();
+    await page.getByRole('option', { name: 'High', exact: true }).click();
+    await expect.poll(() => upstream.sessions[0]?.model?.variant).toBe('high');
+    await page.getByRole('button', { name: 'Model', exact: true }).click();
+    const providerGroup = page.getByRole('treeitem', { name: 'Fixture Provider', exact: true });
+    await providerGroup.click();
+    await expect(providerGroup).toHaveAttribute('aria-expanded', 'false');
+    await expect(
+      page.getByRole('treeitem', { name: 'Fast Model, Fixture Provider', exact: true }),
+    ).toHaveCount(0);
+    await page.getByRole('combobox', { name: 'Search model', exact: true }).fill('fast');
+    await expect(providerGroup).toHaveAttribute('aria-expanded', 'true');
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('button', { name: 'Thinking level', exact: true })).toBeDisabled();
+    expect(upstream.sessions[0]?.model).toEqual({ id: 'fast', providerID: 'fixture' });
+    await page.getByRole('button', { name: 'Model', exact: true }).click();
+    await page.getByRole('combobox', { name: 'Search model', exact: true }).fill('other');
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('button', { name: 'Thinking level', exact: true })).toHaveText(
+      'Default',
+    );
+    await page.getByRole('button', { name: 'Thinking level', exact: true }).click();
+    await expect(page.getByRole('option', { name: 'High', exact: true })).toHaveCount(0);
+    await page.getByRole('option', { name: 'Medium', exact: true }).click();
+    await expect
+      .poll(() => upstream.sessions[0]?.model)
+      .toEqual({ id: 'fixture-model', providerID: 'other', variant: 'medium' });
+    await page.reload();
+    await page
+      .getByRole('navigation', { name: 'Sessions', exact: true })
+      .getByRole('button', { name: /^New chat/ })
+      .click();
+    await expect(page.getByRole('button', { name: 'Model', exact: true })).toHaveText(
+      'Other Reasoner',
+    );
+    await expect(page.getByRole('button', { name: 'Thinking level', exact: true })).toHaveText(
+      'Medium',
+    );
     await page.screenshot({ path: info.outputPath('new-thread.png') });
     await page.getByRole('button', { name: 'Hide sidebar' }).click();
     await expect(page.locator('.sidebar')).toBeHidden();
