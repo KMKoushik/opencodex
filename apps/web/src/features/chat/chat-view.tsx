@@ -412,55 +412,48 @@ export function ChatView({
             pendingCount={chat.forms.data.length}
           />
         ) : (
-          <>
-            <Composer
-              directory={chat.info.data?.location.directory}
-              sessionID={sessionID}
-              onSend={async () => {
-                if (client.isMutating({ mutationKey: sendKey }) || switching) return;
-                const draft = drafts.getState().capture(sessionID);
-                if (
-                  draft.text.trim() === '/fork' &&
-                  !draft.attachments?.length &&
-                  !draft.comments?.length
-                ) {
-                  setForkDraft(draft);
-                  return;
-                }
-                if (
-                  !draft.text.trim() &&
-                  !(draft.attachments ?? EMPTY_ATTACHMENTS).length &&
-                  !draft.comments?.length
-                )
-                  return;
-                const selection = draft.model ?? model;
-                if (selection && chat.info.data)
-                  drafts.getState().rememberModel(chat.info.data.location.directory, selection);
-                return send.mutateAsync({ draft, model: selection });
-              }}
-              sending={sending}
-              ready={chat.info.isSuccess && !switching}
-              running={running}
-              stopping={stop.isPending}
-              onStop={() => stop.mutate()}
-              controls={
-                <ModelControls
-                  models={catalog.data?.data}
-                  providers={catalog.data?.providers}
-                  model={model}
-                  disabled={!chat.info.isSuccess || sending || switching}
-                  loading={catalog.isPending}
-                  failed={catalog.isError}
-                  onChange={select}
-                />
+          <Composer
+            directory={chat.info.data?.location.directory}
+            sessionID={sessionID}
+            onSend={async () => {
+              if (client.isMutating({ mutationKey: sendKey }) || switching) return;
+              const draft = drafts.getState().capture(sessionID);
+              if (
+                draft.text.trim() === '/fork' &&
+                !draft.attachments?.length &&
+                !draft.comments?.length
+              ) {
+                setForkDraft(draft);
+                return;
               }
-            />
-            <p className="composer-hint">
-              {running
-                ? 'Messages sent while working steer the next turn.'
-                : 'Enter to send · Shift + Enter for a new line'}
-            </p>
-          </>
+              if (
+                !draft.text.trim() &&
+                !(draft.attachments ?? EMPTY_ATTACHMENTS).length &&
+                !draft.comments?.length
+              )
+                return;
+              const selection = draft.model ?? model;
+              if (selection && chat.info.data)
+                drafts.getState().rememberModel(chat.info.data.location.directory, selection);
+              return send.mutateAsync({ draft, model: selection });
+            }}
+            sending={sending}
+            ready={chat.info.isSuccess && !switching}
+            running={running}
+            stopping={stop.isPending}
+            onStop={() => stop.mutate()}
+            controls={
+              <ModelControls
+                models={catalog.data?.data}
+                providers={catalog.data?.providers}
+                model={model}
+                disabled={!chat.info.isSuccess || sending || switching}
+                loading={catalog.isPending}
+                failed={catalog.isError}
+                onChange={select}
+              />
+            }
+          />
         )}
       </div>
     </div>

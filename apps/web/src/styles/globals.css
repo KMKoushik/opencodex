@@ -2090,14 +2090,6 @@ svg {
     min-height: 44px;
   }
 }
-.composer-hint {
-  margin-top: 6px;
-  min-height: 18px;
-  font-size: 11px;
-  color: var(--text-tertiary);
-  text-align: left;
-  padding-inline: 4px;
-}
 .request-card {
   border: 1px solid var(--border-heavy);
   border-radius: 12px;
