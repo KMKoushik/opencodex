@@ -13,23 +13,8 @@
 .session-entry[data-selected] .session-row {
   background: transparent;
 }
-.session-actions-trigger {
-  width: 28px;
-  height: 28px;
-  flex-shrink: 0;
-  color: var(--text-tertiary);
-}
-@media (hover: hover) and (pointer: fine) {
-  .session-actions-trigger {
-    opacity: 0;
-  }
-  .session-entry-row:hover .session-actions-trigger,
-  .session-entry-row:focus-within .session-actions-trigger,
-  .session-actions-trigger[aria-expanded='true'] {
-    opacity: 1;
-  }
-}
-.session-actions-menu {
+.session-actions-menu,
+.session-details {
   position: fixed;
   inset: auto;
   margin: 0;
@@ -40,6 +25,20 @@
   background: var(--elevated);
   color: var(--text);
   box-shadow: var(--shadow);
+}
+.session-details {
+  width: max-content;
+  min-width: 0;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 8px 10px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+.session-details-time {
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
 }
 .session-actions-menu button {
   display: block;
@@ -63,14 +62,12 @@
   cursor: default;
 }
 .session-unread[data-responding] {
-  left: 28px;
-  top: calc(50% + 3px);
+  margin-left: -16px;
+  top: calc(50% + 2px);
+  width: 4px;
+  height: 4px;
 }
 @media (pointer: coarse) {
-  .session-actions-trigger {
-    width: 44px;
-    height: 44px;
-  }
   .session-actions-menu button {
     min-height: 44px;
   }

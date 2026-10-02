@@ -68,6 +68,14 @@ svg {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.truncate-fade {
+  min-width: 0;
+  overflow: hidden;
+  padding-right: 24px;
+  white-space: nowrap;
+  /* The trailing space keeps short labels clear of the fade. */
+  mask-image: linear-gradient(to right, var(--text) calc(100% - 24px), transparent);
+}
 .text-error {
   color: var(--error);
 }
@@ -314,10 +322,10 @@ svg {
 .session-list {
   padding-block: 2px 8px;
 }
-/* Thread titles start on the project name's column; status sits on the icon's column. */
+/* Thread titles align with the project icon; status stays in the left gutter. */
 .session-row,
 .session-more {
-  padding-left: 50px;
+  padding-left: 26px;
 }
 .session-row > span {
   flex: 1;
@@ -326,31 +334,27 @@ svg {
   position: relative;
 }
 .session-row > .session-kind {
+  display: inline-flex;
   flex: none;
   color: var(--text-tertiary);
-  font-size: 11px;
 }
 .session-activity {
   position: absolute;
-  left: 28px;
-  top: calc(50% - 7px);
-  width: 14px;
-  height: 14px;
+  left: 26px;
+  margin-left: -16px;
+  top: calc(50% - 5px);
+  width: 10px;
+  height: 10px;
   border: 1.5px solid var(--border-heavy);
   border-top-color: var(--text-secondary);
   border-right-color: var(--text-secondary);
   border-radius: 50%;
   animation: spin 900ms linear infinite;
 }
-.session-row time {
-  flex-shrink: 0;
-  color: var(--text-tertiary);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
 .session-unread {
   position: absolute;
-  left: 32px;
+  left: 26px;
+  margin-left: -14px;
   top: calc(50% - 3px);
   width: 6px;
   height: 6px;
@@ -366,7 +370,7 @@ svg {
   font-size: 12px;
 }
 .session-list .sidebar-note {
-  padding-left: 50px;
+  padding-left: 26px;
 }
 .sidebar-note .button {
   margin-top: 8px;
@@ -1554,6 +1558,12 @@ svg {
   height: 100%;
   overflow-x: hidden;
   overscroll-behavior-y: contain;
+}
+.chat > .timeline .timeline-scroll {
+  mask-image: linear-gradient(to bottom, var(--text) calc(100% - 32px), transparent);
+}
+.chat > .timeline .timeline-footer {
+  padding-bottom: 32px;
 }
 .timeline-row,
 .timeline-footer {

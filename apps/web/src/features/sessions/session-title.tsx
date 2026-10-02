@@ -87,7 +87,6 @@ export function SessionTitle({
           <button
             ref={button}
             type="button"
-            className="truncate"
             aria-label={`Rename conversation: ${title}`}
             title="Rename conversation"
             disabled={disabled}
@@ -97,7 +96,7 @@ export function SessionTitle({
               setDraft(title);
             }}
           >
-            {title}
+            <span className="truncate-fade">{title}</span>
           </button>
         )}
       </h1>

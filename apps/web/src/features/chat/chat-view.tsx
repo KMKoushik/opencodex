@@ -22,6 +22,7 @@ import { BrandIcon } from '../brand/brand';
 import { Starters } from './starters';
 import { sessionUnread } from '@opencodex/contracts';
 import { ProjectSwitcher } from '../projects/project-switcher';
+import { undoDraft } from './undo-draft';
 
 export function ChatView({
   sessionID,
@@ -67,7 +68,11 @@ export function ChatView({
       const slash = parseSlash(input.draft.text);
       const local = slash && localCommands.some((item) => item.name === slash.name);
       if (slash && local) {
-        if (input.draft.attachments?.length || input.draft.comments?.length)
+        if (
+          slash.name !== 'undo' &&
+          slash.name !== 'redo' &&
+          (input.draft.attachments?.length || input.draft.comments?.length)
+        )
           throw new Error('Send or remove attached context before running a thread action.');
         if (slash.name !== 'rename' && slash.text.trim())
           throw new Error(`/${slash.name} does not take arguments.`);
@@ -89,7 +94,12 @@ export function ChatView({
             const message = unique.findLast((item) => item.type === 'user');
             if (!message)
               throw new Error('No earlier user message is loaded. Load earlier history to undo.');
+            const restored = await undoDraft(message);
             await api.sessionAction(sessionID, { action: 'undo', messageID: message.id });
+            client.setQueryData<SessionInfo>(['chat', sessionID, 'info'], (info) =>
+              info ? { ...info, revert: { ...info.revert, messageID: message.id } } : info,
+            );
+            return { session: null, restored };
           }
         }
         if (slash.name === 'rename') {
@@ -135,7 +145,9 @@ export function ChatView({
         client.setQueryData<SessionInfo>(['chat', sessionID, 'info'], (info) =>
           info ? { ...info, model: input.model } : info,
         );
-      drafts.getState().acknowledge(input.draft);
+      if ('restored' in result && result.restored)
+        drafts.getState().restore(input.draft, result.restored);
+      else drafts.getState().acknowledge(input.draft);
       setForkDraft(undefined);
       if ('session' in result && result.session) {
         client.setQueryData(['chat', result.session.id, 'info'], result.session);

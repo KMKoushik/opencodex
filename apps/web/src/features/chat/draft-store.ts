@@ -23,6 +23,7 @@ type DraftState = {
   removeComment: (sessionID: string, id: string) => void;
   capture: (sessionID: string) => DraftSnapshot;
   move: (from: string, to: string) => void;
+  restore: (snapshot: DraftSnapshot, content: Pick<Draft, 'text' | 'attachments'>) => boolean;
   acknowledge: (snapshot: DraftSnapshot) => void;
 };
 
@@ -163,6 +164,16 @@ export function createDraftStore(
         delete drafts[from];
         return { drafts };
       });
+    },
+    restore(snapshot, content) {
+      if ((get().drafts[snapshot.sessionID]?.revision ?? 0) !== snapshot.revision) return false;
+      set((state) => ({
+        drafts: {
+          ...state.drafts,
+          [snapshot.sessionID]: { ...content, model: snapshot.model, revision: ++revision },
+        },
+      }));
+      return true;
     },
     acknowledge(snapshot) {
       set((state) => {

@@ -23,6 +23,9 @@
   text-align: left;
   -webkit-app-region: no-drag;
 }
+.session-title .truncate-fade {
+  display: block;
+}
 .session-title input {
   background: var(--surface-under);
   border-color: var(--border-heavy);

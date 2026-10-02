@@ -30,7 +30,10 @@ export const Message = memo(function Message({ message }: { message: SessionMess
       );
     case 'shell':
       return (
-        <Disclosure id={message.id} label={<code className="truncate">{message.command}</code>}>
+        <Disclosure
+          id={message.id}
+          label={<code className="truncate-fade">{message.command}</code>}
+        >
           <pre className="shell-output">{message.output?.output}</pre>
           {message.output?.truncated && (
             <p className="message-note">Output truncated by OpenCode.</p>

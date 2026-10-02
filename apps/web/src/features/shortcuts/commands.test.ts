@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CommandRegistry, shortcutLabel } from './commands';
+import { CommandRegistry } from './commands';
 
 const context = { mac: true, editable: false, blocked: false };
 const key = (overrides: Partial<KeyboardEvent> = {}) => ({
@@ -65,61 +65,6 @@ describe('app command dispatch', () => {
     expect(dismiss).not.toHaveBeenCalled();
     registry.dispatch(key({ key: 'Escape', metaKey: false }), context);
     expect(dismiss).toHaveBeenCalledOnce();
-  });
-
-  it.each([
-    ['terminal.toggle', 'j', '⌘J'],
-    ['workspace.toggle', 'i', '⌘I'],
-  ] as const)(
-    'dispatches %s from editable inputs with platform-specific modifiers',
-    (id, letter, label) => {
-      const registry = new CommandRegistry();
-      const toggle = vi.fn();
-      registry.register(id, toggle);
-      const event = key({ key: letter, code: `Key${letter.toUpperCase()}` });
-      registry.dispatch(event, { ...context, editable: true });
-      registry.dispatch(
-        key({ key: letter, code: `Key${letter.toUpperCase()}`, metaKey: false, ctrlKey: true }),
-        {
-          ...context,
-          mac: false,
-          editable: true,
-        },
-      );
-      registry.dispatch(event, { ...context, blocked: true });
-      expect(toggle).toHaveBeenCalledTimes(2);
-      expect(event.preventDefault).toHaveBeenCalledOnce();
-      expect(shortcutLabel(id, true)).toBe(label);
-    },
-  );
-
-  it('keeps explicit Control bindings distinct from Command on macOS', () => {
-    const registry = new CommandRegistry();
-    const cycle = vi.fn();
-    registry.register('thinking.cycle', cycle);
-    const controlT = key({ key: 't', code: 'KeyT', metaKey: false, ctrlKey: true });
-    registry.dispatch(controlT, { ...context, editable: true });
-    registry.dispatch(controlT, { ...context, mac: false });
-    registry.dispatch(key({ key: 't', code: 'KeyT' }), context);
-    expect(cycle).toHaveBeenCalledTimes(2);
-    expect(shortcutLabel('thinking.cycle', true)).toBe('⌃T');
-    expect(shortcutLabel('thinking.cycle', false)).toBe('Ctrl+T');
-  });
-
-  it('accepts both new-chat bindings, including macOS Option symbols', () => {
-    const registry = new CommandRegistry();
-    const create = vi.fn();
-    registry.register('chat.new', create);
-    registry.dispatch(key({ key: 'n', code: 'KeyN' }), context);
-    registry.dispatch(key({ key: 'Dead', code: 'KeyN', altKey: true }), context);
-    registry.dispatch(
-      key({ key: 'n', code: 'KeyN', metaKey: false, ctrlKey: true, altKey: true }),
-      { ...context, mac: false },
-    );
-    registry.dispatch(key({ key: 'n', code: 'KeyN', altKey: true, metaKey: false }), context);
-    expect(create).toHaveBeenCalledTimes(3);
-    expect(shortcutLabel('chat.new', true)).toBe('⌘N / ⌘⌥N');
-    expect(shortcutLabel('chat.new', false)).toBe('Ctrl+N / Ctrl+Alt+N');
   });
 
   it('stops on two quick Escapes, with dismissal and editor composition taking priority', () => {

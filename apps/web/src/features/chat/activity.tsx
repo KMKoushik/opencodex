@@ -25,7 +25,7 @@ export const Activity = memo(function Activity({
       label={
         <>
           <span className="activity-label">{row.active ? 'Working' : row.summary}</span>
-          {row.active && <span className="activity-meta truncate">{row.summary}</span>}
+          {row.active && <span className="activity-meta truncate-fade">{row.summary}</span>}
           {row.errors > 0 && <span className="text-error">{row.errors} failed</span>}
         </>
       }
@@ -95,7 +95,7 @@ function WorkItem({ entry, sessionID }: { entry: WorkEntry; sessionID: string })
           <HugeiconsIcon icon={shell ? CommandLineIcon : File01Icon} size={14} />
           <span>{title}</span>
           <span
-            className="activity-target truncate"
+            className="activity-target truncate-fade"
             title={typeof target === 'string' ? target : undefined}
           >
             {typeof target === 'string' ? target : tool.name === 'question' ? '' : tool.name}
