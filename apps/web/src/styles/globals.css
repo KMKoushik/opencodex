@@ -334,6 +334,15 @@ svg {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
+.session-unread {
+  position: absolute;
+  left: 20px;
+  top: calc(50% - 3px);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
 .session-more {
   color: var(--text-tertiary);
 }

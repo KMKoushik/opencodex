@@ -123,6 +123,8 @@ export const api = {
     nativeRequest<SessionInfo>('/sessions', post({ directory, model })),
   session: (id: string, signal: AbortSignal) =>
     nativeRequest<SessionInfo>(sessionPath(id), { signal }),
+  viewSession: (id: string, idle: number) =>
+    nativeRequest<{ ok: true }>(`${sessionPath(id)}/view`, post({ idle })),
   subagents: (id: string, cursor: string | undefined, signal: AbortSignal) =>
     nativeRequest<SessionListOutput>(
       `${sessionPath(id)}/subagents${cursor ? `?${new URLSearchParams({ cursor })}` : ''}`,

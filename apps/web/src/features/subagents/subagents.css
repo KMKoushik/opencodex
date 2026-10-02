@@ -12,10 +12,8 @@
   overflow: hidden;
 }
 .subagents-list-pane {
-  flex: none;
-  height: 240px;
-  max-height: 40%;
-  border-bottom: 1px solid var(--border);
+  flex: 1;
+  overflow: hidden;
 }
 .subagents-list-pane .wb-empty {
   padding: 12px;
@@ -56,10 +54,6 @@
   min-width: 0;
   font-size: 14px;
 }
-.subagent-row[aria-pressed='true'] {
-  background: var(--secondary);
-  color: var(--text);
-}
 .subagent-meta {
   display: flex;
   align-items: center;
@@ -85,11 +79,21 @@
 .subagent-session-header {
   display: flex;
   flex: none;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 12px;
   min-width: 0;
-  padding: 12px 16px;
+  padding: 12px;
   border-bottom: 1px solid var(--border);
+}
+.subagent-session-header .button {
+  flex: none;
+}
+.subagent-session-details {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 4px;
 }
 .subagent-reader {
   font-size: 14px;

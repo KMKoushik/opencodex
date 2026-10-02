@@ -7,6 +7,7 @@ import {
   promptInputSchema,
   sessionActionSchema,
   sessionCreateSchema,
+  sessionViewSchema,
   permissionReplySchema,
   formReplySchema,
   modelInputSchema,
@@ -227,6 +228,16 @@ export function createApp(
       ),
     ),
   );
+  app.use('/api/sessions/:id/view', bodyLimit({ maxSize: 1024 }));
+  app.post('/api/sessions/:id/view', async (c) => {
+    const input = sessionViewSchema.safeParse(await c.req.json().catch(() => null));
+    if (!input.success)
+      return c.json({ message: 'Choose the observed reply to mark as read.' }, 400);
+    await backend.request(c.req.raw.signal, (client, options) =>
+      client.session.view({ sessionID: c.req.param('id'), idle: input.data.idle }, options),
+    );
+    return c.json({ ok: true });
+  });
   app.get('/api/sessions/:id/messages', async (c) =>
     c.json(
       await backend.request(c.req.raw.signal, (client, options) =>
@@ -239,17 +250,28 @@ export function createApp(
   );
   app.get('/api/sessions/:id/subagents', async (c) =>
     c.json(
-      await backend.request(c.req.raw.signal, (client, options) =>
-        client.session.list(
+      await backend.request(c.req.raw.signal, async (client, options) => {
+        const cursor = c.req.query('cursor');
+        const parentID = c.req.param('id');
+        const page = await client.session.list(
           {
-            parentID: c.req.param('id'),
-            limit: 50,
-            order: 'asc',
-            cursor: c.req.query('cursor'),
+            parentID,
+            limit: 10,
+            ...(cursor ? { cursor } : { order: 'asc' as const }),
           },
           options,
-        ),
-      ),
+        );
+        // Native cursors mark an anchor, not whether another page exists.
+        // Probe only full pages, preserving OpenCode's opaque cursor unchanged.
+        const next =
+          page.data.length === 10 &&
+          page.cursor.next &&
+          (await client.session.list({ parentID, limit: 1, cursor: page.cursor.next }, options))
+            .data.length
+            ? page.cursor.next
+            : undefined;
+        return { ...page, cursor: { ...page.cursor, next } };
+      }),
     ),
   );
   app.get('/api/sessions/:id/inbox', async (c) =>

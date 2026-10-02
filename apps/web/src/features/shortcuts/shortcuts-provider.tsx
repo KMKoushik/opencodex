@@ -26,9 +26,10 @@ export function ShortcutsProvider({ children }: { children: ReactNode }) {
         ),
       });
     };
-    // Capture the terminal toggle before Ghostty consumes it, including inside panels.
-    const terminalKeydown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== 'j' || !(isMac ? event.metaKey : event.ctrlKey)) return;
+    // Panel toggles must work inside CodeMirror and Ghostty, before they consume keys.
+    const panelKeydown = (event: KeyboardEvent) => {
+      if (!['i', 'j'].includes(event.key.toLowerCase()) || !(isMac ? event.metaKey : event.ctrlKey))
+        return;
       const target = event
         .composedPath()
         .find((node): node is HTMLElement => node instanceof HTMLElement);
@@ -39,7 +40,7 @@ export function ShortcutsProvider({ children }: { children: ReactNode }) {
       });
       if (event.defaultPrevented) event.stopPropagation();
     };
-    document.addEventListener('keydown', terminalKeydown, true);
+    document.addEventListener('keydown', panelKeydown, true);
     // Bubble phase lets local controls consume their keys before app commands.
     document.addEventListener('keydown', keydown);
     document.addEventListener('focusin', reset);
@@ -47,7 +48,7 @@ export function ShortcutsProvider({ children }: { children: ReactNode }) {
     document.addEventListener('compositionstart', reset);
     window.addEventListener('blur', reset);
     return () => {
-      document.removeEventListener('keydown', terminalKeydown, true);
+      document.removeEventListener('keydown', panelKeydown, true);
       document.removeEventListener('keydown', keydown);
       document.removeEventListener('focusin', reset);
       document.removeEventListener('pointerdown', reset);

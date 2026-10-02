@@ -3,6 +3,7 @@ import { useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-que
 import type { OpenCodeEvent, SessionListOutput } from '@opencodex/contracts';
 import { api } from '../../lib/api';
 import { updateStream, type LivePart } from '../chat/stream';
+import { updateSessionViewed } from '../sessions/viewed';
 
 export function useEvents(enabled: boolean) {
   const client = useQueryClient();
@@ -107,6 +108,10 @@ export function useEvents(enabled: boolean) {
     });
     events.addEventListener('opencode', (message: MessageEvent<string>) => {
       const event: OpenCodeEvent = JSON.parse(message.data);
+      if (event.type === 'session.viewed') {
+        updateSessionViewed(client, event.data.sessionID, event.data.idle);
+        return;
+      }
       const directory = 'location' in event ? event.location?.directory : undefined;
       if (event.type.startsWith('pty.')) {
         refreshWorkspace(directory, ['terminals']);

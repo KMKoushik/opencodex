@@ -65,6 +65,14 @@ export function SessionList({
               title="Responding…"
             />
           )}
+          {!active.data?.[session.id] && (session.time.idle ?? 0) > (session.time.viewed ?? 0) && (
+            <span
+              className="session-unread"
+              role="img"
+              aria-label="Unread reply"
+              title="Unread reply"
+            />
+          )}
         </button>
       ))}
       {(hasHidden || sessions.hasNextPage) && (

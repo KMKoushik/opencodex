@@ -67,22 +67,31 @@ describe('app command dispatch', () => {
     expect(dismiss).toHaveBeenCalledOnce();
   });
 
-  it('toggles the terminal from editable inputs with platform-specific modifiers', () => {
-    const registry = new CommandRegistry();
-    const toggle = vi.fn();
-    registry.register('terminal.toggle', toggle);
-    const event = key({ key: 'j', code: 'KeyJ' });
-    registry.dispatch(event, { ...context, editable: true });
-    registry.dispatch(key({ key: 'j', code: 'KeyJ', metaKey: false, ctrlKey: true }), {
-      ...context,
-      mac: false,
-      editable: true,
-    });
-    registry.dispatch(event, { ...context, blocked: true });
-    expect(toggle).toHaveBeenCalledTimes(2);
-    expect(event.preventDefault).toHaveBeenCalledOnce();
-    expect(shortcutLabel('terminal.toggle', true)).toBe('⌘J');
-  });
+  it.each([
+    ['terminal.toggle', 'j', '⌘J'],
+    ['workspace.toggle', 'i', '⌘I'],
+  ] as const)(
+    'dispatches %s from editable inputs with platform-specific modifiers',
+    (id, letter, label) => {
+      const registry = new CommandRegistry();
+      const toggle = vi.fn();
+      registry.register(id, toggle);
+      const event = key({ key: letter, code: `Key${letter.toUpperCase()}` });
+      registry.dispatch(event, { ...context, editable: true });
+      registry.dispatch(
+        key({ key: letter, code: `Key${letter.toUpperCase()}`, metaKey: false, ctrlKey: true }),
+        {
+          ...context,
+          mac: false,
+          editable: true,
+        },
+      );
+      registry.dispatch(event, { ...context, blocked: true });
+      expect(toggle).toHaveBeenCalledTimes(2);
+      expect(event.preventDefault).toHaveBeenCalledOnce();
+      expect(shortcutLabel(id, true)).toBe(label);
+    },
+  );
 
   it('keeps explicit Control bindings distinct from Command on macOS', () => {
     const registry = new CommandRegistry();

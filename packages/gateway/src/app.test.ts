@@ -36,8 +36,42 @@ async function upstream(handler: (request: IncomingMessage, response: ServerResp
 }
 
 describe('gateway and the real OpenCode client', () => {
+  it('acknowledges only the observed idle transition through the native view API', async () => {
+    const calls: unknown[] = [];
+    let failed = false;
+    const url = await upstream((req, res) => {
+      expect(req.method).toBe('POST');
+      expect(req.url).toBe('/api/session/ses_read/view');
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk: Buffer) => chunks.push(chunk));
+      req.on('end', () => {
+        calls.push(JSON.parse(Buffer.concat(chunks).toString()));
+        if (failed) return res.writeHead(500).end();
+        res.writeHead(204).end();
+      });
+    });
+    const app = createApp(new OpenCodeBackend(async () => ({ url })));
+    const view = (body: unknown) =>
+      app.request('http://localhost/api/sessions/ses_read/view', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    expect((await view({})).status).toBe(400);
+    expect((await view({ idle: -1 })).status).toBe(400);
+    expect((await view({ idle: '100' })).status).toBe(400);
+    expect(calls).toEqual([]);
+    const response = await view({ idle: 100 });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+    expect(calls).toEqual([{ idle: 100 }]);
+    failed = true;
+    expect((await view({ idle: 200 })).status).toBe(502);
+    expect(calls).toEqual([{ idle: 100 }, { idle: 200 }]);
+  });
   it('lists child sessions with native pagination and reads their transcripts without mutations', async () => {
     const calls: string[] = [];
+    const limits: number[] = [];
     const child = {
       id: 'child',
       parentID: 'parent',
@@ -46,7 +80,8 @@ describe('gateway and the real OpenCode client', () => {
       outcome: 'succeeded',
       location: { directory },
     };
-    const page = { data: [child], cursor: { next: 'next-child' } };
+    const fullPage = Array.from({ length: 10 }, (_, index) => ({ ...child, id: `child-${index}` }));
+    let total = 2;
     const messages = { data: [{ id: 'message', type: 'user', text: 'Explore' }], cursor: {} };
     const url = await upstream((req, res) => {
       expect(req.method).toBe('GET');
@@ -55,11 +90,13 @@ describe('gateway and the real OpenCode client', () => {
       res.setHeader('Content-Type', 'application/json');
       if (path.pathname === '/api/session') {
         expect(path.searchParams.get('parentID')).toBe('parent');
-        expect(path.searchParams.get('limit')).toBe('50');
-        expect(path.searchParams.get('order')).toBe('asc');
         expect(path.searchParams.has('directory')).toBe(false);
-        expect(path.searchParams.get('cursor')).toBe(calls.length === 1 ? null : 'next-child');
-        return res.end(JSON.stringify(page));
+        const cursor = path.searchParams.get('cursor');
+        limits.push(Number(path.searchParams.get('limit')));
+        expect(path.searchParams.get('order')).toBe(cursor ? null : 'asc');
+        if (cursor) expect(cursor).toBe('after-ten');
+        const data = cursor ? (total > 10 ? [child] : []) : fullPage.slice(0, total);
+        return res.end(JSON.stringify({ data, cursor: { next: cursor ? 'at-end' : 'after-ten' } }));
       }
       if (path.pathname === '/api/session/child') return res.end(JSON.stringify({ data: child }));
       if (path.pathname === '/api/session/child/message') return res.end(JSON.stringify(messages));
@@ -71,11 +108,28 @@ describe('gateway and the real OpenCode client', () => {
       expect(response.status).toBe(200);
       return response.json();
     };
-    expect(await get('parent/subagents')).toEqual(page);
-    expect(await get('parent/subagents?cursor=next-child')).toEqual(page);
+    // The native service returns a cursor even for two terminal results.
+    expect(await get('parent/subagents')).toEqual({ data: fullPage.slice(0, 2), cursor: {} });
+    expect(calls).toHaveLength(1);
+    total = 10;
+    expect(await get('parent/subagents')).toEqual({ data: fullPage, cursor: {} });
+    expect(calls).toHaveLength(3);
+    total = 11;
+    expect(await get('parent/subagents')).toEqual({
+      data: fullPage,
+      cursor: { next: 'after-ten' },
+    });
+    expect(calls).toHaveLength(5);
+    // Continue with the verified cursor; the last short page has no more button.
+    expect(await get('parent/subagents?cursor=after-ten')).toEqual({ data: [child], cursor: {} });
+    expect(limits).toEqual([10, 10, 1, 10, 1, 10]);
     expect(await get('child')).toEqual(child);
     expect(await get('child/messages')).toEqual(messages);
     expect(calls).toEqual([
+      '/api/session',
+      '/api/session',
+      '/api/session',
+      '/api/session',
       '/api/session',
       '/api/session',
       '/api/session/child',
@@ -521,7 +575,7 @@ describe('gateway and the real OpenCode client', () => {
               id: 'session-1',
               title: 'Review the workspace',
               location: { directory },
-              time: { updated: 42 },
+              time: { updated: 42, idle: 40, viewed: 20 },
               model: { id: 'test-model' },
               fork: {
                 sessionID: 'source-session',
@@ -549,6 +603,7 @@ describe('gateway and the real OpenCode client', () => {
           title: 'Review the workspace',
           directory,
           updatedAt: 42,
+          time: { idle: 40, viewed: 20 },
           model: 'test-model',
           fork: { sessionID: 'source-session' },
         },

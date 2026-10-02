@@ -17,6 +17,7 @@ import { EMPTY_ATTACHMENTS, encodeAttachments } from './attachments';
 import { MessageAttachments } from './message-attachments';
 import { reviewPrompt } from './review-comments';
 import { localCommands, parseSlash, useSlashCommands } from './slash-commands';
+import { SessionViewed } from '../sessions/session-viewed';
 
 export function ChatView({
   sessionID,
@@ -335,6 +336,12 @@ export function ChatView({
         </div>
       )}
       <div className="composer-area">
+        <SessionViewed
+          key={sessionID}
+          sessionID={sessionID}
+          time={chat.info.data?.time}
+          ready={chat.info.isSuccess && chat.messages.isSuccess && !chat.messages.isFetching}
+        />
         {catalog.isError && (
           <div className="chat-error" role="alert">
             <p>Could not load models. {catalog.error.message}</p>

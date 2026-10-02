@@ -218,6 +218,22 @@ export function App() {
     }
   }
 
+  function toggleWorkbench() {
+    if (
+      !connected ||
+      settings ||
+      !terminalDirectory ||
+      (!selectedID && workbenchPanel.id !== 'terminal')
+    )
+      return false;
+    setWorkbenchLoaded(true);
+    setWorkbenchOpen((open) => !open);
+    if (workbenchOpen && document.activeElement?.closest('#workbench')) {
+      (workbenchToggle.current ?? main.current)?.focus({ preventScroll: true });
+    }
+  }
+
+  useCommand('workspace.toggle', toggleWorkbench);
   useCommand('terminal.toggle', toggleTerminal);
   useCommand('sidebar.toggle', toggleSidebar);
   useCommand('chat.new', newChat);
@@ -380,13 +396,10 @@ export function App() {
                   variant="ghost"
                   size="icon"
                   aria-label="Toggle workspace panel"
-                  title="Toggle workspace panel"
+                  {...shortcutProps('workspace.toggle')}
                   aria-expanded={workbenchOpen}
                   aria-controls="workbench"
-                  onClick={() => {
-                    setWorkbenchLoaded(true);
-                    setWorkbenchOpen((value) => !value);
-                  }}
+                  onClick={toggleWorkbench}
                 >
                   <HugeiconsIcon icon={PanelRightIcon} size={17} />
                 </Button>
@@ -483,6 +496,7 @@ export function App() {
           {connected && selectedID && info.data?.location.directory && !settings && (
             <WorkbenchRail
               directory={info.data.location.directory}
+              sessionID={selectedID}
               panels={panels}
               active={terminalVisible ? 'terminal' : workbenchOpen ? workbenchPanel.id : null}
               onSelect={(panel) => {

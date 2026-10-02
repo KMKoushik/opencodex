@@ -42,7 +42,7 @@
      │  Owns sessions, forks, commands + execution                   │                   │  Native bridge types     │
      │  Providers, tools, VCS + filesystem operations                │                   │                          │
      │  Survives OpenCodex shutdown                                  │                   └──────────────────────────┘
-     │  Durable sessions; PTY shells + bounded replay                │
+     │  Durable sessions + read state; PTY shell replay              │
      └───────────────────────────────────────────────────────────────┘                   Code, not a service
 
 

@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LegendList } from '@legendapp/list/react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { BotIcon } from '@hugeicons/core-free-icons';
+import { ArrowRight01Icon, BotIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import type { SessionInfo } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
@@ -14,14 +14,19 @@ import './subagents.css';
 export function SubagentsPanel({ sessionID, live, active }: PanelContext) {
   const [selectedID, setSelectedID] = useState<string>();
   // Retain selection, but release readers, stream observers, and polling when hidden.
-  return active ? (
-    <SubagentsList
-      sessionID={sessionID}
-      live={live}
-      selectedID={selectedID}
-      onSelect={setSelectedID}
-    />
-  ) : null;
+  if (!active) return null;
+  if (selectedID)
+    return (
+      <section className="subagent-reader" aria-label="Subagent conversation">
+        <SubagentSession
+          key={selectedID}
+          sessionID={selectedID}
+          live={live}
+          onBack={() => setSelectedID(undefined)}
+        />
+      </section>
+    );
+  return <SubagentsList sessionID={sessionID} live={live} onSelect={setSelectedID} />;
 }
 
 const sessionKey = (session: SessionInfo) => session.id;
@@ -29,14 +34,14 @@ const sessionKey = (session: SessionInfo) => session.id;
 function SubagentsList({
   sessionID,
   live,
-  selectedID,
   onSelect,
 }: {
   sessionID: string;
   live: boolean;
-  selectedID: string | undefined;
   onSelect: (id: string) => void;
 }) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => heading.current?.focus({ preventScroll: true }), []);
   const sessions = useInfiniteQuery({
     queryKey: ['subagents', sessionID],
     initialPageParam: undefined as string | undefined,
@@ -61,7 +66,9 @@ function SubagentsList({
     <section className="subagents-panel" aria-label="Subagents">
       <div className="subagents-list-pane">
         <div className="wb-subtoolbar">
-          <h2>Delegated sessions</h2>
+          <h2 ref={heading} tabIndex={-1}>
+            Delegated sessions
+          </h2>
           <p className="wb-note">
             {items.length}
             {sessions.hasNextPage ? '+' : ''}
@@ -91,13 +98,7 @@ function SubagentsList({
             renderItem={({ item }) => {
               const running = Boolean(active.data?.[item.id]);
               return (
-                <button
-                  type="button"
-                  className="subagent-row"
-                  aria-pressed={selectedID === item.id}
-                  aria-controls="subagent-reader"
-                  onClick={() => onSelect(item.id)}
-                >
+                <button type="button" className="subagent-row" onClick={() => onSelect(item.id)}>
                   <HugeiconsIcon icon={BotIcon} size={16} />
                   <div className="subagent-row-info">
                     <p className="truncate" title={item.title}>
@@ -119,6 +120,7 @@ function SubagentsList({
                       </span>
                     </p>
                   </div>
+                  <HugeiconsIcon icon={ArrowRight01Icon} size={16} />
                 </button>
               );
             }}
@@ -138,16 +140,6 @@ function SubagentsList({
         )}
         <QueryError query={active} />
       </div>
-      <section id="subagent-reader" className="subagent-reader" aria-label="Subagent conversation">
-        {selectedID ? (
-          <SubagentSession key={selectedID} sessionID={selectedID} live={live} />
-        ) : (
-          <div className="wb-empty">
-            <h3>Follow a subagent</h3>
-            <p>Select a session to read its messages, thinking, and tool activity.</p>
-          </div>
-        )}
-      </section>
     </section>
   );
 }

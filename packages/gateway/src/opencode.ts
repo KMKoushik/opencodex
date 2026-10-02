@@ -123,6 +123,7 @@ export class OpenCodeBackend {
           title: session.title || 'Untitled session',
           directory: session.location.directory,
           updatedAt: session.time.updated,
+          time: session.time,
           model: session.model?.id,
           fork: session.fork ? { sessionID: session.fork.sessionID } : undefined,
         })),

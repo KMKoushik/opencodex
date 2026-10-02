@@ -1,10 +1,22 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { ArrowLeft01Icon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { useChat } from '../chat/use-chat';
 import { Timeline } from '../chat/timeline';
 import { MessageAttachments } from '../chat/message-attachments';
 import { Button } from '../../components/ui/button';
 
-export function SubagentSession({ sessionID, live }: { sessionID: string; live: boolean }) {
+export function SubagentSession({
+  sessionID,
+  live,
+  onBack,
+}: {
+  sessionID: string;
+  live: boolean;
+  onBack: () => void;
+}) {
+  const back = useRef<HTMLButtonElement>(null);
+  useEffect(() => back.current?.focus({ preventScroll: true }), []);
   const chat = useChat(sessionID, live);
   const { messages, seen } = useMemo(() => {
     const seen = new Set<string>();
@@ -74,10 +86,22 @@ export function SubagentSession({ sessionID, live }: { sessionID: string; live: 
   return (
     <>
       <header className="subagent-session-header">
-        <h3 className="truncate" title={chat.info.data?.title}>
-          {chat.info.data?.title || 'Subagent session'}
-        </h3>
-        <p className="wb-note">{live ? 'Live · Read-only' : 'Live updates paused · Read-only'}</p>
+        <Button
+          ref={back}
+          variant="ghost"
+          size="sm"
+          onClick={onBack}
+          aria-label="Back to subagents"
+        >
+          <HugeiconsIcon icon={ArrowLeft01Icon} size={16} />
+          Subagents
+        </Button>
+        <div className="subagent-session-details">
+          <h3 className="truncate" title={chat.info.data?.title}>
+            {chat.info.data?.title || 'Subagent session'}
+          </h3>
+          <p className="wb-note">{live ? 'Live · Read-only' : 'Live updates paused · Read-only'}</p>
+        </div>
       </header>
       {chat.messages.data ? (
         <Timeline

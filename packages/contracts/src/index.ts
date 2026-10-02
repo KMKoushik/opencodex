@@ -45,6 +45,7 @@ export const sessionSchema = z.object({
   title: z.string(),
   directory: z.string(),
   updatedAt: z.number(),
+  time: z.object({ idle: z.number().optional(), viewed: z.number().optional() }),
   model: z.string().optional(),
   fork: z.object({ sessionID: z.string() }).optional(),
 });
@@ -127,6 +128,7 @@ export const modelInputSchema = z.object({
     variant: z.string().min(1).max(512).optional(),
   }),
 });
+export const sessionViewSchema = z.object({ idle: z.number().nonnegative() });
 export const sessionCreateSchema = projectInputSchema.extend({
   model: modelInputSchema.shape.model.optional(),
 });
