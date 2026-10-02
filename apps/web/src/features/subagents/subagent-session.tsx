@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { ArrowLeft01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
+import { useQuery } from '@tanstack/react-query';
+import type { ModelRef } from '@opencodex/contracts';
 import { useChat } from '../chat/use-chat';
 import { Timeline } from '../chat/timeline';
 import { MessageAttachments } from '../chat/message-attachments';
 import { Button } from '../../components/ui/button';
+import { api } from '../../lib/api';
+import { ProviderLogo } from '../chat/provider-logo';
 
 export function SubagentSession({
   sessionID,
@@ -89,19 +93,32 @@ export function SubagentSession({
         <Button
           ref={back}
           variant="ghost"
-          size="sm"
+          size="icon"
           onClick={onBack}
           aria-label="Back to subagents"
+          title="Back to subagents"
         >
           <HugeiconsIcon icon={ArrowLeft01Icon} size={16} />
-          Subagents
         </Button>
         <div className="subagent-session-details">
           <h3 className="truncate" title={chat.info.data?.title}>
             {chat.info.data?.title || 'Subagent session'}
           </h3>
-          <p className="wb-note">{live ? 'Live · Read-only' : 'Live updates paused · Read-only'}</p>
+          {chat.info.data?.model && (
+            <SubagentModel
+              directory={chat.info.data.location.directory}
+              model={chat.info.data.model}
+            />
+          )}
         </div>
+        {running && (
+          <span
+            className="session-activity"
+            role="img"
+            aria-label="Responding"
+            title="Responding…"
+          />
+        )}
       </header>
       {chat.messages.data ? (
         <Timeline
@@ -125,5 +142,28 @@ export function SubagentSession({
         </div>
       )}
     </>
+  );
+}
+
+function SubagentModel({ directory, model }: { directory: string; model: ModelRef }) {
+  const catalog = useQuery({
+    queryKey: ['models', directory],
+    queryFn: ({ signal }) => api.models(directory, signal),
+    staleTime: 5 * 60_000,
+  });
+  const current = catalog.data?.data.find(
+    (item) => item.id === model.id && item.providerID === model.providerID,
+  );
+  const provider = catalog.data?.providers.find((item) => item.id === model.providerID);
+  const name = current?.name || model.id;
+  return (
+    <p
+      className="subagent-session-model"
+      aria-label={`Model: ${name}`}
+      title={`${provider?.name || model.providerID} · ${model.id}`}
+    >
+      <ProviderLogo providerID={model.providerID} canonical={provider?.canonical} />
+      <span className="truncate">{name}</span>
+    </p>
   );
 }

@@ -95,6 +95,23 @@
   min-width: 0;
   gap: 4px;
 }
+.subagent-session-model {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.subagent-session-model .provider-logo,
+.subagent-session-model .provider-logo-fallback {
+  width: 14px;
+  height: 14px;
+}
+.subagent-session-header .session-activity {
+  position: static;
+  flex: none;
+}
 .subagent-reader {
   font-size: 14px;
 }
