@@ -10,6 +10,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import type { TimelineRow, WorkEntry } from './timeline-model';
 import { StreamText } from './stream-text';
 import { Disclosure } from './disclosure';
+import { SkillTool, SkillUsage } from './skill';
 
 export const Activity = memo(function Activity({
   row,
@@ -49,6 +50,8 @@ export const Activity = memo(function Activity({
 const workKey = (entry: WorkEntry) => entry.id;
 
 function WorkItem({ entry, sessionID }: { entry: WorkEntry; sessionID: string }) {
+  if (entry.type === 'skill')
+    return <SkillUsage name={entry.message.name || entry.message.skill} />;
   if (entry.type === 'reasoning')
     return (
       <Disclosure id={entry.id} className="activity-item" label={<span>Thinking</span>}>
@@ -63,6 +66,7 @@ function WorkItem({ entry, sessionID }: { entry: WorkEntry; sessionID: string })
       </Disclosure>
     );
   const tool = entry.tool;
+  if (tool.name === 'skill') return <SkillTool tool={tool} />;
   const state = tool.state;
   const input = typeof state.input === 'object' ? state.input : undefined;
   const target =

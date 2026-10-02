@@ -3,6 +3,7 @@ import type { SessionMessageInfo, SessionMessageAssistantTool } from '@opencodex
 type Assistant = Extract<SessionMessageInfo, { type: 'assistant' }>;
 export type WorkEntry =
   | { id: string; type: 'tool'; tool: SessionMessageAssistantTool }
+  | { id: string; type: 'skill'; message: Extract<SessionMessageInfo, { type: 'skill' }> }
   | {
       id: string;
       type: 'reasoning';
@@ -13,7 +14,6 @@ export type WorkEntry =
     };
 export type TimelineRow =
   | { id: string; type: 'message'; message: SessionMessageInfo }
-  | { id: string; type: 'skill'; tool: SessionMessageAssistantTool }
   | { id: string; type: 'text'; message: Assistant; ordinal: number; text: string }
   | {
       id: string;
@@ -64,7 +64,7 @@ export function createTimelineProjector() {
             if (part.type === 'tool')
               entries.push({
                 id: part.id,
-                type: part.name === 'skill' ? 'skill' : 'tool',
+                type: 'tool',
                 tool: part,
               });
             if (part.type === 'reasoning')
@@ -102,7 +102,9 @@ export function createTimelineProjector() {
               type: 'message',
               message: { ...message, content: [] },
             });
-        } else if (
+        } else if (message.type === 'skill')
+          entries.push({ id: message.id, type: 'skill', message });
+        else if (
           message.type !== 'idle' &&
           message.type !== 'system' &&
           message.type !== 'synthetic'
@@ -111,7 +113,8 @@ export function createTimelineProjector() {
         cache.set(message, entries);
       }
       for (const entry of entries) {
-        if (entry.type === 'tool' || entry.type === 'reasoning') work.push(entry);
+        if (entry.type === 'tool' || entry.type === 'reasoning' || entry.type === 'skill')
+          work.push(entry);
         else {
           flush();
           rows.push(entry);
@@ -131,10 +134,15 @@ function summarizeWork(entries: WorkEntry[]) {
     commands = 0,
     edits = 0,
     questions = 0,
+    skills = 0,
     other = 0,
     errors = 0;
   let active = false;
   for (const entry of entries) {
+    if (entry.type === 'skill') {
+      skills++;
+      continue;
+    }
     if (entry.type !== 'tool') {
       active ||= !entry.completed;
       continue;
@@ -147,6 +155,7 @@ function summarizeWork(entries: WorkEntry[]) {
     else if (/^(shell|bash|exec|execute)$/.test(tool.name)) commands++;
     else if (/^(edit|write|patch|apply_patch|write_file)$/.test(tool.name)) edits++;
     else if (tool.name === 'question') questions++;
+    else if (tool.name === 'skill') skills++;
     else other++;
   }
   const count = (n: number, singular: string, plural = `${singular}s`) =>
@@ -158,6 +167,7 @@ function summarizeWork(entries: WorkEntry[]) {
       commands ? `ran ${count(commands, 'command')}` : '',
       edits ? count(edits, 'edit') : '',
       questions ? count(questions, 'question') : '',
+      skills ? `used ${count(skills, 'skill')}` : '',
       other ? count(other, 'tool call') : '',
     ]
       .filter(Boolean)
