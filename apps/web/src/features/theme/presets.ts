@@ -117,7 +117,7 @@ const catppuccin = {
   },
 };
 
-// One accent (mauve) for primary actions, Mantle for the sidebar, Crust for the review panel.
+// One accent (mauve) for primary actions, Base for content, Mantle for sidebars and file trees.
 // Latte borrows Mocha's panel, keeping code on ink in the light flavor too.
 function catppuccinPreset(flavor: keyof typeof catppuccin, name: string, variant: Variant) {
   const c = catppuccin[flavor];
@@ -130,7 +130,8 @@ function catppuccinPreset(flavor: keyof typeof catppuccin, name: string, variant
     link: c.blue,
     primary: 'accent',
     panel: {
-      seed: { surface: ink.crust, ink: ink.text, accent: ink.mauve },
+      seed: { surface: ink.base, ink: ink.text, accent: ink.mauve },
+      under: ink.mantle,
       error: ink.red,
       success: ink.green,
       warning: ink.yellow,
