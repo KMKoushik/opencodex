@@ -12,6 +12,7 @@ import {
 } from '@opencodex/contracts';
 import { OpenCodeBackend } from './opencode';
 import { GatewayError } from './errors';
+import { imageMime } from './images';
 
 const version = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 const browseInput = projectInputSchema.extend({
@@ -170,16 +171,4 @@ function decodeText(bytes: Uint8Array) {
   } catch {
     return undefined;
   }
-}
-
-function imageMime(bytes: Uint8Array) {
-  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47)
-    return 'image/png';
-  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
-  if (String.fromCharCode(...bytes.slice(0, 3)) === 'GIF') return 'image/gif';
-  if (
-    String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' &&
-    String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP'
-  )
-    return 'image/webp';
 }

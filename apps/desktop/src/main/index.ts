@@ -5,6 +5,11 @@ import { registerNativeHandlers } from './ipc';
 import { createPreferences } from './preferences';
 import { registerLinkHandlers } from './links';
 
+// Keep existing development preferences when replacing Electron's default display name.
+const userData = app.getPath('userData');
+app.setName('OpenCodex');
+app.setPath('userData', userData);
+
 let gateway: Awaited<ReturnType<typeof startGateway>> | undefined;
 let origin: string;
 let quitting = false;

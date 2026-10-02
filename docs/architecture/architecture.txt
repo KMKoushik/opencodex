@@ -12,12 +12,12 @@
   │  │  <>   Browser app          │     │  <>   Desktop app          │   │               │  <>   apps/desktop       │
   │  │                            │     │                            ├───┼──────────────▶│                          │
   │  │  localStorage prefs        │     │  Sandboxed renderer        │   │  link events  │  Window lifecycle        │
-  │  │  Opened projects + theme   │     │  Native IPC available      ├───┼──────────────▶│  Folder picker + open in │
+  │  │  Projects, theme + models  │     │  Native IPC available      ├───┼──────────────▶│  Folder picker + open in │
   │  └────────────────────────────┘     └────────────────────────────┘   │               │  OS browser + clipboard  │
   │                                                                      │               └─────────────┬────────────┘
   │             Zustand chat + editor drafts; Query API state            │                             │
   │                                                                      │               read / write  │
-  │              Lazy panels: files, changes + Ghostty WASM              │                             │
+  │          Lazy files, changes, subagents + dockable terminal          │                             │
   └────────────────────┬─────────────────────────────────────────────────┘                             │
        HTTP /api       │                               ▲  SSE + WS                                     ▼
        + WS input      │                               │  output                         ┌── DESKTOP PREFERENCES ───┐
@@ -25,9 +25,9 @@
      ┌──────────────────────── LOCAL GATEWAY ──────────┴─────────────┐                   │  <>   User-data dir      │
      │                                                               │                   │       electron-store     │
      │  <>   packages/gateway                                        │                   │  preferences.json        │
-     │                                                               │                   │  Projects, theme, opener │
-     │  Hono + V2 client; private service credentials                │                   │                          │
-     │  Bounded diff snapshots; version-checked file writes          │                   └──────────────────────────┘
+     │                                                               │                   │  Projects, theme + layout│
+     │  Hono + V2 client; private service credentials                │                   │  Project model + thinking│
+     │  Bounded images/diffs; version-checked file writes            │                   └──────────────────────────┘
      │  Native APIs + origin-checked, ticketed PTY relay             │
      └─────────────────┬─────────────────────────────────────────────┘
                        │                               ▲
@@ -50,6 +50,6 @@
 
   RUNTIME HOSTING
 
-  DEV          Vite :5173 proxies /api to the gateway on :4310.
+  DEV          Vite :5173 proxies /api to :4310; macOS launches cached OpenCodex.app.
   WEB BUILD    Node gateway serves the UI and API on one loopback origin.
   DESKTOP      Electron main hosts the gateway and built UI on a free loopback port.

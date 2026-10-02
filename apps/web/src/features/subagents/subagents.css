@@ -1,0 +1,120 @@
+.subagents-panel,
+.subagent-reader,
+.subagents-list-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.subagents-panel,
+.subagent-reader {
+  flex: 1;
+  overflow: hidden;
+}
+.subagents-list-pane {
+  flex: none;
+  height: 240px;
+  max-height: 40%;
+  border-bottom: 1px solid var(--border);
+}
+.subagents-list-pane .wb-empty {
+  padding: 12px;
+}
+.subagents-list-pane .wb-empty > svg {
+  margin-bottom: 8px;
+}
+.subagents-panel h2,
+.subagent-session-header h3 {
+  font-size: 14px;
+  font-weight: 500;
+}
+.subagents-panel .wb-note {
+  font-variant-numeric: tabular-nums;
+}
+.subagents-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.subagent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  text-align: left;
+  color: var(--text-secondary);
+}
+.subagent-row > svg {
+  flex: none;
+  height: 20px;
+}
+.subagent-row-info {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+}
+.subagent-row[aria-pressed='true'] {
+  background: var(--secondary);
+  color: var(--text);
+}
+.subagent-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.subagent-meta > span:last-child {
+  flex: none;
+}
+.subagent-meta [data-status='running'] {
+  color: var(--accent-text);
+}
+.subagent-meta [data-status='failed'] {
+  color: var(--error);
+}
+.subagents-more {
+  display: flex;
+  justify-content: center;
+  flex: none;
+  padding: 4px;
+}
+.subagent-session-header {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.subagent-reader {
+  font-size: 14px;
+}
+.subagent-reader .timeline-row,
+.subagent-reader .timeline-footer {
+  padding-inline: 16px;
+}
+.subagent-reader .user-message-bubble {
+  max-width: 100%;
+}
+@media (hover: hover) {
+  .subagent-row:hover {
+    background: var(--hover);
+  }
+}
+@media (pointer: coarse) {
+  .subagent-row,
+  .subagents-more .button {
+    min-height: 48px;
+  }
+}
+@media (max-width: 720px) {
+  .subagent-reader,
+  .subagent-row-info {
+    font-size: 16px;
+  }
+}

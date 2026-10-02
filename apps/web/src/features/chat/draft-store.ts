@@ -13,6 +13,8 @@ type Draft = Readonly<{
 export type DraftSnapshot = Draft & { readonly sessionID: string };
 type DraftState = {
   drafts: Readonly<Record<string, Draft | undefined>>;
+  projectModels: Readonly<Record<string, ModelRef>>;
+  rememberModel: (directory: string, model: ModelRef) => void;
   editText: (sessionID: string, text: string) => void;
   selectModel: (sessionID: string, model: ModelRef) => void;
   attach: (sessionID: string, files: readonly File[]) => string | undefined;
@@ -24,11 +26,37 @@ type DraftState = {
 };
 
 /** Client-owned intent only. API snapshots and request lifecycles stay in Query. */
-export function createDraftStore() {
+export function createDraftStore(
+  preferences: {
+    models?: Readonly<Record<string, ModelRef>>;
+    saveModels?: (models: Readonly<Record<string, ModelRef>>) => void;
+  } = {},
+) {
   // Never reuse a revision, even if a draft is cleared and recreated with identical text.
   let revision = 0;
   return createStore<DraftState>((set, get) => ({
     drafts: {},
+    projectModels: preferences.models ?? {},
+    rememberModel(directory, model) {
+      const current = get().projectModels;
+      const previous = current[directory];
+      if (
+        previous?.id === model.id &&
+        previous.providerID === model.providerID &&
+        previous.variant === model.variant
+      )
+        return;
+      // Bound the preference payload to the native bridge's limit; oldest projects go first.
+      const entries = Object.entries(current).filter(([key]) => key !== directory);
+      entries.push([directory, { ...model }]);
+      let projectModels = Object.fromEntries(entries);
+      while (entries.length > 64 || JSON.stringify(projectModels).length > 16_384) {
+        entries.shift();
+        projectModels = Object.fromEntries(entries);
+      }
+      set({ projectModels });
+      preferences.saveModels?.(projectModels);
+    },
     editText(sessionID, text) {
       set((state) => {
         const current = state.drafts[sessionID];

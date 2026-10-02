@@ -34,6 +34,7 @@ export function ChatView({
   const { catalog, select, model } = useModelSelection(sessionID, chat.info.data);
   const drafts = useDraftStore();
   const [forkDraft, setForkDraft] = useState<DraftSnapshot>();
+  const forkButton = useRef<HTMLButtonElement>(null);
   const commands = useSlashCommands(chat.info.data?.location.directory, false);
   const sendKey = ['chat', sessionID, 'send'];
   const sending = useIsMutating({ mutationKey: sendKey }) > 0;
@@ -60,7 +61,9 @@ export function ChatView({
             session: await api.sessionAction(sessionID, { action: 'fork', before: input.before }),
           };
         if (slash.name === 'new')
-          return { session: await api.createSession(chat.info.data!.location.directory) };
+          return {
+            session: await api.createSession(chat.info.data!.location.directory, input.model),
+          };
         if (slash.name === 'compact') await api.sessionAction(sessionID, { action: 'compact' });
         if (slash.name === 'undo' || slash.name === 'redo') {
           if (running) throw new Error('Stop the current response before undoing or redoing.');
@@ -232,13 +235,44 @@ export function ChatView({
   return (
     <div className="chat" data-empty={empty}>
       {forkDraft && (
-        <Dialog title="Fork conversation" busy={sending} onClose={() => setForkDraft(undefined)}>
+        <Dialog
+          title="Fork conversation"
+          busy={sending}
+          initialFocus={forkButton}
+          onClose={() => setForkDraft(undefined)}
+        >
           <p className="message-note">
             Continue in a new thread from the latest state, or fork just before an earlier message.
           </p>
-          <div className="fork-options">
-            <Button disabled={sending} onClick={() => send.mutate({ draft: forkDraft })}>
-              Fork from latest
+          <div
+            className="fork-options"
+            onKeyDown={(event) => {
+              if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+              if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+              const options = Array.from(
+                event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'),
+              );
+              const index = options.findIndex((option) => option === event.target);
+              if (index < 0) return;
+              event.preventDefault();
+              const next =
+                event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? options.length - 1
+                    : (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) %
+                      options.length;
+              options[next]?.focus({ preventScroll: true });
+              options[next]?.scrollIntoView({ block: 'nearest' });
+            }}
+          >
+            <Button
+              ref={forkButton}
+              variant="ghost"
+              disabled={sending}
+              onClick={() => send.mutate({ draft: forkDraft })}
+            >
+              {sending && !send.variables?.before ? 'Forking…' : 'Fork from latest'}
             </Button>
             {unique
               .filter((message) => message.type === 'user')
@@ -250,7 +284,11 @@ export function ChatView({
                   disabled={sending}
                   onClick={() => send.mutate({ draft: forkDraft, before: message.id })}
                 >
-                  <span className="truncate">Before: {message.text || 'Attachments'}</span>
+                  <span className="truncate">
+                    {sending && send.variables?.before === message.id
+                      ? 'Forking…'
+                      : `Before: ${message.text || 'Attachments'}`}
+                  </span>
                 </Button>
               ))}
             {chat.messages.hasNextPage && (
@@ -343,7 +381,10 @@ export function ChatView({
                   !draft.comments?.length
                 )
                   return;
-                return send.mutateAsync({ draft, model: draft.model ?? model });
+                const selection = draft.model ?? model;
+                if (selection && chat.info.data)
+                  drafts.getState().rememberModel(chat.info.data.location.directory, selection);
+                return send.mutateAsync({ draft, model: selection });
               }}
               sending={sending}
               ready={chat.info.isSuccess}

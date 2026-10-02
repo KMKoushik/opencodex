@@ -8,6 +8,7 @@ import { SettingsGroup, SettingsRow } from '../settings/settings-layout';
 import { presets, type Variant } from './presets';
 import { isCustomized, resolveSeed, type ThemeMode, type VariantPreference } from './theme';
 import { useTheme } from './use-theme';
+import type { TerminalPlacement } from '../terminal/placement';
 
 const modes = [
   { value: 'light', label: 'Light', icon: <HugeiconsIcon icon={Sun03Icon} size={14} /> },
@@ -15,7 +16,13 @@ const modes = [
   { value: 'system', label: 'System', icon: <HugeiconsIcon icon={ComputerIcon} size={14} /> },
 ] satisfies { value: ThemeMode; label: string; icon: ReactNode }[];
 
-export function AppearanceSettings() {
+export function AppearanceSettings({
+  terminalPlacement,
+  onTerminalPlacementChange,
+}: {
+  terminalPlacement: TerminalPlacement;
+  onTerminalPlacementChange: (placement: TerminalPlacement) => void;
+}) {
   const { preference, update } = useTheme();
   return (
     <>
@@ -26,6 +33,22 @@ export function AppearanceSettings() {
             value={preference.mode}
             options={modes}
             onChange={(mode) => update({ ...preference, mode })}
+          />
+        </SettingsRow>
+      </SettingsGroup>
+      <SettingsGroup title="Terminal">
+        <SettingsRow
+          label="Placement"
+          description="Open the terminal below the workspace or in the right-side panel."
+        >
+          <SegmentedControl<TerminalPlacement>
+            label="Terminal placement"
+            value={terminalPlacement}
+            options={[
+              { value: 'bottom', label: 'Bottom' },
+              { value: 'right', label: 'Right' },
+            ]}
+            onChange={onTerminalPlacementChange}
           />
         </SettingsRow>
       </SettingsGroup>

@@ -2,6 +2,35 @@ import { expect, it } from 'vitest';
 import { createDraftStore } from './draft-store';
 import { reviewPrompt } from './review-comments';
 
+it('persists model and thinking per project without persisting drafts or changing another project', () => {
+  let saved = '';
+  let writes = 0;
+  const store = createDraftStore({
+    saveModels: (models) => {
+      saved = JSON.stringify(models);
+      writes++;
+    },
+  });
+  const first = { id: 'reasoner', providerID: 'provider', variant: 'high' };
+  const second = { id: 'other', providerID: 'provider', variant: 'low' };
+  store.getState().rememberModel('/one', first);
+  store.getState().rememberModel('/two', second);
+  store.getState().editText('chat', 'unsent');
+  store.getState().rememberModel('/one', first);
+  expect(writes).toBe(2);
+  store.getState().rememberModel('/one', { ...first, variant: undefined });
+  const reopened = createDraftStore({ models: JSON.parse(saved) });
+  expect(reopened.getState().projectModels).toEqual({
+    '/one': { id: 'reasoner', providerID: 'provider' },
+    '/two': second,
+  });
+  expect(reopened.getState().drafts).toEqual({});
+  for (let index = 0; index < 65; index++)
+    store.getState().rememberModel(`/project-${index}`, first);
+  expect(Object.keys(store.getState().projectModels)).toHaveLength(64);
+  expect(store.getState().projectModels['/project-0']).toBeUndefined();
+});
+
 it('keeps review context separate and preserves comments edited during a send', () => {
   const store = createDraftStore();
   const actions = store.getState();

@@ -31,7 +31,7 @@ export async function startGateway(options: { port?: number; assets?: string } =
     app.use('*', async (c, next) => {
       c.header(
         'Content-Security-Policy',
-        "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-src http: https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+        "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https:; connect-src 'self'; frame-src http: https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
       );
       await next();
     });

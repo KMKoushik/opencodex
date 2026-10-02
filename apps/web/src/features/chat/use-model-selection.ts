@@ -19,6 +19,7 @@ export function useModelSelection(sessionID: string, session?: SessionInfo) {
     model: draft ?? session?.model ?? catalog.data?.defaultModel ?? undefined,
     select(model: ModelRef) {
       store.getState().selectModel(sessionID, model);
+      if (directory) store.getState().rememberModel(directory, model);
     },
   };
 }

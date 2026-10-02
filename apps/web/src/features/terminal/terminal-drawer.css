@@ -1,0 +1,22 @@
+.workbench.terminal-drawer {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  max-height: 60%;
+  border-left: 0;
+  border-top: 1px solid var(--border);
+}
+.terminal-resize {
+  position: absolute;
+  inset: -4px 0 auto;
+  height: 8px;
+  cursor: row-resize;
+  touch-action: none;
+  z-index: 4;
+}
+.terminal-resize:focus-visible {
+  background: var(--accent-soft);
+}
+:root[data-platform] .terminal-drawer .wb-header {
+  -webkit-app-region: no-drag;
+}

@@ -7,6 +7,7 @@ import {
   type OpenCodeProject,
   type ProjectUpdate,
   type SessionInfo,
+  type SessionListOutput,
   type SessionMessagesResponse,
   type SessionInboxInfo,
   type SessionInboxUser,
@@ -118,10 +119,15 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(input),
     }),
-  createSession: (directory: string) =>
-    nativeRequest<SessionInfo>('/sessions', post({ directory })),
+  createSession: (directory: string, model?: ModelRef) =>
+    nativeRequest<SessionInfo>('/sessions', post({ directory, model })),
   session: (id: string, signal: AbortSignal) =>
     nativeRequest<SessionInfo>(sessionPath(id), { signal }),
+  subagents: (id: string, cursor: string | undefined, signal: AbortSignal) =>
+    nativeRequest<SessionListOutput>(
+      `${sessionPath(id)}/subagents${cursor ? `?${new URLSearchParams({ cursor })}` : ''}`,
+      { signal },
+    ),
   active: (signal: AbortSignal) =>
     nativeRequest<Record<string, SessionActive>>('/sessions/active', { signal }),
   messages: (id: string, cursor: string | undefined, signal: AbortSignal) =>

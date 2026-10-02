@@ -67,6 +67,23 @@ describe('app command dispatch', () => {
     expect(dismiss).toHaveBeenCalledOnce();
   });
 
+  it('toggles the terminal from editable inputs with platform-specific modifiers', () => {
+    const registry = new CommandRegistry();
+    const toggle = vi.fn();
+    registry.register('terminal.toggle', toggle);
+    const event = key({ key: 'j', code: 'KeyJ' });
+    registry.dispatch(event, { ...context, editable: true });
+    registry.dispatch(key({ key: 'j', code: 'KeyJ', metaKey: false, ctrlKey: true }), {
+      ...context,
+      mac: false,
+      editable: true,
+    });
+    registry.dispatch(event, { ...context, blocked: true });
+    expect(toggle).toHaveBeenCalledTimes(2);
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(shortcutLabel('terminal.toggle', true)).toBe('⌘J');
+  });
+
   it('keeps explicit Control bindings distinct from Command on macOS', () => {
     const registry = new CommandRegistry();
     const cycle = vi.fn();

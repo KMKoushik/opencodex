@@ -8,9 +8,15 @@ export interface DesktopBridge {
   platform: string;
 }
 
-export type PreferenceKey = 'project' | 'projects' | 'theme' | 'openInApp';
-export type DesktopPreferences = Record<Exclude<PreferenceKey, 'openInApp'>, string | null> & {
+export type PreferenceKey =
+  'project' | 'projects' | 'theme' | 'openInApp' | 'terminalPlacement' | 'projectModels';
+export type DesktopPreferences = Record<
+  Exclude<PreferenceKey, 'openInApp' | 'terminalPlacement' | 'projectModels'>,
+  string | null
+> & {
   openInApp?: string | null;
+  terminalPlacement?: string | null;
+  projectModels?: string | null;
 };
 
 export const openAppIDs = [

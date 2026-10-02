@@ -1,7 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { attachmentLimitError, connectionSchema, sessionPageSchema } from '@opencodex/contracts';
 import { createApp } from './app';
@@ -35,6 +36,84 @@ async function upstream(handler: (request: IncomingMessage, response: ServerResp
 }
 
 describe('gateway and the real OpenCode client', () => {
+  it('lists child sessions with native pagination and reads their transcripts without mutations', async () => {
+    const calls: string[] = [];
+    const child = {
+      id: 'child',
+      parentID: 'parent',
+      title: 'Explore the code',
+      agent: 'explore',
+      outcome: 'succeeded',
+      location: { directory },
+    };
+    const page = { data: [child], cursor: { next: 'next-child' } };
+    const messages = { data: [{ id: 'message', type: 'user', text: 'Explore' }], cursor: {} };
+    const url = await upstream((req, res) => {
+      expect(req.method).toBe('GET');
+      const path = new URL(req.url!, 'http://localhost');
+      calls.push(path.pathname);
+      res.setHeader('Content-Type', 'application/json');
+      if (path.pathname === '/api/session') {
+        expect(path.searchParams.get('parentID')).toBe('parent');
+        expect(path.searchParams.get('limit')).toBe('50');
+        expect(path.searchParams.get('order')).toBe('asc');
+        expect(path.searchParams.has('directory')).toBe(false);
+        expect(path.searchParams.get('cursor')).toBe(calls.length === 1 ? null : 'next-child');
+        return res.end(JSON.stringify(page));
+      }
+      if (path.pathname === '/api/session/child') return res.end(JSON.stringify({ data: child }));
+      if (path.pathname === '/api/session/child/message') return res.end(JSON.stringify(messages));
+      res.writeHead(404).end();
+    });
+    const app = createApp(new OpenCodeBackend(async () => ({ url })));
+    const get = async (path: string) => {
+      const response = await app.request(`http://localhost/api/sessions/${path}`);
+      expect(response.status).toBe(200);
+      return response.json();
+    };
+    expect(await get('parent/subagents')).toEqual(page);
+    expect(await get('parent/subagents?cursor=next-child')).toEqual(page);
+    expect(await get('child')).toEqual(child);
+    expect(await get('child/messages')).toEqual(messages);
+    expect(calls).toEqual([
+      '/api/session',
+      '/api/session',
+      '/api/session/child',
+      '/api/session/child/message',
+    ]);
+  });
+  it('creates sessions with the inherited model and variant through the native API', async () => {
+    const calls: unknown[] = [];
+    const url = await upstream((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk: Buffer) => chunks.push(chunk));
+      req.on('end', () => {
+        expect(req.url).toBe('/api/session');
+        const body = JSON.parse(Buffer.concat(chunks).toString());
+        calls.push(body);
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ data: { id: 'new', ...body } }));
+      });
+    });
+    const app = createApp(new OpenCodeBackend(async () => ({ url })));
+    const create = (model?: unknown) =>
+      app.request('http://localhost/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ directory, model }),
+      });
+    const model = { id: 'reasoner', providerID: 'provider', variant: 'high' };
+    const response = await create(model);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ model });
+    expect((await create()).status).toBe(200);
+    expect(calls).toEqual([
+      { location: { directory }, agent: 'build', model },
+      { location: { directory }, agent: 'build' },
+    ]);
+    expect((await create({ id: '' })).status).toBe(400);
+    expect(calls).toHaveLength(2);
+  });
   it('stages undo while idle and commits a staged revert before admitting the next prompt', async () => {
     let active = true;
     const calls: string[] = [];
@@ -174,6 +253,71 @@ describe('gateway and the real OpenCode client', () => {
     expect((await read('../outside')).status).toBe(400);
     expect((await read('huge.txt')).status).toBe(413);
     expect((await read('huge-stream.txt')).status).toBe(413);
+  });
+
+  it('previews local chat images through bounded native reads, without serving non-image files', async () => {
+    const reads: Array<{ directory: string | null; path: string }> = [];
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8ioAAAAASUVORK5CYII=',
+      'base64',
+    );
+    const url = await upstream((req, res) => {
+      const path = new URL(req.url!, 'http://localhost');
+      expect(req.headers.authorization).toBe(
+        `Basic ${Buffer.from('image:test').toString('base64')}`,
+      );
+      if (path.pathname === '/api/session/s') {
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({ data: { id: 's', location: { directory } } }));
+      }
+      const file = decodeURIComponent(path.pathname.slice('/api/fs/read/'.length));
+      reads.push({ directory: path.searchParams.get('location[directory]'), path: file });
+      if (file === 'large.png') {
+        res.write(Buffer.alloc(1536 * 1024));
+        return res.end(Buffer.alloc(1536 * 1024));
+      }
+      if (file === 'logo.svg')
+        return res.end('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+      if (file === 'secret.png') return res.end('<html>not an image</html>');
+      if (file === 'missing.png') return res.writeHead(404).end();
+      res.end(png);
+    });
+    const app = createApp(
+      new OpenCodeBackend(async () => ({
+        url,
+        auth: { type: 'basic', username: 'image', password: 'test' },
+      })),
+    );
+    const get = (path: string, headers?: Record<string, string>) =>
+      app.request(`http://localhost/api/sessions/s/image?${new URLSearchParams({ path })}`, {
+        headers,
+      });
+    const relative = await get('art/preview with spaces.png');
+    expect(relative.status).toBe(200);
+    expect(relative.headers.get('content-type')).toBe('image/png');
+    expect(Buffer.from(await relative.arrayBuffer())).toEqual(png);
+    expect(reads.at(-1)).toEqual({
+      directory: join(directory, 'art'),
+      path: 'preview with spaces.png',
+    });
+    const outside = join(dirname(directory), 'outside image.png');
+    expect((await get(outside)).status).toBe(200);
+    expect(reads.at(-1)).toEqual({ directory: dirname(directory), path: 'outside image.png' });
+    expect((await get(pathToFileURL(outside).href)).status).toBe(200);
+    expect(reads.at(-1)?.path).toBe('outside image.png');
+    const svg = await get('logo.svg');
+    expect(svg.headers.get('content-type')).toBe('image/svg+xml');
+    expect(svg.headers.get('content-security-policy')).toContain('sandbox');
+    expect(svg.headers.get('x-content-type-options')).toBe('nosniff');
+    expect((await get('secret.png')).status).toBe(415);
+    expect((await get('large.png')).status).toBe(413);
+    expect((await get('missing.png')).status).toBe(502);
+    const count = reads.length;
+    expect((await get('https://example.com/image.png')).status).toBe(400);
+    expect((await get('file://other-host/image.png')).status).toBe(400);
+    expect((await get('file:///bad%00.png')).status).toBe(400);
+    expect((await get('image.png', { origin: 'https://other.example' })).status).toBe(403);
+    expect(reads).toHaveLength(count);
   });
 
   it('shares native diff snapshots but transfers only metadata or the requested patch', async () => {
@@ -379,6 +523,10 @@ describe('gateway and the real OpenCode client', () => {
               location: { directory },
               time: { updated: 42 },
               model: { id: 'test-model' },
+              fork: {
+                sessionID: 'source-session',
+                boundary: { type: 'through', messageID: 'last-message' },
+              },
             },
           ],
           cursor: { next: 'next-page' },
@@ -402,6 +550,7 @@ describe('gateway and the real OpenCode client', () => {
           directory,
           updatedAt: 42,
           model: 'test-model',
+          fork: { sessionID: 'source-session' },
         },
       ],
       nextCursor: 'next-page',

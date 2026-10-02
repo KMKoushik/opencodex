@@ -10,7 +10,7 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { OpenCodeProject, Project } from '@opencodex/contracts';
+import type { ModelCatalog, ModelRef, OpenCodeProject, Project } from '@opencodex/contracts';
 import { Button } from '../components/ui/button';
 import { useConnection } from '../features/connection/use-connection';
 import { useEvents } from '../features/connection/use-events';
@@ -34,8 +34,20 @@ import { useCommand } from '../features/shortcuts/use-command';
 import { shortcutProps } from '../features/shortcuts/commands';
 import { ShortcutsSettings } from '../features/shortcuts/shortcuts-settings';
 import { SessionPanelToggle } from '../features/session-panel/session-panel-toggle';
+import { SessionTitle } from '../features/sessions/session-title';
 import { WorkbenchRail } from '../features/workbench/workbench-rail';
 import { panels } from '../features/workbench/panels';
+import { SidebarResize } from '../features/sidebar/sidebar-resize';
+import { readTerminalPlacement, type TerminalPlacement } from '../features/terminal/placement';
+import { writeStorage } from '../lib/storage';
+import { useDraftStore } from '../features/chat/draft-context';
+
+const TerminalDrawer = lazy(() =>
+  import('../features/terminal/terminal-drawer').then((module) => ({
+    default: module.TerminalDrawer,
+  })),
+);
+const terminalPanel = panels.find((panel) => panel.id === 'terminal')!;
 
 const ChatView = lazy(() =>
   import('../features/chat/chat-view').then((module) => ({ default: module.ChatView })),
@@ -54,6 +66,11 @@ export function App() {
   const [settings, setSettings] = useState<SettingsSection | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalPlacement, setTerminalPlacement] = useState(readTerminalPlacement);
+  const [terminalLoaded, setTerminalLoaded] = useState(false);
+  const terminalFocus = useRef<HTMLElement | null>(null);
+
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [workbenchPanel, setWorkbenchPanel] = useState(panels[0]!);
   const [workbenchLoaded, setWorkbenchLoaded] = useState(false);
@@ -61,6 +78,7 @@ export function App() {
   const sidebar = useRef<HTMLElement>(null);
   const main = useRef<HTMLElement>(null);
   const queryClient = useQueryClient();
+  const drafts = useDraftStore();
   const { connected } = useConnection();
   const live = useEvents(connected);
   const metadata = useQuery({
@@ -80,8 +98,9 @@ export function App() {
     queryFn: ({ signal }) => api.session(selectedID!, signal),
   });
   const create = useMutation({
-    mutationFn: (directory: string) => api.createSession(directory),
-    onSuccess: (session, directory) => {
+    mutationFn: ({ directory, model }: { directory: string; model?: ModelRef }) =>
+      api.createSession(directory, model),
+    onSuccess: (session, { directory }) => {
       queryClient.setQueryData(['chat', session.id, 'info'], session);
       if (project?.directory === directory) {
         setSelectedID(session.id);
@@ -130,8 +149,19 @@ export function App() {
 
   function newChat() {
     if (!project || !connected || create.isPending) return false;
+    // Capture the visible selection before creation; unsent choices win over session state.
+    const model =
+      (selectedID ? drafts.getState().drafts[selectedID]?.model : undefined) ??
+      info.data?.model ??
+      drafts.getState().projectModels[project.directory] ??
+      queryClient.getQueryData<ModelCatalog>([
+        'models',
+        info.data?.location.directory ?? project.directory,
+      ])?.defaultModel ??
+      undefined;
+    if (model) drafts.getState().rememberModel(project.directory, model);
     navigate(null);
-    create.mutate(project.directory);
+    create.mutate({ directory: project.directory, model });
   }
 
   function openProject() {
@@ -139,6 +169,56 @@ export function App() {
     selectProject(null);
   }
 
+  const terminalDirectory = selectedID ? info.data?.location.directory : project?.directory;
+  const terminalVisible =
+    terminalPlacement === 'bottom'
+      ? terminalOpen
+      : workbenchOpen && workbenchPanel.id === 'terminal';
+  function changeTerminalPlacement(next: TerminalPlacement) {
+    if (next === terminalPlacement) return;
+    setTerminalPlacement(next);
+    writeStorage('terminalPlacement', next);
+    if (next === 'right') {
+      setTerminalOpen(false);
+      if (terminalVisible) {
+        setWorkbenchLoaded(true);
+        setWorkbenchPanel(terminalPanel);
+        setWorkbenchOpen(true);
+      }
+    } else {
+      if (workbenchPanel.id === 'terminal') {
+        setWorkbenchPanel(panels[0]!);
+        setWorkbenchOpen(false);
+      }
+      setTerminalLoaded((loaded) => loaded || terminalVisible);
+      setTerminalOpen(terminalVisible);
+    }
+  }
+  function closeTerminal() {
+    if (terminalPlacement === 'bottom') setTerminalOpen(false);
+    else setWorkbenchOpen(false);
+    const target = terminalFocus.current;
+    if (target?.isConnected) target.focus({ preventScroll: true });
+    else main.current?.focus({ preventScroll: true });
+  }
+  function toggleTerminal() {
+    if (!connected || !terminalDirectory || settings) return false;
+    if (terminalVisible) closeTerminal();
+    else {
+      terminalFocus.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      if (terminalPlacement === 'bottom') {
+        setTerminalLoaded(true);
+        setTerminalOpen(true);
+      } else {
+        setWorkbenchLoaded(true);
+        setWorkbenchPanel(terminalPanel);
+        setWorkbenchOpen(true);
+      }
+    }
+  }
+
+  useCommand('terminal.toggle', toggleTerminal);
   useCommand('sidebar.toggle', toggleSidebar);
   useCommand('chat.new', newChat);
   useCommand('project.open', openProject);
@@ -162,6 +242,7 @@ export function App() {
         Skip to content
       </a>
       <aside ref={sidebar} className="sidebar" id="sidebar" aria-label="Sidebar">
+        <SidebarResize />
         <div className="sidebar-header">
           <span className="sidebar-brand">OpenCodex</span>
           <Button
@@ -270,15 +351,16 @@ export function App() {
                   /
                 </span>
               )}
-              {!settings && (
-                <h1 className="toolbar-title truncate">
-                  {selectedID
-                    ? info.data?.title || 'New chat'
-                    : project
-                      ? 'New thread'
-                      : 'OpenCodex'}
-                </h1>
-              )}
+              {!settings && selectedID ? (
+                <SessionTitle
+                  key={`title-${selectedID}`}
+                  sessionID={selectedID}
+                  title={info.data?.title || 'New chat'}
+                  disabled={!connected || !info.isSuccess}
+                />
+              ) : !settings ? (
+                <h1 className="toolbar-title truncate">{project ? 'New thread' : 'OpenCodex'}</h1>
+              ) : null}
               {connected && !live && !settings && (
                 <span className="toolbar-status" role="status">
                   Live updates paused
@@ -335,7 +417,10 @@ export function App() {
                       }}
                     />
                   ) : (
-                    <AppearanceSettings />
+                    <AppearanceSettings
+                      terminalPlacement={terminalPlacement}
+                      onTerminalPlacementChange={changeTerminalPlacement}
+                    />
                   )}
                 </div>
               ) : selectedID && connected ? (
@@ -367,8 +452,8 @@ export function App() {
           </div>
           {workbenchLoaded &&
             connected &&
-            selectedID &&
-            info.data?.location.directory &&
+            terminalDirectory &&
+            (selectedID || workbenchPanel.id === 'terminal') &&
             !settings && (
               <Suspense
                 fallback={
@@ -378,13 +463,17 @@ export function App() {
                 }
               >
                 <WorkbenchPanel
-                  key={selectedID}
-                  directory={info.data.location.directory}
-                  sessionID={selectedID}
+                  key={selectedID ?? terminalDirectory}
+                  directory={terminalDirectory}
+                  sessionID={selectedID ?? ''}
                   live={live}
                   open={workbenchOpen}
                   panel={workbenchPanel}
                   onClose={() => {
+                    if (workbenchPanel.id === 'terminal') {
+                      closeTerminal();
+                      return;
+                    }
                     setWorkbenchOpen(false);
                     workbenchToggle.current?.focus();
                   }}
@@ -395,8 +484,12 @@ export function App() {
             <WorkbenchRail
               directory={info.data.location.directory}
               panels={panels}
-              active={workbenchOpen ? workbenchPanel.id : null}
+              active={terminalVisible ? 'terminal' : workbenchOpen ? workbenchPanel.id : null}
               onSelect={(panel) => {
+                if (panel.id === 'terminal') {
+                  toggleTerminal();
+                  return;
+                }
                 setWorkbenchLoaded(true);
                 setWorkbenchPanel(panel);
                 setWorkbenchOpen((open) => panel.id !== workbenchPanel.id || !open);
@@ -404,6 +497,21 @@ export function App() {
             />
           )}
         </div>
+        {terminalPlacement === 'bottom' &&
+          terminalLoaded &&
+          connected &&
+          terminalDirectory &&
+          !settings && (
+            <Suspense fallback={null}>
+              <TerminalDrawer
+                key={terminalDirectory}
+                directory={terminalDirectory}
+                live={live}
+                open={terminalOpen}
+                onClose={closeTerminal}
+              />
+            </Suspense>
+          )}
       </div>
       <div className="sidebar-scrim" aria-hidden="true" onClick={() => setSidebarOpen(false)} />
     </div>

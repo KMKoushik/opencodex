@@ -44,9 +44,9 @@ button:disabled {
   cursor: default;
   opacity: 0.45;
 }
+:focus,
 :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: none;
 }
 h1,
 h2,
@@ -75,13 +75,18 @@ svg {
 /* Shell */
 .app-shell {
   display: grid;
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  grid-template-columns: clamp(200px, var(--sidebar-width), min(480px, calc(100vw - 360px))) minmax(
+      0,
+      1fr
+    );
   height: 100dvh;
   background: var(--surface-under);
 }
 .sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
   padding: 0 10px 10px;
   background: var(--surface-under);
@@ -305,6 +310,11 @@ svg {
 }
 .session-row {
   position: relative;
+}
+.session-row > .session-kind {
+  flex: none;
+  color: var(--text-tertiary);
+  font-size: 11px;
 }
 .session-activity {
   position: absolute;
@@ -544,10 +554,6 @@ svg {
 .projects-search > svg {
   flex-shrink: 0;
 }
-.projects-search:focus-within {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
-}
 .projects-search input {
   min-width: 0;
   width: 100%;
@@ -747,7 +753,6 @@ svg {
   border: 1px solid var(--border-heavy);
   border-radius: 8px;
   background: var(--control);
-  outline-offset: -1px;
 }
 .project-editor-icon {
   display: flex;
@@ -802,8 +807,7 @@ svg {
   cursor: pointer;
 }
 .project-color-option input:checked {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  background: var(--selected);
 }
 .project-color-option > .project-icon {
   pointer-events: none;

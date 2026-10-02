@@ -9,7 +9,8 @@ import { useDraftStore } from './draft-context';
 import { EMPTY_ATTACHMENTS } from './attachments';
 import { ComposerAttachments } from './composer-attachments';
 import { ComposerComments } from './composer-comments';
-import { localCommands, useSlashCommands } from './slash-commands';
+import { localCommands, matchSlashCommands, useSlashCommands } from './slash-commands';
+import { useTypeToCompose } from './use-type-to-compose';
 import './slash-commands.css';
 
 export function Composer({
@@ -45,16 +46,15 @@ export function Composer({
   const dragDepth = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  useTypeToCompose(textarea, sessionID);
   const [commandIndex, setCommandIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [focused, setFocused] = useState(false);
   const commandQuery = useSlashCommands(directory, focused && draft.startsWith('/'));
   const commandSearch = /^\/[^\s/]*$/.test(draft) && focused && !dismissed;
-  const commands = (commandQuery.data ?? localCommands)
-    .filter((item) =>
-      `${item.name} ${item.description}`.toLowerCase().includes(draft.slice(1).toLowerCase()),
-    )
-    .slice(0, 50);
+  const commands = commandSearch
+    ? matchSlashCommands(commandQuery.data ?? localCommands, draft.slice(1))
+    : [];
   const activeCommand = Math.min(commandIndex, Math.max(0, commands.length - 1));
   function chooseCommand(name: string) {
     store.getState().editText(sessionID, `/${name} `);

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Cancel01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -9,11 +9,13 @@ export function Dialog({
   onClose,
   children,
   busy = false,
+  initialFocus,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   busy?: boolean;
+  initialFocus?: RefObject<HTMLElement | null>;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const heading = useId();
@@ -21,8 +23,9 @@ export function Dialog({
   useEffect(() => {
     const dialog = ref.current!;
     dialog.showModal();
+    initialFocus?.current?.focus();
     return () => dialog.close();
-  }, []);
+  }, [initialFocus]);
   return createPortal(
     <dialog
       ref={ref}

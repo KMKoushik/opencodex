@@ -37,8 +37,9 @@ export function Timeline({
   historyError,
   fetchEarlier,
   footer,
+  readOnly = false,
 }: {
-  ref: Ref<TimelineHandle>;
+  ref?: Ref<TimelineHandle>;
   sessionID: string;
   messages: SessionMessageInfo[];
   hasEarlier: boolean;
@@ -46,6 +47,7 @@ export function Timeline({
   historyError: boolean;
   fetchEarlier: () => Promise<unknown>;
   footer: ReactNode;
+  readOnly?: boolean;
 }) {
   const [project] = useState(createTimelineProjector);
   const rows = useMemo(() => project(messages), [project, messages]);
@@ -134,7 +136,7 @@ export function Timeline({
           }
           ListFooterComponent={<div className="timeline-footer">{footer}</div>}
         />
-        <ResponseSelection key={sessionID} scope={scope} sessionID={sessionID} />
+        {!readOnly && <ResponseSelection key={sessionID} scope={scope} sessionID={sessionID} />}
         {!following && (
           <div className="jump-to-latest">
             <Button variant="secondary" size="sm" onClick={scrollToLatest}>

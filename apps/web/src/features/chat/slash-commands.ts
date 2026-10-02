@@ -10,6 +10,31 @@ export const localCommands = [
   { name: 'rename', description: 'Rename this thread · /rename New title' },
   { name: 'export', description: 'Download this conversation as JSON' },
 ];
+
+export function matchSlashCommands<T extends { name: string; description: string }>(
+  commands: readonly T[],
+  search: string,
+) {
+  const query = search.toLowerCase();
+  const groups: T[][] = [[], [], [], []];
+  for (const command of commands) {
+    const name = command.name.toLowerCase();
+    const rank =
+      name === query
+        ? 0
+        : name.startsWith(query)
+          ? 1
+          : name.includes(query)
+            ? 2
+            : command.description.toLowerCase().includes(query)
+              ? 3
+              : -1;
+    // Rank before limiting, so an exact match cannot be buried by description matches.
+    if (rank >= 0 && groups[rank]!.length < 50) groups[rank]!.push(command);
+  }
+  return groups.flat().slice(0, 50);
+}
+
 export function useSlashCommands(directory: string | undefined, enabled: boolean) {
   return useQuery({
     queryKey: ['workspace', 'commands', directory],

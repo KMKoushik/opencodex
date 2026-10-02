@@ -6,6 +6,7 @@ import {
   projectUpdateSchema,
   promptInputSchema,
   sessionActionSchema,
+  sessionCreateSchema,
   permissionReplySchema,
   formReplySchema,
   modelInputSchema,
@@ -17,6 +18,7 @@ import { GatewayError } from './errors';
 import { resolveProject } from './project';
 import { workspaceRoutes } from './workspace';
 import { terminalRoutes } from './terminals';
+import { imageRoutes } from './images';
 
 export function createApp(
   backend = new OpenCodeBackend(),
@@ -42,6 +44,7 @@ export function createApp(
   app.get('/api/connection', async (c) => c.json(await backend.connection()));
   app.post('/api/connection', async (c) => c.json(await backend.connection(true)));
   app.route('/api/terminals', terminalRoutes(backend));
+  app.route('/api/sessions', imageRoutes(backend));
 
   app.post('/api/projects/resolve', async (c) => {
     const input = projectInputSchema.safeParse(await c.req.json().catch(() => null));
@@ -90,13 +93,17 @@ export function createApp(
   });
 
   app.post('/api/sessions', async (c) => {
-    const input = projectInputSchema.safeParse(await c.req.json().catch(() => null));
+    const input = sessionCreateSchema.safeParse(await c.req.json().catch(() => null));
     if (!input.success) return c.json({ message: 'Choose a project first.' }, 400);
     const project = await resolveProject(input.data.directory);
     return c.json(
       await backend.request(c.req.raw.signal, (client, options) =>
         client.session.create(
-          { location: { directory: project.directory }, agent: 'build' },
+          {
+            location: { directory: project.directory },
+            agent: 'build',
+            model: input.data.model,
+          },
           options,
         ),
       ),
@@ -225,6 +232,21 @@ export function createApp(
       await backend.request(c.req.raw.signal, (client, options) =>
         client.message.list(
           { sessionID: c.req.param('id'), limit: 50, cursor: c.req.query('cursor') },
+          options,
+        ),
+      ),
+    ),
+  );
+  app.get('/api/sessions/:id/subagents', async (c) =>
+    c.json(
+      await backend.request(c.req.raw.signal, (client, options) =>
+        client.session.list(
+          {
+            parentID: c.req.param('id'),
+            limit: 50,
+            order: 'asc',
+            cursor: c.req.query('cursor'),
+          },
           options,
         ),
       ),

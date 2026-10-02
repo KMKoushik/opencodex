@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { OpenCodeEvent } from '@opencodex/contracts';
+import { useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
+import type { OpenCodeEvent, SessionListOutput } from '@opencodex/contracts';
 import { api } from '../../lib/api';
 import { updateStream, type LivePart } from '../chat/stream';
 
@@ -31,6 +31,17 @@ export function useEvents(enabled: boolean) {
       pending.clear();
     };
     const changed = new Set<string>();
+    const refreshSubagents = (ids: ReadonlySet<string>) =>
+      client.invalidateQueries({
+        queryKey: ['subagents'],
+        predicate: (query) =>
+          ids.has(String(query.queryKey[1])) ||
+          Boolean(
+            (query.state.data as InfiniteData<SessionListOutput> | undefined)?.pages.some((page) =>
+              page.data.some((session) => ids.has(session.id)),
+            ),
+          ),
+      });
     let workspaceTimer: ReturnType<typeof setTimeout> | undefined;
     const workspaceChanged = new Map<string | undefined, Set<string>>();
     const refreshWorkspace = (directory: string | undefined, resources: string[]) => {
@@ -61,6 +72,7 @@ export function useEvents(enabled: boolean) {
         void client.invalidateQueries({ queryKey: ['sessions'] });
         void client.invalidateQueries({ queryKey: ['projects'] });
         void client.invalidateQueries({ queryKey: ['active'] });
+        void refreshSubagents(changed);
         for (const id of changed)
           void client.invalidateQueries({
             queryKey: ['chat', id],
@@ -75,6 +87,7 @@ export function useEvents(enabled: boolean) {
       pending.clear();
       setLive(true);
       void client.invalidateQueries({ queryKey: ['workspace'] });
+      void client.invalidateQueries({ queryKey: ['subagents'] });
       // Subscriptions are live-only. Refetch after every reconnect to recover missed changes.
       void client.invalidateQueries({ queryKey: ['connection'] });
       void client.invalidateQueries({ queryKey: ['models'] });
@@ -124,8 +137,10 @@ export function useEvents(enabled: boolean) {
       if (event.type === 'session.model.selected' || event.type === 'session.agent.selected') {
         void client.invalidateQueries({ queryKey: ['chat', event.data.sessionID, 'info'] });
         void client.invalidateQueries({ queryKey: ['sessions'] });
+        void refreshSubagents(new Set([event.data.sessionID]));
         return;
       }
+      if (event.type === 'session.created' && event.data.parentID) changed.add(event.data.parentID);
       const data = 'data' in event ? event.data : undefined;
       const id =
         data && 'sessionID' in data && typeof data.sessionID === 'string'

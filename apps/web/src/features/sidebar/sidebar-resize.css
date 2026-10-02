@@ -1,0 +1,31 @@
+.sidebar-resize {
+  position: absolute;
+  inset: 0 -4px 0 auto;
+  z-index: 4;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  -webkit-app-region: no-drag;
+}
+.sidebar-resize:focus-visible {
+  background: var(--accent-soft);
+}
+@media (hover: hover) {
+  .sidebar-resize:hover {
+    background: var(--accent-soft);
+  }
+}
+.app-shell[data-sidebar-resizing]::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  cursor: col-resize;
+  user-select: none;
+  -webkit-app-region: no-drag;
+}
+@media (max-width: 720px) {
+  .sidebar-resize {
+    display: none;
+  }
+}

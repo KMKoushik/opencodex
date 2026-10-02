@@ -124,6 +124,7 @@ export class OpenCodeBackend {
           directory: session.location.directory,
           updatedAt: session.time.updated,
           model: session.model?.id,
+          fork: session.fork ? { sessionID: session.fork.sessionID } : undefined,
         })),
         nextCursor: result.cursor.next ?? null,
       };

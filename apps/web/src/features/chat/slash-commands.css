@@ -27,6 +27,11 @@
   flex-shrink: 0;
   justify-content: flex-start;
 }
+.fork-options .button:focus {
+  outline: none;
+  background: var(--selected);
+  color: var(--text);
+}
 .slash-menu button {
   display: flex;
   align-items: center;

@@ -9,10 +9,12 @@ export function ImageAttachment({
   source,
   name,
   className,
+  onError,
 }: {
   source: File | string;
   name: string;
   className?: string;
+  onError?: () => void;
 }) {
   const image = useRef<HTMLImageElement>(null);
   const [preview, setPreview] = useState<string>();
@@ -40,6 +42,8 @@ export function ImageAttachment({
           alt={name}
           loading="lazy"
           decoding="async"
+          referrerPolicy="no-referrer"
+          onError={onError}
         />
       </button>
       {preview &&
@@ -90,7 +94,13 @@ function ImagePreview({ src, name, onClose }: { src: string; name: string; onClo
             <HugeiconsIcon icon={Cancel01Icon} size={20} />
           </Button>
         </header>
-        <img className="image-preview-full" src={src} alt={name} decoding="async" />
+        <img
+          className="image-preview-full"
+          src={src}
+          alt={name}
+          decoding="async"
+          referrerPolicy="no-referrer"
+        />
       </div>
     </dialog>
   );

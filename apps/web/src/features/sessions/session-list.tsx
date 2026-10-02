@@ -53,6 +53,7 @@ export function SessionList({
           onClick={() => onSelect(session.id)}
         >
           <span className="truncate">{session.title}</span>
+          {session.fork && <span className="session-kind">Fork</span>}
           <time dateTime={new Date(session.updatedAt).toISOString()}>
             {formatAge(session.updatedAt)}
           </time>

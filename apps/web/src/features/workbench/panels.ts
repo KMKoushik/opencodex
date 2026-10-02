@@ -1,6 +1,6 @@
 import { createElement, lazy, type ComponentProps, type ReactNode } from 'react';
 import type { HugeiconsIcon } from '@hugeicons/react';
-import { FileEditIcon, Folder01Icon, CommandLineIcon } from '@hugeicons/core-free-icons';
+import { FileEditIcon, Folder01Icon, CommandLineIcon, BotIcon } from '@hugeicons/core-free-icons';
 
 export type PanelContext = {
   directory: string;
@@ -27,6 +27,9 @@ const WorkspaceEditor = lazy(() =>
 const TerminalPanel = lazy(() =>
   import('../terminal/terminal-panel').then((module) => ({ default: module.TerminalPanel })),
 );
+const SubagentsPanel = lazy(() =>
+  import('../subagents/subagents-panel').then((module) => ({ default: module.SubagentsPanel })),
+);
 
 export const panels: readonly PanelDefinition[] = [
   {
@@ -42,6 +45,12 @@ export const panels: readonly PanelDefinition[] = [
     icon: FileEditIcon,
     stateKey: 'editor',
     render: (context) => createElement(WorkspaceEditor, { ...context, view: 'changes' }),
+  },
+  {
+    id: 'subagents',
+    label: 'Subagents',
+    icon: BotIcon,
+    render: (context) => createElement(SubagentsPanel, context),
   },
   {
     id: 'terminal',

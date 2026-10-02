@@ -26,6 +26,20 @@ export function ShortcutsProvider({ children }: { children: ReactNode }) {
         ),
       });
     };
+    // Capture the terminal toggle before Ghostty consumes it, including inside panels.
+    const terminalKeydown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== 'j' || !(isMac ? event.metaKey : event.ctrlKey)) return;
+      const target = event
+        .composedPath()
+        .find((node): node is HTMLElement => node instanceof HTMLElement);
+      registry.dispatch(event, {
+        mac: isMac,
+        editable: true,
+        blocked: Boolean(target?.closest('[role="dialog"][aria-modal="true"], dialog[open]')),
+      });
+      if (event.defaultPrevented) event.stopPropagation();
+    };
+    document.addEventListener('keydown', terminalKeydown, true);
     // Bubble phase lets local controls consume their keys before app commands.
     document.addEventListener('keydown', keydown);
     document.addEventListener('focusin', reset);
@@ -33,6 +47,7 @@ export function ShortcutsProvider({ children }: { children: ReactNode }) {
     document.addEventListener('compositionstart', reset);
     window.addEventListener('blur', reset);
     return () => {
+      document.removeEventListener('keydown', terminalKeydown, true);
       document.removeEventListener('keydown', keydown);
       document.removeEventListener('focusin', reset);
       document.removeEventListener('pointerdown', reset);

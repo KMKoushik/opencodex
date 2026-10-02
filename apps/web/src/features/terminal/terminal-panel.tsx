@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Add01Icon, Cancel01Icon, CommandLineIcon } from '@hugeicons/core-free-icons';
@@ -10,7 +10,12 @@ import type { PanelContext } from '../workbench/panels';
 import { TerminalView } from './terminal-view';
 import './terminal.css';
 
-export function TerminalPanel({ directory, active, live, headerElement }: PanelContext) {
+export function TerminalPanel({
+  directory,
+  active,
+  live,
+  headerElement,
+}: Pick<PanelContext, 'directory' | 'active' | 'live' | 'headerElement'>) {
   const client = useQueryClient();
   const key = ['workspace', 'terminals', directory];
   const [selected, setSelected] = useState<string>();
@@ -34,6 +39,17 @@ export function TerminalPanel({ directory, active, live, headerElement }: PanelC
       void client.invalidateQueries({ queryKey: key });
     },
   });
+  const autoCreated = useRef(false);
+  const { mutate: createTerminal } = create;
+  useEffect(() => {
+    if (!active) {
+      autoCreated.current = false;
+      return;
+    }
+    if (!terminals.isSuccess || terminals.isFetching || autoCreated.current) return;
+    autoCreated.current = true;
+    if (!items.length) createTerminal();
+  }, [active, terminals.isSuccess, terminals.isFetching, items.length, createTerminal]);
   const remove = useMutation({
     mutationFn: (id: string) => api.removeTerminal(directory, id),
     onSuccess: (_, id) => {

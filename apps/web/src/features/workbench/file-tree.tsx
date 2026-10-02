@@ -15,7 +15,7 @@ const treeCSS = `:host {
   --trees-border-color-override: var(--border);
   --trees-accent-override: var(--accent-text);
   --trees-selected-fg-override: var(--text);
-  --trees-focus-ring-color-override: var(--accent-text);
+  --trees-focus-ring-color-override: transparent;
   --trees-git-added-color-override: var(--success);
   --trees-git-untracked-color-override: var(--success);
   --trees-git-modified-color-override: var(--text-secondary);

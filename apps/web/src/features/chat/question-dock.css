@@ -95,8 +95,6 @@
 }
 .question-choice:has(:focus-visible) {
   background: var(--selected);
-  outline: 1px solid var(--text-tertiary);
-  outline-offset: -1px;
 }
 .question-choice input:focus-visible {
   outline: none;

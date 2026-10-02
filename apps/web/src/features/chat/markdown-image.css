@@ -1,0 +1,35 @@
+.markdown-image {
+  display: block;
+  margin-block: 12px;
+  max-width: 100%;
+}
+.markdown-image .image-attachment-trigger {
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+}
+.markdown-image img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 560px;
+  object-fit: contain;
+}
+.markdown-image-error {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.markdown-image-error button {
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

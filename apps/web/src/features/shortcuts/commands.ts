@@ -17,6 +17,13 @@ type Command = {
 // One catalog drives dispatch, tooltips, accessibility hints, and the shortcuts page.
 export const commands = [
   {
+    id: 'terminal.toggle',
+    label: 'Toggle terminal',
+    group: 'App',
+    bindings: [{ key: 'j', mod: true }],
+    inInput: true,
+  },
+  {
     id: 'sidebar.toggle',
     label: 'Toggle sidebar',
     group: 'App',

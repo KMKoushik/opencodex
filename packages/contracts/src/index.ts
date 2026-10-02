@@ -46,6 +46,7 @@ export const sessionSchema = z.object({
   directory: z.string(),
   updatedAt: z.number(),
   model: z.string().optional(),
+  fork: z.object({ sessionID: z.string() }).optional(),
 });
 
 export const sessionPageSchema = z.object({
@@ -94,6 +95,7 @@ export const workspaceWriteSchema = workspaceFileInputSchema.extend({
 export type {
   Project as OpenCodeProject,
   SessionInfo,
+  SessionListOutput,
   SessionMessagesResponse,
   SessionMessageInfo,
   SessionMessageAssistantTool,
@@ -124,6 +126,9 @@ export const modelInputSchema = z.object({
     providerID: z.string().min(1).max(512),
     variant: z.string().min(1).max(512).optional(),
   }),
+});
+export const sessionCreateSchema = projectInputSchema.extend({
+  model: modelInputSchema.shape.model.optional(),
 });
 // Match T3 Code's composer limits; non-image files have no aggregate byte cap.
 export const MAX_ATTACHMENTS = 100;
