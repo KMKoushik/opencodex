@@ -3,6 +3,7 @@ import { Cancel01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
 import type { PanelDefinition } from './panels';
+import type { FileRequest } from './file-link';
 import './workbench.css';
 
 export function WorkbenchPanel({
@@ -11,6 +12,7 @@ export function WorkbenchPanel({
   live,
   open,
   panel,
+  fileRequest,
   onClose,
   onSelectPanel,
 }: {
@@ -19,6 +21,7 @@ export function WorkbenchPanel({
   live: boolean;
   open: boolean;
   panel: PanelDefinition;
+  fileRequest?: FileRequest;
   onClose: () => void;
   onSelectPanel?: (id: string) => void;
 }) {
@@ -126,6 +129,7 @@ export function WorkbenchPanel({
                 active: open && entry.id === panel.id,
                 headerElement,
                 selectView: onSelectPanel,
+                fileRequest,
               })}
             </Suspense>
           </div>

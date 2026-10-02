@@ -122,7 +122,8 @@ svg {
   height: 16.4px;
 }
 :root[data-platform='darwin'] .sidebar-header {
-  padding-left: 76px;
+  height: calc(var(--toolbar-height) + 32px);
+  padding-top: 32px;
 }
 .main-shell {
   display: flex;
@@ -281,7 +282,8 @@ svg {
   flex: 1;
   min-width: 0;
 }
-.project-close {
+.project-close,
+.project-new-chat {
   flex-shrink: 0;
 }
 .project-row {
@@ -1104,7 +1106,7 @@ svg {
     color: var(--text);
   }
   .sidebar-heading .button,
-  .project-heading .button {
+  .project-heading .project-close {
     opacity: 0;
   }
   .sidebar-heading:hover .button,
@@ -1262,6 +1264,7 @@ svg {
 }
 /* The hero shares the composer's column, so the starters line up with it. */
 .chat-empty {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1284,7 +1287,7 @@ svg {
   line-height: 1.25;
   letter-spacing: -0.02em;
 }
-.chat-empty p {
+.chat-empty > p {
   margin-top: 10px;
   color: var(--text-secondary);
   font-size: 14.5px;
@@ -1347,6 +1350,126 @@ svg {
 @media (max-width: 720px) {
   .starters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.chat-empty > .message-note {
+  position: absolute;
+  right: 24px;
+  bottom: 0;
+  left: 24px;
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: normal;
+  color: var(--text-tertiary);
+}
+.chat-empty > .text-error {
+  padding: 0 24px;
+  color: var(--error);
+  font-size: 12px;
+  letter-spacing: normal;
+}
+.project-switcher {
+  width: fit-content;
+  max-width: 100%;
+  margin: 8px auto 0;
+  text-align: left;
+}
+.project-switcher .select-trigger {
+  width: auto;
+  max-width: min(480px, calc(100vw - 48px));
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+.project-switcher .select-menu {
+  right: auto;
+  left: 50%;
+  width: min(360px, calc(100vw - 48px));
+  transform: translateX(-50%);
+}
+.project-switcher .select-menu li {
+  height: auto;
+  min-height: 44px;
+  padding: 8px;
+}
+.project-switcher .select-menu svg {
+  flex-shrink: 0;
+}
+.project-switcher-option {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+.project-switcher-option small {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.project-menu {
+  display: flex;
+  flex-direction: column;
+}
+.project-menu .select-options {
+  min-height: 0;
+}
+.project-switcher-search {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 8px;
+  min-height: 44px;
+  margin-bottom: 4px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-tertiary);
+}
+.project-switcher-search input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+}
+.project-switcher-search input::placeholder {
+  color: var(--text-tertiary);
+}
+.project-switcher-search input:focus-visible {
+  outline: none;
+}
+.project-switcher-search:focus-within {
+  border-bottom-color: var(--accent);
+}
+.project-switcher-open {
+  justify-content: flex-start;
+  flex-shrink: 0;
+  min-height: 44px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.project-switcher-empty,
+.project-switcher-error {
+  padding: 12px 8px;
+  font-size: 13px;
+}
+.project-switcher-empty {
+  color: var(--text-secondary);
+}
+@media (max-width: 540px), (pointer: coarse) {
+  .project-switcher-search input {
+    font-size: 16px;
+  }
+}
+@media (hover: hover) {
+  .project-switcher .select-trigger:hover:not(:disabled) {
+    background: var(--hover);
+    color: var(--text);
   }
 }
 .chat[data-empty='true'] {

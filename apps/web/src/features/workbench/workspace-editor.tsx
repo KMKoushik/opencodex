@@ -12,6 +12,7 @@ import { WorkspaceTree } from './file-tree';
 import { FilePreview } from './file-preview';
 import { QueryError } from './query-error';
 import { editorKey, useEditorDrafts } from './editor-drafts';
+import { resolveFileLink, type FileRequest } from './file-link';
 
 const DiffPreview = lazy(() =>
   import('./diff-preview').then((module) => ({ default: module.DiffPreview })),
@@ -20,6 +21,7 @@ const DiffPool = lazy(() => import('./diff-pool').then((module) => ({ default: m
 type Tab = {
   id: string;
   path: string;
+  directory: string;
   kind: 'file' | 'diff';
   mode: 'working' | 'branch';
   pinned: boolean;
@@ -33,6 +35,7 @@ export function WorkspaceEditor({
   active,
   headerElement,
   selectView,
+  fileRequest,
 }: {
   directory: string;
   sessionID: string;
@@ -41,6 +44,7 @@ export function WorkspaceEditor({
   active: boolean;
   headerElement: HTMLDivElement | null;
   selectView?: (id: string) => void;
+  fileRequest?: FileRequest;
 }) {
   const [mode, setMode] = useState<'working' | 'branch'>('working');
   const [diffStyle, setDiffStyle] = useState<'unified' | 'split'>('unified');
@@ -61,9 +65,9 @@ export function WorkspaceEditor({
     () =>
       store.subscribe((state) => {
         setTabs((previous) =>
-          previous.some((tab) => !tab.pinned && state.edits[editorKey(directory, tab.path)])
+          previous.some((tab) => !tab.pinned && state.edits[editorKey(tab.directory, tab.path)])
             ? previous.map((tab) =>
-                state.edits[editorKey(directory, tab.path)] ? { ...tab, pinned: true } : tab,
+                state.edits[editorKey(tab.directory, tab.path)] ? { ...tab, pinned: true } : tab,
               )
             : previous,
         );
@@ -97,9 +101,12 @@ export function WorkspaceEditor({
     [changes.data],
   );
   const current = tabs.find((tab) => tab.id === selected);
-  function open(path: string, kind: Tab['kind'], pinned = false) {
+  function open(path: string, kind: Tab['kind'], pinned = false, fileDirectory = directory) {
     if ((tree.current?.parentElement?.clientWidth ?? Infinity) <= 560) setTreeVisible(false);
-    const id = JSON.stringify([kind, kind === 'diff' ? mode : '', path]);
+    selectFile(path, kind, pinned, fileDirectory);
+  }
+  function selectFile(path: string, kind: Tab['kind'], pinned: boolean, fileDirectory: string) {
+    const id = JSON.stringify([fileDirectory, kind, kind === 'diff' ? mode : '', path]);
     setTabs((previous) => {
       const existing = previous.find((tab) => tab.id === id);
       if (existing)
@@ -107,11 +114,17 @@ export function WorkspaceEditor({
           ? previous.map((tab) => (tab.id === id ? { ...tab, pinned: true } : tab))
           : previous;
       const keep = previous.filter(
-        (tab) => tab.pinned || dirty.has(editorKey(directory, tab.path)),
+        (tab) => tab.pinned || dirty.has(editorKey(tab.directory, tab.path)),
       );
-      return [...keep, { id, kind, path, mode, pinned }];
+      return [...keep, { id, kind, path, directory: fileDirectory, mode, pinned }];
     });
     setSelected(id);
+  }
+  const [handledRequest, setHandledRequest] = useState<FileRequest>();
+  if (fileRequest && fileRequest !== handledRequest) {
+    setHandledRequest(fileRequest);
+    selectFile(fileRequest.path, 'file', true, fileRequest.directory);
+    setTreeVisible(false);
   }
   function close(id: string) {
     const index = tabs.findIndex((tab) => tab.id === id);
@@ -119,7 +132,11 @@ export function WorkspaceEditor({
     setTabs(next);
     if (selected === id) setSelected(next[Math.min(index, next.length - 1)]?.id ?? '');
   }
-  const parts = current?.path.split('/') ?? [];
+  const parts = current
+    ? `${current.directory === directory ? '' : `${current.directory}/`}${current.path}`
+        .split('/')
+        .filter(Boolean)
+    : [];
   return (
     <div className="wb-editor-workspace" hidden={!active}>
       {active &&
@@ -147,7 +164,7 @@ export function WorkspaceEditor({
             }}
           >
             {tabs.map((tab) => {
-              const unsaved = tab.kind === 'file' && dirty.has(editorKey(directory, tab.path));
+              const unsaved = tab.kind === 'file' && dirty.has(editorKey(tab.directory, tab.path));
               return (
                 <div className="wb-document-tab" data-active={selected === tab.id} key={tab.id}>
                   <button
@@ -155,7 +172,7 @@ export function WorkspaceEditor({
                     aria-selected={selected === tab.id}
                     aria-controls="wb-document-content"
                     tabIndex={selected === tab.id ? 0 : -1}
-                    title={`${tab.path}${tab.kind === 'diff' ? ` (${tab.mode === 'working' ? 'uncommitted' : 'base branch'} diff)` : ''}`}
+                    title={`${tab.directory}/${tab.path}${tab.kind === 'diff' ? ` (${tab.mode === 'working' ? 'uncommitted' : 'base branch'} diff)` : ''}`}
                     data-preview={!tab.pinned && !unsaved}
                     onClick={() => setSelected(tab.id)}
                     onDoubleClick={() =>
@@ -250,10 +267,16 @@ export function WorkspaceEditor({
               {active && current?.kind === 'file' && (
                 <FilePreview
                   key={current.id}
-                  directory={directory}
+                  directory={current.directory}
                   path={current.path}
                   sessionID={sessionID}
                   live={live}
+                  onOpenFile={(href) => {
+                    const target = resolveFileLink(href, directory);
+                    if (!target) return false;
+                    open(target.path, 'file', true, target.directory);
+                    return true;
+                  }}
                 />
               )}
               {active && current?.kind === 'diff' && (
@@ -360,7 +383,9 @@ export function WorkspaceEditor({
             directory={directory}
             kind="files"
             changes={statuses}
-            selected={current?.kind === 'file' ? current.path : ''}
+            selected={
+              current?.kind === 'file' && current.directory === directory ? current.path : ''
+            }
             visible={active && view === 'files' && treeVisible}
             live={live}
             onOpen={(path, pinned) => open(path, 'file', pinned)}

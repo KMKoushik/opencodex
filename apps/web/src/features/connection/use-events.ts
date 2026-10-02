@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import type { OpenCodeEvent, SessionListOutput } from '@opencodex/contracts';
+import type { OpenCodeEvent, SessionInfo, SessionListOutput } from '@opencodex/contracts';
 import { api } from '../../lib/api';
 import { updateStream, type LivePart } from '../chat/stream';
 import { updateSessionViewed } from '../sessions/viewed';
+import type { SubagentCost } from '../session-panel/session-cost';
+import { updateSessionUnread } from '../sessions/unread';
 
 export function useEvents(enabled: boolean) {
   const client = useQueryClient();
@@ -32,6 +34,7 @@ export function useEvents(enabled: boolean) {
       pending.clear();
     };
     const changed = new Set<string>();
+    const costChanged = new Set<string>();
     const refreshSubagents = (ids: ReadonlySet<string>) =>
       client.invalidateQueries({
         queryKey: ['subagents'],
@@ -74,12 +77,24 @@ export function useEvents(enabled: boolean) {
         void client.invalidateQueries({ queryKey: ['projects'] });
         void client.invalidateQueries({ queryKey: ['active'] });
         void refreshSubagents(changed);
+        if (costChanged.size)
+          void client.invalidateQueries({
+            queryKey: ['session-cost'],
+            predicate: (query) =>
+              costChanged.has(String(query.queryKey[1])) ||
+              Boolean(
+                (query.state.data as SubagentCost[] | undefined)?.some((session) =>
+                  costChanged.has(session.id),
+                ),
+              ),
+          });
         for (const id of changed)
           void client.invalidateQueries({
             queryKey: ['chat', id],
             predicate: (query) => query.queryKey[2] !== 'stream',
           });
         changed.clear();
+        costChanged.clear();
       }, 250);
     };
     events.addEventListener('ready', () => {
@@ -89,6 +104,7 @@ export function useEvents(enabled: boolean) {
       setLive(true);
       void client.invalidateQueries({ queryKey: ['workspace'] });
       void client.invalidateQueries({ queryKey: ['subagents'] });
+      void client.invalidateQueries({ queryKey: ['session-cost'] });
       // Subscriptions are live-only. Refetch after every reconnect to recover missed changes.
       void client.invalidateQueries({ queryKey: ['connection'] });
       void client.invalidateQueries({ queryKey: ['models'] });
@@ -110,6 +126,32 @@ export function useEvents(enabled: boolean) {
       const event: OpenCodeEvent = JSON.parse(message.data);
       if (event.type === 'session.viewed') {
         updateSessionViewed(client, event.data.sessionID, event.data.idle);
+        return;
+      }
+      if (event.type === 'session.usage.updated') {
+        const { sessionID, cost, tokens } = event.data;
+        client.setQueryData<SessionInfo>(['chat', sessionID, 'info'], (session) =>
+          session ? { ...session, cost, tokens } : undefined,
+        );
+        // Native cumulative usage updates change cost without refetching the tree
+        // or any transcripts on every completed provider step.
+        client.setQueriesData<SubagentCost[]>(
+          {
+            queryKey: ['session-cost'],
+            predicate: (query) =>
+              Boolean(
+                (query.state.data as SubagentCost[] | undefined)?.some(
+                  (session) => session.id === sessionID,
+                ),
+              ),
+          },
+          (sessions) =>
+            sessions?.map((session) => (session.id === sessionID ? { ...session, cost } : session)),
+        );
+        return;
+      }
+      if (event.type === 'session.metadata.updated') {
+        updateSessionUnread(client, event.data.sessionID, event.data.metadata);
         return;
       }
       const directory = 'location' in event ? event.location?.directory : undefined;
@@ -145,7 +187,11 @@ export function useEvents(enabled: boolean) {
         void refreshSubagents(new Set([event.data.sessionID]));
         return;
       }
-      if (event.type === 'session.created' && event.data.parentID) changed.add(event.data.parentID);
+      if (event.type === 'session.created' && event.data.parentID) {
+        changed.add(event.data.parentID);
+        costChanged.add(event.data.parentID);
+      }
+      if (event.type === 'session.deleted') costChanged.add(event.data.sessionID);
       const data = 'data' in event ? event.data : undefined;
       const id =
         data && 'sessionID' in data && typeof data.sessionID === 'string'

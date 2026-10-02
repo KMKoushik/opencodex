@@ -2,6 +2,31 @@ import { expect, it } from 'vitest';
 import { createDraftStore } from './draft-store';
 import { reviewPrompt } from './review-comments';
 
+it('moves the latest unsent draft to a fresh project chat without reusing its revision', () => {
+  const store = createDraftStore();
+  const actions = store.getState();
+  actions.editText('one', 'Start here');
+  actions.selectModel('one', { id: 'reasoner', providerID: 'provider', variant: 'high' });
+  actions.attach('one', [new File(['context'], 'notes.txt')]);
+  const before = actions.capture('one');
+  actions.editText('one', 'Keep edits made while switching');
+  actions.move('one', 'two');
+  const moved = actions.capture('two');
+  expect(store.getState().drafts.one).toBeUndefined();
+  expect(moved).toMatchObject({
+    text: 'Keep edits made while switching',
+    model: before.model,
+    attachments: before.attachments,
+  });
+  expect(moved.revision).toBeGreaterThan(before.revision);
+  actions.acknowledge({ ...before, sessionID: 'two' });
+  expect(actions.capture('two')).toEqual(moved);
+  actions.editText('three', 'Another draft');
+  actions.move('two', 'three');
+  expect(actions.capture('two')).toEqual(moved);
+  expect(actions.capture('three').text).toBe('Another draft');
+});
+
 it('persists model and thinking per project without persisting drafts or changing another project', () => {
   let saved = '';
   let writes = 0;

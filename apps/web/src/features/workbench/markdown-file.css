@@ -1,0 +1,106 @@
+.wb-markdown-file {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.wb-markdown-modes {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--surface-under);
+}
+.wb-markdown-modes [aria-pressed='true'] {
+  background: var(--control);
+  color: var(--text);
+}
+.wb-markdown-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.wb-markdown-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.wb-markdown-prose {
+  max-width: 820px;
+  margin-inline: auto;
+  padding: 32px clamp(20px, 5cqi, 48px) 64px;
+  font-size: 14px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+}
+.wb-markdown-prose > :first-child {
+  margin-top: 0;
+}
+.wb-markdown-prose :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--text);
+  scroll-margin-top: 24px;
+  letter-spacing: -0.02em;
+}
+.wb-markdown-prose h1 {
+  font-size: 26px;
+  line-height: 1.3;
+  margin-bottom: 24px;
+}
+.wb-markdown-prose h2 {
+  font-size: 20px;
+  margin-top: 32px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.wb-markdown-prose h3 {
+  font-size: 16px;
+  margin-top: 24px;
+}
+.wb-markdown-prose strong,
+.wb-markdown-prose th {
+  color: var(--text);
+  font-weight: 600;
+}
+.wb-markdown-prose th {
+  background: var(--secondary);
+  text-align: left;
+}
+.wb-markdown-prose td,
+.wb-markdown-prose th {
+  padding: 9px 14px;
+}
+.wb-markdown-prose pre {
+  line-height: 1.6;
+  overflow-wrap: normal;
+}
+.wb-markdown-prose code {
+  font-size: 0.9em;
+}
+.wb-markdown-prose hr {
+  margin-block: 28px;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+.wb-markdown-prose input[type='checkbox'] {
+  margin-right: 6px;
+  accent-color: var(--accent);
+}
+.wb-markdown-prose .contains-task-list {
+  list-style: none;
+  padding-left: 4px;
+}
+.wb-markdown-prose .markdown-image {
+  display: block;
+  margin-block: 20px;
+}
+.wb-markdown-prose .markdown-image img {
+  max-height: none;
+}
+@media (pointer: coarse) {
+  .wb-markdown-modes button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}

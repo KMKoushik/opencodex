@@ -69,6 +69,59 @@ describe('gateway and the real OpenCode client', () => {
     expect((await view({ idle: 200 })).status).toBe(502);
     expect(calls).toEqual([{ idle: 100 }, { idle: 200 }]);
   });
+  it('persists manual unread marks through native metadata without losing other fields or clearing a newer mark', async () => {
+    let metadata: Record<string, unknown> = { otherClient: { pinned: true } };
+    const writes: unknown[] = [];
+    let failed = false;
+    const url = await upstream((req, res) => {
+      expect(req.url).toBe('/api/session/ses_read');
+      if (req.method === 'GET') {
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(
+          JSON.stringify({ data: { id: 'ses_read', metadata, time: { idle: 100, viewed: 100 } } }),
+        );
+      }
+      expect(req.method).toBe('PATCH');
+      let body = '';
+      req.on('data', (chunk) => {
+        body += chunk;
+      });
+      req.on('end', () => {
+        const input = JSON.parse(body);
+        expect(Object.keys(input)).toEqual(['metadata']);
+        writes.push(input);
+        if (failed) return res.writeHead(500).end();
+        metadata = input.metadata;
+        res.writeHead(204).end();
+      });
+    });
+    const app = createApp(new OpenCodeBackend(async () => ({ url })));
+    const unread = (body: unknown) =>
+      app.request('http://localhost/api/sessions/ses_read/unread', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    expect((await unread({ action: 'clear' })).status).toBe(400);
+    const first = await (await unread({ action: 'mark' })).json();
+    expect(first.unread).toEqual(expect.any(String));
+    const [marked, acknowledged] = await Promise.all([
+      unread({ action: 'mark' }),
+      unread({ action: 'clear', marker: first.unread }),
+    ]);
+    const second = await marked.json();
+    expect(second.unread).not.toBe(first.unread);
+    expect(await acknowledged.json()).toEqual(second);
+    expect(writes).toHaveLength(2);
+    expect(metadata).toEqual({ otherClient: { pinned: true }, opencodexUnread: second.unread });
+    expect(await (await unread({ action: 'clear', marker: second.unread })).json()).toEqual({
+      unread: null,
+    });
+    expect(metadata).toEqual({ otherClient: { pinned: true }, opencodexUnread: null });
+    failed = true;
+    expect((await unread({ action: 'mark' })).status).toBe(502);
+    expect(metadata.opencodexUnread).toBeNull();
+  });
   it('lists child sessions with native pagination and reads their transcripts without mutations', async () => {
     const calls: string[] = [];
     const limits: number[] = [];
@@ -363,6 +416,13 @@ describe('gateway and the real OpenCode client', () => {
     expect(svg.headers.get('content-type')).toBe('image/svg+xml');
     expect(svg.headers.get('content-security-policy')).toContain('sandbox');
     expect(svg.headers.get('x-content-type-options')).toBe('nosniff');
+    const workspaceSvg = await app.request(
+      `http://localhost/api/workspace/file?${new URLSearchParams({ directory, path: 'logo.svg' })}`,
+    );
+    expect(await workspaceSvg.json()).toMatchObject({
+      kind: 'image',
+      uri: expect.stringMatching(/^data:image\/svg\+xml;base64,/),
+    });
     expect((await get('secret.png')).status).toBe(415);
     expect((await get('large.png')).status).toBe(413);
     expect((await get('missing.png')).status).toBe(502);
@@ -576,6 +636,7 @@ describe('gateway and the real OpenCode client', () => {
               title: 'Review the workspace',
               location: { directory },
               time: { updated: 42, idle: 40, viewed: 20 },
+              metadata: { opencodexUnread: 'manual-mark' },
               model: { id: 'test-model' },
               fork: {
                 sessionID: 'source-session',
@@ -604,6 +665,7 @@ describe('gateway and the real OpenCode client', () => {
           directory,
           updatedAt: 42,
           time: { idle: 40, viewed: 20 },
+          unread: 'manual-mark',
           model: 'test-model',
           fork: { sessionID: 'source-session' },
         },

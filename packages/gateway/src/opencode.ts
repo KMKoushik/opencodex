@@ -1,6 +1,7 @@
 import { OpenCode, type OpenCodeClient } from '@opencode/client';
 import { Service, type Endpoint } from '@opencode/client/service';
 import type { Connection, SessionPage } from '@opencodex/contracts';
+import { sessionUnread } from '@opencodex/contracts';
 import { GatewayError } from './errors';
 import { previewFetch } from './preview-fetch';
 
@@ -124,6 +125,7 @@ export class OpenCodeBackend {
           directory: session.location.directory,
           updatedAt: session.time.updated,
           time: session.time,
+          unread: sessionUnread(session),
           model: session.model?.id,
           fork: session.fork ? { sessionID: session.fork.sessionID } : undefined,
         })),

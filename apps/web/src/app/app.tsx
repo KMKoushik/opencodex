@@ -42,6 +42,8 @@ import { readTerminalPlacement, type TerminalPlacement } from '../features/termi
 import { writeStorage } from '../lib/storage';
 import { useDraftStore } from '../features/chat/draft-context';
 import { BrandIcon, Wordmark } from '../features/brand/brand';
+import { FileLinkContext } from '../features/workbench/file-link-context';
+import { resolveFileLink, type FileRequest } from '../features/workbench/file-link';
 
 const TerminalDrawer = lazy(() =>
   import('../features/terminal/terminal-drawer').then((module) => ({
@@ -75,6 +77,7 @@ export function App() {
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [workbenchPanel, setWorkbenchPanel] = useState(panels[0]!);
   const [workbenchLoaded, setWorkbenchLoaded] = useState(false);
+  const [fileRequest, setFileRequest] = useState<FileRequest>();
   const workbenchToggle = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
   const main = useRef<HTMLElement>(null);
@@ -98,6 +101,20 @@ export function App() {
     enabled: Boolean(selectedID && connected),
     queryFn: ({ signal }) => api.session(selectedID!, signal),
   });
+  const fileDirectory = info.data?.location.directory;
+  const openFileLink = useCallback(
+    (href: string) => {
+      if (!selectedID || !fileDirectory) return false;
+      const target = resolveFileLink(href, fileDirectory);
+      if (!target) return false;
+      setFileRequest({ ...target, sessionID: selectedID });
+      setWorkbenchLoaded(true);
+      setWorkbenchPanel(panels[0]!);
+      setWorkbenchOpen(true);
+      return true;
+    },
+    [selectedID, fileDirectory],
+  );
   const create = useMutation({
     mutationFn: ({ directory, model }: { directory: string; model?: ModelRef }) =>
       api.createSession(directory, model),
@@ -106,6 +123,28 @@ export function App() {
       if (project?.directory === directory) {
         setSelectedID(session.id);
         setSidebarOpen(false);
+      }
+      void queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+  const switchProject = useMutation({
+    mutationFn: ({
+      project,
+      model,
+    }: {
+      project: Project;
+      sourceSessionID: string;
+      model?: ModelRef;
+    }) => api.createSession(project.directory, model),
+    onSuccess: (session, { project: next, sourceSessionID, model }) => {
+      queryClient.setQueryData(['chat', session.id, 'info'], session);
+      // Keep observing this mutation across navigation so late responses cannot take over.
+      if (selectedID === sourceSessionID) {
+        drafts.getState().move(sourceSessionID, session.id);
+        if (model) drafts.getState().rememberModel(next.directory, model);
+        selectProject(next);
+        setSelectedID(session.id);
       }
       void queryClient.invalidateQueries({ queryKey: ['sessions'] });
       void queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -149,20 +188,27 @@ export function App() {
   }
 
   function newChat() {
-    if (!project || !connected || create.isPending) return false;
+    if (!project) return false;
+    return newProjectChat(project);
+  }
+
+  function newProjectChat(next: Project) {
+    if (!connected || create.isPending || switchProject.isPending) return false;
+    const current = project?.directory === next.directory;
     // Capture the visible selection before creation; unsent choices win over session state.
     const model =
-      (selectedID ? drafts.getState().drafts[selectedID]?.model : undefined) ??
-      info.data?.model ??
-      drafts.getState().projectModels[project.directory] ??
+      (current && selectedID ? drafts.getState().drafts[selectedID]?.model : undefined) ??
+      (current ? info.data?.model : undefined) ??
+      drafts.getState().projectModels[next.directory] ??
       queryClient.getQueryData<ModelCatalog>([
         'models',
-        info.data?.location.directory ?? project.directory,
+        (current ? info.data?.location.directory : undefined) ?? next.directory,
       ])?.defaultModel ??
       undefined;
-    if (model) drafts.getState().rememberModel(project.directory, model);
+    if (model) drafts.getState().rememberModel(next.directory, model);
     navigate(null);
-    create.mutate({ directory: project.directory, model });
+    if (!current) selectProject(next);
+    create.mutate({ directory: next.directory, model });
   }
 
   function openProject() {
@@ -283,7 +329,7 @@ export function App() {
             <div className="sidebar-actions">
               <button
                 className="nav-row"
-                disabled={!project || !connected || create.isPending}
+                disabled={!project || !connected || create.isPending || switchProject.isPending}
                 {...shortcutProps('chat.new')}
                 onClick={newChat}
               >
@@ -307,6 +353,8 @@ export function App() {
               current={project}
               onSelect={selectProject}
               onClose={closeProject}
+              onNewChat={newProjectChat}
+              creatingDirectory={create.isPending ? create.variables.directory : undefined}
               selectedID={selectedID}
               onSelectSession={(next, id) => {
                 if (project?.directory !== next.directory) selectProject(next);
@@ -448,16 +496,36 @@ export function App() {
                     </p>
                   }
                 >
-                  <ChatView
-                    key={selectedID}
-                    sessionID={selectedID}
-                    onOpenSession={setSelectedID}
-                    live={live}
-                  />
+                  <FileLinkContext.Provider value={openFileLink}>
+                    <ChatView
+                      key={selectedID}
+                      sessionID={selectedID}
+                      onOpenSession={setSelectedID}
+                      live={live}
+                      projectName={currentProject?.name}
+                      project={currentProject}
+                      projects={projects}
+                      switching={switchProject.isPending}
+                      switchError={
+                        switchProject.variables?.sourceSessionID === selectedID
+                          ? switchProject.error?.message
+                          : undefined
+                      }
+                      onSwitchProject={(next, model) => {
+                        if (create.isPending || switchProject.isPending) return;
+                        switchProject.mutate({
+                          project: next,
+                          sourceSessionID: selectedID,
+                          model,
+                        });
+                      }}
+                    />
+                  </FileLinkContext.Provider>
                 </Suspense>
               ) : (
                 <WorkspaceView
                   project={currentProject}
+                  projects={projects}
                   onSelectProject={selectProject}
                   onNewChat={newChat}
                   creating={create.isPending}
@@ -489,6 +557,7 @@ export function App() {
                     const next = panels.find((panel) => panel.id === id);
                     if (next) setWorkbenchPanel(next);
                   }}
+                  fileRequest={fileRequest?.sessionID === selectedID ? fileRequest : undefined}
                   onClose={() => {
                     if (workbenchPanel.id === 'terminal') {
                       closeTerminal();

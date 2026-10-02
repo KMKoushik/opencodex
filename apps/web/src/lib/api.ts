@@ -17,6 +17,7 @@ import {
   type FormInfo,
   type CommandInfo,
   sessionActionSchema,
+  sessionUnreadSchema,
   type FormAnswer,
   type ModelCatalog,
   type ModelRef,
@@ -125,6 +126,8 @@ export const api = {
     nativeRequest<SessionInfo>(sessionPath(id), { signal }),
   viewSession: (id: string, idle: number) =>
     nativeRequest<{ ok: true }>(`${sessionPath(id)}/view`, post({ idle })),
+  unreadSession: (id: string, input: z.infer<typeof sessionUnreadSchema>) =>
+    nativeRequest<{ unread: string | null }>(`${sessionPath(id)}/unread`, post(input)),
   subagents: (id: string, cursor: string | undefined, signal: AbortSignal) =>
     nativeRequest<SessionListOutput>(
       `${sessionPath(id)}/subagents${cursor ? `?${new URLSearchParams({ cursor })}` : ''}`,

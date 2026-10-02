@@ -9,14 +9,21 @@ export interface DesktopBridge {
 }
 
 export type PreferenceKey =
-  'project' | 'projects' | 'theme' | 'openInApp' | 'terminalPlacement' | 'projectModels';
+  | 'project'
+  | 'projects'
+  | 'theme'
+  | 'openInApp'
+  | 'terminalPlacement'
+  | 'projectModels'
+  | 'modelUsage';
 export type DesktopPreferences = Record<
-  Exclude<PreferenceKey, 'openInApp' | 'terminalPlacement' | 'projectModels'>,
+  Exclude<PreferenceKey, 'openInApp' | 'terminalPlacement' | 'projectModels' | 'modelUsage'>,
   string | null
 > & {
   openInApp?: string | null;
   terminalPlacement?: string | null;
   projectModels?: string | null;
+  modelUsage?: string | null;
 };
 
 export const openAppIDs = [

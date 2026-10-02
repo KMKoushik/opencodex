@@ -1,6 +1,7 @@
 import { createElement, lazy, type ComponentProps, type ReactNode } from 'react';
 import type { HugeiconsIcon } from '@hugeicons/react';
 import { FileEditIcon, Folder01Icon, CommandLineIcon, BotIcon } from '@hugeicons/core-free-icons';
+import type { FileRequest } from './file-link';
 
 export type PanelContext = {
   directory: string;
@@ -12,6 +13,7 @@ export type PanelContext = {
   headerElement: HTMLDivElement | null;
   /** Switches the workspace panel to another view, e.g. Files ↔ Changes. */
   selectView?: (id: string) => void;
+  fileRequest?: FileRequest;
 };
 
 export type PanelDefinition = {

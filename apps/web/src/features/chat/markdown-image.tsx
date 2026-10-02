@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
+import { FileLinkContext } from '../workbench/file-link-context';
 import { ImageAttachment } from './image-attachment';
 import './markdown-image.css';
 
@@ -12,6 +13,7 @@ export function MarkdownImage({
   sessionID: string;
 }) {
   const [failed, setFailed] = useState(false);
+  const openFile = useContext(FileLinkContext);
   const name = alt || 'Image';
   if (!src) return <span className="markdown-image-error">Image unavailable: {name}</span>;
   const source = /^(?:https?:|data:image\/|\/\/)/i.test(src)
@@ -27,7 +29,12 @@ export function MarkdownImage({
           </button>
         </span>
       ) : (
-        <ImageAttachment source={source} name={name} onError={() => setFailed(true)} />
+        <ImageAttachment
+          source={source}
+          name={name}
+          onError={() => setFailed(true)}
+          onOpen={() => openFile?.(src) ?? false}
+        />
       )}
     </span>
   );

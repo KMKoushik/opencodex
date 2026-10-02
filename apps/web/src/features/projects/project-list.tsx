@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { ArrowDown01Icon, ArrowRight01Icon, Cancel01Icon } from '@hugeicons/core-free-icons';
+import {
+  Add01Icon,
+  ArrowDown01Icon,
+  ArrowRight01Icon,
+  Cancel01Icon,
+} from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useQuery } from '@tanstack/react-query';
 import type { Project } from '@opencodex/contracts';
@@ -16,6 +21,8 @@ export function ProjectList({
   current,
   onSelect,
   onClose,
+  onNewChat,
+  creatingDirectory,
   selectedID,
   onSelectSession,
 }: {
@@ -25,6 +32,8 @@ export function ProjectList({
   current: Project | null;
   onSelect: (project: Project) => void;
   onClose: (directory: string) => void;
+  onNewChat: (project: Project) => void;
+  creatingDirectory: string | undefined;
   selectedID: string | undefined;
   onSelectSession: (project: Project, id: string) => void;
 }) {
@@ -88,6 +97,25 @@ export function ProjectList({
                 />
                 <span className="truncate">{project.name}</span>
               </button>
+              <Button
+                className="project-new-chat"
+                variant="ghost"
+                size="icon"
+                aria-label={`New chat in ${project.name}`}
+                title={`New chat in ${project.name}`}
+                disabled={Boolean(creatingDirectory)}
+                aria-busy={creatingDirectory === project.directory}
+                onClick={() => {
+                  setExpandedDirectories((previous) =>
+                    previous.has(project.directory)
+                      ? previous
+                      : new Set(previous).add(project.directory),
+                  );
+                  onNewChat(project);
+                }}
+              >
+                <HugeiconsIcon icon={Add01Icon} size={14} />
+              </Button>
               <Button
                 className="project-close"
                 variant="ghost"

@@ -12,7 +12,7 @@
   │  │  <>   Browser app          │     │  <>   Desktop app          │   │               │  <>   apps/desktop       │
   │  │                            │     │                            ├───┼──────────────▶│                          │
   │  │  localStorage prefs        │     │  Sandboxed renderer        │   │  link events  │  Window lifecycle        │
-  │  │  Projects, theme + models  │     │  Native IPC available      ├───┼──────────────▶│  Folder picker + open in │
+  │  │  Model intent + frequency  │     │  Native IPC available      ├───┼──────────────▶│  Folder picker + open in │
   │  └────────────────────────────┘     └────────────────────────────┘   │               │  OS browser + clipboard  │
   │                                                                      │               └─────────────┬────────────┘
   │             Zustand chat + editor drafts; Query API state            │                             │
@@ -26,7 +26,7 @@
      │                                                               │                   │       electron-store     │
      │  <>   packages/gateway                                        │                   │  preferences.json        │
      │                                                               │                   │  Projects, theme + layout│
-     │  Hono + V2 client; private service credentials                │                   │  Project model + thinking│
+     │  Hono + V2 client; private service credentials                │                   │  Model intent + frequency│
      │  Bounded images/diffs; version-checked file writes            │                   └──────────────────────────┘
      │  Native APIs + origin-checked, ticketed PTY relay             │
      └─────────────────┬─────────────────────────────────────────────┘
@@ -42,7 +42,7 @@
      │  Owns sessions, forks, commands + execution                   │                   │  Native bridge types     │
      │  Providers, tools, VCS + filesystem operations                │                   │                          │
      │  Survives OpenCodex shutdown                                  │                   └──────────────────────────┘
-     │  Durable sessions + read state; PTY shell replay              │
+     │  Durable sessions + read markers; PTY shell replay            │
      └───────────────────────────────────────────────────────────────┘                   Code, not a service
 
 

@@ -22,6 +22,7 @@ type DraftState = {
   saveComment: (sessionID: string, comment: ReviewComment) => string | undefined;
   removeComment: (sessionID: string, id: string) => void;
   capture: (sessionID: string) => DraftSnapshot;
+  move: (from: string, to: string) => void;
   acknowledge: (snapshot: DraftSnapshot) => void;
 };
 
@@ -153,6 +154,15 @@ export function createDraftStore(
     },
     capture(sessionID) {
       return { sessionID, ...(get().drafts[sessionID] ?? { text: '', revision: 0 }) };
+    },
+    move(from, to) {
+      set((state) => {
+        const current = state.drafts[from];
+        if (!current || from === to || state.drafts[to]) return state;
+        const drafts = { ...state.drafts, [to]: { ...current, revision: ++revision } };
+        delete drafts[from];
+        return { drafts };
+      });
     },
     acknowledge(snapshot) {
       set((state) => {

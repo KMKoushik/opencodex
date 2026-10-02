@@ -3,17 +3,20 @@ import type { Project } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { useConnection } from '../connection/use-connection';
 import { ProjectForm } from '../projects/project-form';
+import { ProjectSwitcher } from '../projects/project-switcher';
 import { shortcutProps } from '../shortcuts/commands';
 import { BrandIcon } from '../brand/brand';
 
 export function WorkspaceView({
   project,
+  projects,
   onSelectProject,
   onNewChat,
   creating,
   createError,
 }: {
   project: Project | null;
+  projects: Project[];
   onSelectProject: (project: Project) => void;
   onNewChat: () => void;
   creating: boolean;
@@ -70,6 +73,12 @@ export function WorkspaceView({
       title="What should we build?"
       description="Any model, any provider. Your repo stays on your machine."
     >
+      <ProjectSwitcher
+        project={project}
+        opened={projects}
+        disabled={creating}
+        onSelect={onSelectProject}
+      />
       <Button {...shortcutProps('chat.new')} onClick={onNewChat} disabled={creating}>
         {creating ? 'Creating…' : 'New chat'}
       </Button>

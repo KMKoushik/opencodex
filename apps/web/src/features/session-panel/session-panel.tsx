@@ -13,6 +13,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
 import { api } from '../../lib/api';
 import { messageQuery } from '../chat/message-query';
+import { loadSubagentCosts } from './session-cost';
 
 const number = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 const money = new Intl.NumberFormat(undefined, {
@@ -47,6 +48,16 @@ export function SessionPanel({
     queryFn: ({ signal }) => api.session(sessionID, signal),
     refetchOnMount: false,
   });
+  const subagentCosts = useQuery({
+    queryKey: ['session-cost', sessionID],
+    queryFn: ({ signal }) => loadSubagentCosts(sessionID, signal),
+    staleTime: 30_000,
+    gcTime: 60_000,
+    refetchInterval: live ? false : 5_000,
+  });
+  const subagentCost = subagentCosts.data?.reduce((total, child) => total + child.cost, 0);
+  const totalCost =
+    session.data && subagentCost !== undefined ? session.data.cost + subagentCost : undefined;
   const messages = useInfiniteQuery({
     ...messageQuery(sessionID),
     select: latestResponse,
@@ -162,11 +173,36 @@ export function SessionPanel({
       <PanelDetails
         label="Usage"
         icon={Coins01Icon}
-        value={session.data?.cost !== undefined ? money.format(session.data.cost) : undefined}
+        value={
+          subagentCosts.isError
+            ? 'Unavailable'
+            : totalCost !== undefined
+              ? money.format(totalCost)
+              : 'Loading…'
+        }
       >
-        <p className="session-panel-note">Session totals reported by OpenCode.</p>
+        <p className="session-panel-note">Cost includes this session and all its subagents.</p>
+        {totalCost !== undefined && !subagentCosts.isError && (
+          <dl className="session-stat-list">
+            {[
+              ['This session', money.format(session.data!.cost)],
+              [
+                `Subagents (${number.format(subagentCosts.data!.length)})`,
+                money.format(subagentCost!),
+              ],
+              ['Total cost', money.format(totalCost)],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        <QueryError query={subagentCosts} />
+        <p className="session-panel-note">Token totals for this session only.</p>
         {session.data?.tokens ? (
-          <TokenStats tokens={session.data.tokens} cost={session.data.cost} />
+          <TokenStats tokens={session.data.tokens} />
         ) : (
           <p className="session-panel-note">No usage reported yet.</p>
         )}
@@ -274,7 +310,7 @@ function PanelDetails({
   );
 }
 
-function TokenStats({ tokens, cost }: { tokens: TokenUsageInfo; cost?: number }) {
+function TokenStats({ tokens }: { tokens: TokenUsageInfo }) {
   return (
     <dl className="session-stat-list">
       {[
@@ -283,7 +319,6 @@ function TokenStats({ tokens, cost }: { tokens: TokenUsageInfo; cost?: number })
         ['Reasoning', number.format(tokens.reasoning)],
         ['Cache read', number.format(tokens.cache.read)],
         ['Cache write', number.format(tokens.cache.write)],
-        ...(cost !== undefined ? [['Cost', money.format(cost)]] : []),
       ].map(([label, value]) => (
         <div key={label}>
           <dt>{label}</dt>

@@ -3,7 +3,15 @@ import { z } from 'zod';
 import type { DesktopPreferences, PreferenceKey } from '@opencodex/contracts/desktop';
 
 export const preferenceInputSchema = z.object({
-  key: z.enum(['project', 'projects', 'theme', 'openInApp', 'terminalPlacement', 'projectModels']),
+  key: z.enum([
+    'project',
+    'projects',
+    'theme',
+    'openInApp',
+    'terminalPlacement',
+    'projectModels',
+    'modelUsage',
+  ]),
   value: z.string().max(16_384).nullable(),
 });
 
@@ -20,6 +28,7 @@ export function createPreferences() {
       openInApp: { type: ['string', 'null'] },
       terminalPlacement: { enum: ['bottom', 'right', null] },
       projectModels: { type: ['string', 'null'] },
+      modelUsage: { type: ['string', 'null'] },
     },
     accessPropertiesByDotNotation: false,
     clearInvalidConfig: true,

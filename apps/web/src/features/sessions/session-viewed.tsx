@@ -4,15 +4,18 @@ import type { SessionInfo } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { api } from '../../lib/api';
 import { updateSessionViewed } from './viewed';
+import { SessionUnread } from './session-unread';
 
 export function SessionViewed({
   sessionID,
   time,
   ready,
+  unread,
 }: {
   sessionID: string;
   time: SessionInfo['time'] | undefined;
   ready: boolean;
+  unread: string | null | undefined;
 }) {
   const client = useQueryClient();
   const attempted = useRef<number>(undefined);
@@ -49,12 +52,17 @@ export function SessionViewed({
     };
   }, [client, sessionID, ready, idle, viewed, mutate, isPending]);
 
-  return view.isError && idle !== undefined && idle > viewed && view.variables === idle ? (
-    <div className="chat-error" role="alert">
-      <p>Could not mark this reply as read.</p>
-      <Button variant="secondary" size="sm" onClick={() => mutate(idle)}>
-        Retry
-      </Button>
-    </div>
-  ) : null;
+  return (
+    <>
+      <SessionUnread key={sessionID} sessionID={sessionID} unread={unread} ready={ready} />
+      {view.isError && idle !== undefined && idle > viewed && view.variables === idle ? (
+        <div className="chat-error" role="alert">
+          <p>Could not mark this reply as read.</p>
+          <Button variant="secondary" size="sm" onClick={() => mutate(idle)}>
+            Retry
+          </Button>
+        </div>
+      ) : null}
+    </>
+  );
 }

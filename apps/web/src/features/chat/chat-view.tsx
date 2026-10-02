@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useIsMutating, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { ModelRef, SessionInfo } from '@opencodex/contracts';
+import type { ModelRef, Project, SessionInfo } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { Dialog } from '../../components/ui/dialog';
 import { api } from '../../lib/api';
@@ -20,14 +20,28 @@ import { localCommands, parseSlash, useSlashCommands } from './slash-commands';
 import { SessionViewed } from '../sessions/session-viewed';
 import { BrandIcon } from '../brand/brand';
 import { Starters } from './starters';
+import { sessionUnread } from '@opencodex/contracts';
+import { ProjectSwitcher } from '../projects/project-switcher';
 
 export function ChatView({
   sessionID,
   live,
+  projectName,
+  project,
+  projects,
+  switching,
+  switchError,
+  onSwitchProject,
   onOpenSession,
 }: {
   sessionID: string;
   live: boolean;
+  projectName?: string;
+  project: Project | null;
+  projects: Project[];
+  switching: boolean;
+  switchError?: string;
+  onSwitchProject: (project: Project, model?: ModelRef) => void;
   onOpenSession: (id: string) => void;
 }) {
   const client = useQueryClient();
@@ -314,6 +328,29 @@ export function ChatView({
           <BrandIcon size="large" className="hero-art" />
           <h2>What should we build?</h2>
           <p>Any model, any provider. Your repo stays on your machine.</p>
+          {project ? (
+            <ProjectSwitcher
+              project={project}
+              opened={projects}
+              disabled={sending || switching || !chat.info.isSuccess}
+              onSelect={(next) => {
+                if (client.isMutating({ mutationKey: sendKey }) || switching) return;
+                onSwitchProject(next, drafts.getState().capture(sessionID).model ?? model);
+              }}
+            />
+          ) : (
+            <p>{projectName || 'Start a new thread'}</p>
+          )}
+          {switching && (
+            <p className="message-note" role="status">
+              Switching project…
+            </p>
+          )}
+          {switchError && (
+            <p className="text-error" role="alert">
+              {switchError}
+            </p>
+          )}
           <Starters sessionID={sessionID} />
         </div>
       ) : chat.messages.data ? (
@@ -342,7 +379,13 @@ export function ChatView({
           key={sessionID}
           sessionID={sessionID}
           time={chat.info.data?.time}
-          ready={chat.info.isSuccess && chat.messages.isSuccess && !chat.messages.isFetching}
+          unread={chat.info.data ? (sessionUnread(chat.info.data) ?? null) : undefined}
+          ready={
+            chat.info.isSuccess &&
+            !chat.info.isFetching &&
+            chat.messages.isSuccess &&
+            !chat.messages.isFetching
+          }
         />
         {catalog.isError && (
           <div className="chat-error" role="alert">
@@ -374,7 +417,7 @@ export function ChatView({
               directory={chat.info.data?.location.directory}
               sessionID={sessionID}
               onSend={async () => {
-                if (client.isMutating({ mutationKey: sendKey })) return;
+                if (client.isMutating({ mutationKey: sendKey }) || switching) return;
                 const draft = drafts.getState().capture(sessionID);
                 if (
                   draft.text.trim() === '/fork' &&
@@ -396,7 +439,7 @@ export function ChatView({
                 return send.mutateAsync({ draft, model: selection });
               }}
               sending={sending}
-              ready={chat.info.isSuccess}
+              ready={chat.info.isSuccess && !switching}
               running={running}
               stopping={stop.isPending}
               onStop={() => stop.mutate()}
@@ -405,7 +448,7 @@ export function ChatView({
                   models={catalog.data?.data}
                   providers={catalog.data?.providers}
                   model={model}
-                  disabled={!chat.info.isSuccess || sending}
+                  disabled={!chat.info.isSuccess || sending || switching}
                   loading={catalog.isPending}
                   failed={catalog.isError}
                   onChange={select}

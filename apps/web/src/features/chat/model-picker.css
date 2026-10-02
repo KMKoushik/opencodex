@@ -94,6 +94,9 @@
   padding: 0 8px 0 34px;
   font-size: 13px;
 }
+.model-picker-option[data-frequent] {
+  padding-left: 8px;
+}
 .model-picker-option[aria-selected='true'] {
   background: var(--selected);
 }

@@ -10,11 +10,13 @@ export function ImageAttachment({
   name,
   className,
   onError,
+  onOpen,
 }: {
   source: File | string;
   name: string;
   className?: string;
   onError?: () => void;
+  onOpen?: () => boolean;
 }) {
   const image = useRef<HTMLImageElement>(null);
   const [preview, setPreview] = useState<string>();
@@ -32,6 +34,7 @@ export function ImageAttachment({
         aria-label={`Preview ${name}`}
         title={`Preview ${name}`}
         onClick={() => {
+          if (onOpen?.()) return;
           if (image.current?.src) setPreview(image.current.src);
         }}
       >

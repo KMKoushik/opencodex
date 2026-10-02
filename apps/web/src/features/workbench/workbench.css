@@ -432,21 +432,6 @@
 .wb-editor:focus-within {
   box-shadow: inset 0 0 0 1px var(--border-heavy);
 }
-.wb-image {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 20px;
-  text-align: center;
-}
-.wb-image img {
-  max-width: 100%;
-  height: auto;
-}
-.wb-image-target {
-  max-width: 100%;
-  cursor: crosshair;
-}
 @media (hover: hover) {
   .wb-document-tab > button:hover {
     background: var(--hover);

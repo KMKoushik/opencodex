@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Button } from '../../components/ui/button';
 import { api } from '../../lib/api';
 import { useSessions } from './use-sessions';
+import { SessionRow } from './session-row';
 
 export function SessionList({
   connected,
@@ -45,35 +46,14 @@ export function SessionList({
         <p className="sidebar-note">No threads yet</p>
       )}
       {items.slice(0, visibleCount).map((session) => (
-        <button
+        <SessionRow
           key={session.id}
-          className="nav-row session-row"
-          aria-current={selectedID === session.id ? 'page' : undefined}
-          title={session.title}
-          onClick={() => onSelect(session.id)}
-        >
-          <span className="truncate">{session.title}</span>
-          {session.fork && <span className="session-kind">Fork</span>}
-          <time dateTime={new Date(session.updatedAt).toISOString()}>
-            {formatAge(session.updatedAt)}
-          </time>
-          {connected && active.data?.[session.id] && (
-            <span
-              className="session-activity"
-              role="img"
-              aria-label="Responding"
-              title="Responding…"
-            />
-          )}
-          {!active.data?.[session.id] && (session.time.idle ?? 0) > (session.time.viewed ?? 0) && (
-            <span
-              className="session-unread"
-              role="img"
-              aria-label="Unread reply"
-              title="Unread reply"
-            />
-          )}
-        </button>
+          session={session}
+          selected={selectedID === session.id}
+          responding={Boolean(connected && active.data?.[session.id])}
+          connected={connected}
+          onSelect={() => onSelect(session.id)}
+        />
       ))}
       {(hasHidden || sessions.hasNextPage) && (
         <button
@@ -92,16 +72,4 @@ export function SessionList({
       )}
     </nav>
   );
-}
-
-function formatAge(time: number) {
-  const minutes = Math.max(0, Math.floor((Date.now() - time) / 60_000));
-  if (minutes < 1) return 'now';
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d`;
-  if (days < 365) return `${Math.floor(days / 7)}w`;
-  return `${Math.floor(days / 365)}y`;
 }

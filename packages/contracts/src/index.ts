@@ -46,6 +46,7 @@ export const sessionSchema = z.object({
   directory: z.string(),
   updatedAt: z.number(),
   time: z.object({ idle: z.number().optional(), viewed: z.number().optional() }),
+  unread: z.string().optional(),
   model: z.string().optional(),
   fork: z.object({ sessionID: z.string() }).optional(),
 });
@@ -129,6 +130,15 @@ export const modelInputSchema = z.object({
   }),
 });
 export const sessionViewSchema = z.object({ idle: z.number().nonnegative() });
+export const sessionUnreadSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('mark') }),
+  z.object({ action: z.literal('clear'), marker: z.string().uuid() }),
+]);
+export const SESSION_UNREAD_KEY = 'opencodexUnread';
+export function sessionUnread(session: { metadata?: Record<string, unknown> }): string | undefined {
+  const marker = session.metadata?.[SESSION_UNREAD_KEY];
+  return typeof marker === 'string' && marker ? marker : undefined;
+}
 export const sessionCreateSchema = projectInputSchema.extend({
   model: modelInputSchema.shape.model.optional(),
 });

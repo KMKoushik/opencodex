@@ -17,12 +17,13 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import type { ModelInfo, ModelProvider, ModelRef } from '@opencodex/contracts';
 import { ProviderLogo } from './provider-logo';
+import { modelKey, readModelUsage, recordModelUsage } from './model-usage';
 import { useCommand } from '../shortcuts/use-command';
 import { shortcutProps } from '../shortcuts/commands';
 import './model-picker.css';
 
-type Entry = { key: string; model: ModelInfo; search: string };
-type Group = { provider: ModelProvider; entries: Entry[] };
+type Entry = { key: string; model: ModelInfo; provider: ModelProvider; search: string };
+type Group = { provider: ModelProvider; entries: Entry[]; frequent?: boolean };
 type Row =
   | {
       type: 'provider';
@@ -68,8 +69,9 @@ export function ModelPicker({
         grouped.set(item.providerID, group);
       }
       group.entries.push({
-        key: JSON.stringify([item.providerID, item.id]),
+        key: modelKey(item),
         model: item,
+        provider: group.provider,
         search: `${group.provider.name} ${item.providerID} ${item.name} ${item.id}`.toLowerCase(),
       });
     }
@@ -138,6 +140,7 @@ export function ModelPicker({
           placement={placement}
           onClose={close}
           onSelect={(next) => {
+            recordModelUsage(next);
             onChange(next);
             close();
           }}
@@ -166,12 +169,32 @@ function ModelMenu({
   const list = useRef<LegendListRef>(null);
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const [activeKey, setActiveKey] = useState(
-    model ? JSON.stringify([model.providerID, model.id]) : '',
-  );
+  const [usage] = useState(readModelUsage);
+  const frequent = useMemo(() => {
+    const entries = groups.flatMap((group) => group.entries);
+    const ranked = entries.filter((entry) => usage.has(entry.key));
+    ranked.sort((a, b) => usage.get(b.key)! - usage.get(a.key)!);
+    if (!ranked.length && model) {
+      const current = entries.find((entry) => entry.key === modelKey(model));
+      if (current) ranked.push(current);
+    }
+    return ranked.slice(0, 5).map((entry) => ({ ...entry, key: `frequent:${entry.key}` }));
+  }, [groups, model, usage]);
+  const [activeKey, setActiveKey] = useState('');
   const rows = useMemo(() => {
     const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-    const filtered = groups
+    const filtered = [
+      ...(frequent.length && !terms.length
+        ? [
+            {
+              provider: { id: 'most-used', name: usage.size ? 'Most used' : 'Current model' },
+              entries: frequent,
+              frequent: true,
+            },
+          ]
+        : []),
+      ...groups,
+    ]
       .map((group) => ({
         ...group,
         entries: group.entries.filter((entry) =>
@@ -202,7 +225,7 @@ function ModelMenu({
           : []),
       ];
     });
-  }, [groups, query, collapsed]);
+  }, [groups, frequent, query, collapsed, usage]);
   const found = rows.findIndex((row) => row.key === activeKey);
   const active =
     found >= 0
@@ -300,6 +323,7 @@ function ModelMenu({
         <LegendList
           ref={list}
           data={rows}
+          extraData={active}
           keyExtractor={rowKey}
           estimatedItemSize={36}
           drawDistance={80}
@@ -328,10 +352,11 @@ function ModelMenu({
                 aria-label={
                   item.type === 'provider'
                     ? item.group.provider.name
-                    : `${item.entry.model.name}, ${item.group.provider.name}`
+                    : `${item.entry.model.name}, ${item.entry.provider.name}`
                 }
                 className={item.type === 'provider' ? 'model-group-heading' : 'model-picker-option'}
                 data-active={index === active}
+                data-frequent={item.group.frequent || undefined}
                 onPointerMove={(event) => {
                   if (event.pointerType === 'mouse' && (event.movementX || event.movementY))
                     setActiveKey(item.key);
@@ -342,10 +367,12 @@ function ModelMenu({
               >
                 {item.type === 'provider' ? (
                   <>
-                    <ProviderLogo
-                      providerID={item.group.provider.id}
-                      canonical={item.group.provider.canonical}
-                    />
+                    {!item.group.frequent && (
+                      <ProviderLogo
+                        providerID={item.group.provider.id}
+                        canonical={item.group.provider.canonical}
+                      />
+                    )}
                     <span className="truncate">{item.group.provider.name}</span>
                     <span className="model-group-count">{item.group.entries.length}</span>
                     <HugeiconsIcon
@@ -355,6 +382,12 @@ function ModelMenu({
                   </>
                 ) : (
                   <>
+                    {item.group.frequent && (
+                      <ProviderLogo
+                        providerID={item.entry.model.providerID}
+                        canonical={item.entry.provider.canonical}
+                      />
+                    )}
                     <span className="truncate">{item.entry.model.name}</span>
                     {Boolean(context) && (
                       <span

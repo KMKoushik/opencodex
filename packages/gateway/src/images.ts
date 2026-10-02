@@ -37,7 +37,7 @@ export function imageRoutes(backend: OpenCodeBackend) {
         options,
       );
     });
-    const mime = imageMime(bytes) ?? (isSvg(bytes) ? 'image/svg+xml' : undefined);
+    const mime = imageMime(bytes);
     if (!mime) return c.json({ message: 'This file is not a supported image.' }, 415);
     c.header('Content-Type', mime);
     c.header('Cache-Control', 'private, max-age=60');
@@ -57,6 +57,7 @@ export function imageMime(bytes: Uint8Array) {
     String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP'
   )
     return 'image/webp';
+  if (isSvg(bytes)) return 'image/svg+xml';
 }
 
 function isSvg(bytes: Uint8Array) {

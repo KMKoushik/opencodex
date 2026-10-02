@@ -3,7 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { QueryError } from './query-error';
 import { Annotation, type AnnotationTarget } from './annotation';
-import { Button } from '../../components/ui/button';
+import { ImageViewer } from './image-viewer';
+import { FileLinkContext } from './file-link-context';
+const MarkdownFile = lazy(() =>
+  import('./markdown-file').then((module) => ({ default: module.MarkdownFile })),
+);
 const FileEditor = lazy(() =>
   import('./file-editor').then((module) => ({ default: module.FileEditor })),
 );
@@ -12,11 +16,13 @@ export function FilePreview({
   path,
   sessionID,
   live,
+  onOpenFile,
 }: {
   directory: string;
   path: string;
   sessionID: string;
   live: boolean;
+  onOpenFile: (href: string) => boolean;
 }) {
   const [annotation, setAnnotation] = useState<AnnotationTarget>();
   const query = useQuery({
@@ -27,7 +33,7 @@ export function FilePreview({
     refetchInterval: live ? false : 15_000,
   });
   return (
-    <>
+    <FileLinkContext.Provider value={onOpenFile}>
       <QueryError query={query} />
       {query.isPending && (
         <p className="wb-empty" role="status">
@@ -36,46 +42,34 @@ export function FilePreview({
       )}
       {query.data?.kind === 'text' && (
         <Suspense fallback={<p className="wb-empty">Loading editor…</p>}>
-          <FileEditor directory={directory} path={path} file={query.data} sessionID={sessionID} />
+          {/\.(?:md|markdown|mdown)$/i.test(path) ? (
+            <MarkdownFile
+              directory={directory}
+              path={path}
+              file={query.data}
+              sessionID={sessionID}
+              onComment={() => setAnnotation({ path, directory })}
+              source={
+                <FileEditor
+                  directory={directory}
+                  path={path}
+                  file={query.data}
+                  sessionID={sessionID}
+                />
+              }
+            />
+          ) : (
+            <FileEditor directory={directory} path={path} file={query.data} sessionID={sessionID} />
+          )}
         </Suspense>
       )}
       {query.data?.kind === 'image' && (
-        <>
-          <div className="wb-subtoolbar">
-            <span className="wb-note">Click a point to annotate</span>
-            <Button variant="ghost" size="sm" onClick={() => setAnnotation({ path, directory })}>
-              Comment on image
-            </Button>
-          </div>
-          <div className="wb-image">
-            <button
-              className="wb-image-target"
-              aria-label={`Annotate ${path}`}
-              onClick={(event) => {
-                const image = event.currentTarget.querySelector('img')!;
-                const bounds = image.getBoundingClientRect();
-                const x = Math.round(
-                  Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)) * 100,
-                );
-                const y = Math.round(
-                  Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)) * 100,
-                );
-                setAnnotation({
-                  path,
-                  directory,
-                  ...(event.detail
-                    ? {
-                        quote: `Image point: ${x}% from left, ${y}% from top. Original dimensions: ${image.naturalWidth} × ${image.naturalHeight}.`,
-                      }
-                    : {}),
-                });
-              }}
-            >
-              <img src={query.data.uri} alt={path} />
-            </button>
-            <p className="wb-note">{path}</p>
-          </div>
-        </>
+        <ImageViewer
+          src={query.data.uri}
+          name={path}
+          bytes={query.data.bytes}
+          onComment={(quote) => setAnnotation({ path, directory, quote })}
+        />
       )}
       {query.data?.kind === 'binary' && (
         <p className="wb-empty">
@@ -90,6 +84,6 @@ export function FilePreview({
           onClose={() => setAnnotation(undefined)}
         />
       )}
-    </>
+    </FileLinkContext.Provider>
   );
 }

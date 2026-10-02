@@ -20,6 +20,7 @@ import { resolveProject } from './project';
 import { workspaceRoutes } from './workspace';
 import { terminalRoutes } from './terminals';
 import { imageRoutes } from './images';
+import { sessionUnreadRoutes } from './session-unread';
 
 export function createApp(
   backend = new OpenCodeBackend(),
@@ -46,6 +47,7 @@ export function createApp(
   app.post('/api/connection', async (c) => c.json(await backend.connection(true)));
   app.route('/api/terminals', terminalRoutes(backend));
   app.route('/api/sessions', imageRoutes(backend));
+  app.route('/api/sessions', sessionUnreadRoutes(backend));
 
   app.post('/api/projects/resolve', async (c) => {
     const input = projectInputSchema.safeParse(await c.req.json().catch(() => null));
