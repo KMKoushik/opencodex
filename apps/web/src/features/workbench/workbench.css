@@ -84,12 +84,21 @@
 }
 .workbench input,
 .workbench select {
-  background: var(--secondary);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 5px;
-  padding: 6px 8px;
+  height: 28px;
+  padding: 0 9px;
   min-width: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-heavy);
+  color: var(--text);
+}
+/* Pickers are glazed chips; text fields are quiet rings. */
+.workbench select {
+  border: 1px solid var(--chip-border);
+  background: var(--chip);
+  box-shadow: var(--chip-shadow);
+  font-weight: 500;
 }
 .workbench select {
   max-width: 100%;
@@ -145,6 +154,20 @@
 .wb-tree-resize:focus-visible {
   background: var(--accent-soft);
 }
+/* The seam grip: half paper, half ink, where the conversation meets the review panel. */
+.wb-resize::before {
+  content: '';
+  position: absolute;
+  top: calc(50% - 28px);
+  left: -1px;
+  width: 10px;
+  height: 56px;
+  border-radius: 5px;
+  background:
+    linear-gradient(90deg, transparent 50%, var(--control) 50%, var(--surface-under) 100%),
+    var(--paper-glaze);
+  box-shadow: var(--glaze-shadow);
+}
 .workbench[data-resizing]::after {
   content: '';
   position: absolute;
@@ -161,32 +184,37 @@
 .wb-document-tabs {
   display: flex;
   flex: 1;
+  align-items: center;
+  gap: 4px;
   min-width: 0;
   height: 100%;
+  padding-left: 10px;
   overflow-x: auto;
-  scrollbar-width: thin;
-  background: var(--surface);
+  scrollbar-width: none;
 }
+/* Open files are pills; the active one is glazed. */
 .wb-document-tab {
   display: flex;
   flex: none;
   align-items: center;
   gap: 2px;
+  height: 28px;
   max-width: 240px;
-  border-right: 1px solid var(--border);
-  padding-right: 5px;
+  padding-right: 4px;
+  border-radius: 8px;
   color: var(--text-tertiary);
+  font-size: 12.5px;
 }
 .wb-document-tab[data-active='true'] {
-  background: var(--surface);
+  background: var(--glaze);
+  box-shadow: var(--glaze-shadow);
   color: var(--text);
-  box-shadow: inset 0 2px var(--accent-text);
 }
 .wb-document-tab > button {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 8px;
+  gap: 7px;
+  padding: 4px 6px 4px 10px;
   white-space: nowrap;
   min-width: 0;
 }
@@ -201,8 +229,9 @@
   font-style: italic;
 }
 .wb-document-tab > button:last-child {
-  padding: 4px;
-  border-radius: 3px;
+  padding: 3px;
+  border-radius: 5px;
+  color: var(--text-tertiary);
 }
 .wb-document-tab svg {
   flex: none;
@@ -241,6 +270,35 @@
   flex: none;
   font-size: 11px;
 }
+/* In Changes the row is the review toolbar: comparison, totals, then the diff's controls. */
+.wb-breadcrumbs[data-view='changes'] {
+  min-height: 44px;
+  gap: 10px;
+}
+.wb-breadcrumbs[data-view='changes'] select {
+  flex: none;
+}
+.wb-totals {
+  display: flex;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.wb-toolbar-slot {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+.wb-toolbar-slot:empty {
+  visibility: hidden;
+}
+.wb-toolbar-slot .wb-actions {
+  margin-left: 0;
+}
 .wb-explorer {
   display: flex;
   flex-direction: column;
@@ -248,6 +306,7 @@
   min-height: 0;
   position: relative;
   border-left: 1px solid var(--border);
+  background: var(--surface-under);
 }
 .wb-explorer-heading {
   display: flex;
@@ -263,12 +322,15 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.wb-comparison {
-  padding: 8px 8px 0;
+.wb-explorer-heading .segmented {
+  flex: 1;
+  min-width: 0;
 }
-.wb-comparison select {
-  width: 100%;
-  font-size: 11px;
+.wb-explorer-heading .segmented button {
+  flex: 1;
+  justify-content: center;
+  height: 24px;
+  padding: 0 8px;
 }
 .wb-tree-pane {
   display: flex;
@@ -284,13 +346,16 @@
 }
 .wb-tree-tools input {
   width: 100%;
-  padding: 5px 7px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .wb-pierre-tree {
   display: block;
   flex: 1;
   overflow: hidden;
+}
+/* Only the status letter carries color; on the calico's ink, file icons are monochrome too. */
+:root[data-art='calico'] .wb-pierre-tree {
+  --tree-icon-filter: grayscale(1);
 }
 .wb-explorer-footer {
   display: flex;
@@ -298,7 +363,8 @@
   padding: 8px 10px;
   color: var(--text-tertiary);
   border-top: 1px solid var(--border);
-  font-size: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 .wb-explorer-footer > span:first-child {

@@ -30,7 +30,7 @@ Messages sent during a run use OpenCode's native steering behavior. Drafts stay 
 
 Use the paperclip, paste from the clipboard, or drop files onto the composer to attach images, PDFs, and text/code files. Images show thumbnails; each attachment can be removed before sending. You can send attachments with or without text, up to 100 files per message: 10 MiB per image, 80 MiB total images, and 50 MiB per other file, matching T3 Code's limits. Files stay local until you send, survive switching chats, and remain available after a failed send. Reloading discards unsent drafts and attachments.
 
-Themes live in **Settings → Appearance**. Choose Light, Dark, or System mode, then pick a separate light and dark theme, such as OpenCodex, Catppuccin (Latte, Mocha, Macchiato, Frappé), GitHub, Nord, Gruvbox, Solarized, Rosé Pine, Tokyo Night, Dracula, Everforest, or One. As in Codex, each theme is three seed colors — accent, background, and foreground — plus a contrast level; you can adjust any of them, and every other color is derived from them. Choices persist across launches.
+Themes live in **Settings → Appearance**. Choose Light, Dark, or System mode, then pick a separate light and dark theme, such as OpenCodex, Catppuccin (Latte, Mocha, Macchiato, Frappé), GitHub, Nord, Gruvbox, Solarized, Rosé Pine, Tokyo Night, Dracula, Everforest, or One. As in Codex, each theme is three seed colors — accent, background, and foreground — plus a contrast level; you can adjust any of them, and every other color is derived from them, including the glazed ceramic controls. The OpenCodex and Catppuccin themes keep code on ink: the workspace panel and terminal use the theme's own dark palette even in light mode (Catppuccin Latte borrows Mocha's), with matching syntax colors in diffs and the editor. Choices persist across launches.
 
 ### Review and edit your workspace
 
@@ -74,7 +74,7 @@ bun run build        # Web + Electron bundles
 bun package:desktop  # Installer for the current operating system
 ```
 
-The desktop bundle starts its gateway on an available loopback port and serves the built UI from it. OpenCode is an installed prerequisite; its executable is not bundled yet. Distribution signing, updates, and branded installer assets are not configured.
+The desktop bundle starts its gateway on an available loopback port and serves the built UI from it. OpenCode is an installed prerequisite; its executable is not bundled yet. App icons live in `apps/desktop/build/`; distribution signing and updates are not configured.
 
 ## Backend configuration
 

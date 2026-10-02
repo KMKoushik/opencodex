@@ -21,7 +21,7 @@ async function createWindow() {
     height: 840,
     minWidth: 760,
     minHeight: 560,
-    backgroundColor: '#181818',
+    backgroundColor: '#1a1a1d',
     ...(process.platform === 'darwin'
       ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 16, y: 15 } }
       : {}),
@@ -41,6 +41,9 @@ async function createWindow() {
 app
   .whenReady()
   .then(async () => {
+    // Packaged builds take the icon from the bundle; show the calico in the Dock during development too.
+    if (!app.isPackaged && process.platform === 'darwin')
+      app.dock?.setIcon(fileURLToPath(new URL('../../build/icon.png', import.meta.url)));
     if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
       origin = process.env.ELECTRON_RENDERER_URL;
     } else {

@@ -5,10 +5,10 @@ import { FileTree, useFileTree } from '@pierre/trees/react';
 import type { GitStatusEntry, FileTreeBatchOperation } from '@pierre/trees';
 import { api } from '../../lib/api';
 import { Button } from '../../components/ui/button';
-import { useTheme } from '../theme/use-theme';
+import { useSyntaxTheme } from '../theme/use-theme';
 
 const treeCSS = `:host {
-  --trees-bg-override: var(--surface);
+  --trees-bg-override: var(--surface-under);
   --trees-fg-override: var(--text-secondary);
   --trees-selected-bg-override: var(--selected);
   --trees-hover-bg-override: var(--hover);
@@ -16,13 +16,19 @@ const treeCSS = `:host {
   --trees-accent-override: var(--accent-text);
   --trees-selected-fg-override: var(--text);
   --trees-focus-ring-color-override: transparent;
+  --trees-selected-focused-border-color-override: transparent;
   --trees-git-added-color-override: var(--success);
   --trees-git-untracked-color-override: var(--success);
-  --trees-git-modified-color-override: var(--text-secondary);
+  --trees-git-modified-color-override: var(--warning);
   --trees-git-deleted-color-override: var(--error);
   --trees-font-family-override: var(--font-sans);
-  --trees-font-size-override: 12px;
-} button[data-type='item'] { border-radius: 4px; }`;
+  --trees-font-size-override: 12.5px;
+} button[data-type='item'] { border-radius: 7px; }
+[data-item-git-status] > [data-item-section='content'],
+[data-item-git-status] > [data-item-section='icon'] > :not([data-icon-name='file-tree-icon-chevron']) {
+  color: inherit;
+}
+[data-item-section='icon'] { filter: var(--tree-icon-filter, none); }`;
 
 function combineDirectories(results: UseQueryResult<FileSystemEntry[], Error>[]) {
   return {
@@ -51,7 +57,7 @@ export function WorkspaceTree({
   live: boolean;
   onOpen: (path: string, pinned: boolean) => void;
 }) {
-  const { variant } = useTheme();
+  const scheme = useSyntaxTheme().type;
   const [folders, setFolders] = useState(['']);
   const parents = useMemo(() => {
     const segments = selected.split('/');
@@ -212,7 +218,7 @@ export function WorkspaceTree({
       <FileTree
         model={model}
         className="wb-pierre-tree"
-        style={{ colorScheme: variant, height: '100%', minHeight: 0 }}
+        style={{ colorScheme: scheme, height: '100%', minHeight: 0 }}
         onClickCapture={(event) => {
           // Search closes on activation; capture the path before Pierre recycles the row.
           const row = event.nativeEvent

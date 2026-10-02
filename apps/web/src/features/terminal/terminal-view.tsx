@@ -184,7 +184,7 @@ export function TerminalView({
           scrollback: 5000,
           cursorBlink: false,
           disableStdin: true,
-          theme: terminalTheme(),
+          theme: terminalTheme(element),
         });
         const fit = new FitAddon();
         term.loadAddon(fit);
@@ -216,7 +216,7 @@ export function TerminalView({
         });
         observer.observe(element);
         themeObserver = new MutationObserver(() => {
-          if (term) term.options.theme = terminalTheme();
+          if (term) term.options.theme = terminalTheme(element);
         });
         themeObserver.observe(document.documentElement, {
           attributes: true,

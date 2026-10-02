@@ -1,6 +1,13 @@
-import { useEffect, useLayoutEffect, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useSyncExternalStore } from 'react';
 import { readStorage, writeStorage } from '../../lib/storage';
-import { applyTheme, parseThemePreference, resolveVariant, type ThemePreference } from './theme';
+import { findPreset } from './presets';
+import {
+  applyTheme,
+  deriveTheme,
+  parseThemePreference,
+  resolveVariant,
+  type ThemePreference,
+} from './theme';
 
 const listeners = new Set<() => void>();
 let preference: ThemePreference | undefined;
@@ -42,6 +49,19 @@ export function useTheme() {
     update: setPreference,
     systemDark,
   };
+}
+
+/** Which coat the brand art wears in the active theme. */
+export function useThemeArt() {
+  const { preference, variant } = useTheme();
+  return findPreset(variant, preference[variant].preset).art ?? 'calico';
+}
+
+/** Syntax theme for code on the review panel, which may stay dark in light themes. */
+export function useSyntaxTheme() {
+  const { preference, variant } = useTheme();
+  const current = preference[variant];
+  return useMemo(() => deriveTheme(variant, current).syntax, [variant, current]);
 }
 
 /** Applies the theme for the lifetime of the app. Mount once. */
