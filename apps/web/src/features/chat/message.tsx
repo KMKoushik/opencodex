@@ -2,6 +2,7 @@ import { memo } from 'react';
 import type { SessionMessageInfo } from '@opencodex/contracts';
 import { Disclosure } from './disclosure';
 import { MessageAttachments } from './message-attachments';
+import { SkillUsage } from './skill';
 
 export const Message = memo(function Message({ message }: { message: SessionMessageInfo }) {
   switch (message.type) {
@@ -56,11 +57,7 @@ export const Message = memo(function Message({ message }: { message: SessionMess
     case 'synthetic':
       return null;
     case 'skill':
-      return (
-        <Disclosure id={message.id} label="Skill">
-          <p className="reasoning-text">{message.text}</p>
-        </Disclosure>
-      );
+      return <SkillUsage name={message.name || message.skill} />;
     case 'idle':
       return null;
   }

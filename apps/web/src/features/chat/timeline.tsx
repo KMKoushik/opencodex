@@ -18,6 +18,7 @@ import { Activity } from './activity';
 import { DisclosureProvider } from './disclosure';
 import { createTimelineProjector, type TimelineRow } from './timeline-model';
 import { Message } from './message';
+import { SkillTool } from './skill';
 import { StreamText } from './stream-text';
 import { ResponseSelection } from './response-selection';
 
@@ -155,6 +156,8 @@ const Row = memo(function Row({ row, sessionID }: { row: TimelineRow; sessionID:
     <div className="timeline-row" data-row-id={row.id} data-row-type={row.type}>
       {row.type === 'activity' ? (
         <Activity row={row} sessionID={sessionID} />
+      ) : row.type === 'skill' ? (
+        <SkillTool tool={row.tool} />
       ) : row.type === 'text' ? (
         <article className="assistant-message" aria-label="Assistant">
           <StreamText

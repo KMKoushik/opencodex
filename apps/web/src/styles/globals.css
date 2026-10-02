@@ -110,20 +110,22 @@ svg {
   gap: 7px;
   min-width: 0;
 }
-/* The ceramic tile's render includes its drop shadow; the negative margins align the tile itself. */
 .sidebar-brand-icon {
+  display: block;
+  flex: none;
   width: 30px;
   height: 30px;
-  margin: -3px -3px -3px -1px;
+  object-fit: contain;
 }
 .sidebar-wordmark {
   display: block;
   width: auto;
   height: 16.4px;
 }
-:root[data-platform='darwin'] .sidebar-header {
-  height: calc(var(--toolbar-height) + 32px);
-  padding-top: 32px;
+.toolbar-brand {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
 }
 .main-shell {
   display: flex;
@@ -1124,9 +1126,6 @@ svg {
   .app-shell[data-sidebar-collapsed='true'] .sidebar {
     display: none;
   }
-  :root[data-platform='darwin'] .app-shell[data-sidebar-collapsed='true'] .toolbar {
-    padding-left: 84px;
-  }
 }
 
 @media (pointer: coarse) {
@@ -1516,6 +1515,23 @@ svg {
 .message-note {
   color: var(--text-tertiary);
   font-size: 12px;
+}
+.skill-usage {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.skill-usage-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  overflow-wrap: anywhere;
+}
+.skill-usage-label > svg {
+  flex-shrink: 0;
+}
+.skill-usage-name {
+  color: var(--text);
 }
 .tool-details pre,
 .shell-output,

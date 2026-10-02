@@ -307,7 +307,7 @@ export function App() {
       <aside ref={sidebar} className="sidebar" id="sidebar" aria-label="Sidebar">
         <SidebarResize />
         <div className="sidebar-header">
-          <span className="sidebar-brand">
+          <span className="sidebar-brand" aria-label="OpenCodex">
             <BrandIcon size="small" className="sidebar-brand-icon" />
             <Wordmark className="sidebar-wordmark" />
           </span>
@@ -380,6 +380,11 @@ export function App() {
         <div className="workspace-body">
           <div className="chat-column">
             <header className="toolbar">
+              {sidebarCollapsed && (
+                <span className="toolbar-brand" aria-label="OpenCodex">
+                  <BrandIcon size="small" className="sidebar-brand-icon" />
+                </span>
+              )}
               {sidebarCollapsed && (
                 <Button
                   className="desktop-sidebar-toggle"

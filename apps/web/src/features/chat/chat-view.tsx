@@ -444,6 +444,7 @@ export function ChatView({
             onStop={() => stop.mutate()}
             controls={
               <ModelControls
+                sessionID={sessionID}
                 models={catalog.data?.data}
                 providers={catalog.data?.providers}
                 model={model}

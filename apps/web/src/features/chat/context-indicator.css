@@ -1,0 +1,87 @@
+.context-indicator {
+  flex-shrink: 0;
+  anchor-scope: --context-indicator;
+}
+.context-indicator-trigger {
+  anchor-name: --context-indicator;
+}
+.composer-controls .context-indicator-trigger.button {
+  width: 32px;
+  height: 32px;
+}
+.context-indicator-trigger[aria-expanded='true'] {
+  background: var(--hover);
+}
+.context-indicator svg {
+  fill: none;
+  stroke-width: 2.5;
+}
+.context-ring-track {
+  stroke: var(--border-heavy);
+}
+.context-ring-value {
+  stroke: var(--text-secondary);
+}
+.context-indicator svg[data-level='high'] .context-ring-value {
+  stroke: var(--warning);
+}
+.context-indicator svg[data-level='critical'] .context-ring-value {
+  stroke: var(--error);
+}
+.context-popover {
+  position: fixed;
+  position-anchor: --context-indicator;
+  inset: auto;
+  bottom: calc(anchor(top) + 8px);
+  right: anchor(right);
+  position-try-fallbacks: flip-inline, flip-block;
+  width: min(280px, calc(100vw - 24px));
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--border-heavy);
+  border-radius: 12px;
+  background: var(--elevated);
+  box-shadow: var(--shadow);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.context-popover-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text);
+}
+.context-popover p + p {
+  margin-top: 4px;
+  color: var(--text-tertiary);
+}
+.context-popover progress {
+  display: block;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  margin-block: 12px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 4px;
+  background: var(--secondary-hover);
+  color: var(--text-secondary);
+}
+.context-popover progress::-webkit-progress-bar {
+  background: var(--secondary-hover);
+}
+.context-popover progress::-webkit-progress-value {
+  border-radius: 4px;
+  background: var(--text-secondary);
+}
+.context-popover progress::-moz-progress-bar {
+  border-radius: 4px;
+  background: var(--text-secondary);
+}
+@media (pointer: coarse) {
+  .composer-controls .context-indicator-trigger.button {
+    width: 44px;
+    height: 44px;
+  }
+}

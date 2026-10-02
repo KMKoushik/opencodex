@@ -2,12 +2,14 @@ import { useMemo, useRef } from 'react';
 import type { ModelInfo, ModelProvider, ModelRef } from '@opencodex/contracts';
 import { Select } from '../../components/ui/select';
 import { ModelPicker } from './model-picker';
+import { ContextIndicator } from './context-indicator';
 import { useCommand } from '../shortcuts/use-command';
 import { shortcutProps } from '../shortcuts/commands';
 
 const variantLabel = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 
 export function ModelControls({
+  sessionID,
   models,
   providers,
   model,
@@ -16,6 +18,7 @@ export function ModelControls({
   failed,
   onChange,
 }: {
+  sessionID: string;
   models?: ModelInfo[];
   providers?: ModelProvider[];
   model?: ModelRef;
@@ -70,6 +73,7 @@ export function ModelControls({
   const cycleShortcut = shortcutProps('thinking.cycle');
   return (
     <div className="composer-controls">
+      <ContextIndicator key={sessionID} sessionID={sessionID} models={models} model={model} />
       <ModelPicker
         models={options}
         providers={providers}

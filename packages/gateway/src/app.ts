@@ -255,10 +255,11 @@ export function createApp(
       await backend.request(c.req.raw.signal, async (client, options) => {
         const cursor = c.req.query('cursor');
         const parentID = c.req.param('id');
+        const pageSize = 100;
         const page = await client.session.list(
           {
             parentID,
-            limit: 10,
+            limit: pageSize,
             ...(cursor ? { cursor } : { order: 'asc' as const }),
           },
           options,
@@ -266,7 +267,7 @@ export function createApp(
         // Native cursors mark an anchor, not whether another page exists.
         // Probe only full pages, preserving OpenCode's opaque cursor unchanged.
         const next =
-          page.data.length === 10 &&
+          page.data.length === pageSize &&
           page.cursor.next &&
           (await client.session.list({ parentID, limit: 1, cursor: page.cursor.next }, options))
             .data.length

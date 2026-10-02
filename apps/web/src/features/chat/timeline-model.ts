@@ -13,6 +13,7 @@ export type WorkEntry =
     };
 export type TimelineRow =
   | { id: string; type: 'message'; message: SessionMessageInfo }
+  | { id: string; type: 'skill'; tool: SessionMessageAssistantTool }
   | { id: string; type: 'text'; message: Assistant; ordinal: number; text: string }
   | {
       id: string;
@@ -60,7 +61,12 @@ export function createTimelineProjector() {
           let text = 0;
           let reasoning = 0;
           for (const part of message.content) {
-            if (part.type === 'tool') entries.push({ id: part.id, type: 'tool', tool: part });
+            if (part.type === 'tool')
+              entries.push({
+                id: part.id,
+                type: part.name === 'skill' ? 'skill' : 'tool',
+                tool: part,
+              });
             if (part.type === 'reasoning')
               entries.push({
                 id: `${message.id}:reasoning:${reasoning}`,

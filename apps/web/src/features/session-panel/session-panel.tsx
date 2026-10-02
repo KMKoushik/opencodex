@@ -1,6 +1,6 @@
-import { useInfiniteQuery, useQuery, type InfiniteData } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import type { SessionMessagesResponse, TokenUsageInfo } from '@opencodex/contracts';
+import type { TokenUsageInfo } from '@opencodex/contracts';
 import {
   ArrowRight01Icon,
   GitBranchIcon,
@@ -13,6 +13,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
 import { api } from '../../lib/api';
 import { messageQuery } from '../chat/message-query';
+import { latestResponse, tokenTotal } from '../chat/context-usage';
 import { loadSubagentCosts } from './session-cost';
 
 const number = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
@@ -22,17 +23,6 @@ const money = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 4,
 });
 const percent = new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 1 });
-
-// Native pages are newest-first. Bound work to the latest page, never the full transcript.
-function latestResponse(data: InfiniteData<SessionMessagesResponse>) {
-  return data.pages[0]?.data.find(
-    (message) => message.type === 'assistant' && message.tokens && tokenTotal(message.tokens) > 0,
-  );
-}
-
-function tokenTotal(tokens: TokenUsageInfo) {
-  return tokens.input + tokens.output + tokens.reasoning + tokens.cache.read + tokens.cache.write;
-}
 
 export function SessionPanel({
   sessionID,

@@ -133,7 +133,10 @@ describe('gateway and the real OpenCode client', () => {
       outcome: 'succeeded',
       location: { directory },
     };
-    const fullPage = Array.from({ length: 10 }, (_, index) => ({ ...child, id: `child-${index}` }));
+    const fullPage = Array.from({ length: 100 }, (_, index) => ({
+      ...child,
+      id: `child-${index}`,
+    }));
     let total = 2;
     const messages = { data: [{ id: 'message', type: 'user', text: 'Explore' }], cursor: {} };
     const url = await upstream((req, res) => {
@@ -147,9 +150,11 @@ describe('gateway and the real OpenCode client', () => {
         const cursor = path.searchParams.get('cursor');
         limits.push(Number(path.searchParams.get('limit')));
         expect(path.searchParams.get('order')).toBe(cursor ? null : 'asc');
-        if (cursor) expect(cursor).toBe('after-ten');
-        const data = cursor ? (total > 10 ? [child] : []) : fullPage.slice(0, total);
-        return res.end(JSON.stringify({ data, cursor: { next: cursor ? 'at-end' : 'after-ten' } }));
+        if (cursor) expect(cursor).toBe('after-hundred');
+        const data = cursor ? (total > 100 ? [child] : []) : fullPage.slice(0, total);
+        return res.end(
+          JSON.stringify({ data, cursor: { next: cursor ? 'at-end' : 'after-hundred' } }),
+        );
       }
       if (path.pathname === '/api/session/child') return res.end(JSON.stringify({ data: child }));
       if (path.pathname === '/api/session/child/message') return res.end(JSON.stringify(messages));
@@ -164,18 +169,21 @@ describe('gateway and the real OpenCode client', () => {
     // The native service returns a cursor even for two terminal results.
     expect(await get('parent/subagents')).toEqual({ data: fullPage.slice(0, 2), cursor: {} });
     expect(calls).toHaveLength(1);
-    total = 10;
+    total = 100;
     expect(await get('parent/subagents')).toEqual({ data: fullPage, cursor: {} });
     expect(calls).toHaveLength(3);
-    total = 11;
+    total = 101;
     expect(await get('parent/subagents')).toEqual({
       data: fullPage,
-      cursor: { next: 'after-ten' },
+      cursor: { next: 'after-hundred' },
     });
     expect(calls).toHaveLength(5);
     // Continue with the verified cursor; the last short page has no more button.
-    expect(await get('parent/subagents?cursor=after-ten')).toEqual({ data: [child], cursor: {} });
-    expect(limits).toEqual([10, 10, 1, 10, 1, 10]);
+    expect(await get('parent/subagents?cursor=after-hundred')).toEqual({
+      data: [child],
+      cursor: {},
+    });
+    expect(limits).toEqual([100, 100, 1, 100, 1, 100]);
     expect(await get('child')).toEqual(child);
     expect(await get('child/messages')).toEqual(messages);
     expect(calls).toEqual([
