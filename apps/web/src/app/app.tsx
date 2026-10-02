@@ -3,7 +3,7 @@ import {
   PanelLeftCloseIcon,
   PanelLeftIcon,
   Settings01Icon,
-  Add01Icon,
+  PencilEdit02Icon,
   FolderOpenIcon,
   Folder01Icon,
   PanelRightIcon,
@@ -41,6 +41,7 @@ import { SidebarResize } from '../features/sidebar/sidebar-resize';
 import { readTerminalPlacement, type TerminalPlacement } from '../features/terminal/placement';
 import { writeStorage } from '../lib/storage';
 import { useDraftStore } from '../features/chat/draft-context';
+import { BrandIcon, Wordmark } from '../features/brand/brand';
 
 const TerminalDrawer = lazy(() =>
   import('../features/terminal/terminal-drawer').then((module) => ({
@@ -260,7 +261,10 @@ export function App() {
       <aside ref={sidebar} className="sidebar" id="sidebar" aria-label="Sidebar">
         <SidebarResize />
         <div className="sidebar-header">
-          <span className="sidebar-brand">OpenCodex</span>
+          <span className="sidebar-brand">
+            <BrandIcon size="small" className="sidebar-brand-icon" />
+            <Wordmark className="sidebar-wordmark" />
+          </span>
           <Button
             className="desktop-sidebar-toggle"
             variant="ghost"
@@ -283,7 +287,7 @@ export function App() {
                 {...shortcutProps('chat.new')}
                 onClick={newChat}
               >
-                <HugeiconsIcon icon={Add01Icon} size={16} />
+                <HugeiconsIcon icon={PencilEdit02Icon} size={16} />
                 <span>{create.isPending ? 'Creating…' : 'New chat'}</span>
               </button>
               <button className="nav-row" {...shortcutProps('project.open')} onClick={openProject}>
@@ -449,7 +453,6 @@ export function App() {
                     sessionID={selectedID}
                     onOpenSession={setSelectedID}
                     live={live}
-                    projectName={currentProject?.name}
                   />
                 </Suspense>
               ) : (
@@ -482,6 +485,10 @@ export function App() {
                   live={live}
                   open={workbenchOpen}
                   panel={workbenchPanel}
+                  onSelectPanel={(id) => {
+                    const next = panels.find((panel) => panel.id === id);
+                    if (next) setWorkbenchPanel(next);
+                  }}
                   onClose={() => {
                     if (workbenchPanel.id === 'terminal') {
                       closeTerminal();

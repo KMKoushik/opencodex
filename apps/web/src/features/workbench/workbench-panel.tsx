@@ -12,6 +12,7 @@ export function WorkbenchPanel({
   open,
   panel,
   onClose,
+  onSelectPanel,
 }: {
   directory: string;
   sessionID: string;
@@ -19,6 +20,7 @@ export function WorkbenchPanel({
   open: boolean;
   panel: PanelDefinition;
   onClose: () => void;
+  onSelectPanel?: (id: string) => void;
 }) {
   const [width, setWidth] = useState(820);
   const [headerElement, setHeaderElement] = useState<HTMLDivElement | null>(null);
@@ -40,7 +42,8 @@ export function WorkbenchPanel({
     <aside
       ref={ref}
       id="workbench"
-      className="workbench"
+      // Code sits on ink: themes with a review panel palette render this subtree dark.
+      className="workbench ink"
       hidden={!open}
       aria-label="Workspace panel"
       style={{ width }}
@@ -122,6 +125,7 @@ export function WorkbenchPanel({
                 live,
                 active: open && entry.id === panel.id,
                 headerElement,
+                selectView: onSelectPanel,
               })}
             </Suspense>
           </div>

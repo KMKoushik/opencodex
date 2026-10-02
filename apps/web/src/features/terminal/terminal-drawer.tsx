@@ -30,7 +30,7 @@ export function TerminalDrawer({
     <section
       ref={root}
       id="terminal-drawer"
-      className="workbench terminal-drawer"
+      className="workbench terminal-drawer ink"
       hidden={!open}
       aria-label="Terminal"
       style={{ height }}

@@ -105,15 +105,24 @@ svg {
   -webkit-app-region: no-drag;
 }
 .sidebar-brand {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+/* The ceramic tile's render includes its drop shadow; the negative margins align the tile itself. */
+.sidebar-brand-icon {
+  width: 30px;
+  height: 30px;
+  margin: -3px -3px -3px -1px;
+}
+.sidebar-wordmark {
+  display: block;
+  width: auto;
+  height: 16.4px;
 }
 :root[data-platform='darwin'] .sidebar-header {
   padding-left: 76px;
-}
-:root[data-platform='darwin'] .sidebar-brand {
-  visibility: hidden;
 }
 .main-shell {
   display: flex;
@@ -229,7 +238,7 @@ svg {
 .nav-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   width: 100%;
   min-height: var(--row-height);
   padding: 0 8px;
@@ -237,7 +246,7 @@ svg {
   border-radius: 8px;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 13.5px;
   text-align: left;
 }
 .nav-row[aria-current] {
@@ -301,9 +310,10 @@ svg {
 .session-list {
   padding-block: 2px 8px;
 }
+/* Thread titles start on the project name's column; status sits on the icon's column. */
 .session-row,
 .session-more {
-  padding-left: 38px;
+  padding-left: 50px;
 }
 .session-row > span {
   flex: 1;
@@ -318,7 +328,7 @@ svg {
 }
 .session-activity {
   position: absolute;
-  left: 16px;
+  left: 28px;
   top: calc(50% - 7px);
   width: 14px;
   height: 14px;
@@ -336,7 +346,7 @@ svg {
 }
 .session-unread {
   position: absolute;
-  left: 20px;
+  left: 32px;
   top: calc(50% - 3px);
   width: 6px;
   height: 6px;
@@ -352,7 +362,7 @@ svg {
   font-size: 12px;
 }
 .session-list .sidebar-note {
-  padding-left: 32px;
+  padding-left: 50px;
 }
 .sidebar-note .button {
   margin-top: 8px;
@@ -370,15 +380,12 @@ svg {
   text-align: center;
 }
 .empty-state h1 {
-  font-size: 28px;
-  font-weight: 500;
-  line-height: 1.25;
-  letter-spacing: -0.03em;
   overflow-wrap: anywhere;
 }
 .empty-state > p {
-  margin-top: 8px;
+  margin-top: 10px;
   color: var(--text-secondary);
+  font-size: 14.5px;
 }
 .empty-actions {
   display: flex;
@@ -879,13 +886,18 @@ svg {
     background-color 120ms ease,
     color 120ms ease;
 }
+/* Anything you press is glazed ceramic; surfaces stay flat. */
 .button-primary {
-  background: var(--primary);
+  background: var(--primary-glaze);
+  box-shadow: var(--primary-shadow);
   color: var(--on-primary);
+  font-weight: 600;
 }
 .button-secondary {
-  background: var(--secondary);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--chip);
+  box-shadow:
+    var(--chip-shadow),
+    inset 0 0 0 1px var(--chip-border);
   color: var(--text);
 }
 .button-ghost {
@@ -908,8 +920,8 @@ svg {
   gap: 2px;
   padding: 2px;
   border-radius: 9px;
-  background: var(--secondary);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--well);
+  box-shadow: var(--well-shadow);
 }
 .segmented button {
   display: flex;
@@ -925,9 +937,17 @@ svg {
   font-weight: 500;
 }
 .segmented button[aria-checked='true'] {
-  background: var(--control);
-  box-shadow: 0 0 0 1px var(--border-heavy);
+  background: var(--glaze);
+  box-shadow: var(--glaze-shadow);
   color: var(--text);
+}
+.segmented-badge {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--secondary);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
 }
 .select {
   position: relative;
@@ -938,9 +958,10 @@ svg {
   align-items: center;
   gap: 8px;
   height: 32px;
-  border: 1px solid var(--border-heavy);
-  border-radius: 8px;
-  background: var(--control);
+  border: 1px solid var(--chip-border);
+  border-radius: 9px;
+  background: var(--chip);
+  box-shadow: var(--chip-shadow);
   font-size: 13px;
 }
 .select-trigger {
@@ -959,9 +980,9 @@ svg {
   z-index: 20;
   width: 240px;
   margin: 0;
-  padding: 4px;
+  padding: 5px;
   border: 1px solid var(--border-heavy);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--elevated);
   box-shadow: var(--shadow);
 }
@@ -1239,20 +1260,94 @@ svg {
   margin: 0 auto;
   padding: 32px 24px 8px;
 }
+/* The hero shares the composer's column, so the starters line up with it. */
 .chat-empty {
-  padding: 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100%, var(--thread-width));
+  margin: 0 auto;
+  padding: 0 24px 28px;
   text-align: center;
 }
-.chat-empty h2 {
-  font-size: 28px;
-  font-weight: 500;
-  letter-spacing: -0.03em;
+.hero-art {
+  display: block;
+  width: 176px;
+  height: 176px;
+  margin: 0 auto 4px;
+  user-select: none;
+}
+.chat-empty h2,
+.empty-state h1 {
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
 }
 .chat-empty p {
-  margin-top: 8px;
+  margin-top: 10px;
   color: var(--text-secondary);
-  font-size: 20px;
-  letter-spacing: -0.02em;
+  font-size: 14.5px;
+}
+.starters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin-top: 28px;
+}
+.starter {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 104px;
+  padding: 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--glaze);
+  box-shadow: var(--glaze-shadow);
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: left;
+}
+.starter-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--primary-glaze);
+  box-shadow: var(--primary-shadow);
+  color: var(--on-primary);
+}
+/* Catppuccin tints each starter with its own pastel instead of the primary glaze. */
+:root[data-art='catppuccin'] .starter-icon {
+  --tint: var(--link);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--tint) 24%, transparent),
+    color-mix(in srgb, var(--tint) 13%, transparent)
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tint) 22%, transparent);
+  color: var(--tint);
+}
+:root[data-art='catppuccin'] .starter:nth-child(2) .starter-icon {
+  --tint: var(--success);
+}
+:root[data-art='catppuccin'] .starter:nth-child(3) .starter-icon {
+  --tint: var(--warning);
+}
+:root[data-art='catppuccin'] .starter:nth-child(4) .starter-icon {
+  --tint: var(--accent-text);
+}
+@media (max-width: 720px) {
+  .starters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .chat[data-empty='true'] {
   justify-content: center;
@@ -1279,10 +1374,11 @@ svg {
   gap: 8px;
 }
 .user-message-bubble {
-  max-width: 80%;
-  padding: 10px 16px;
-  border-radius: 20px;
-  background: var(--secondary);
+  max-width: min(80%, 460px);
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--bubble);
+  line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -1291,7 +1387,7 @@ svg {
   flex-direction: column;
   gap: 14px;
   min-width: 0;
-  line-height: 1.65;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 .message-note {
@@ -1475,18 +1571,25 @@ svg {
   white-space: pre;
 }
 .markdown code {
-  font-size: 12px;
+  font-size: 12.5px;
 }
 .markdown :not(pre) > code {
-  background: var(--secondary);
-  border-radius: 4px;
-  padding: 2px 4px;
+  background: var(--code-bg);
+  border-radius: 5px;
+  padding: 1px 5px;
 }
 .markdown a,
 .request-card a {
-  color: var(--accent-text);
+  color: var(--link);
+  font-weight: 500;
   text-decoration: underline;
+  text-decoration-color: var(--link-underline);
   text-underline-offset: 3px;
+}
+.markdown a.file-link > svg {
+  display: inline;
+  margin-right: 4px;
+  vertical-align: -2px;
 }
 .markdown blockquote {
   border-left: 2px solid var(--border-heavy);
@@ -1529,16 +1632,20 @@ svg {
 }
 .composer {
   position: relative;
-  border: 1px solid var(--border-heavy);
-  border-radius: 22px;
-  padding: 16px 14px 12px;
-  background: var(--surface);
+  border-radius: 18px;
+  padding: 14px 10px 10px 14px;
+  background: var(--composer);
+  box-shadow: var(--composer-shadow);
 }
 .composer:focus-within {
-  border-color: var(--text-tertiary);
+  box-shadow:
+    var(--composer-shadow),
+    0 0 0 1px var(--border-heavy);
 }
 .composer[data-dragging='true'] {
-  border-color: var(--accent);
+  box-shadow:
+    var(--composer-shadow),
+    0 0 0 1px var(--accent);
 }
 .composer-drop-overlay {
   position: absolute;
@@ -1755,10 +1862,11 @@ svg {
 .composer-controls {
   display: flex;
   align-items: center;
-  gap: 2px;
+  justify-content: flex-end;
+  gap: 4px;
   flex: 1;
   min-width: 0;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--text-secondary);
 }
 .composer-controls .select {
@@ -1767,11 +1875,21 @@ svg {
 .composer-controls .select-trigger {
   width: auto;
   max-width: 240px;
+  height: 30px;
   padding-inline: 8px;
   border-color: transparent;
   background: transparent;
+  box-shadow: none;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+/* The model is a glazed chip; thinking stays a quiet text control. */
+.composer-controls .model-select .select-trigger {
+  border-color: var(--chip-border);
+  background: var(--chip);
+  box-shadow: var(--chip-shadow);
+  color: var(--text);
 }
 .composer-controls .select-trigger:disabled {
   color: var(--text-tertiary);
@@ -1780,8 +1898,8 @@ svg {
   flex-shrink: 0;
 }
 .composer-controls .select-menu {
-  left: 0;
-  right: auto;
+  left: auto;
+  right: 0;
   width: min(320px, calc(100vw - 64px));
 }
 .composer-controls .select:last-child .select-menu {
@@ -1800,9 +1918,41 @@ svg {
 }
 .composer-footer .button {
   flex-shrink: 0;
-  border-radius: 50%;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+}
+.composer-footer .composer-send {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+/* The glaze's wet highlight across the top of the send button. */
+.composer-send::before {
+  content: '';
+  position: absolute;
+  inset: 2px 4px auto;
+  height: 42%;
+  border-radius: 10px 10px 6px 6px;
+  background: var(--primary-sheen);
+  pointer-events: none;
+}
+.composer-send > svg {
+  position: relative;
+}
+/* Nothing to send yet: an unglazed chip rather than a faded glaze. */
+.composer-footer .composer-send:disabled {
+  background: var(--chip);
+  box-shadow:
+    var(--chip-shadow),
+    inset 0 0 0 1px var(--chip-border);
+  color: var(--text-tertiary);
+  opacity: 1;
+}
+.composer-send:disabled::before {
+  display: none;
 }
 @media (max-width: 540px) {
   .composer-controls {

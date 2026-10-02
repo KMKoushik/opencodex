@@ -2,12 +2,33 @@ export type Variant = 'light' | 'dark';
 
 export type Seed = { surface: string; ink: string; accent: string; contrast: number };
 
-export type Preset = {
+/** Colors a palette publishes beyond its three seeds. Anything not listed is derived. */
+export type Tones = {
+  error?: string;
+  success?: string;
+  /** Modified files and cautions such as full access. */
+  warning?: string;
+  /** Link text; defaults to the accent. */
+  link?: string;
+  /** Secondary panes such as the sidebar; derived from the surface when omitted. */
+  under?: string;
+};
+
+/** The review panel's own palette: prose stays on paper, code sits on ink. Always dark. */
+export type PanelPalette = Tones & { seed: Omit<Seed, 'contrast'> };
+
+export type Preset = Tones & {
   id: string;
   name: string;
   seed: Seed;
-  error?: string;
-  success?: string;
+  /** Primary actions are glazed in the foreground ink (default) or the accent. */
+  primary?: 'ink' | 'accent';
+  /** A dark review panel beside the conversation. When omitted the panel follows the theme. */
+  panel?: PanelPalette;
+  /** Shiki theme for code; `ink` derives a monochrome theme from the panel. */
+  syntax?: string;
+  /** Which coat the calico wears in this theme. */
+  art?: 'calico' | 'catppuccin';
 };
 
 export const defaultContrast = { light: 45, dark: 60 } satisfies Record<Variant, number>;
@@ -26,24 +47,113 @@ function preset(
   name: string,
   variant: Variant,
   [surface, ink, accent]: [string, string, string],
-  status: { error?: string; success?: string } = {},
+  extra: Omit<Preset, 'id' | 'name' | 'seed'> = {},
 ): Preset {
   return {
     id,
     name,
     seed: { surface, ink, accent, contrast: defaultContrast[variant] },
-    ...status,
+    ...extra,
   };
+}
+
+// The calico's ink half: one review panel shared by both OpenCodex themes.
+const calicoInk: PanelPalette = {
+  seed: { surface: '#111113', ink: '#f5f5f7', accent: '#f5f5f7' },
+  error: '#ff8f86',
+  success: '#7fdb97',
+  warning: '#e2b85a',
+};
+
+// Catppuccin's published palette (catppuccin.com/palette), the swatches this app uses.
+const catppuccin = {
+  latte: {
+    base: '#eff1f5',
+    mantle: '#e6e9ef',
+    crust: '#dce0e8',
+    text: '#4c4f69',
+    mauve: '#8839ef',
+    red: '#d20f39',
+    green: '#40a02b',
+    peach: '#fe640b',
+    yellow: '#df8e1d',
+    blue: '#1e66f5',
+  },
+  frappe: {
+    base: '#303446',
+    mantle: '#292c3c',
+    crust: '#232634',
+    text: '#c6d0f5',
+    mauve: '#ca9ee6',
+    red: '#e78284',
+    green: '#a6d189',
+    peach: '#ef9f76',
+    yellow: '#e5c890',
+    blue: '#8caaee',
+  },
+  macchiato: {
+    base: '#24273a',
+    mantle: '#1e2030',
+    crust: '#181926',
+    text: '#cad3f5',
+    mauve: '#c6a0f6',
+    red: '#ed8796',
+    green: '#a6da95',
+    peach: '#f5a97f',
+    yellow: '#eed49f',
+    blue: '#8aadf4',
+  },
+  mocha: {
+    base: '#1e1e2e',
+    mantle: '#181825',
+    crust: '#11111b',
+    text: '#cdd6f4',
+    mauve: '#cba6f7',
+    red: '#f38ba8',
+    green: '#a6e3a1',
+    peach: '#fab387',
+    yellow: '#f9e2af',
+    blue: '#89b4fa',
+  },
+};
+
+// One accent (mauve) for primary actions, Mantle for the sidebar, Crust for the review panel.
+// Latte borrows Mocha's panel, keeping code on ink in the light flavor too.
+function catppuccinPreset(flavor: keyof typeof catppuccin, name: string, variant: Variant) {
+  const c = catppuccin[flavor];
+  const ink = variant === 'light' ? catppuccin.mocha : c;
+  return preset(`catppuccin-${flavor}`, name, variant, [c.base, c.text, c.mauve], {
+    under: c.mantle,
+    error: c.red,
+    success: c.green,
+    warning: c.peach,
+    link: c.blue,
+    primary: 'accent',
+    panel: {
+      seed: { surface: ink.crust, ink: ink.text, accent: ink.mauve },
+      error: ink.red,
+      success: ink.green,
+      warning: ink.yellow,
+      link: ink.blue,
+    },
+    syntax: `catppuccin-${variant === 'light' ? 'mocha' : flavor}`,
+    art: 'catppuccin',
+  });
 }
 
 // Seed colors come from each theme's published palette. Every other color is derived.
 export const presets: Record<Variant, Preset[]> = {
   light: [
-    preset('opencodex-light', 'OpenCodex', 'light', ['#ffffff', '#1a1c1f', '#0169cc']),
-    preset('catppuccin-latte', 'Catppuccin Latte', 'light', ['#eff1f5', '#4c4f69', '#8839ef'], {
-      error: '#d20f39',
-      success: '#40a02b',
+    preset('opencodex-light', 'OpenCodex', 'light', ['#f9f9f8', '#18181a', '#18181a'], {
+      under: '#f1f1ef',
+      error: '#c0392b',
+      success: '#1e7a3a',
+      warning: '#9a5b00',
+      panel: calicoInk,
+      syntax: 'ink',
+      art: 'calico',
     }),
+    catppuccinPreset('latte', 'Catppuccin Latte', 'light'),
     preset('github-light', 'GitHub Light', 'light', ['#ffffff', '#1f2328', '#0969da'], {
       error: '#d1242f',
       success: '#1a7f37',
@@ -78,22 +188,18 @@ export const presets: Record<Variant, Preset[]> = {
     }),
   ],
   dark: [
-    preset('opencodex-dark', 'OpenCodex', 'dark', ['#181818', '#ffffff', '#339cff']),
-    preset('catppuccin-mocha', 'Catppuccin Mocha', 'dark', ['#1e1e2e', '#cdd6f4', '#cba6f7'], {
-      error: '#f38ba8',
-      success: '#a6e3a1',
+    preset('opencodex-dark', 'OpenCodex', 'dark', ['#1a1a1d', '#ededf0', '#ededf0'], {
+      under: '#141416',
+      error: '#ff7b72',
+      success: '#5fd47f',
+      warning: '#e2b85a',
+      panel: calicoInk,
+      syntax: 'ink',
+      art: 'calico',
     }),
-    preset(
-      'catppuccin-macchiato',
-      'Catppuccin Macchiato',
-      'dark',
-      ['#24273a', '#cad3f5', '#c6a0f6'],
-      { error: '#ed8796', success: '#a6da95' },
-    ),
-    preset('catppuccin-frappe', 'Catppuccin Frappé', 'dark', ['#303446', '#c6d0f5', '#ca9ee6'], {
-      error: '#e78284',
-      success: '#a6d189',
-    }),
+    catppuccinPreset('mocha', 'Catppuccin Mocha', 'dark'),
+    catppuccinPreset('macchiato', 'Catppuccin Macchiato', 'dark'),
+    catppuccinPreset('frappe', 'Catppuccin Frappé', 'dark'),
     preset('dracula', 'Dracula', 'dark', ['#282a36', '#f8f8f2', '#bd93f9'], {
       error: '#ff5555',
       success: '#50fa7b',

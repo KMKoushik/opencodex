@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { SourceCodeIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import type { LivePart } from './stream';
 import { ResponseMarks } from './response-marks';
 import { MarkdownImage } from './markdown-image';
@@ -35,11 +37,21 @@ export const StreamText = memo(function StreamText({
   const root = useRef<HTMLDivElement>(null);
   const components = useMemo<Components>(
     () => ({
-      a: ({ children, href }) => (
-        <a href={href} target="_blank" rel="noreferrer">
-          {children}
-        </a>
-      ),
+      a: ({ children, href }) => {
+        // Workspace references (no scheme) read as code: an icon, then the path.
+        const local = Boolean(href) && !/^([a-z][a-z\d+.-]*:|#)/i.test(href!);
+        return (
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className={local ? 'file-link' : undefined}
+          >
+            {local && <HugeiconsIcon icon={SourceCodeIcon} size={13} />}
+            {children}
+          </a>
+        );
+      },
       img: ({ src, alt }) => <MarkdownImage key={src} src={src} alt={alt} sessionID={sessionID} />,
     }),
     [sessionID],

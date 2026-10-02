@@ -1,6 +1,6 @@
 import { useRef, type KeyboardEvent, type ReactNode } from 'react';
 
-type Option<T extends string> = { value: T; label: string; icon?: ReactNode };
+type Option<T extends string> = { value: T; label: string; icon?: ReactNode; badge?: ReactNode };
 
 export function SegmentedControl<T extends string>({
   label,
@@ -39,6 +39,7 @@ export function SegmentedControl<T extends string>({
         >
           {option.icon}
           {option.label}
+          {option.badge !== undefined && <span className="segmented-badge">{option.badge}</span>}
         </button>
       ))}
     </div>

@@ -4,11 +4,15 @@ import { tags } from '@lezer/highlight';
 
 export const editorHighlighting = syntaxHighlighting(
   HighlightStyle.define([
-    { tag: [tags.keyword, tags.typeName, tags.className], color: 'var(--accent-text)' },
-    { tag: [tags.string, tags.regexp], color: 'var(--success)' },
+    {
+      tag: [tags.keyword, tags.typeName, tags.className],
+      color: 'var(--syntax-keyword)',
+      fontWeight: 'var(--syntax-keyword-weight)',
+    },
+    { tag: [tags.string, tags.regexp], color: 'var(--syntax-string)' },
     { tag: [tags.number, tags.bool, tags.null], color: 'var(--text)' },
-    { tag: [tags.comment, tags.meta], color: 'var(--text-tertiary)' },
-    { tag: [tags.punctuation, tags.operator], color: 'var(--text-secondary)' },
+    { tag: [tags.comment, tags.meta], color: 'var(--syntax-comment)' },
+    { tag: [tags.punctuation, tags.operator], color: 'var(--syntax-punctuation)' },
   ]),
 );
 

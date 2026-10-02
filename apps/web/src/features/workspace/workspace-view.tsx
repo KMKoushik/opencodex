@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/button';
 import { useConnection } from '../connection/use-connection';
 import { ProjectForm } from '../projects/project-form';
 import { shortcutProps } from '../shortcuts/commands';
+import { BrandIcon } from '../brand/brand';
 
 export function WorkspaceView({
   project,
@@ -65,7 +66,10 @@ export function WorkspaceView({
   }
 
   return (
-    <EmptyState title="Let’s build something" description={project.name}>
+    <EmptyState
+      title="What should we build?"
+      description="Any model, any provider. Your repo stays on your machine."
+    >
       <Button {...shortcutProps('chat.new')} onClick={onNewChat} disabled={creating}>
         {creating ? 'Creating…' : 'New chat'}
       </Button>
@@ -89,6 +93,7 @@ function EmptyState({
 }) {
   return (
     <div className="empty-state">
+      <BrandIcon size="large" className="hero-art" />
       <h1>{title}</h1>
       {description && <p>{description}</p>}
       {children && <div className="empty-actions">{children}</div>}

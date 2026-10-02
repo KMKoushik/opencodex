@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useStore } from 'zustand';
-import { ArrowUp02Icon, Attachment01Icon, StopIcon } from '@hugeicons/core-free-icons';
+import { ArrowUp02Icon, PlusSignIcon, StopIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
 import { useCommand } from '../shortcuts/use-command';
@@ -265,7 +265,7 @@ export function Composer({
             title="Attach images, PDFs, or text/code files"
             onClick={() => fileInput.current?.click()}
           >
-            <HugeiconsIcon icon={Attachment01Icon} size={18} />
+            <HugeiconsIcon icon={PlusSignIcon} size={18} />
           </Button>
           {controls}
           {running && (
@@ -283,6 +283,7 @@ export function Composer({
           <Button
             type="submit"
             size="icon"
+            className="composer-send"
             aria-label="Send message"
             title="Send message"
             disabled={!hasContent || sending || !ready}

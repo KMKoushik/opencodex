@@ -10,6 +10,8 @@ export type PanelContext = {
   active: boolean;
   /** Optional top-row content can be portalled here while active. */
   headerElement: HTMLDivElement | null;
+  /** Switches the workspace panel to another view, e.g. Files ↔ Changes. */
+  selectView?: (id: string) => void;
 };
 
 export type PanelDefinition = {

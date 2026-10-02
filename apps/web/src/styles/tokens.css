@@ -3,40 +3,75 @@
  * (see features/theme/theme.ts); these values are the default dark theme,
  * used only until the first theme is applied. Components use these names
  * only, never raw colors.
+ *
+ * Ceramic: glaze, chip, composer, and primary-glaze are gradients; their
+ * matching *-shadow tokens carry the top edge, hairline ring, and drop.
  */
 :root {
   color-scheme: dark;
-  --surface: #181818;
-  --surface-under: #141414;
-  --elevated: #232323;
-  --control: #2f2f2f;
-  --text: #ffffff;
-  --text-secondary: #bcbcbc;
-  --text-tertiary: #8a8a8a;
-  --border: rgb(255 255 255 / 0.084);
-  --border-heavy: rgb(255 255 255 / 0.156);
-  --hover: rgb(255 255 255 / 0.068);
-  --selected: rgb(255 255 255 / 0.1);
-  --secondary: rgb(255 255 255 / 0.052);
-  --secondary-hover: rgb(255 255 255 / 0.094);
-  --primary: #ffffff;
-  --primary-hover: #dfdfdf;
-  --on-primary: #181818;
-  --accent: #339cff;
-  --accent-soft: #1e3449;
-  --accent-text: #339cff;
-  --on-accent: #000000;
-  --error: #ff6764;
-  --success: #40c977;
-  --project-gray: #676767;
-  --project-blue: #397be5;
-  --project-green: #32815d;
-  --project-orange: #cf713c;
-  --project-pink: #c74795;
-  --project-purple: #7250d8;
+  --project-gray: #5e5e5e;
+  --project-blue: #356fcd;
+  --project-green: #2f7555;
+  --project-orange: #b96738;
+  --project-pink: #b24287;
+  --project-purple: #674ac2;
   --on-project: #ffffff;
+  --surface: #1a1a1d;
+  --surface-under: #141416;
+  --elevated: #242427;
+  --control: #2f2f32;
+  --text: #ededf0;
+  --text-secondary: #b0b0b3;
+  --text-tertiary: #828285;
+  --border: rgb(237 237 240 / 0.084);
+  --border-heavy: rgb(237 237 240 / 0.156);
+  --hover: rgb(237 237 240 / 0.068);
+  --selected: rgb(237 237 240 / 0.1);
+  --secondary: rgb(237 237 240 / 0.052);
+  --secondary-hover: rgb(237 237 240 / 0.094);
+  --primary: #ededf0;
+  --primary-hover: #cfcfd2;
+  --on-primary: #1a1a1d;
+  --accent: #ededf0;
+  --accent-soft: #464649;
+  --accent-text: #ededf0;
+  --on-accent: #000000;
+  --error: #ff7b72;
+  --success: #5fd47f;
+  --warning: #e2b85a;
+  --link: #ededf0;
+  --link-underline: rgb(237 237 240 / 0.4);
   --scrim: rgb(0 0 0 / 0.5);
   --shadow: 0 12px 32px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.25);
+  --bubble: #28282b;
+  --code-bg: rgb(237 237 240 / 0.08);
+  --wordmark-muted: #7d7d80;
+  --glaze: linear-gradient(180deg, #262629 0%, #202023 100%);
+  --glaze-shadow:
+    inset 0 1px 0 rgb(237 237 240 / 0.07), 0 0 0 1px rgb(237 237 240 / 0.08),
+    0 1px 3px rgb(0 0 0 / 0.35);
+  --chip: linear-gradient(180deg, #2b2b2e 0%, #232326 100%);
+  --chip-border: rgb(237 237 240 / 0.09);
+  --chip-shadow: inset 0 1px 0 rgb(237 237 240 / 0.07), 0 1px 1px rgb(0 0 0 / 0.2);
+  --composer: linear-gradient(180deg, #222225 0%, #1d1d20 100%);
+  --composer-shadow:
+    inset 0 1px 0 rgb(237 237 240 / 0.07), 0 0 0 1px rgb(237 237 240 / 0.08),
+    0 10px 28px rgb(0 0 0 / 0.35), 0 2px 5px rgb(0 0 0 / 0.25);
+  --well: #121214;
+  --well-shadow: inset 0 1px 2px rgb(0 0 0 / 0.7);
+  --primary-glaze: linear-gradient(180deg, #ffffff 0%, #e8e8eb 55%, #d3d3d6 100%);
+  --primary-shadow:
+    inset 0 1px 0 #ffffff, inset 0 -2px 3px rgb(0 0 0 / 0.12), 0 1px 2px rgb(0 0 0 / 0.5),
+    0 3px 8px rgb(0 0 0 / 0.35);
+  --primary-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.65) 0%, rgb(255 255 255 / 0) 100%);
+  --syntax-keyword: #ededf0;
+  --syntax-keyword-weight: 400;
+  --syntax-string: #5fd47f;
+  --syntax-comment: #828285;
+  --syntax-punctuation: #b0b0b3;
+
+  /* The page's own glaze, still reachable from inside .ink (e.g. the seam grip). */
+  --paper-glaze: var(--glaze);
 
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono:
@@ -49,4 +84,70 @@
 
 :root[data-platform] {
   --row-height: 30px;
+}
+
+/*
+ * The calico split: prose on paper, code on ink. Inside .ink, every semantic
+ * token resolves to the review panel palette (--ink-*), which themes without
+ * a panel of their own set equal to the page tokens. Keep this list in sync
+ * with the tokens derived in features/theme/theme.ts.
+ */
+.ink {
+  color-scheme: var(--ink-scheme, dark);
+  /* Inherited text was computed on the page; restate it from the ink tokens. */
+  color: var(--text);
+  --project-gray: var(--ink-project-gray);
+  --project-blue: var(--ink-project-blue);
+  --project-green: var(--ink-project-green);
+  --project-orange: var(--ink-project-orange);
+  --project-pink: var(--ink-project-pink);
+  --project-purple: var(--ink-project-purple);
+  --on-project: var(--ink-on-project);
+  --surface: var(--ink-surface);
+  --surface-under: var(--ink-surface-under);
+  --elevated: var(--ink-elevated);
+  --control: var(--ink-control);
+  --text: var(--ink-text);
+  --text-secondary: var(--ink-text-secondary);
+  --text-tertiary: var(--ink-text-tertiary);
+  --border: var(--ink-border);
+  --border-heavy: var(--ink-border-heavy);
+  --hover: var(--ink-hover);
+  --selected: var(--ink-selected);
+  --secondary: var(--ink-secondary);
+  --secondary-hover: var(--ink-secondary-hover);
+  --primary: var(--ink-primary);
+  --primary-hover: var(--ink-primary-hover);
+  --on-primary: var(--ink-on-primary);
+  --accent: var(--ink-accent);
+  --accent-soft: var(--ink-accent-soft);
+  --accent-text: var(--ink-accent-text);
+  --on-accent: var(--ink-on-accent);
+  --error: var(--ink-error);
+  --success: var(--ink-success);
+  --warning: var(--ink-warning);
+  --link: var(--ink-link);
+  --link-underline: var(--ink-link-underline);
+  --scrim: var(--ink-scrim);
+  --shadow: var(--ink-shadow);
+  --bubble: var(--ink-bubble);
+  --code-bg: var(--ink-code-bg);
+  --wordmark-muted: var(--ink-wordmark-muted);
+  --glaze: var(--ink-glaze);
+  --glaze-shadow: var(--ink-glaze-shadow);
+  --chip: var(--ink-chip);
+  --chip-border: var(--ink-chip-border);
+  --chip-shadow: var(--ink-chip-shadow);
+  --composer: var(--ink-composer);
+  --composer-shadow: var(--ink-composer-shadow);
+  --well: var(--ink-well);
+  --well-shadow: var(--ink-well-shadow);
+  --primary-glaze: var(--ink-primary-glaze);
+  --primary-shadow: var(--ink-primary-shadow);
+  --primary-sheen: var(--ink-primary-sheen);
+  --syntax-keyword: var(--ink-syntax-keyword);
+  --syntax-keyword-weight: var(--ink-syntax-keyword-weight);
+  --syntax-string: var(--ink-syntax-string);
+  --syntax-comment: var(--ink-syntax-comment);
+  --syntax-punctuation: var(--ink-syntax-punctuation);
 }

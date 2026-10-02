@@ -16,7 +16,7 @@
   width: 36px;
   height: 36px;
   flex: none;
-  border-radius: 6px;
+  border-radius: 10px;
   color: var(--text-tertiary);
 }
 .wb-rail-badge {
@@ -42,9 +42,11 @@
   background: var(--surface);
   color: var(--error);
 }
+/* The open view is a raised ceramic tile. */
 .wb-rail > button[aria-pressed='true'] {
   color: var(--text);
-  background: var(--selected);
+  background: var(--glaze);
+  box-shadow: var(--glaze-shadow);
 }
 @media (hover: hover) {
   .wb-rail > button:hover {

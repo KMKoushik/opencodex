@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
 import { useQuery } from '@tanstack/react-query';
 import { CodeView } from '@pierre/diffs/react';
@@ -9,19 +10,45 @@ import type {
   SelectedLineRange,
 } from '@pierre/diffs';
 import { api } from '../../lib/api';
-import { useTheme } from '../theme/use-theme';
+import { useSyntaxTheme } from '../theme/use-theme';
+import { diffThemes } from './syntax';
 import { QueryError } from './query-error';
 import { Annotation, type AnnotationTarget } from './annotation';
 import { useDraftStore } from '../chat/draft-context';
 import { EMPTY_COMMENTS, type ReviewComment } from '../chat/review-comments';
 import { CommentCard } from '../chat/comment-editor';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { LayoutTwoColumnIcon, Menu01Icon } from '@hugeicons/core-free-icons';
 import { Button } from '../../components/ui/button';
+import { SegmentedControl } from '../../components/ui/segmented-control';
 import { diffComment } from './diff-comment';
 
-const diffCSS = `:host { --diffs-font-family: var(--font-mono); --diffs-font-size: 12px; --diffs-line-height: 22px;
- --diffs-bg: var(--surface); --diffs-fg: var(--text); --diffs-addition-color: var(--success); --diffs-deletion-color: var(--error); }
- [data-diffs-header] { display: none; }
+const diffCSS = `:host { --diffs-font-family: var(--font-mono); --diffs-header-font-family: var(--font-sans);
+ --diffs-font-size: 12.5px; --diffs-line-height: 20px;
+ --diffs-bg: var(--surface); --diffs-fg: var(--text); --diffs-addition-color: var(--success); --diffs-deletion-color: var(--error);
+ --diffs-modified-color: var(--warning); --diffs-fg-number-override: var(--text-tertiary);
+ --diffs-bg-context-override: var(--surface); --diffs-bg-context-gutter-override: var(--surface);
+ --diffs-bg-separator-override: var(--secondary); }
+ [data-diffs-header] { min-height: 40px; padding-inline: 14px 12px; background: var(--secondary);
+   border-bottom: 1px solid var(--border); }
+ [data-diffs-header] [data-title] { font-size: 12.5px; }
+ [data-metadata] { display: flex; gap: 6px; }
+ [data-additions-count] { order: 1; }
+ [data-deletions-count] { order: 2; }
 `;
+const layouts = [
+  {
+    value: 'unified' as const,
+    label: 'Unified',
+    icon: <HugeiconsIcon icon={Menu01Icon} size={14} />,
+  },
+  {
+    value: 'split' as const,
+    label: 'Split',
+    icon: <HugeiconsIcon icon={LayoutTwoColumnIcon} size={14} />,
+  },
+];
+
 export function DiffPreview({
   directory,
   path,
@@ -31,6 +58,7 @@ export function DiffPreview({
   live,
   style,
   onStyleChange,
+  toolbarElement,
 }: {
   directory: string;
   path: string;
@@ -40,6 +68,8 @@ export function DiffPreview({
   live: boolean;
   style: 'unified' | 'split';
   onStyleChange: (style: 'unified' | 'split') => void;
+  /** When set, the layout and comment controls render in the review toolbar instead. */
+  toolbarElement?: HTMLElement | null;
 }) {
   const query = useQuery({
     queryKey: ['workspace', 'diff', directory, mode, path],
@@ -48,7 +78,7 @@ export function DiffPreview({
     refetchInterval: live ? false : 15_000,
   });
   const patch = query.data?.patch;
-  const { variant } = useTheme();
+  const syntax = useSyntaxTheme();
   const [parsed, setParsed] = useState<{
     source: string;
     file?: FileDiffMetadata;
@@ -140,10 +170,11 @@ export function DiffPreview({
   }, [file, path, directory, mode, comments, pending]);
   const options = useMemo(
     () => ({
-      theme: { dark: 'pierre-dark' as const, light: 'pierre-light' as const },
-      themeType: variant,
+      theme: diffThemes(syntax),
+      themeType: syntax.type,
+      diffIndicators: 'bars' as const,
+      lineDiffType: 'word-alt' as const,
       diffStyle: style,
-      disableFileHeader: true,
       enableLineSelection: !pending,
       enableGutterUtility: !pending,
       onGutterUtilityClick: beginComment,
@@ -153,36 +184,41 @@ export function DiffPreview({
       maxLineDiffLength: 2000,
       hunkSeparators: 'line-info' as const,
     }),
-    [variant, style, pending, beginComment],
+    [syntax, style, pending, beginComment],
   );
   const range = selection?.range;
+  const controls = (
+    <>
+      <SegmentedControl
+        label="Diff layout"
+        value={style}
+        options={layouts}
+        onChange={onStyleChange}
+      />
+      <div className="wb-actions">
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={!selection}
+          onClick={() => range && beginComment(range)}
+        >
+          Comment
+        </Button>
+        {query.data?.status !== 'deleted' && (
+          <Button variant="ghost" size="sm" onClick={onOpenFile}>
+            Edit file
+          </Button>
+        )}
+      </div>
+    </>
+  );
   return (
     <div className="wb-diff-preview">
-      <div className="wb-subtoolbar">
-        <select
-          aria-label="Diff layout"
-          value={style}
-          onChange={(event) => onStyleChange(event.target.value as typeof style)}
-        >
-          <option value="unified">Unified</option>
-          <option value="split">Split</option>
-        </select>
-        <div className="wb-actions">
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!selection}
-            onClick={() => range && beginComment(range)}
-          >
-            Comment
-          </Button>
-          {query.data?.status !== 'deleted' && (
-            <Button variant="ghost" size="sm" onClick={onOpenFile}>
-              Edit file
-            </Button>
-          )}
-        </div>
-      </div>
+      {toolbarElement ? (
+        createPortal(controls, toolbarElement)
+      ) : (
+        <div className="wb-subtoolbar">{controls}</div>
+      )}
       <QueryError query={query} />
       {parsed?.source === patch && parsed?.error && (
         <p className="wb-empty" role="alert">

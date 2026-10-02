@@ -18,16 +18,16 @@ import { MessageAttachments } from './message-attachments';
 import { reviewPrompt } from './review-comments';
 import { localCommands, parseSlash, useSlashCommands } from './slash-commands';
 import { SessionViewed } from '../sessions/session-viewed';
+import { BrandIcon } from '../brand/brand';
+import { Starters } from './starters';
 
 export function ChatView({
   sessionID,
   live,
-  projectName,
   onOpenSession,
 }: {
   sessionID: string;
   live: boolean;
-  projectName?: string;
   onOpenSession: (id: string) => void;
 }) {
   const client = useQueryClient();
@@ -311,8 +311,10 @@ export function ChatView({
       )}
       {empty ? (
         <div className="chat-empty">
-          <h2>Let’s build something</h2>
-          <p>{projectName || 'Start a new thread'}</p>
+          <BrandIcon size="large" className="hero-art" />
+          <h2>What should we build?</h2>
+          <p>Any model, any provider. Your repo stays on your machine.</p>
+          <Starters sessionID={sessionID} />
         </div>
       ) : chat.messages.data ? (
         <Timeline

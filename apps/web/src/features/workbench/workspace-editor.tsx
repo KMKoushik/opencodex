@@ -7,6 +7,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Cancel01Icon, File01Icon, FileEditIcon, RefreshIcon } from '@hugeicons/core-free-icons';
 import { api } from '../../lib/api';
 import { Button } from '../../components/ui/button';
+import { SegmentedControl } from '../../components/ui/segmented-control';
 import { WorkspaceTree } from './file-tree';
 import { FilePreview } from './file-preview';
 import { QueryError } from './query-error';
@@ -31,6 +32,7 @@ export function WorkspaceEditor({
   view,
   active,
   headerElement,
+  selectView,
 }: {
   directory: string;
   sessionID: string;
@@ -38,6 +40,7 @@ export function WorkspaceEditor({
   view: 'files' | 'changes';
   active: boolean;
   headerElement: HTMLDivElement | null;
+  selectView?: (id: string) => void;
 }) {
   const [mode, setMode] = useState<'working' | 'branch'>('working');
   const [diffStyle, setDiffStyle] = useState<'unified' | 'split'>('unified');
@@ -50,6 +53,7 @@ export function WorkspaceEditor({
     setTreeVisible(true);
   }
   const [treeWidth, setTreeWidth] = useState(220);
+  const [toolbarSlot, setToolbarSlot] = useState<HTMLDivElement | null>(null);
   const tree = useRef<HTMLElement>(null);
   const drag = useRef<{ x: number; width: number } | null>(null);
   const store = useEditorDrafts();
@@ -193,15 +197,34 @@ export function WorkspaceEditor({
         )}
       <div className="wb-editor-layout" data-tree={treeVisible}>
         <div className="wb-document">
-          <div className="wb-breadcrumbs">
-            <nav aria-label="File breadcrumbs">
-              {parts.map((part, index) => (
-                <span key={index}>
-                  {index > 0 && <span className="wb-breadcrumb-separator">›</span>}
-                  {part}
+          <div className="wb-breadcrumbs" data-view={view}>
+            {view === 'changes' ? (
+              // The review toolbar: what is compared, its totals, then the open diff's controls.
+              <>
+                <select
+                  aria-label="Changes comparison"
+                  value={mode}
+                  onChange={(event) => setMode(event.target.value as typeof mode)}
+                >
+                  <option value="working">Uncommitted</option>
+                  <option value="branch">Base branch</option>
+                </select>
+                <span className="wb-totals">
+                  <span className="wb-added">+{total.additions.toLocaleString()}</span>
+                  <span className="wb-removed">−{total.deletions.toLocaleString()}</span>
                 </span>
-              ))}
-            </nav>
+                <div className="wb-toolbar-slot" ref={setToolbarSlot} />
+              </>
+            ) : (
+              <nav aria-label="File breadcrumbs">
+                {parts.map((part, index) => (
+                  <span key={index}>
+                    {index > 0 && <span className="wb-breadcrumb-separator">›</span>}
+                    {part}
+                  </span>
+                ))}
+              </nav>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -244,6 +267,7 @@ export function WorkspaceEditor({
                     onStyleChange={setDiffStyle}
                     sessionID={sessionID}
                     live={live}
+                    toolbarElement={view === 'changes' ? toolbarSlot : null}
                     onOpenFile={() => open(current.path, 'file', true)}
                   />
                 </DiffPool>
@@ -298,9 +322,25 @@ export function WorkspaceEditor({
             }}
           />
           <div className="wb-explorer-heading">
-            <span>
-              {view === 'changes' ? 'Changes' : directory.split('/').filter(Boolean).at(-1)}
-            </span>
+            {selectView ? (
+              <SegmentedControl
+                label="Workspace view"
+                value={view}
+                options={[
+                  { value: 'files', label: 'All files' },
+                  {
+                    value: 'changes',
+                    label: 'Changes',
+                    badge: changes.isSuccess ? statuses.length : undefined,
+                  },
+                ]}
+                onChange={selectView}
+              />
+            ) : (
+              <span>
+                {view === 'changes' ? 'Changes' : directory.split('/').filter(Boolean).at(-1)}
+              </span>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -312,16 +352,6 @@ export function WorkspaceEditor({
           </div>
           {view === 'changes' && (
             <>
-              <div className="wb-comparison">
-                <select
-                  aria-label="Changes comparison"
-                  value={mode}
-                  onChange={(event) => setMode(event.target.value as typeof mode)}
-                >
-                  <option value="working">Uncommitted changes</option>
-                  <option value="branch">Base branch changes</option>
-                </select>
-              </div>
               <QueryError query={changes} />
               {changes.isSuccess && !statuses.length && <p className="wb-notice">No changes.</p>}
             </>

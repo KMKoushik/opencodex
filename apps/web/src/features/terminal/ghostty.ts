@@ -9,8 +9,9 @@ export function loadGhostty() {
   }));
 }
 
-export function terminalTheme() {
-  const style = getComputedStyle(document.documentElement);
+/** Terminal colors from the tokens in effect at `element` (the review panel may be ink). */
+export function terminalTheme(element: Element = document.documentElement) {
+  const style = getComputedStyle(element);
   const token = (name: string) => style.getPropertyValue(`--${name}`).trim();
   return {
     background: token('surface'),

@@ -1,0 +1,6 @@
+.wordmark-open {
+  fill: var(--wordmark-muted);
+}
+.wordmark-codex {
+  fill: var(--text);
+}
