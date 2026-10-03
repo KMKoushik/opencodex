@@ -45,14 +45,24 @@
   text-align: left;
   color: var(--text-secondary);
 }
-.subagent-row > svg {
+.subagent-avatar {
+  display: grid;
+  place-items: center;
   flex: none;
-  height: 20px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.subagent-row > svg {
+  align-self: center;
+  color: var(--text-tertiary);
 }
 .subagent-row-info {
   flex: 1;
   min-width: 0;
-  font-size: 14px;
+  font-size: var(--chat-font-size);
 }
 .subagent-meta {
   display: flex;
@@ -65,7 +75,7 @@
   flex: none;
 }
 .subagent-meta [data-status='running'] {
-  color: var(--accent-text);
+  color: var(--text-secondary);
 }
 .subagent-meta [data-status='failed'] {
   color: var(--error);
@@ -113,7 +123,7 @@
   flex: none;
 }
 .subagent-reader {
-  font-size: 14px;
+  font-size: var(--chat-font-size);
 }
 .subagent-reader .timeline-row,
 .subagent-reader .timeline-footer {

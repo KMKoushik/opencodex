@@ -4,6 +4,7 @@ import {
   ArrowDown01Icon,
   ArrowRight01Icon,
   Cancel01Icon,
+  Folder01Icon,
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useQuery } from '@tanstack/react-query';
@@ -59,8 +60,8 @@ export function ProjectList({
     return metadata ? projectFolder(metadata) : project;
   });
   return (
-    <nav className="project-list" aria-label="Projects">
-      <div className="sidebar-heading">Threads</div>
+    <nav className="project-list scrollbar-on-hover" aria-label="Projects">
+      <div className="sidebar-heading">Projects</div>
       {opened.length > 0 && projects.isError && (
         <div className="sidebar-note" role="alert">
           <p>{projects.error.message}</p>
@@ -90,11 +91,21 @@ export function ProjectList({
                   if (!expanded && !active) onSelect(project);
                 }}
               >
-                <HugeiconsIcon icon={expanded ? ArrowDown01Icon : ArrowRight01Icon} size={12} />
-                <ProjectIcon
-                  name={project.name}
-                  icon={projects.data?.get(project.directory)?.icon}
-                />
+                <span className="project-folder">
+                  {projects.data?.get(project.directory)?.icon ? (
+                    <ProjectIcon
+                      name={project.name}
+                      icon={projects.data?.get(project.directory)?.icon}
+                    />
+                  ) : (
+                    <HugeiconsIcon icon={Folder01Icon} size={16} />
+                  )}
+                  <HugeiconsIcon
+                    className="project-chevron"
+                    icon={expanded ? ArrowDown01Icon : ArrowRight01Icon}
+                    size={12}
+                  />
+                </span>
                 <span className="truncate">{project.name}</span>
               </button>
               <Button

@@ -187,6 +187,9 @@ function derive(
     text: css(ink),
     'text-secondary': css(secondary),
     'text-tertiary': css(tertiary),
+    'activity-shimmer-base': css(mix(surface, tertiary, light ? 0.65 : 0.95)),
+    'activity-shimmer-highlight': css(light ? tertiary : ink),
+    'user-message': css(mix(surface, light ? accent : ink, light ? 0.12 : 0.08 + c * 0.04)),
     border: alpha(ink, 0.06 + c * 0.04),
     'border-heavy': alpha(ink, (light ? 0.09 : 0.12) + c * 0.06),
     hover: alpha(ink, (light ? 0.04 : 0.05) + c * 0.03),
@@ -209,6 +212,7 @@ function derive(
     shadow: light
       ? '0 12px 32px rgb(0 0 0 / 0.1), 0 2px 6px rgb(0 0 0 / 0.05)'
       : '0 12px 32px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.25)',
+    'card-shadow': `0 2px 8px ${drop(light ? 0.04 : 0.2)}, 0 8px 24px ${drop(light ? 0.04 : 0.15)}`,
     bubble: css(sink(light ? 0.055 : 0.065)),
     'code-bg': alpha(ink, light ? 0.06 : 0.08),
     'wordmark-muted': css(mix(surface, ink, 0.47)),

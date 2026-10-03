@@ -1,4 +1,5 @@
 import { clipboard, dialog, Menu, shell, type BrowserWindow } from 'electron';
+import { showTextMenu } from './context-menu';
 
 function isWebLink(value: string) {
   try {
@@ -33,8 +34,12 @@ export function registerLinkHandlers(window: BrowserWindow, origin: string) {
     event.preventDefault();
     openLink(url);
   });
-  window.webContents.on('context-menu', (_event, { linkURL }) => {
-    if (!linkURL) return;
+  window.webContents.on('context-menu', (_event, params) => {
+    const { linkURL } = params;
+    if (params.isEditable || !linkURL) {
+      showTextMenu(window, params, openLink);
+      return;
+    }
     Menu.buildFromTemplate([
       { label: 'Open link', enabled: isWebLink(linkURL), click: () => openLink(linkURL) },
       {

@@ -12,6 +12,7 @@ import type {
   FormInfo,
   PromptFileAttachment,
   OpenCodeProject,
+  FileDiffInfo,
 } from '../packages/contracts/src';
 
 const pngBase64 =
@@ -59,6 +60,7 @@ async function fixture(directory: string) {
     },
   ];
   const messages: SessionMessageInfo[] = [];
+  const diffs: FileDiffInfo[] = [];
   const models = [
     {
       id: 'fixture-model',
@@ -159,6 +161,8 @@ async function fixture(directory: string) {
       res.end(JSON.stringify({ version: '2.0.19', pid: 1, urls: [], paths: { tmp: directory } }));
       return;
     }
+    if (url.pathname === '/api/vcs/diff')
+      return res.end(JSON.stringify({ location: { directory }, data: diffs }));
     if (url.pathname === '/api/session') {
       if (req.method === 'POST') {
         let body = '';
@@ -175,7 +179,22 @@ async function fixture(directory: string) {
         sessions.unshift(session);
         return res.end(JSON.stringify({ data: session }));
       }
-      res.end(JSON.stringify({ data: sessions, cursor: {} }));
+      const search = url.searchParams.get('search')?.toLowerCase();
+      const parentID = url.searchParams.get('parentID');
+      const items = sessions
+        .filter((session) =>
+          parentID && parentID !== 'null' ? session.parentID === parentID : !session.parentID,
+        )
+        .filter((session) => !search || session.title?.toLowerCase().includes(search));
+      const cursor = url.searchParams.get('cursor');
+      const start = cursor ? items.findIndex((session) => session.id === cursor) : 0;
+      const limit = Number(url.searchParams.get('limit') ?? items.length);
+      res.end(
+        JSON.stringify({
+          data: items.slice(start, start + limit),
+          cursor: { next: items[start + limit]?.id },
+        }),
+      );
       return;
     }
     if (url.pathname === '/api/session/active')
@@ -269,6 +288,12 @@ async function fixture(directory: string) {
       }
       if (url.pathname.endsWith('/interrupt')) {
         running = false;
+        messages.push({
+          id: `idle-${messages.length}`,
+          type: 'idle',
+          outcome: 'interrupted',
+          time: { created: Date.now() },
+        });
         changed();
         return res.end(JSON.stringify({ interrupted: true }));
       }
@@ -284,6 +309,8 @@ async function fixture(directory: string) {
     messageRequests,
     sessions,
     projects,
+    diffs,
+    emit,
     seedLink(url: string) {
       messages.push({
         id: 'link-message',
@@ -296,11 +323,12 @@ async function fixture(directory: string) {
     },
     seedHistory(turns: number) {
       for (let i = 0; i < turns; i++) {
+        const created = i * 60_000;
         messages.push({
           id: `history-user-${i}`,
           type: 'user',
           text: `Review change ${i}`,
-          time: { created: i },
+          time: { created },
         });
         for (let step = 0; step < 2; step++)
           messages.push({
@@ -308,14 +336,17 @@ async function fixture(directory: string) {
             type: 'assistant',
             agent: 'build',
             model: { id: 'fixture-model', providerID: 'fixture' },
-            time: { created: i, completed: i + 1 },
+            time: { created: created + step * 13_000, completed: created + (step + 1) * 13_000 },
             content: [
               { type: 'reasoning', text: 'Inspect the relevant files and verify the change.' },
               ...Array.from({ length: 3 }, (_, j): SessionMessageAssistantTool => ({
                 type: 'tool' as const,
                 id: `history-tool-${i}-${step}-${j}`,
                 name: 'read',
-                time: { created: i, completed: i + 1 },
+                time: {
+                  created: created + step * 13_000,
+                  completed: created + (step + 1) * 13_000,
+                },
                 state: {
                   status: 'completed' as const,
                   input: { path: `src/feature-${step}-${j}.ts` },
@@ -329,7 +360,7 @@ async function fixture(directory: string) {
           type: 'assistant',
           agent: 'build',
           model: { id: 'fixture-model', providerID: 'fixture' },
-          time: { created: i, completed: i + 1 },
+          time: { created: created + 26_000, completed: created + 27_000 },
           content: [
             {
               type: 'text',
@@ -345,6 +376,33 @@ async function fixture(directory: string) {
         stream.write(
           `data: ${JSON.stringify({ type: 'session.renamed', data: { sessionID, title: sessions[0]!.title } })}\n\n`,
         );
+    },
+    work(
+      content: Extract<SessionMessageInfo, { type: 'assistant' }>['content'],
+      created = Date.now(),
+    ) {
+      let message = messages.find((item) => item.id === 'activity-assistant');
+      if (!message || message.type !== 'assistant') {
+        message = {
+          type: 'assistant',
+          id: 'activity-assistant',
+          agent: 'build',
+          model: { id: 'fixture-model', providerID: 'fixture' },
+          time: { created },
+          content,
+        };
+        messages.push(message);
+      }
+      message.content = content;
+      running = true;
+      changed();
+    },
+    compaction(message: Extract<SessionMessageInfo, { type: 'compaction' }>) {
+      const index = messages.findIndex((item) => item.id === message.id);
+      if (index < 0) messages.push(message);
+      else messages[index] = message;
+      running = message.status === 'running';
+      changed();
     },
     startText() {
       messages.push({
@@ -389,6 +447,12 @@ async function fixture(directory: string) {
       ];
       message.time.completed = Date.now();
       running = false;
+      messages.push({
+        id: `idle-${messages.length}`,
+        type: 'idle',
+        outcome: 'succeeded',
+        time: { created: Date.now() },
+      });
       emit({
         type: 'session.text.ended',
         data: { sessionID, assistantMessageID: message.id, ordinal: 0, text },
@@ -766,9 +830,27 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
     await expect(projects.locator('.project-row')).toHaveCount(1);
     await page.getByRole('button', { name: 'Explore the project' }).click();
     await expect(page.getByRole('heading', { name: 'Explore the project' })).toBeVisible();
+    await expect(page.locator('.sidebar-rail')).toHaveCount(0);
+    await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Keep my draft');
+    await page.getByRole('button', { name: 'Search threads', exact: true }).click();
+    const search = page.getByRole('dialog', { name: 'Search threads', exact: true });
+    await search
+      .getByRole('searchbox', { name: 'Search threads', exact: true })
+      .fill('no matching title');
+    await expect(search.getByText('No threads match your search.')).toBeVisible();
+    await search.getByRole('searchbox', { name: 'Search threads', exact: true }).fill('Explore');
+    await search.getByRole('button', { name: /^Explore the project/ }).click();
+    await expect(search).toHaveCount(0);
+    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue(
+      'Keep my draft',
+    );
     await page.getByRole('button', { name: 'Settings' }).click();
     await expect(page.getByText('Connected · v2.0.19')).toBeVisible();
     await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Go back', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Explore the project' })).toBeVisible();
+    await page.getByRole('button', { name: 'Go forward', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Back to app' }).click();
     upstream.update();
     await expect(
@@ -783,8 +865,10 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
       projects.getByRole('button', { name: 'Old project name', exact: true }),
     ).toHaveCount(0);
     await page.keyboard.press('ControlOrMeta+n');
-    await expect(page.getByRole('heading', { name: 'New chat', exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Let’s build something' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Rename conversation: New chat', exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'What should we build?' })).toBeVisible();
     expect(upstream.sessions[0]?.agent).toBe('build');
     await expect(page.locator('.composer')).not.toContainText(/\b(build|plan)\b/i);
     const selectionRequests: string[] = [];
@@ -900,12 +984,13 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
     await page.screenshot({ path: info.outputPath('chat-requests.png') });
     await page.getByRole('button', { name: 'Allow once' }).click();
     await expect.poll(() => upstream.decision).toBe('once');
-    await page.getByRole('combobox', { name: 'Scope', exact: true }).selectOption('all');
-    await page.getByRole('button', { name: 'Submit', exact: true }).click();
+    await page.getByRole('radio', { name: 'Whole project', exact: true }).check();
+    await page.getByRole('button', { name: 'Review answers', exact: true }).click();
+    await page.getByRole('button', { name: 'Send answers ↵', exact: true }).click();
     await expect.poll(() => upstream.answer).toEqual({ scope: 'all' });
     upstream.finishText('Here is the **streaming response**.');
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).not.toBeVisible();
-    await page.getByRole('button', { name: 'Read 1 file', exact: true }).click();
+    await page.getByRole('button', { name: /^Worked for / }).click();
     await page.getByRole('button', { name: /Read README.md/ }).click();
     await expect(page.getByText('Project README contents')).toBeVisible();
     upstream.reconnect();
@@ -987,6 +1072,289 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
   }
 });
 
+test('workspace: responsive native-data summary and native scrollbars', async ({ page }, info) => {
+  const directory = info.outputPath('project');
+  const upstream = await fixture(directory);
+  upstream.seedHistory(60);
+  const parent = upstream.sessions[0]!;
+  const child = (index: number): SessionInfo => ({
+    ...parent,
+    id: `summary-child-${index}`,
+    title: `Review task ${index}`,
+    parentID: parent.id,
+    outcome: 'succeeded',
+  });
+  upstream.sessions.push(...Array.from({ length: 3 }, (_, index) => child(index)));
+  upstream.diffs.push({
+    file: 'src/summary.tsx',
+    patch: '@@ -1 +1 @@\n-old\n+new\n',
+    additions: 258,
+    deletions: 35,
+    status: 'modified',
+  });
+  const previous = process.env.OPENCODE_URL;
+  process.env.OPENCODE_URL = upstream.url;
+  const gateway = await startGateway({ assets: resolve('apps/web/dist') });
+  const reads: string[] = [];
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('request', (request) => {
+    if (/\/workspace\/diff|\/subagents/.test(request.url())) reads.push(request.url());
+  });
+  try {
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.goto(gateway.url);
+    await page.getByLabel('Project directory', { exact: true }).fill(directory);
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await page.getByRole('button', { name: 'Explore the project' }).click();
+    await expect(page.getByRole('heading', { name: 'Change 59', exact: true })).toBeVisible();
+    expect(reads).toEqual([]);
+
+    const column = page.locator('.chat-column');
+    const card = page.locator('.thread-summary-card');
+    const toggle = page.getByRole('button', { name: 'Thread summary', exact: true });
+    await page.setViewportSize({ width: 1444, height: 1000 });
+    await expect(column).toHaveAttribute('data-summary', 'shift');
+    await expect(card.getByRole('button', { name: /^Changes/ })).toHaveText('Changes+258−35');
+    await expect(card.getByRole('button', { name: '3 done', exact: true })).toBeVisible();
+    const bounds = await page.evaluate(() => ({
+      column: document.querySelector('.chat-column')!.getBoundingClientRect().left,
+      composer: document.querySelector('.composer-area')!.getBoundingClientRect().toJSON(),
+      card: document.querySelector('.thread-summary-inline')!.getBoundingClientRect().left,
+    }));
+    expect(bounds.composer.left).toBeGreaterThanOrEqual(bounds.column);
+    expect(bounds.composer.right).toBeLessThan(bounds.card);
+    await page.screenshot({ path: info.outputPath('summary-shift-light.png') });
+
+    await toggle.click();
+    await expect(card).toHaveCount(0);
+    await expect(page.locator('.composer-area')).toHaveCSS('transform', 'none');
+    await toggle.click();
+    await expect(card.getByRole('button', { name: '3 done', exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 2000, height: 1000 });
+    await expect(column).toHaveAttribute('data-summary', 'gutter');
+    await expect(page.locator('.composer-area')).toHaveCSS('transform', 'none');
+
+    const scroll = page.locator('.timeline-scroll');
+    await page.getByRole('button', { name: 'Hide sidebar', exact: true }).focus();
+    await page.mouse.move(0, 0);
+    await expect(scroll).toHaveCSS('scrollbar-gutter', 'stable both-edges');
+    await expect(scroll).toHaveCSS('scrollbar-color', 'rgba(0, 0, 0, 0) rgba(0, 0, 0, 0)');
+    await scroll.hover();
+    await expect(scroll).not.toHaveCSS('scrollbar-color', 'rgba(0, 0, 0, 0) rgba(0, 0, 0, 0)');
+    await page.screenshot({ path: info.outputPath('summary-gutter-light.png') });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.screenshot({ path: info.outputPath('summary-gutter-dark.png') });
+    await page.emulateMedia({ forcedColors: 'active' });
+    await expect(scroll).toHaveCSS('scrollbar-color', 'auto');
+    await expect(scroll).toHaveCSS('scrollbar-width', 'auto');
+    await page.emulateMedia({ forcedColors: 'none' });
+    await card.getByRole('button', { name: /^Changes/ }).click();
+    await expect(page.getByRole('combobox', { name: 'Changes comparison' })).toBeVisible();
+    await page.getByRole('button', { name: 'Close workspace panel' }).click();
+
+    upstream.sessions.find((session) => session.id === 'summary-child-0')!.outcome = 'failed';
+    upstream.emit({
+      type: 'session.status',
+      data: { sessionID: 'summary-child-0', status: { type: 'idle' } },
+    });
+    await expect(
+      card.getByRole('button', { name: '2 done · 1 failed', exact: true }),
+    ).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(card).toHaveCount(0);
+    await toggle.click();
+    const dialog = page.getByRole('dialog', { name: 'Thread summary', exact: true });
+    await expect(dialog).toBeVisible();
+    await card.getByRole('button', { name: 'Project actions' }).click();
+    await expect(page.getByRole('menu', { name: 'Open project in application' })).toBeVisible();
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeVisible();
+    await page.screenshot({ path: info.outputPath('summary-mobile.png') });
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(toggle).toBeFocused();
+    await toggle.click();
+    await card.getByRole('button', { name: '2 done · 1 failed', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole('heading', { name: 'Delegated sessions' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Review task 0.*Failed/ })).toBeVisible();
+    await page.getByRole('button', { name: 'Close workspace panel' }).click();
+
+    upstream.sessions.push(...Array.from({ length: 98 }, (_, index) => child(index + 3)));
+    upstream.emit({ type: 'session.created', data: upstream.sessions.at(-1)! });
+    await toggle.click();
+    await expect(card.getByRole('button', { name: /100\+ subagents/ })).toBeVisible();
+    expect(reads.filter((url) => url.includes('/subagents?cursor='))).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    expect(errors).toEqual([]);
+  } finally {
+    await page.close();
+    await gateway.close();
+    await upstream.close();
+    if (previous === undefined) delete process.env.OPENCODE_URL;
+    else process.env.OPENCODE_URL = previous;
+  }
+});
+
+test('conversation: thinking and tool shimmer follows native activity', async ({ page }, info) => {
+  const directory = info.outputPath('project');
+  const upstream = await fixture(directory);
+  const previous = process.env.OPENCODE_URL;
+  process.env.OPENCODE_URL = upstream.url;
+  const gateway = await startGateway({ assets: resolve('apps/web/dist') });
+  try {
+    await page.goto(gateway.url);
+    await page.getByLabel('Project directory', { exact: true }).fill(directory);
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await page.getByRole('button', { name: 'Explore the project' }).click();
+    await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Inspect the project');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    const thinking = page.locator('.chat-status .activity-text');
+    await expect(thinking).toHaveText('Thinking');
+    await expect(thinking).toHaveCSS('font-size', '16px');
+    await expect(thinking).toHaveCSS('animation-name', 'activity-shimmer');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect(thinking).toHaveCSS('animation-name', 'none');
+    await expect(thinking).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    upstream.startText();
+    upstream.delta('Inspecting the workspace.');
+    await expect(page.getByRole('article', { name: 'Assistant' })).toContainText('Inspecting');
+    await expect(thinking).toHaveCount(0);
+    upstream.finishText('Inspecting the workspace.');
+
+    const now = Date.now();
+    await page.clock.setFixedTime(now);
+    upstream.work(
+      [{ type: 'reasoning', text: 'Check the README.', time: { created: 1 } }],
+      now - 27_000,
+    );
+    const header = page.locator('.work-header-trigger').last();
+    await expect(header).toHaveText('Working for 27s');
+    await expect(header).toHaveCSS('font-size', '16px');
+    await page.mouse.move(0, 0);
+    await expect(header.locator('.work-header-chevron')).toHaveCSS('opacity', '0');
+    await header.hover();
+    await expect(header.locator('.work-header-chevron')).toHaveCSS('opacity', '1');
+    await page.clock.setFixedTime(now + 1000);
+    await expect(header).toHaveText('Working for 28s');
+    const group = page.locator('.activity-group').last();
+    await expect(group.locator('.activity-label')).toHaveText('Thinking');
+    await expect(group.locator('.activity-label')).toHaveAttribute('data-active', 'true');
+    await expect(thinking).toHaveCount(0);
+    const reasoning = {
+      type: 'reasoning' as const,
+      text: 'Check the README.',
+      time: { created: 1, completed: 2 },
+    };
+    upstream.work([reasoning]);
+    await expect(group).toHaveCount(0);
+    await expect(thinking).toHaveText('Thinking');
+
+    const tool: SessionMessageAssistantTool = {
+      type: 'tool',
+      id: 'activity-tool',
+      name: 'read',
+      time: { created: 2 },
+      state: { status: 'streaming', input: '' },
+    };
+    upstream.work([reasoning, tool]);
+    await expect(group.locator('.activity-label')).toHaveAttribute('data-active', 'true');
+    await expect(thinking).toHaveCount(0);
+    await header.click();
+    const running = group.locator('.activity-item .activity-label').last();
+    await expect(running).toHaveText('Reading file');
+    await expect(running).toHaveCSS('animation-name', 'activity-shimmer');
+    upstream.work([
+      reasoning,
+      { ...tool, state: { status: 'running', input: { path: 'README.md' }, metadata: {} } },
+    ]);
+    await expect(running).toHaveText('Reading README.md');
+    await expect(running).toHaveCSS('animation-name', 'activity-shimmer');
+    await expect(group.getByText('Thinking', { exact: true })).toHaveAttribute(
+      'data-active',
+      'false',
+    );
+    upstream.ask();
+    await expect(page.locator('.activity-text[data-active="true"]')).toHaveCount(0);
+    await expect(page.locator('.chat-status')).toHaveText('Waiting for permission');
+    await page.getByRole('button', { name: 'Allow once' }).click();
+    await page.getByRole('radio', { name: 'Whole project', exact: true }).check();
+    await page.getByRole('button', { name: 'Review answers', exact: true }).click();
+    await page.getByRole('button', { name: 'Send answers ↵', exact: true }).click();
+    await expect(running).toHaveCSS('animation-name', 'activity-shimmer');
+    upstream.work([
+      reasoning,
+      {
+        ...tool,
+        state: {
+          status: 'completed',
+          input: { path: 'README.md' },
+          content: [{ type: 'text', text: 'Project README contents' }],
+        },
+      },
+    ]);
+    await expect(group.locator('.activity-item .activity-label').last()).toHaveAttribute(
+      'data-active',
+      'false',
+    );
+    await expect(running).toHaveText('Read README.md');
+    await expect(running).toHaveCSS('animation-name', 'none');
+    await expect(thinking).toHaveText('Thinking');
+    upstream.work([
+      reasoning,
+      { ...tool, state: { status: 'running', input: { path: 'README.md' }, metadata: {} } },
+    ]);
+    await expect(running).toHaveCSS('animation-name', 'activity-shimmer');
+    await page.screenshot({ path: info.outputPath('activity-shimmer.png') });
+    await page.getByRole('button', { name: 'Stop', exact: true }).click();
+    await expect(header).toHaveText(/^You stopped after \d+s$/);
+    const stoppedLabel = await header.textContent();
+    await page.clock.setFixedTime(now + 3_600_000);
+    await expect(header).toHaveText(stoppedLabel!);
+    await expect(page.locator('.activity-text[data-active="true"]')).toHaveCount(0);
+    await expect(running).toHaveCSS('animation-name', 'none');
+    const compaction = {
+      id: 'compaction-1',
+      type: 'compaction' as const,
+      reason: 'manual' as const,
+      time: { created: Date.now() },
+      summary: 'The workspace was inspected.',
+      recent: '',
+    };
+    upstream.compaction({ ...compaction, status: 'running' });
+    const compacted = page.locator('.context-compaction .activity-text');
+    await expect(compacted).toHaveText('Compacting context');
+    await expect(compacted).toHaveCSS('animation-name', 'activity-shimmer');
+    await expect(thinking).toHaveCount(0);
+    await page.getByRole('button', { name: 'Stop', exact: true }).click();
+    await expect(compacted).toHaveCSS('animation-name', 'none');
+    upstream.compaction({ ...compaction, status: 'completed' });
+    await expect(compacted).toHaveText('Context compacted');
+    await expect(compacted).toHaveCSS('font-size', '16px');
+    await expect(compacted).toHaveCSS('animation-name', 'none');
+    await compacted.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath('context-compacted.png') });
+    upstream.compaction({ ...compaction, status: 'completed', reason: 'auto' });
+    await expect(compacted).toHaveText('Context automatically compacted');
+    upstream.compaction({
+      ...compaction,
+      status: 'failed',
+      error: { type: 'ProviderError', message: 'Provider unavailable' },
+    });
+    await expect(page.getByRole('alert')).toHaveText('Compaction failed: Provider unavailable');
+  } finally {
+    await gateway.close();
+    await upstream.close();
+    if (previous === undefined) delete process.env.OPENCODE_URL;
+    else process.env.OPENCODE_URL = previous;
+  }
+});
+
 test('conversation: grouped activity and anchored automatic history', async ({ page }, info) => {
   const directory = info.outputPath('project');
   const upstream = await fixture(directory);
@@ -997,17 +1365,19 @@ test('conversation: grouped activity and anchored automatic history', async ({ p
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   try {
+    await page.setViewportSize({ width: 1600, height: 1000 });
     await page.goto(gateway.url);
     await page.getByLabel('Project directory', { exact: true }).fill(directory);
     await page.getByRole('button', { name: 'Open', exact: true }).click();
     await page.getByRole('button', { name: 'Explore the project' }).click();
     await expect(page.getByRole('heading', { name: 'Change 599', exact: true })).toBeVisible();
+    await expect(page.locator('.thread-summary-inline')).toBeVisible();
     expect(await page.locator('.timeline-row').count()).toBeLessThan(40);
     await expect(page.locator('.tool-details')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0);
     await page.screenshot({ path: info.outputPath('activity-collapsed.png') });
-    const latestGroup = page.locator('.activity-group > .disclosure-trigger').last();
-    await expect(latestGroup).toHaveText('Read 6 files');
+    const latestGroup = page.locator('.work-header-trigger').last();
+    await expect(latestGroup).toHaveText('Worked for 27s');
     await latestGroup.click();
     await expect
       .poll(async () => {
@@ -1065,7 +1435,7 @@ test('conversation: grouped activity and anchored automatic history', async ({ p
     expect(await page.locator('.timeline-row').count()).toBeLessThan(40);
     await page.getByRole('button', { name: 'Jump to latest' }).click();
     await expect(page.getByRole('heading', { name: 'Change 599', exact: true })).toBeVisible();
-    await expect(page.locator('.activity-group > .disclosure-trigger').last()).toHaveAttribute(
+    await expect(page.locator('.work-header-trigger').last()).toHaveAttribute(
       'aria-expanded',
       'true',
     );
@@ -1142,17 +1512,36 @@ test('Electron: bundled gateway, isolated renderer, and native folder bridge', a
     ).rejects.toThrow('Choose a project directory');
     await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(30, 30, 46)');
     await expect(page.locator('.toolbar-project')).toHaveText('Fixture project');
+    if (process.platform === 'darwin') {
+      const toolbar = (await page.locator('.toolbar').boundingBox())!;
+      const brand = (await page.locator('.sidebar-brand').boundingBox())!;
+      const toggle = (await page.getByRole('button', { name: 'Hide sidebar' }).boundingBox())!;
+      expect(brand.y).toBeGreaterThanOrEqual(toolbar.height);
+      expect(toggle.y + toggle.height).toBeLessThanOrEqual(toolbar.height);
+      await page.screenshot({ path: info.outputPath('mac-header-expanded.png') });
+    }
     await page.keyboard.press('ControlOrMeta+b');
     await expect(page.locator('.sidebar')).toBeHidden();
+    if (process.platform === 'darwin') {
+      const brand = (await page.locator('.toolbar-brand').boundingBox())!;
+      expect(brand.x).toBeGreaterThanOrEqual(96);
+      await page.screenshot({ path: info.outputPath('mac-header-collapsed.png') });
+    }
     await page.keyboard.press('ControlOrMeta+b');
     await expect(page.locator('.sidebar')).toBeVisible();
     await page.keyboard.press('ControlOrMeta+,');
     await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('button', { name: 'Open project', exact: true })).toBeVisible();
-    type LinkState = { opened: string[]; copied: string[]; menu?: Electron.Menu };
-    await application.evaluate(({ shell, clipboard, Menu }) => {
-      const state: LinkState = { opened: [], copied: [] };
+    type LinkState = {
+      opened: string[];
+      copied: string[];
+      replacements: string[];
+      menu?: Electron.Menu;
+      params?: Electron.ContextMenuParams;
+    };
+    await application.evaluate(({ shell, clipboard, Menu, BrowserWindow }) => {
+      const state: LinkState = { opened: [], copied: [], replacements: [] };
       (globalThis as typeof globalThis & { linkTest: LinkState }).linkTest = state;
       shell.openExternal = async (url) => {
         state.opened.push(url);
@@ -1163,6 +1552,9 @@ test('Electron: bundled gateway, isolated renderer, and native folder bridge', a
       Menu.prototype.popup = function () {
         state.menu = this;
       };
+      BrowserWindow.getAllWindows()[0]!.webContents.on('context-menu', (_event, params) => {
+        state.params = params;
+      });
     });
     await application.evaluate(({ dialog }, selected) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [selected] });
@@ -1175,12 +1567,26 @@ test('Electron: bundled gateway, isolated renderer, and native folder bridge', a
     const sessionCount = upstream.sessions.length;
     await page.keyboard.press('ControlOrMeta+n');
     await expect.poll(() => upstream.sessions.length).toBe(sessionCount + 1);
-    await expect(page.getByRole('heading', { name: 'New chat', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Rename conversation: New chat', exact: true }),
+    ).toBeVisible();
     await page.keyboard.press('ControlOrMeta+Alt+n');
     await expect.poll(() => upstream.sessions.length).toBe(sessionCount + 2);
     await page.getByRole('button', { name: 'Explore the project' }).click();
     await expect(page.getByRole('heading', { name: 'Explore the project' })).toBeVisible();
     expect(await page.evaluate(() => 'require' in window || 'process' in window)).toBe(false);
+    await page.getByRole('button', { name: 'Thread summary', exact: true }).click();
+    const summary = page.getByRole('dialog', { name: 'Thread summary', exact: true });
+    await expect(summary).toContainText('Changes+0−0');
+    await summary.getByRole('button', { name: 'Project actions' }).click();
+    await expect(
+      page.getByRole('menuitemradio', { name: openApps[0]!.label, exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(summary).toBeVisible();
+    await page.screenshot({ path: info.outputPath('summary-electron.png') });
+    await page.keyboard.press('Escape');
+    await expect(summary).toBeHidden();
     await page.locator('input[type=file]').setInputFiles({
       name: 'download.txt',
       mimeType: 'text/plain',
@@ -1237,6 +1643,65 @@ test('Electron: bundled gateway, isolated renderer, and native folder bridge', a
     await expect(page.getByRole('button', { name: 'Thinking level', exact: true })).toHaveText(
       'Low',
     );
+    const composer = page.getByRole('textbox', { name: 'Message', exact: true });
+    await composer.fill('Select text and correct a typo.');
+    const inputBox = (await composer.boundingBox())!;
+    await page.mouse.move(inputBox.x + 4, inputBox.y + 12);
+    await page.mouse.down();
+    await page.mouse.move(inputBox.x + 130, inputBox.y + 12, { steps: 8 });
+    await page.mouse.up();
+    expect(
+      await composer.evaluate(
+        (input: HTMLTextAreaElement) => input.selectionEnd > input.selectionStart,
+      ),
+    ).toBe(true);
+    await composer.press('ControlOrMeta+a');
+    await composer.click({ button: 'right', position: { x: 25, y: 12 } });
+    await expect
+      .poll(() =>
+        application.evaluate(() => {
+          const state = (globalThis as typeof globalThis & { linkTest: LinkState }).linkTest;
+          return {
+            editable: state.params?.isEditable,
+            copy: state.params?.editFlags.canCopy,
+            roles: state.menu?.items.map((item) => item.role?.toLowerCase()).filter(Boolean),
+          };
+        }),
+      )
+      .toEqual({
+        editable: true,
+        copy: true,
+        roles: ['undo', 'redo', 'cut', 'copy', 'paste', 'selectall'],
+      });
+    await application.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0]!.webContents.insertText('Corrected draft');
+    });
+    await expect(composer).toHaveValue('Corrected draft');
+    // Use the actual Chromium context snapshot with deterministic suggestions;
+    // do not depend on downloaded dictionaries or write the user's OS dictionary.
+    const spellingItems = await application.evaluate(({ BrowserWindow }) => {
+      const state = (globalThis as typeof globalThis & { linkTest: LinkState }).linkTest;
+      const window = BrowserWindow.getAllWindows()[0]!;
+      const contents = window.webContents;
+      const replace = contents.replaceMisspelling;
+      contents.replaceMisspelling = (word) => state.replacements.push(word);
+      contents.emit('context-menu', {} as Electron.Event, {
+        ...state.params!,
+        misspelledWord: 'mistkaen',
+        dictionarySuggestions: ['mistaken'],
+      });
+      const item = state.menu!.items.find((item) => item.label === 'mistaken')!;
+      item.click(item, window, {} as Electron.KeyboardEvent);
+      contents.replaceMisspelling = replace;
+      return state.menu!.items.map((item) => item.label);
+    });
+    expect(spellingItems).toContain('Learn Spelling');
+    expect(
+      await application.evaluate(
+        () => (globalThis as typeof globalThis & { linkTest: LinkState }).linkTest.replacements,
+      ),
+    ).toEqual(['mistaken']);
+    await composer.fill('');
     const appURL = page.url();
     const link = page.getByRole('link', { name: 'Fixture link', exact: true });
     await link.click();
@@ -1317,7 +1782,7 @@ test('Electron: bundled gateway, isolated renderer, and native folder bridge', a
     await application.close();
     application = await launch();
     const reopened = await application.firstWindow();
-    await expect(reopened.getByRole('heading', { name: 'Let’s build something' })).toBeVisible();
+    await expect(reopened.getByRole('heading', { name: 'What should we build?' })).toBeVisible();
     await expect(reopened.locator('.toolbar-project')).toHaveText('Fixture project');
     await expect(reopened.locator('body')).toHaveCSS('background-color', 'rgb(36, 39, 58)');
     const projects = reopened.getByRole('navigation', { name: 'Projects', exact: true });

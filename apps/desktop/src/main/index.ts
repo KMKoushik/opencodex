@@ -23,7 +23,7 @@ async function createWindow() {
     minHeight: 560,
     backgroundColor: '#1a1a1d',
     ...(process.platform === 'darwin'
-      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 16, y: 15 } }
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 16, y: 13 } }
       : {}),
     show: false,
     webPreferences: {
@@ -31,6 +31,7 @@ async function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      spellcheck: true,
     },
   });
   registerLinkHandlers(window, new URL(origin).origin);

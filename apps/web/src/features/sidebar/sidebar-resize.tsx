@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import './sidebar-resize.css';
 
 const minimum = 200;
-const defaultWidth = 275;
+const defaultWidth = 300;
 
 export function SidebarResize() {
   const handle = useRef<HTMLDivElement>(null);

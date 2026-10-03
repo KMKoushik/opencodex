@@ -180,4 +180,9 @@ export const api = {
     if (cursor) query.set('cursor', cursor);
     return request(`/sessions?${query}`, sessionPageSchema, { signal });
   },
+  searchSessions: (search: string, cursor: string | undefined, signal: AbortSignal) => {
+    const query = new URLSearchParams({ search });
+    if (cursor) query.set('cursor', cursor);
+    return request(`/session-search?${query}`, sessionPageSchema, { signal });
+  },
 };

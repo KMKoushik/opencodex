@@ -1,0 +1,51 @@
+/* Native scrolling and hit testing, including OS overlay-scrollbar behavior.
+   The installed Codex app uses a transparent track and a border-tone hover thumb. */
+:root {
+  scrollbar-color: var(--border-heavy) transparent;
+}
+* {
+  scrollbar-width: thin;
+}
+.scrollbar-on-hover::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scrollbar-on-hover::-webkit-scrollbar-track,
+.scrollbar-on-hover::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.scrollbar-on-hover::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: var(--border-heavy);
+  background-clip: padding-box;
+}
+@media (hover: hover) and (forced-colors: none) {
+  .scrollbar-on-hover {
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 150ms ease;
+  }
+  .scrollbar-on-hover:is(:hover, :focus-within) {
+    scrollbar-color: var(--border-heavy) transparent;
+  }
+  .scrollbar-on-hover::-webkit-scrollbar-thumb {
+    background-color: transparent;
+  }
+  .scrollbar-on-hover:is(:hover, :focus-within)::-webkit-scrollbar-thumb {
+    background-color: var(--border-heavy);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scrollbar-on-hover {
+    transition: none;
+  }
+}
+@media (forced-colors: active) {
+  :root,
+  .scrollbar-on-hover {
+    scrollbar-color: auto;
+  }
+  * {
+    scrollbar-width: auto;
+  }
+}

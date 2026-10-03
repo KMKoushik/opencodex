@@ -123,6 +123,7 @@ export function Composer({
           event.dataTransfer.dropEffect = 'copy';
         }}
         onDragLeave={(event) => {
+          if (!event.dataTransfer.types.includes('Files')) return;
           event.preventDefault();
           if (--dragDepth.current <= 0) {
             dragDepth.current = 0;
@@ -216,6 +217,7 @@ export function Composer({
           {...shortcutProps('composer.focus')}
           placeholder="Ask anything, or describe what to build"
           rows={2}
+          spellCheck
           value={draft}
           onChange={(event) => {
             setCommandIndex(0);

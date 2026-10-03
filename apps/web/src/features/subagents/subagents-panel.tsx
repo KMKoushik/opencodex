@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { LegendList } from '@legendapp/list/react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { ArrowRight01Icon, BotIcon } from '@hugeicons/core-free-icons';
@@ -9,6 +9,7 @@ import { api } from '../../lib/api';
 import { QueryError } from '../workbench/query-error';
 import type { PanelContext } from '../workbench/panels';
 import { SubagentSession } from './subagent-session';
+import { noSubagents, subagentsQuery } from './subagents-query';
 import './subagents.css';
 
 export function SubagentsPanel({ sessionID, live, active }: PanelContext) {
@@ -42,26 +43,13 @@ function SubagentsList({
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => heading.current?.focus({ preventScroll: true }), []);
-  const sessions = useInfiniteQuery({
-    queryKey: ['subagents', sessionID],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam, signal }) => api.subagents(sessionID, pageParam, signal),
-    getNextPageParam: (page) => page.cursor.next ?? undefined,
-    refetchInterval: live ? false : 5_000,
-  });
+  const sessions = useInfiniteQuery(subagentsQuery(sessionID, live));
   const active = useQuery({
     queryKey: ['active'],
     queryFn: ({ signal }) => api.active(signal),
     refetchOnMount: false,
   });
-  const items = useMemo(() => {
-    const seen = new Set<string>();
-    return (sessions.data?.pages.flatMap((page) => page.data) ?? []).filter((session) => {
-      if (seen.has(session.id)) return false;
-      seen.add(session.id);
-      return true;
-    });
-  }, [sessions.data]);
+  const items = sessions.data ?? noSubagents;
   return (
     <section className="subagents-panel" aria-label="Subagents">
       <div className="subagents-list-pane">
@@ -90,16 +78,19 @@ function SubagentsList({
         {items.length > 0 && (
           <LegendList
             data={items}
+            extraData={active.data}
             keyExtractor={sessionKey}
             estimatedItemSize={62}
             drawDistance={160}
-            className="subagents-list"
+            className="subagents-list scrollbar-on-hover"
             aria-label="Subagent sessions"
             renderItem={({ item }) => {
               const running = Boolean(active.data?.[item.id]);
               return (
                 <button type="button" className="subagent-row" onClick={() => onSelect(item.id)}>
-                  <HugeiconsIcon icon={BotIcon} size={16} />
+                  <span className="subagent-avatar" aria-hidden="true">
+                    <HugeiconsIcon icon={BotIcon} size={18} />
+                  </span>
                   <div className="subagent-row-info">
                     <p className="truncate" title={item.title}>
                       {item.title || 'Untitled subagent'}

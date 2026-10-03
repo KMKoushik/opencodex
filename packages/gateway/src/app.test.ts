@@ -685,6 +685,18 @@ describe('gateway and the real OpenCode client', () => {
     expect(requested?.searchParams.get('cursor')).toBe('page-2');
     expect(requested?.searchParams.get('limit')).toBe('50');
     expect(authorization).toBe(`Basic ${Buffer.from('test:private').toString('base64')}`);
+    const search = await app.request(
+      'http://localhost/api/session-search?search=Review&cursor=page-2',
+    );
+    expect(search.status).toBe(200);
+    expect(requested?.searchParams.get('search')).toBe('Review');
+    expect(requested?.searchParams.get('cursor')).toBe('page-2');
+    expect(requested?.searchParams.get('directory')).toBeNull();
+    expect(requested?.searchParams.get('parentID')).toBe('null');
+    expect(requested?.searchParams.get('limit')).toBe('50');
+    expect(
+      (await app.request(`http://localhost/api/session-search?search=${'a'.repeat(257)}`)).status,
+    ).toBe(400);
   });
 
   it('keeps upstream failures as errors and does not leak their payloads', async () => {
