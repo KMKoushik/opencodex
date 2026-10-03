@@ -1,5 +1,5 @@
 import { lazy, Suspense, useId, useRef, useState } from 'react';
-import { Cancel01Icon, MoreHorizontalIcon } from '@hugeicons/core-free-icons';
+import { Cancel01Icon, SlidersHorizontalIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
 import './session-panel.css';
@@ -12,10 +12,12 @@ export function SessionPanelToggle({
   sessionID,
   projectName,
   live,
+  onOpen,
 }: {
   sessionID: string;
   projectName?: string;
   live: boolean;
+  onOpen: (id: string) => void;
 }) {
   const id = useId();
   const panel = useRef<HTMLDivElement>(null);
@@ -34,7 +36,7 @@ export function SessionPanelToggle({
         aria-controls={id}
         popoverTarget={id}
       >
-        <HugeiconsIcon icon={MoreHorizontalIcon} size={16} />
+        <HugeiconsIcon icon={SlidersHorizontalIcon} size={17} />
       </Button>
       <div
         ref={panel}
@@ -46,6 +48,13 @@ export function SessionPanelToggle({
         data-shortcut-boundary=""
         onToggle={(event) => {
           if (event.target === event.currentTarget) setOpen(event.newState === 'open');
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape' || event.nativeEvent.isComposing) return;
+          event.preventDefault();
+          event.stopPropagation();
+          panel.current?.hidePopover();
+          trigger.current?.focus({ preventScroll: true });
         }}
       >
         {open && (
@@ -72,7 +81,15 @@ export function SessionPanelToggle({
                 </p>
               }
             >
-              <SessionPanel sessionID={sessionID} projectName={projectName} live={live} />
+              <SessionPanel
+                sessionID={sessionID}
+                projectName={projectName}
+                live={live}
+                onOpen={(id) => {
+                  panel.current?.hidePopover();
+                  onOpen(id);
+                }}
+              />
             </Suspense>
           </>
         )}

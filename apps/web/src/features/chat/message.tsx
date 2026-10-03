@@ -1,19 +1,10 @@
 import { memo } from 'react';
-import { TextSelectIcon } from '@hugeicons/core-free-icons';
-import { HugeiconsIcon } from '@hugeicons/react';
 import type { SessionMessageInfo } from '@opencodex/contracts';
-import { ActivityText } from './activity-text';
 import { Disclosure } from './disclosure';
 import { MessageAttachments } from './message-attachments';
 import { SkillUsage } from './skill';
 
-export const Message = memo(function Message({
-  message,
-  active = false,
-}: {
-  message: SessionMessageInfo;
-  active?: boolean;
-}) {
+export const Message = memo(function Message({ message }: { message: SessionMessageInfo }) {
   switch (message.type) {
     case 'user':
       return (
@@ -51,28 +42,13 @@ export const Message = memo(function Message({
       );
     case 'compaction':
       return (
-        <div
-          className="context-compaction"
-          data-status={message.status}
-          role={
-            message.status === 'failed'
-              ? 'alert'
-              : message.status === 'running'
-                ? 'status'
-                : undefined
-          }
-        >
-          <HugeiconsIcon icon={TextSelectIcon} size={16} aria-hidden="true" />
-          <ActivityText active={active && message.status === 'running'}>
-            {message.status === 'running'
-              ? 'Compacting context'
-              : message.status === 'failed'
-                ? `Compaction failed: ${message.error.message}`
-                : message.reason === 'auto'
-                  ? 'Context automatically compacted'
-                  : 'Context compacted'}
-          </ActivityText>
-        </div>
+        <p className="message-note">
+          {message.status === 'running'
+            ? 'Compacting context…'
+            : message.status === 'failed'
+              ? `Compaction failed: ${message.error.message}`
+              : 'Context compacted'}
+        </p>
       );
     case 'agent-switched':
       return <p className="message-note">Agent: {message.agent}</p>;

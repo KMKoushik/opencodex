@@ -23,8 +23,9 @@
   --text: #ededf0;
   --text-secondary: #b0b0b3;
   --text-tertiary: #828285;
-  --activity-shimmer-base: #7d7d80;
-  --activity-shimmer-highlight: #ededf0;
+  --activity-skill: var(--project-purple);
+  --activity-search: var(--project-blue);
+  --activity-edit: var(--project-orange);
   --user-message: #303033;
   --border: rgb(237 237 240 / 0.084);
   --border-heavy: rgb(237 237 240 / 0.156);
@@ -117,8 +118,9 @@
   --text: var(--ink-text);
   --text-secondary: var(--ink-text-secondary);
   --text-tertiary: var(--ink-text-tertiary);
-  --activity-shimmer-base: var(--ink-activity-shimmer-base);
-  --activity-shimmer-highlight: var(--ink-activity-shimmer-highlight);
+  --activity-skill: var(--ink-activity-skill);
+  --activity-search: var(--ink-activity-search);
+  --activity-edit: var(--ink-activity-edit);
   --user-message: var(--ink-user-message);
   --border: var(--ink-border);
   --border-heavy: var(--ink-border-heavy);

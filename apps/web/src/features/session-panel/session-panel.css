@@ -1,9 +1,24 @@
-.session-panel-toggle {
+.toolbar-session-actions {
   flex-shrink: 0;
   margin-left: auto;
 }
-.toolbar-status + .session-panel-toggle {
+.toolbar-status + .toolbar-session-actions {
   margin-left: 0;
+}
+.session-panel-toggle {
+  flex-shrink: 0;
+}
+.session-panel-toggle ~ .workspace-panel-toggle {
+  position: relative;
+  margin-left: 4px;
+}
+.session-panel-toggle ~ .workspace-panel-toggle::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: -6px;
+  border-left: 1px solid var(--border-heavy);
 }
 .session-panel-toggle[aria-expanded='true'] {
   background: var(--selected);
@@ -108,6 +123,51 @@
 .session-file-totals {
   white-space: nowrap;
 }
+.session-panel-link {
+  width: 100%;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.session-panel-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.session-panel-link .session-panel-link-title {
+  color: var(--text);
+  font-weight: 600;
+}
+.session-subagents-link {
+  justify-content: flex-start;
+}
+.session-subagents-preview {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  color: var(--text-secondary);
+}
+.session-subagent-avatar {
+  display: inline-flex;
+}
+.session-subagent-avatar:nth-child(3n + 1) {
+  color: var(--project-pink);
+}
+.session-subagent-avatar:nth-child(3n + 2) {
+  color: var(--project-orange);
+}
+.session-subagent-avatar:nth-child(3n) {
+  color: var(--project-purple);
+}
+.session-subagents-more {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
 .session-additions,
 .session-resource-status[data-connected='true'] {
   color: var(--success);
@@ -184,6 +244,13 @@
   }
   .session-panel-details > summary {
     min-height: 44px;
+  }
+  .session-panel-link,
+  .session-actions-toggle .button {
+    min-height: 44px;
+  }
+  .session-actions-toggle .button {
+    min-width: 44px;
   }
   .session-panel-heading .button,
   .session-panel-toggle {

@@ -1,26 +1,12 @@
 import { useId, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import {
-  Copy01Icon,
-  Folder01Icon,
-  FolderOpenIcon,
-  MoreHorizontalIcon,
-  Tick02Icon,
-} from '@hugeicons/core-free-icons';
+import { Copy01Icon, Folder01Icon, FolderOpenIcon, Tick02Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import type { OpenApp, OpenAppID } from '@opencodex/contracts/desktop';
 import { readStorage, writeStorage } from '../../lib/storage';
 import './open-in-app.css';
 
-export function OpenInApp({
-  directory,
-  active,
-  compact = false,
-}: {
-  directory: string;
-  active: boolean;
-  compact?: boolean;
-}) {
+export function OpenInApp({ directory, active }: { directory: string; active: boolean }) {
   const id = useId();
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -35,7 +21,7 @@ export function OpenInApp({
   const apps = useQuery({
     queryKey: ['desktop', 'open-apps'],
     queryFn: () => desktop!.listOpenApps(),
-    enabled: canOpenApps && active && (!compact || expanded),
+    enabled: canOpenApps && active,
     staleTime: 5 * 60_000,
   });
   const selected = apps.data?.find((entry) => entry.id === selectedID) ?? apps.data?.[0];
@@ -67,8 +53,8 @@ export function OpenInApp({
         ref={trigger}
         type="button"
         className="open-app-trigger"
-        aria-label={compact ? 'Project actions' : 'Open in…'}
-        title={compact ? 'Project actions' : 'Open in…'}
+        aria-label="Open in…"
+        title="Open in…"
         aria-haspopup="menu"
         aria-expanded={expanded}
         aria-controls={id}
@@ -80,9 +66,7 @@ export function OpenInApp({
           }
         }}
       >
-        {compact ? (
-          <HugeiconsIcon icon={MoreHorizontalIcon} size={16} />
-        ) : selected ? (
+        {selected ? (
           <AppIcon key={selected.id} app={selected} />
         ) : (
           <HugeiconsIcon icon={FolderOpenIcon} size={18} />

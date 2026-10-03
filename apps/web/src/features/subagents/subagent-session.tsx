@@ -9,7 +9,6 @@ import { MessageAttachments } from '../chat/message-attachments';
 import { Button } from '../../components/ui/button';
 import { api } from '../../lib/api';
 import { ProviderLogo } from '../chat/provider-logo';
-import { ThinkingIndicator } from '../chat/thinking-indicator';
 
 export function SubagentSession({
   sessionID,
@@ -72,21 +71,19 @@ export function SubagentSession({
         </p>
       )}
       <p className="chat-status" role="status">
-        {chat.permissions.data?.length ? (
-          'Waiting for permission'
-        ) : chat.forms.data?.length ? (
-          'Waiting for an answer'
-        ) : running ? (
-          <ThinkingIndicator sessionID={sessionID} latest={messages.at(-1)} />
-        ) : waiting.length ? (
-          'Waiting to run…'
-        ) : chat.info.data?.outcome === 'interrupted' ? (
-          'Stopped'
-        ) : chat.info.data?.outcome === 'succeeded' ? (
-          'Completed'
-        ) : (
-          'Idle'
-        )}
+        {chat.permissions.data?.length
+          ? 'Waiting for permission'
+          : chat.forms.data?.length
+            ? 'Waiting for an answer'
+            : running
+              ? ''
+              : waiting.length
+                ? 'Waiting to run…'
+                : chat.info.data?.outcome === 'interrupted'
+                  ? 'Stopped'
+                  : chat.info.data?.outcome === 'succeeded'
+                    ? 'Completed'
+                    : 'Idle'}
       </p>
     </>
   );
@@ -132,8 +129,6 @@ export function SubagentSession({
           historyError={chat.messages.isFetchNextPageError}
           fetchEarlier={chat.messages.fetchNextPage}
           footer={footer}
-          working={running && !chat.permissions.data?.length && !chat.forms.data?.length}
-          running={running}
           readOnly
         />
       ) : (

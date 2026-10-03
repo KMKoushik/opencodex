@@ -1,45 +1,46 @@
-import { BookOpen01Icon } from '@hugeicons/core-free-icons';
+import { Layers01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import type { SessionMessageAssistantTool } from '@opencodex/contracts';
-import { ActivityText } from './activity-text';
 
 export function SkillUsage({
   name,
   status = 'completed',
   error,
-  active = false,
 }: {
   name?: string;
   status?: SessionMessageAssistantTool['state']['status'];
   error?: string;
-  active?: boolean;
 }) {
-  const label =
-    status === 'completed'
-      ? 'Loaded skill'
-      : status === 'error'
-        ? 'Failed to load skill'
-        : 'Loading skill';
   return (
     <div className="skill-usage">
       <p className="skill-usage-label">
-        <HugeiconsIcon icon={BookOpen01Icon} size={18} aria-hidden="true" />
-        <ActivityText active={active && (status === 'running' || status === 'streaming')}>
-          {name ? `${label} ${name}` : label}
-        </ActivityText>
+        <HugeiconsIcon
+          icon={Layers01Icon}
+          size={14}
+          className="activity-tool-icon"
+          data-kind="skill"
+          aria-hidden="true"
+        />
+        <span>
+          {status === 'completed'
+            ? 'Used skill'
+            : status === 'error'
+              ? 'Failed to load skill'
+              : 'Loading skill'}
+          {name && (
+            <>
+              : <span className="skill-usage-name">{name}</span>
+            </>
+          )}
+          {(status === 'running' || status === 'streaming') && '…'}
+        </span>
       </p>
       {error && <p className="text-error">{error}</p>}
     </div>
   );
 }
 
-export function SkillTool({
-  tool,
-  active,
-}: {
-  tool: SessionMessageAssistantTool;
-  active: boolean;
-}) {
+export function SkillTool({ tool }: { tool: SessionMessageAssistantTool }) {
   const state = tool.state;
   const input = typeof state.input === 'object' ? state.input : undefined;
   const name = input && [input.name, input.id].find((value) => typeof value === 'string' && value);
@@ -56,7 +57,6 @@ export function SkillTool({
       name={typeof name === 'string' ? name : outputName}
       status={state.status}
       error={state.status === 'error' ? state.error.message : undefined}
-      active={active}
     />
   );
 }

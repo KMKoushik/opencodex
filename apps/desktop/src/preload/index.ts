@@ -3,6 +3,13 @@ import { desktopChannels, type DesktopBridge } from '@opencodex/contracts/deskto
 
 const desktop: DesktopBridge = {
   platform: process.platform,
+  getFullscreen: () => ipcRenderer.invoke(desktopChannels.getFullscreen),
+  onFullscreenChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, fullscreen: boolean) =>
+      callback(fullscreen);
+    ipcRenderer.on(desktopChannels.fullscreenChanged, listener);
+    return () => ipcRenderer.removeListener(desktopChannels.fullscreenChanged, listener);
+  },
   selectDirectory: () => ipcRenderer.invoke(desktopChannels.selectDirectory),
   getPreferences: () => ipcRenderer.invoke(desktopChannels.getPreferences),
   setPreference: (key, value) => ipcRenderer.invoke(desktopChannels.setPreference, { key, value }),

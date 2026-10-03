@@ -61,6 +61,25 @@
   color: var(--text-tertiary);
   cursor: default;
 }
+.session-actions-menu {
+  max-width: min(280px, calc(100vw - 16px));
+  -webkit-app-region: no-drag;
+}
+.session-actions-error {
+  padding: 6px 10px;
+  color: var(--error);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.session-actions-toggle {
+  display: flex;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+.session-actions-toggle .button[aria-expanded='true'] {
+  background: var(--selected);
+  color: var(--text);
+}
 .session-unread[data-responding] {
   position: absolute;
   right: 8px;

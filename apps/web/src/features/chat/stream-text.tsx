@@ -56,7 +56,7 @@ export const StreamText = memo(function StreamText({
   if (!stream.data) return null;
   return (
     <div
-      className={kind === 'reasoning' ? 'markdown reasoning-text' : 'markdown'}
+      className={kind === 'reasoning' ? 'reasoning-text' : 'markdown'}
       ref={root}
       data-response-id={kind === 'text' ? messageID : undefined}
       data-response-ordinal={kind === 'text' ? ordinal : undefined}

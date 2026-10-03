@@ -20,6 +20,7 @@ export function registerNativeHandlers(
     }
     return window;
   }
+  ipcMain.handle(desktopChannels.getFullscreen, (event) => requireWindow(event).isFullScreen());
   ipcMain.handle(desktopChannels.selectDirectory, async (event) => {
     const window = requireWindow(event);
     const result = await dialog.showOpenDialog(window, {

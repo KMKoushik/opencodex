@@ -1,118 +1,62 @@
 import { memo } from 'react';
 import { LegendList } from '@legendapp/list/react';
 import {
+  CheckmarkCircle02Icon,
   AlertCircleIcon,
   File01Icon,
   CommandLineIcon,
-  Folder01Icon,
   Search01Icon,
-  PencilEdit01Icon,
-  BookOpen01Icon,
-  BotIcon,
-  MessageQuestionIcon,
-  GlobeIcon,
-  Wrench01Icon,
+  FileEditIcon,
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import type { TimelineRow, WorkEntry } from './timeline-model';
 import { StreamText } from './stream-text';
 import { Disclosure } from './disclosure';
 import { SkillTool, SkillUsage } from './skill';
-import { ActivityText } from './activity-text';
-import { toolActivity, type ToolKind } from './tool-activity';
-
-const toolIcons = {
-  read: File01Icon,
-  search: Search01Icon,
-  list: Folder01Icon,
-  command: CommandLineIcon,
-  edit: PencilEdit01Icon,
-  skill: BookOpen01Icon,
-  subagent: BotIcon,
-  question: MessageQuestionIcon,
-  web: GlobeIcon,
-  tool: Wrench01Icon,
-} satisfies Record<ToolKind, typeof File01Icon>;
 
 export const Activity = memo(function Activity({
   row,
   sessionID,
-  active,
-  expanded = false,
 }: {
   row: Extract<TimelineRow, { type: 'activity' }>;
   sessionID: string;
-  active: boolean;
-  expanded?: boolean;
 }) {
-  const current =
-    active && row.current?.type === 'tool' ? toolActivity(row.current.tool) : undefined;
-  const label =
-    active && row.current?.type === 'reasoning' ? 'Thinking' : (current?.text ?? row.summary);
-  const entries = (
-    <LegendList
-      data={row.entries}
-      extraData={active}
-      keyExtractor={workKey}
-      renderItem={({ item }) => (
-        <WorkItem
-          key={item.id}
-          entry={item}
-          sessionID={sessionID}
-          active={active && item.messageID === row.current?.messageID}
-        />
-      )}
-      estimatedItemSize={34}
-      drawDistance={160}
-      maintainVisibleContentPosition
-      style={{ height: Math.max(160, Math.min(300, row.entries.length * 38 + 24)) }}
-      className="activity-entries"
-      aria-label="Agent activity"
-      role="region"
-    />
-  );
-  if (expanded) return <section className="activity-group">{entries}</section>;
   return (
     <Disclosure
       id={row.id}
       className="activity-group"
       label={
         <>
-          {current && (
-            <HugeiconsIcon icon={toolIcons[current.kind]} size={18} className="activity-icon" />
-          )}
-          <ActivityText active={active} className="activity-label truncate-fade" title={label}>
-            {label}
-          </ActivityText>
+          <span className="activity-label">{row.active ? 'Working' : row.summary}</span>
+          {row.active && <span className="activity-meta truncate-fade">{row.summary}</span>}
           {row.errors > 0 && <span className="text-error">{row.errors} failed</span>}
         </>
       }
     >
-      {entries}
+      <LegendList
+        data={row.entries}
+        keyExtractor={workKey}
+        renderItem={({ item }) => <WorkItem key={item.id} entry={item} sessionID={sessionID} />}
+        estimatedItemSize={34}
+        drawDistance={160}
+        maintainVisibleContentPosition
+        style={{ height: Math.max(160, Math.min(300, row.entries.length * 38 + 24)) }}
+        className="activity-entries"
+        aria-label="Agent activity"
+        role="region"
+      />
     </Disclosure>
   );
 });
 
 const workKey = (entry: WorkEntry) => entry.id;
 
-function WorkItem({
-  entry,
-  sessionID,
-  active,
-}: {
-  entry: WorkEntry;
-  sessionID: string;
-  active: boolean;
-}) {
+function WorkItem({ entry, sessionID }: { entry: WorkEntry; sessionID: string }) {
   if (entry.type === 'skill')
     return <SkillUsage name={entry.message.name || entry.message.skill} />;
   if (entry.type === 'reasoning')
     return (
-      <Disclosure
-        id={entry.id}
-        className="activity-item"
-        label={<ActivityText active={active && !entry.completed}>Thinking</ActivityText>}
-      >
+      <Disclosure id={entry.id} className="activity-item" label={<span>Thinking</span>}>
         <StreamText
           sessionID={sessionID}
           messageID={entry.messageID}
@@ -124,10 +68,37 @@ function WorkItem({
       </Disclosure>
     );
   const tool = entry.tool;
-  if (tool.name === 'skill') return <SkillTool tool={tool} active={active} />;
+  if (tool.name === 'skill') return <SkillTool tool={tool} />;
   const state = tool.state;
-  const working = active && (state.status === 'running' || state.status === 'streaming');
-  const presentation = toolActivity(tool);
+  const input = typeof state.input === 'object' ? state.input : undefined;
+  const target =
+    input &&
+    [input.filePath, input.path, input.command, input.pattern, input.query].find(
+      (value) => typeof value === 'string',
+    );
+  const shell = /^(shell|bash|exec|execute)$/.test(tool.name);
+  const kind = /^(grep|glob|search|list|ls)$/.test(tool.name)
+    ? 'search'
+    : /^(edit|write|patch|apply_patch|write_file)$/.test(tool.name)
+      ? 'edit'
+      : shell
+        ? 'shell'
+        : 'read';
+  const icon =
+    kind === 'search'
+      ? Search01Icon
+      : kind === 'edit'
+        ? FileEditIcon
+        : shell
+          ? CommandLineIcon
+          : File01Icon;
+  const title = /^(read|read_file)$/.test(tool.name)
+    ? 'Read'
+    : shell
+      ? 'Run'
+      : tool.name === 'question'
+        ? 'Question'
+        : tool.name;
   const status =
     state.status === 'error'
       ? 'Failed'
@@ -142,23 +113,29 @@ function WorkItem({
       className="activity-item"
       label={
         <>
-          <HugeiconsIcon icon={toolIcons[presentation.kind]} size={18} className="activity-icon" />
-          <ActivityText
-            active={working}
-            className="activity-label truncate-fade"
-            title={presentation.text}
+          <HugeiconsIcon
+            icon={icon}
+            size={14}
+            className="activity-tool-icon"
+            data-kind={kind}
+            aria-hidden="true"
+          />
+          <span>{title}</span>
+          <span
+            className="activity-target truncate-fade"
+            title={typeof target === 'string' ? target : undefined}
           >
-            {presentation.text}
-          </ActivityText>
-          {state.status === 'error' ? (
+            {typeof target === 'string' ? target : tool.name === 'question' ? '' : tool.name}
+          </span>
+          {state.status === 'completed' || state.status === 'error' ? (
             <HugeiconsIcon
-              icon={AlertCircleIcon}
-              size={14}
-              className="text-error"
+              icon={state.status === 'error' ? AlertCircleIcon : CheckmarkCircle02Icon}
+              size={13}
+              className={state.status === 'error' ? 'text-error' : 'activity-check'}
               aria-label={status}
             />
           ) : (
-            <span className="sr-only">{status}</span>
+            <span className="activity-meta">{status}…</span>
           )}
         </>
       }

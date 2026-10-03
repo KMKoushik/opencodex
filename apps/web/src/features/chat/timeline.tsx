@@ -20,8 +20,6 @@ import { createTimelineProjector, type TimelineRow } from './timeline-model';
 import { Message } from './message';
 import { StreamText } from './stream-text';
 import { ResponseSelection } from './response-selection';
-import { createWorkHeaderProjector } from './work-header-model';
-import { WorkHeader } from './work-header';
 
 export type TimelineHandle = { scrollToLatest: () => void };
 const followOutput = {
@@ -40,8 +38,6 @@ export function Timeline({
   fetchEarlier,
   footer,
   readOnly = false,
-  working = false,
-  running = working,
 }: {
   ref?: Ref<TimelineHandle>;
   sessionID: string;
@@ -52,44 +48,9 @@ export function Timeline({
   fetchEarlier: () => Promise<unknown>;
   footer: ReactNode;
   readOnly?: boolean;
-  working?: boolean;
-  running?: boolean;
 }) {
   const [project] = useState(createTimelineProjector);
-  const [projectWork] = useState(createWorkHeaderProjector);
-  const { rows, scopes, latestWorkID } = useMemo(
-    () => projectWork(messages, project(messages)),
-    [projectWork, project, messages],
-  );
-  const [expandedWork, setExpandedWork] = useState(() => new Set<string>());
-  const latest = messages.at(-1);
-  const activeMessageID =
-    working && (latest?.type === 'assistant' || latest?.type === 'compaction')
-      ? latest.id
-      : undefined;
-  const runningWorkID = running ? latestWorkID : undefined;
-  const currentMessageID = running && latest?.type === 'assistant' ? latest.id : undefined;
-  const visibleRows = useMemo(
-    () =>
-      rows.filter(
-        (row) =>
-          row.type !== 'activity' ||
-          expandedWork.has(scopes.get(row.id) ?? '') ||
-          !scopes.has(row.id) ||
-          Boolean(currentMessageID && row.current?.messageID === currentMessageID),
-      ),
-    [rows, scopes, expandedWork, currentMessageID],
-  );
-  const toggleWork = useCallback(
-    (id: string) =>
-      setExpandedWork((previous) => {
-        const next = new Set(previous);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        return next;
-      }),
-    [],
-  );
+  const rows = useMemo(() => project(messages), [project, messages]);
   const list = useRef<LegendListRef>(null);
   const scope = useRef<HTMLDivElement>(null);
   const ready = useRef(false);
@@ -111,32 +72,15 @@ export function Timeline({
       if (node && node.scrollHeight <= node.clientHeight + 32) loadEarlier();
     });
     return () => cancelAnimationFrame(frame);
-  }, [visibleRows, loadingEarlier, loadEarlier]);
+  }, [rows, loadingEarlier, loadEarlier]);
   const scrollToLatest = () => {
     setFollowing(true);
     void list.current?.scrollToEnd({ animated: false });
   };
   useImperativeHandle(ref, () => ({ scrollToLatest }));
   const renderItem = useCallback(
-    ({ item }: { item: TimelineRow }) => (
-      <Row
-        key={item.id}
-        row={item}
-        sessionID={sessionID}
-        active={Boolean(
-          activeMessageID &&
-          (item.type === 'activity'
-            ? item.current?.messageID === activeMessageID
-            : item.type === 'message' && item.message.id === activeMessageID),
-        )}
-        running={item.type === 'work-header' && item.id === runningWorkID}
-        expanded={expandedWork.has(
-          item.type === 'work-header' ? item.id : (scopes.get(item.id) ?? ''),
-        )}
-        onToggleWork={toggleWork}
-      />
-    ),
-    [sessionID, activeMessageID, runningWorkID, expandedWork, scopes, toggleWork],
+    ({ item }: { item: TimelineRow }) => <Row key={item.id} row={item} sessionID={sessionID} />,
+    [sessionID],
   );
   return (
     <DisclosureProvider>
@@ -144,14 +88,12 @@ export function Timeline({
         className="timeline"
         ref={scope}
         onClickCapture={(event) => {
-          if ((event.target as HTMLElement).closest('.disclosure-trigger, .work-header-trigger'))
-            setFollowing(false);
+          if ((event.target as HTMLElement).closest('.disclosure-trigger')) setFollowing(false);
         }}
       >
         <LegendList
           ref={list}
-          data={visibleRows}
-          extraData={renderItem}
+          data={rows}
           keyExtractor={rowKey}
           renderItem={renderItem}
           estimatedItemSize={100}
@@ -208,32 +150,11 @@ export function Timeline({
   );
 }
 
-const Row = memo(function Row({
-  row,
-  sessionID,
-  active,
-  running,
-  expanded,
-  onToggleWork,
-}: {
-  row: TimelineRow;
-  sessionID: string;
-  active: boolean;
-  running: boolean;
-  expanded: boolean;
-  onToggleWork: (id: string) => void;
-}) {
+const Row = memo(function Row({ row, sessionID }: { row: TimelineRow; sessionID: string }) {
   return (
     <div className="timeline-row" data-row-id={row.id} data-row-type={row.type}>
-      {row.type === 'work-header' ? (
-        <WorkHeader
-          row={row}
-          running={running}
-          expanded={expanded}
-          onToggle={() => onToggleWork(row.id)}
-        />
-      ) : row.type === 'activity' ? (
-        <Activity row={row} sessionID={sessionID} active={active} expanded={expanded} />
+      {row.type === 'activity' ? (
+        <Activity row={row} sessionID={sessionID} />
       ) : row.type === 'text' ? (
         <article className="assistant-message" aria-label="Assistant">
           <StreamText
@@ -245,7 +166,7 @@ const Row = memo(function Row({
           />
         </article>
       ) : (
-        <Message message={row.message} active={active} />
+        <Message message={row.message} />
       )}
     </div>
   );

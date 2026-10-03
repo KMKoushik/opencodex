@@ -8,7 +8,25 @@ import './styles/globals.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('The application root is missing.');
-if (window.desktop) document.documentElement.dataset.platform = window.desktop.platform;
+if (window.desktop) {
+  document.documentElement.dataset.platform = window.desktop.platform;
+  const setFullscreen = (fullscreen: boolean) => {
+    document.documentElement.dataset.fullscreen = String(fullscreen);
+  };
+  let changed = false;
+  const unsubscribe = window.desktop.onFullscreenChanged?.((fullscreen) => {
+    changed = true;
+    setFullscreen(fullscreen);
+  });
+  // Subscribe first; a transition must win over an older startup snapshot.
+  void window.desktop
+    .getFullscreen?.()
+    .then((fullscreen) => {
+      if (!changed) setFullscreen(fullscreen);
+    })
+    .catch((error: unknown) => console.error('Could not read window fullscreen state.', error));
+  import.meta.hot?.dispose(() => unsubscribe?.());
+}
 void initializeStorage().then(() => {
   applyInitialTheme();
   createRoot(root).render(

@@ -136,8 +136,8 @@ svg {
   min-width: 0;
   flex-shrink: 1;
 }
-/* Native macOS controls occupy the titlebar's left edge. */
-:root[data-platform='darwin'] .sidebar-header {
+/* Native macOS controls occupy the titlebar's left edge outside fullscreen. */
+:root[data-platform='darwin']:not([data-fullscreen='true']) .sidebar-header {
   padding-left: 88px;
 }
 .toolbar-brand {
@@ -1136,7 +1136,9 @@ svg {
     display: none;
   }
   /* Native controls remain at the window's left edge when the sidebar hides. */
-  :root[data-platform='darwin'] .app-shell[data-sidebar-collapsed='true'] .toolbar {
+  :root[data-platform='darwin']:not([data-fullscreen='true'])
+    .app-shell[data-sidebar-collapsed='true']
+    .toolbar {
     padding-left: 96px;
   }
 }
@@ -1533,14 +1535,13 @@ svg {
   font-size: 12px;
 }
 .skill-usage {
-  color: var(--text-tertiary);
-  font-size: var(--chat-font-size);
-  line-height: 24px;
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 .skill-usage-label {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-height: 32px;
   padding: 4px 2px;
   overflow-wrap: anywhere;
@@ -1548,22 +1549,8 @@ svg {
 .skill-usage-label > svg {
   flex-shrink: 0;
 }
-.context-compaction {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  min-width: 0;
-  color: var(--text-tertiary);
-  font-size: var(--chat-font-size);
-  font-weight: 400;
-  line-height: 24px;
-  overflow-wrap: anywhere;
-}
-.context-compaction > svg {
-  margin-top: 4px;
-}
-.context-compaction[data-status='failed'] .activity-text {
-  color: var(--error);
+.skill-usage-name {
+  color: var(--text);
 }
 .tool-details pre,
 .shell-output,
@@ -1657,36 +1644,42 @@ svg {
   transform: rotate(90deg);
 }
 .activity-label {
-  font-weight: 400;
   overflow-wrap: anywhere;
 }
-.activity-icon {
+.activity-meta,
+.activity-check {
   color: var(--text-tertiary);
-}
-.activity-group > .disclosure-trigger,
-.activity-item > .disclosure-trigger {
-  gap: 6px;
-  padding-inline: 0;
-  color: var(--text-tertiary);
-  font-size: var(--chat-font-size);
-  line-height: 24px;
-}
-.activity-group .disclosure-chevron {
-  order: 1;
-  width: 12px;
-  height: 12px;
-  opacity: 0;
-}
-.activity-group .disclosure-trigger:focus-visible .disclosure-chevron {
-  opacity: 1;
+  font-size: 12px;
 }
 .activity-entries {
-  margin: 4px 0 8px;
-  padding-left: 24px;
+  margin: 4px 0 8px 8px;
+  padding-left: 12px;
   overscroll-behavior-y: contain;
 }
+.activity-group .disclosure-chevron {
+  display: none;
+}
 .activity-item .disclosure-trigger {
+  font-size: 12px;
   padding-right: 8px;
+}
+.activity-target {
+  flex: 1;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.activity-tool-icon {
+  flex-shrink: 0;
+}
+.activity-tool-icon[data-kind='skill'] {
+  color: var(--activity-skill);
+}
+.activity-tool-icon[data-kind='search'] {
+  color: var(--activity-search);
+}
+.activity-tool-icon[data-kind='edit'] {
+  color: var(--activity-edit);
 }
 .tool-details,
 .reasoning-text,
@@ -1703,15 +1696,16 @@ svg {
 }
 .reasoning-text {
   color: var(--text-secondary);
-  font-size: var(--chat-font-size);
-  line-height: var(--chat-line-height);
+  line-height: 1.6;
+  white-space: pre-wrap;
 }
 @media (hover: hover) {
   .disclosure-trigger:hover {
     color: var(--text);
   }
-  .activity-group .disclosure-trigger:hover .disclosure-chevron {
-    opacity: 1;
+  .disclosure-trigger:hover .activity-target,
+  .disclosure-trigger:hover .activity-meta {
+    color: var(--text);
   }
 }
 @media (pointer: coarse) {
@@ -1836,10 +1830,9 @@ svg {
   font-weight: 600;
 }
 .chat-status {
-  min-height: 24px;
+  min-height: 20px;
   color: var(--text-tertiary);
-  font-size: var(--chat-font-size);
-  line-height: 24px;
+  font-size: 12px;
 }
 .chat-error {
   display: flex;

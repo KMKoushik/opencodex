@@ -1,11 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { GitForkIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import type { Session } from '@opencodex/contracts';
-import { Button } from '../../components/ui/button';
-import { api } from '../../lib/api';
-import { refreshSessionUnread } from './unread';
+import { SessionActionsMenu, type SessionActionsHandle } from './session-actions-menu';
 import './session-row.css';
 
 export function SessionRow({
@@ -21,35 +18,15 @@ export function SessionRow({
   connected: boolean;
   onSelect: () => void;
 }) {
-  const client = useQueryClient();
   const id = useId();
   const detailsID = `${id}-details`;
   const trigger = useRef<HTMLButtonElement>(null);
-  const menu = useRef<HTMLDivElement>(null);
+  const menu = useRef<SessionActionsHandle>(null);
   const details = useRef<HTMLDivElement>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [age, setAge] = useState(() => formatAge(session.updatedAt));
   const [expanded, setExpanded] = useState(false);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
-  const mark = useMutation({
-    mutationKey: ['chat', session.id, 'unread'],
-    mutationFn: () => api.unreadSession(session.id, { action: 'mark' }),
-    retry: false,
-    onSuccess: () => refreshSessionUnread(client, session.id),
-  });
   useEffect(() => () => clearTimeout(hoverTimer.current), []);
-  useEffect(() => {
-    if (!expanded) return;
-    const outside = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (!menu.current?.contains(target)) {
-        menu.current?.hidePopover();
-        setExpanded(false);
-      }
-    };
-    document.addEventListener('pointerdown', outside);
-    return () => document.removeEventListener('pointerdown', outside);
-  }, [expanded]);
   function hideDetails() {
     clearTimeout(hoverTimer.current);
     details.current?.hidePopover();
@@ -71,22 +48,7 @@ export function SessionRow({
   }
   function show(point?: { top: number; left: number }) {
     hideDetails();
-    if (!connected || mark.isPending) return;
-    const rect = trigger.current!.getBoundingClientRect();
-    setPosition({
-      top: Math.max(8, Math.min(point?.top ?? rect.bottom + 4, innerHeight - 60)),
-      left: Math.max(8, Math.min(point?.left ?? rect.left, innerWidth - 188)),
-    });
-    menu.current?.showPopover();
-    setExpanded(true);
-    menu.current
-      ?.querySelector<HTMLButtonElement>('button:not(:disabled)')
-      ?.focus({ preventScroll: true });
-  }
-  function dismiss() {
-    menu.current?.hidePopover();
-    setExpanded(false);
-    trigger.current?.focus({ preventScroll: true });
+    menu.current?.show(point);
   }
   return (
     <div className="session-entry" data-selected={selected || undefined}>
@@ -165,57 +127,16 @@ export function SessionRow({
             <time dateTime={new Date(session.updatedAt).toISOString()}>{age}</time>
           </p>
         </div>
-        <div
+        <SessionActionsMenu
           ref={menu}
           id={id}
-          className="session-actions-menu"
-          popover="manual"
-          role="menu"
-          aria-label={`${session.title} actions`}
-          data-shortcut-boundary=""
-          style={position}
-          onKeyDown={(event) => {
-            if (event.nativeEvent.isComposing) return;
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              event.stopPropagation();
-              dismiss();
-            }
-            if (event.key === 'Tab') {
-              dismiss();
-            }
-            if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
-              event.preventDefault();
-              menu.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
-            }
-          }}
-        >
-          <button
-            type="button"
-            role="menuitem"
-            disabled={!connected || mark.isPending}
-            onClick={() => {
-              dismiss();
-              mark.mutate();
-            }}
-          >
-            Mark as unread
-          </button>
-        </div>
+          sessionID={session.id}
+          title={session.title}
+          connected={connected}
+          anchor={trigger}
+          onOpenChange={setExpanded}
+        />
       </div>
-      {mark.isError && (
-        <div className="sidebar-note text-error" role="alert">
-          <p>Could not mark this thread as unread. {mark.error.message}</p>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={mark.isPending}
-            onClick={() => mark.mutate()}
-          >
-            Retry
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

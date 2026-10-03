@@ -1,5 +1,7 @@
 // Only native capabilities cross IPC. Agent data always uses the gateway API.
 export interface DesktopBridge {
+  getFullscreen(): Promise<boolean>;
+  onFullscreenChanged(callback: (fullscreen: boolean) => void): () => void;
   selectDirectory(): Promise<string | null>;
   getPreferences(): Promise<DesktopPreferences>;
   setPreference(key: PreferenceKey, value: string | null): Promise<void>;
@@ -39,6 +41,8 @@ export type OpenAppID = (typeof openAppIDs)[number];
 export type OpenApp = { id: OpenAppID; label: string; icon?: string };
 
 export const desktopChannels = {
+  getFullscreen: 'desktop:get-fullscreen',
+  fullscreenChanged: 'desktop:fullscreen-changed',
   selectDirectory: 'desktop:select-directory',
   getPreferences: 'desktop:get-preferences',
   setPreference: 'desktop:set-preference',

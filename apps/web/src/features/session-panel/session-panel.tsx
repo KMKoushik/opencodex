@@ -1,6 +1,12 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+  type UseInfiniteQueryResult,
+} from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import type { TokenUsageInfo } from '@opencodex/contracts';
+import type { SessionInfo, SessionListOutput, TokenUsageInfo } from '@opencodex/contracts';
 import {
   ArrowRight01Icon,
   GitBranchIcon,
@@ -8,13 +14,16 @@ import {
   Link01Icon,
   Layers01Icon,
   Coins01Icon,
+  BotIcon,
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
 import { api } from '../../lib/api';
+import { cn } from '../../lib/utils';
 import { messageQuery } from '../chat/message-query';
 import { latestResponse, tokenTotal } from '../chat/context-usage';
 import { loadSubagentCosts } from './session-cost';
+import { noSubagents, subagentsQuery } from '../subagents/subagents-query';
 
 const number = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 const money = new Intl.NumberFormat(undefined, {
@@ -28,11 +37,15 @@ export function SessionPanel({
   sessionID,
   projectName,
   live,
+  onOpen,
 }: {
   sessionID: string;
   projectName?: string;
   live: boolean;
+  onOpen: (id: string) => void;
 }) {
+  const client = useQueryClient();
+  const children = useInfiniteQuery(subagentsQuery(sessionID, live));
   const session = useQuery({
     queryKey: ['chat', sessionID, 'info'],
     queryFn: ({ signal }) => api.session(sessionID, signal),
@@ -40,7 +53,23 @@ export function SessionPanel({
   });
   const subagentCosts = useQuery({
     queryKey: ['session-cost', sessionID],
-    queryFn: ({ signal }) => loadSubagentCosts(sessionID, signal),
+    queryFn: async ({ signal }) => {
+      await client.fetchInfiniteQuery(subagentsQuery(sessionID, live));
+      signal.throwIfAborted();
+      return loadSubagentCosts(sessionID, signal, (id, cursor, signal) => {
+        // The summary and full Subagents reader already own these native pages.
+        // Reuse loaded parent pages when aggregating cost rather than fetching twice.
+        const cached =
+          id === sessionID
+            ? client.getQueryData<InfiniteData<SessionListOutput>>(['subagents', sessionID])
+            : undefined;
+        const index = cached?.pageParams.indexOf(cursor) ?? -1;
+        return index >= 0
+          ? Promise.resolve(cached!.pages[index]!)
+          : api.subagents(id, cursor, signal);
+      });
+    },
+    enabled: children.isSuccess,
     staleTime: 30_000,
     gcTime: 60_000,
     refetchInterval: live ? false : 5_000,
@@ -136,7 +165,12 @@ export function SessionPanel({
               </span>
             </div>
             {vcs.data.info.provider && (
-              <div className="session-panel-row session-project-row">
+              <button
+                type="button"
+                className="session-panel-row session-project-row session-panel-link"
+                onClick={() => onOpen('changes')}
+                title="Open working-tree changes"
+              >
                 <HugeiconsIcon icon={FileEditIcon} size={16} />
                 <span>
                   {vcs.data.files.length === 1
@@ -148,7 +182,7 @@ export function SessionPanel({
                   <span aria-hidden="true"> / </span>
                   <span className="text-error">−{number.format(changes!.deletions)}</span>
                 </div>
-              </div>
+              </button>
             )}
           </>
         )}
@@ -160,43 +194,46 @@ export function SessionPanel({
         <QueryError query={session} />
         <QueryError query={vcs} />
       </section>
-      <PanelDetails
-        label="Usage"
-        icon={Coins01Icon}
-        value={
-          subagentCosts.isError
-            ? 'Unavailable'
-            : totalCost !== undefined
-              ? money.format(totalCost)
-              : 'Loading…'
-        }
-      >
-        <p className="session-panel-note">Cost includes this session and all its subagents.</p>
-        {totalCost !== undefined && !subagentCosts.isError && (
-          <dl className="session-stat-list">
-            {[
-              ['This session', money.format(session.data!.cost)],
-              [
-                `Subagents (${number.format(subagentCosts.data!.length)})`,
-                money.format(subagentCost!),
-              ],
-              ['Total cost', money.format(totalCost)],
-            ].map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-        <QueryError query={subagentCosts} />
-        <p className="session-panel-note">Token totals for this session only.</p>
-        {session.data?.tokens ? (
-          <TokenStats tokens={session.data.tokens} />
-        ) : (
-          <p className="session-panel-note">No usage reported yet.</p>
-        )}
-      </PanelDetails>
+      <SubagentsSummary query={children} onOpen={() => onOpen('subagents')} />
+      {(totalCost !== 0 || children.isError || subagentCosts.isError) && (
+        <PanelDetails
+          label="Usage"
+          icon={Coins01Icon}
+          value={
+            children.isError || subagentCosts.isError
+              ? 'Unavailable'
+              : totalCost !== undefined
+                ? money.format(totalCost)
+                : 'Loading…'
+          }
+        >
+          <p className="session-panel-note">Cost includes this session and all its subagents.</p>
+          {totalCost !== undefined && !subagentCosts.isError && (
+            <dl className="session-stat-list">
+              {[
+                ['This session', money.format(session.data!.cost)],
+                [
+                  `Subagents (${number.format(subagentCosts.data!.length)})`,
+                  money.format(subagentCost!),
+                ],
+                ['Total cost', money.format(totalCost)],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          <QueryError query={subagentCosts} />
+          <p className="session-panel-note">Token totals for this session only.</p>
+          {session.data?.tokens ? (
+            <TokenStats tokens={session.data.tokens} />
+          ) : (
+            <p className="session-panel-note">No usage reported yet.</p>
+          )}
+        </PanelDetails>
+      )}
       <PanelDetails
         label="MCP"
         icon={Link01Icon}
@@ -257,6 +294,60 @@ export function SessionPanel({
         <QueryError query={skills} />
       </PanelDetails>
     </>
+  );
+}
+
+function SubagentsSummary({
+  query: children,
+  onOpen,
+  className,
+}: {
+  query: UseInfiniteQueryResult<SessionInfo[]>;
+  onOpen: () => void;
+  className?: string;
+}) {
+  const items = children.data ?? noSubagents;
+  if (children.isSuccess && items.length === 0) return null;
+  const label = children.isError
+    ? 'Unavailable'
+    : children.isPending
+      ? 'Loading…'
+      : items.length
+        ? `${number.format(items.length)}${children.hasNextPage ? '+' : ''} subagents`
+        : 'None';
+  return (
+    <section className={cn('session-panel-section', className)} aria-label="Subagents summary">
+      <button
+        type="button"
+        className="session-panel-row session-panel-link session-subagents-link"
+        onClick={onOpen}
+        aria-label={`Subagents: ${label}`}
+        title="Open subagents"
+      >
+        <HugeiconsIcon icon={BotIcon} size={16} />
+        <span className="session-panel-link-title">Subagents</span>
+        <HugeiconsIcon icon={ArrowRight01Icon} size={12} />
+        <span className="session-subagents-preview" aria-hidden="true">
+          {items.length > 0 && !children.isError ? (
+            <>
+              {items.slice(0, 3).map((child) => (
+                <span key={child.id} className="session-subagent-avatar" title={child.title}>
+                  <HugeiconsIcon icon={BotIcon} size={16} />
+                </span>
+              ))}
+              {items.length > 3 && (
+                <span className="session-subagents-more">
+                  +{number.format(items.length - 3)} more
+                </span>
+              )}
+            </>
+          ) : (
+            label
+          )}
+        </span>
+      </button>
+      <QueryError query={children} />
+    </section>
   );
 }
 

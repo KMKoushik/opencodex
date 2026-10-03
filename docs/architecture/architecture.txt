@@ -9,9 +9,9 @@
   │                                                                      │
   │  ┌───────── BROWSER ──────────┐     ┌──── ELECTRON RENDERER ─────┐   │               ┌───── ELECTRON MAIN ──────┐
   │  │                            │     │                            │   │  preload IPC  │                          │
-  │  │  <>   Browser app          │     │  <>   Desktop app          │   │               │  <>   apps/desktop       │
-  │  │                            │     │                            ├───┼──────────────▶│                          │
-  │  │  localStorage prefs        │     │  Sandboxed renderer        │   │  web events   │  Window lifecycle        │
+  │  │  <>   Browser app          │     │  <>   Desktop app          ├───┼──────────────▶│  <>   apps/desktop       │
+  │  │                            │     │                            │◀──┼───────────────┤                          │
+  │  │  localStorage prefs        │     │  Sandboxed renderer        │   │  web events   │  Window + fullscreen     │
   │  │  Model intent + frequency  │     │  Native IPC available      ├───┼──────────────▶│  Folder picker + open in │
   │  └────────────────────────────┘     └────────────────────────────┘   │               │  OS browser + clipboard  │
   │                                                                      │               │  OS edit + spelling menus│

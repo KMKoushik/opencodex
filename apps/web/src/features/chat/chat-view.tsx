@@ -23,7 +23,6 @@ import { Starters } from './starters';
 import { sessionUnread } from '@opencodex/contracts';
 import { ProjectSwitcher } from '../projects/project-switcher';
 import { undoDraft } from './undo-draft';
-import { ThinkingIndicator } from './thinking-indicator';
 
 export function ChatView({
   sessionID,
@@ -248,19 +247,17 @@ export function ChatView({
         </p>
       )}
       <div className="chat-status" role="status">
-        {chat.permissions.data?.length ? (
-          'Waiting for permission'
-        ) : chat.forms.data?.length ? (
-          'Waiting for your answer'
-        ) : running ? (
-          <ThinkingIndicator sessionID={sessionID} latest={unique.at(-1)} />
-        ) : waiting.length ? (
-          'Message accepted; waiting to run…'
-        ) : chat.info.data?.outcome === 'interrupted' ? (
-          'Stopped'
-        ) : (
-          ''
-        )}
+        {chat.permissions.data?.length
+          ? 'Waiting for permission'
+          : chat.forms.data?.length
+            ? 'Waiting for your answer'
+            : running
+              ? ''
+              : waiting.length
+                ? 'Message accepted; waiting to run…'
+                : chat.info.data?.outcome === 'interrupted'
+                  ? 'Stopped'
+                  : ''}
       </div>
     </>
   );
@@ -380,8 +377,6 @@ export function ChatView({
           historyError={chat.messages.isFetchNextPageError}
           fetchEarlier={chat.messages.fetchNextPage}
           footer={footer}
-          working={running && !chat.permissions.data?.length && !chat.forms.data?.length}
-          running={running}
         />
       ) : (
         <div className="chat-transcript">

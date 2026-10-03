@@ -31,7 +31,7 @@ import { useCommand } from '../features/shortcuts/use-command';
 import { shortcutProps } from '../features/shortcuts/commands';
 import { ShortcutsSettings } from '../features/shortcuts/shortcuts-settings';
 import { SessionPanelToggle } from '../features/session-panel/session-panel-toggle';
-import { ThreadSummaryToggle } from '../features/session-panel/thread-summary-toggle';
+import { SessionActionsToggle } from '../features/sessions/session-actions-toggle';
 import { SessionTitle } from '../features/sessions/session-title';
 import { WorkbenchRail } from '../features/workbench/workbench-rail';
 import { panels } from '../features/workbench/panels';
@@ -430,17 +430,17 @@ export function App() {
                 </span>
               )}
               {connected && selectedID && !settings && (
+                <SessionActionsToggle
+                  key={`actions-${selectedID}`}
+                  sessionID={selectedID}
+                  title={info.data?.title || 'New chat'}
+                  className="toolbar-session-actions"
+                />
+              )}
+              {connected && selectedID && !settings && (
                 <SessionPanelToggle
                   key={selectedID}
                   sessionID={selectedID}
-                  projectName={currentProject?.name}
-                  live={live}
-                />
-              )}
-              {connected && selectedID && info.data?.location.directory && !settings && (
-                <ThreadSummaryToggle
-                  sessionID={selectedID}
-                  directory={info.data.location.directory}
                   projectName={currentProject?.name}
                   live={live}
                   onOpen={(id) => {

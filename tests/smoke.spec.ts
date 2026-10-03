@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { startGateway } from '../packages/gateway/src/server';
+import { SESSION_UNREAD_KEY } from '../packages/contracts/src';
 import type {
   SessionMessageInfo,
   SessionMessageAssistantTool,
@@ -163,6 +164,17 @@ async function fixture(directory: string) {
     }
     if (url.pathname === '/api/vcs/diff')
       return res.end(JSON.stringify({ location: { directory }, data: diffs }));
+    if (url.pathname === '/api/vcs')
+      return res.end(
+        JSON.stringify({
+          location: { directory },
+          data: { provider: 'git', branch: { current: 'main' } },
+        }),
+      );
+    if (url.pathname === '/api/vcs/status')
+      return res.end(JSON.stringify({ location: { directory }, data: diffs }));
+    if (url.pathname === '/api/mcp' || url.pathname === '/api/skill')
+      return res.end(JSON.stringify({ location: { directory }, data: [] }));
     if (url.pathname === '/api/session') {
       if (req.method === 'POST') {
         let body = '';
@@ -200,7 +212,17 @@ async function fixture(directory: string) {
     if (url.pathname === '/api/session/active')
       return res.end(JSON.stringify({ data: running ? { [sessionID]: { type: 'running' } } : {} }));
     const session = sessions.find((item) => url.pathname === `/api/session/${item.id}`);
-    if (session)
+    if (session) {
+      if (req.method === 'PATCH') {
+        let body = '';
+        for await (const chunk of req) body += chunk;
+        Object.assign(session, JSON.parse(body));
+        emit({
+          type: 'session.metadata.updated',
+          data: { sessionID: session.id, metadata: session.metadata },
+        });
+        return res.writeHead(204).end();
+      }
       return res.end(
         JSON.stringify({
           data: {
@@ -212,6 +234,7 @@ async function fixture(directory: string) {
           },
         }),
       );
+    }
     if (url.pathname.endsWith('/message')) {
       const cursor = url.searchParams.get('cursor') ?? '';
       messageRequests.push(cursor);
@@ -395,13 +418,6 @@ async function fixture(directory: string) {
       }
       message.content = content;
       running = true;
-      changed();
-    },
-    compaction(message: Extract<SessionMessageInfo, { type: 'compaction' }>) {
-      const index = messages.findIndex((item) => item.id === message.id);
-      if (index < 0) messages.push(message);
-      else messages[index] = message;
-      running = message.status === 'running';
       changed();
     },
     startText() {
@@ -990,7 +1006,7 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
     await expect.poll(() => upstream.answer).toEqual({ scope: 'all' });
     upstream.finishText('Here is the **streaming response**.');
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).not.toBeVisible();
-    await page.getByRole('button', { name: /^Worked for / }).click();
+    await page.getByRole('button', { name: 'Read 1 file', exact: true }).click();
     await page.getByRole('button', { name: /Read README.md/ }).click();
     await expect(page.getByText('Project README contents')).toBeVisible();
     upstream.reconnect();
@@ -1072,7 +1088,9 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
   }
 });
 
-test('workspace: responsive native-data summary and native scrollbars', async ({ page }, info) => {
+test('workspace: combined session details, shared thread actions and native scrollbars', async ({
+  page,
+}, info) => {
   const directory = info.outputPath('project');
   const upstream = await fixture(directory);
   upstream.seedHistory(60);
@@ -1084,7 +1102,8 @@ test('workspace: responsive native-data summary and native scrollbars', async ({
     parentID: parent.id,
     outcome: 'succeeded',
   });
-  upstream.sessions.push(...Array.from({ length: 3 }, (_, index) => child(index)));
+  upstream.sessions.push(...Array.from({ length: 13 }, (_, index) => child(index)));
+  parent.cost = 0.25;
   upstream.diffs.push({
     file: 'src/summary.tsx',
     patch: '@@ -1 +1 @@\n-old\n+new\n',
@@ -1099,7 +1118,7 @@ test('workspace: responsive native-data summary and native scrollbars', async ({
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('request', (request) => {
-    if (/\/workspace\/diff|\/subagents/.test(request.url())) reads.push(request.url());
+    if (/\/workspace\/vcs|\/subagents/.test(request.url())) reads.push(request.url());
   });
   try {
     await page.emulateMedia({ colorScheme: 'light' });
@@ -1110,29 +1129,40 @@ test('workspace: responsive native-data summary and native scrollbars', async ({
     await expect(page.getByRole('heading', { name: 'Change 59', exact: true })).toBeVisible();
     expect(reads).toEqual([]);
 
-    const column = page.locator('.chat-column');
-    const card = page.locator('.thread-summary-card');
-    const toggle = page.getByRole('button', { name: 'Thread summary', exact: true });
+    const panel = page.getByRole('dialog', { name: 'Session details', exact: true });
+    const toggle = page.getByRole('button', { name: 'Session details', exact: true });
     await page.setViewportSize({ width: 1444, height: 1000 });
-    await expect(column).toHaveAttribute('data-summary', 'shift');
-    await expect(card.getByRole('button', { name: /^Changes/ })).toHaveText('Changes+258−35');
-    await expect(card.getByRole('button', { name: '3 done', exact: true })).toBeVisible();
-    const bounds = await page.evaluate(() => ({
-      column: document.querySelector('.chat-column')!.getBoundingClientRect().left,
-      composer: document.querySelector('.composer-area')!.getBoundingClientRect().toJSON(),
-      card: document.querySelector('.thread-summary-inline')!.getBoundingClientRect().left,
-    }));
-    expect(bounds.composer.left).toBeGreaterThanOrEqual(bounds.column);
-    expect(bounds.composer.right).toBeLessThan(bounds.card);
-    await page.screenshot({ path: info.outputPath('summary-shift-light.png') });
-
-    await toggle.click();
-    await expect(card).toHaveCount(0);
+    await expect(panel).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Thread summary', exact: true })).toHaveCount(0);
     await expect(page.locator('.composer-area')).toHaveCSS('transform', 'none');
     await toggle.click();
-    await expect(card.getByRole('button', { name: '3 done', exact: true })).toBeVisible();
+    await expect(panel.getByRole('button', { name: /1 file changed/ })).toHaveText(
+      '1 file changed+258 / −35',
+    );
+    const subagents = panel.getByRole('button', { name: /^Subagents/ });
+    await expect(subagents).toHaveAttribute('aria-label', 'Subagents: 13 subagents');
+    await expect(subagents.locator('.session-subagent-avatar')).toHaveCount(3);
+    await expect(subagents.locator('.session-subagents-more')).toHaveText('+10 more');
+    expect(
+      await subagents
+        .locator('.session-subagent-avatar')
+        .evaluateAll((nodes) => new Set(nodes.map((node) => getComputedStyle(node).color)).size),
+    ).toBe(3);
+    await subagents.hover();
+    await expect(subagents).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    for (const label of ['Usage', 'MCP', 'Skills'])
+      await expect(panel.getByText(label, { exact: true })).toBeVisible();
+    await panel.getByText('Usage', { exact: true }).click();
+    await expect(panel.getByText('Total cost', { exact: true })).toBeVisible();
+    expect(
+      reads.filter((url) => new URL(url).pathname === `/api/sessions/${parent.id}/subagents`),
+    ).toHaveLength(1);
+    await page.screenshot({ path: info.outputPath('session-details-light.png') });
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(toggle).toBeFocused();
     await page.setViewportSize({ width: 2000, height: 1000 });
-    await expect(column).toHaveAttribute('data-summary', 'gutter');
+    await expect(panel).toBeHidden();
     await expect(page.locator('.composer-area')).toHaveCSS('transform', 'none');
 
     const scroll = page.locator('.timeline-scroll');
@@ -1142,14 +1172,14 @@ test('workspace: responsive native-data summary and native scrollbars', async ({
     await expect(scroll).toHaveCSS('scrollbar-color', 'rgba(0, 0, 0, 0) rgba(0, 0, 0, 0)');
     await scroll.hover();
     await expect(scroll).not.toHaveCSS('scrollbar-color', 'rgba(0, 0, 0, 0) rgba(0, 0, 0, 0)');
-    await page.screenshot({ path: info.outputPath('summary-gutter-light.png') });
     await page.emulateMedia({ colorScheme: 'dark' });
-    await page.screenshot({ path: info.outputPath('summary-gutter-dark.png') });
     await page.emulateMedia({ forcedColors: 'active' });
     await expect(scroll).toHaveCSS('scrollbar-color', 'auto');
     await expect(scroll).toHaveCSS('scrollbar-width', 'auto');
     await page.emulateMedia({ forcedColors: 'none' });
-    await card.getByRole('button', { name: /^Changes/ }).click();
+    await toggle.click();
+    await panel.getByRole('button', { name: /1 file changed/ }).click();
+    await expect(panel).toBeHidden();
     await expect(page.getByRole('combobox', { name: 'Changes comparison' })).toBeVisible();
     await page.getByRole('button', { name: 'Close workspace panel' }).click();
 
@@ -1158,38 +1188,47 @@ test('workspace: responsive native-data summary and native scrollbars', async ({
       type: 'session.status',
       data: { sessionID: 'summary-child-0', status: { type: 'idle' } },
     });
-    await expect(
-      card.getByRole('button', { name: '2 done · 1 failed', exact: true }),
-    ).toBeVisible();
+    await toggle.click();
+    await expect(subagents).toHaveAttribute('aria-label', 'Subagents: 13 subagents');
+    await page.screenshot({ path: info.outputPath('session-details-dark.png') });
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(card).toHaveCount(0);
-    await toggle.click();
-    const dialog = page.getByRole('dialog', { name: 'Thread summary', exact: true });
-    await expect(dialog).toBeVisible();
-    await card.getByRole('button', { name: 'Project actions' }).click();
-    await expect(page.getByRole('menu', { name: 'Open project in application' })).toBeVisible();
-    await expect(dialog).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(dialog).toBeVisible();
-    await page.screenshot({ path: info.outputPath('summary-mobile.png') });
-    await page.keyboard.press('Escape');
-    await expect(dialog).toBeHidden();
-    await expect(toggle).toBeFocused();
-    await toggle.click();
-    await card.getByRole('button', { name: '2 done · 1 failed', exact: true }).click();
-    await expect(dialog).toBeHidden();
+    await expect(panel).toBeVisible();
+    await page.screenshot({ path: info.outputPath('session-details-mobile.png') });
+    await subagents.click();
+    await expect(panel).toBeHidden();
     await expect(page.getByRole('heading', { name: 'Delegated sessions' })).toBeVisible();
     await expect(page.getByRole('button', { name: /Review task 0.*Failed/ })).toBeVisible();
     await page.getByRole('button', { name: 'Close workspace panel' }).click();
 
-    upstream.sessions.push(...Array.from({ length: 98 }, (_, index) => child(index + 3)));
+    upstream.sessions.push(...Array.from({ length: 88 }, (_, index) => child(index + 13)));
     upstream.emit({ type: 'session.created', data: upstream.sessions.at(-1)! });
     await toggle.click();
-    await expect(card.getByRole('button', { name: /100\+ subagents/ })).toBeVisible();
-    expect(reads.filter((url) => url.includes('/subagents?cursor='))).toEqual([]);
+    await expect(subagents).toHaveAttribute('aria-label', 'Subagents: 100+ subagents');
+    await expect(subagents.locator('.session-subagents-more')).toHaveText('+97 more');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 1444, height: 1000 });
+    const actions = page.getByRole('button', { name: 'Thread actions', exact: true });
+    await actions.click();
+    const menu = page.getByRole('menu', { name: 'Explore the project actions', exact: true });
+    const labels = await menu.getByRole('menuitem').allTextContents();
+    expect(labels).toEqual(['Mark as unread']);
+    await page.keyboard.press('Escape');
+    await expect(actions).toBeFocused();
+    await actions.click();
+    await menu.getByRole('menuitem', { name: 'Mark as unread' }).click();
+    await expect(menu).toBeHidden();
+    await expect.poll(() => parent.metadata?.[SESSION_UNREAD_KEY]).toEqual(expect.any(String));
+    const marker = parent.metadata![SESSION_UNREAD_KEY];
+    const thread = page.getByRole('button', { name: /Explore the project/ }).first();
+    await expect(thread.getByRole('img', { name: 'Unread thread', exact: true })).toBeVisible();
+    await thread.click({ button: 'right' });
+    expect(await menu.getByRole('menuitem').allTextContents()).toEqual(labels);
+    await menu.getByRole('menuitem', { name: 'Mark as unread' }).click();
+    await expect.poll(() => parent.metadata?.[SESSION_UNREAD_KEY]).not.toBe(marker);
+    await expect(menu).toBeHidden();
     expect(errors).toEqual([]);
   } finally {
     await page.close();
@@ -1200,7 +1239,9 @@ test('workspace: responsive native-data summary and native scrollbars', async ({
   }
 });
 
-test('conversation: thinking and tool shimmer follows native activity', async ({ page }, info) => {
+test('conversation: tool activity keeps its input, output and status visible', async ({
+  page,
+}, info) => {
   const directory = info.outputPath('project');
   const upstream = await fixture(directory);
   const previous = process.env.OPENCODE_URL;
@@ -1213,48 +1254,7 @@ test('conversation: thinking and tool shimmer follows native activity', async ({
     await page.getByRole('button', { name: 'Explore the project' }).click();
     await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Inspect the project');
     await page.getByRole('button', { name: 'Send message' }).click();
-    const thinking = page.locator('.chat-status .activity-text');
-    await expect(thinking).toHaveText('Thinking');
-    await expect(thinking).toHaveCSS('font-size', '16px');
-    await expect(thinking).toHaveCSS('animation-name', 'activity-shimmer');
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await expect(thinking).toHaveCSS('animation-name', 'none');
-    await expect(thinking).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
-    await page.emulateMedia({ reducedMotion: 'no-preference' });
-    upstream.startText();
-    upstream.delta('Inspecting the workspace.');
-    await expect(page.getByRole('article', { name: 'Assistant' })).toContainText('Inspecting');
-    await expect(thinking).toHaveCount(0);
-    upstream.finishText('Inspecting the workspace.');
-
-    const now = Date.now();
-    await page.clock.setFixedTime(now);
-    upstream.work(
-      [{ type: 'reasoning', text: 'Check the README.', time: { created: 1 } }],
-      now - 27_000,
-    );
-    const header = page.locator('.work-header-trigger').last();
-    await expect(header).toHaveText('Working for 27s');
-    await expect(header).toHaveCSS('font-size', '16px');
-    await page.mouse.move(0, 0);
-    await expect(header.locator('.work-header-chevron')).toHaveCSS('opacity', '0');
-    await header.hover();
-    await expect(header.locator('.work-header-chevron')).toHaveCSS('opacity', '1');
-    await page.clock.setFixedTime(now + 1000);
-    await expect(header).toHaveText('Working for 28s');
-    const group = page.locator('.activity-group').last();
-    await expect(group.locator('.activity-label')).toHaveText('Thinking');
-    await expect(group.locator('.activity-label')).toHaveAttribute('data-active', 'true');
-    await expect(thinking).toHaveCount(0);
-    const reasoning = {
-      type: 'reasoning' as const,
-      text: 'Check the README.',
-      time: { created: 1, completed: 2 },
-    };
-    upstream.work([reasoning]);
-    await expect(group).toHaveCount(0);
-    await expect(thinking).toHaveText('Thinking');
-
+    await expect(page.locator('.chat-status')).toBeEmpty();
     const tool: SessionMessageAssistantTool = {
       type: 'tool',
       id: 'activity-tool',
@@ -1262,33 +1262,28 @@ test('conversation: thinking and tool shimmer follows native activity', async ({
       time: { created: 2 },
       state: { status: 'streaming', input: '' },
     };
-    upstream.work([reasoning, tool]);
-    await expect(group.locator('.activity-label')).toHaveAttribute('data-active', 'true');
-    await expect(thinking).toHaveCount(0);
-    await header.click();
-    const running = group.locator('.activity-item .activity-label').last();
-    await expect(running).toHaveText('Reading file');
-    await expect(running).toHaveCSS('animation-name', 'activity-shimmer');
+    upstream.work([tool]);
+    const group = page.locator('.activity-group').last();
+    const summary = group.locator(':scope > .disclosure-trigger');
+    await expect(summary).toContainText('Working');
+    await expect(summary).toContainText('Read 1 file');
+    await summary.click();
+    const details = group.locator('.activity-item > .disclosure-trigger');
+    await expect(details).toContainText('Preparing…');
     upstream.work([
-      reasoning,
       { ...tool, state: { status: 'running', input: { path: 'README.md' }, metadata: {} } },
     ]);
-    await expect(running).toHaveText('Reading README.md');
-    await expect(running).toHaveCSS('animation-name', 'activity-shimmer');
-    await expect(group.getByText('Thinking', { exact: true })).toHaveAttribute(
-      'data-active',
-      'false',
-    );
+    await expect(details).toContainText('README.md');
+    await expect(details).toContainText('Running…');
+    await details.click();
+    await expect(group.locator('.tool-details')).toContainText('"path": "README.md"');
     upstream.ask();
-    await expect(page.locator('.activity-text[data-active="true"]')).toHaveCount(0);
     await expect(page.locator('.chat-status')).toHaveText('Waiting for permission');
     await page.getByRole('button', { name: 'Allow once' }).click();
     await page.getByRole('radio', { name: 'Whole project', exact: true }).check();
     await page.getByRole('button', { name: 'Review answers', exact: true }).click();
     await page.getByRole('button', { name: 'Send answers ↵', exact: true }).click();
-    await expect(running).toHaveCSS('animation-name', 'activity-shimmer');
     upstream.work([
-      reasoning,
       {
         ...tool,
         state: {
@@ -1298,55 +1293,14 @@ test('conversation: thinking and tool shimmer follows native activity', async ({
         },
       },
     ]);
-    await expect(group.locator('.activity-item .activity-label').last()).toHaveAttribute(
-      'data-active',
-      'false',
-    );
-    await expect(running).toHaveText('Read README.md');
-    await expect(running).toHaveCSS('animation-name', 'none');
-    await expect(thinking).toHaveText('Thinking');
-    upstream.work([
-      reasoning,
-      { ...tool, state: { status: 'running', input: { path: 'README.md' }, metadata: {} } },
-    ]);
-    await expect(running).toHaveCSS('animation-name', 'activity-shimmer');
-    await page.screenshot({ path: info.outputPath('activity-shimmer.png') });
+    await expect(summary).toHaveText('Read 1 file');
+    await expect(details.locator('[aria-label="Completed"]')).toBeVisible();
+    await expect(group.locator('.tool-details')).toContainText('Project README contents');
+    await expect(page.locator('.work-header')).toHaveCount(0);
+    await page.screenshot({ path: info.outputPath('tool-activity.png') });
     await page.getByRole('button', { name: 'Stop', exact: true }).click();
-    await expect(header).toHaveText(/^You stopped after \d+s$/);
-    const stoppedLabel = await header.textContent();
-    await page.clock.setFixedTime(now + 3_600_000);
-    await expect(header).toHaveText(stoppedLabel!);
-    await expect(page.locator('.activity-text[data-active="true"]')).toHaveCount(0);
-    await expect(running).toHaveCSS('animation-name', 'none');
-    const compaction = {
-      id: 'compaction-1',
-      type: 'compaction' as const,
-      reason: 'manual' as const,
-      time: { created: Date.now() },
-      summary: 'The workspace was inspected.',
-      recent: '',
-    };
-    upstream.compaction({ ...compaction, status: 'running' });
-    const compacted = page.locator('.context-compaction .activity-text');
-    await expect(compacted).toHaveText('Compacting context');
-    await expect(compacted).toHaveCSS('animation-name', 'activity-shimmer');
-    await expect(thinking).toHaveCount(0);
-    await page.getByRole('button', { name: 'Stop', exact: true }).click();
-    await expect(compacted).toHaveCSS('animation-name', 'none');
-    upstream.compaction({ ...compaction, status: 'completed' });
-    await expect(compacted).toHaveText('Context compacted');
-    await expect(compacted).toHaveCSS('font-size', '16px');
-    await expect(compacted).toHaveCSS('animation-name', 'none');
-    await compacted.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: info.outputPath('context-compacted.png') });
-    upstream.compaction({ ...compaction, status: 'completed', reason: 'auto' });
-    await expect(compacted).toHaveText('Context automatically compacted');
-    upstream.compaction({
-      ...compaction,
-      status: 'failed',
-      error: { type: 'ProviderError', message: 'Provider unavailable' },
-    });
-    await expect(page.getByRole('alert')).toHaveText('Compaction failed: Provider unavailable');
+    await expect(page.getByRole('button', { name: 'Stop', exact: true })).not.toBeVisible();
+    await expect(summary).toHaveText('Read 1 file');
   } finally {
     await gateway.close();
     await upstream.close();
@@ -1371,13 +1325,12 @@ test('conversation: grouped activity and anchored automatic history', async ({ p
     await page.getByRole('button', { name: 'Open', exact: true }).click();
     await page.getByRole('button', { name: 'Explore the project' }).click();
     await expect(page.getByRole('heading', { name: 'Change 599', exact: true })).toBeVisible();
-    await expect(page.locator('.thread-summary-inline')).toBeVisible();
     expect(await page.locator('.timeline-row').count()).toBeLessThan(40);
     await expect(page.locator('.tool-details')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0);
     await page.screenshot({ path: info.outputPath('activity-collapsed.png') });
-    const latestGroup = page.locator('.work-header-trigger').last();
-    await expect(latestGroup).toHaveText('Worked for 27s');
+    const latestGroup = page.locator('.activity-group > .disclosure-trigger').last();
+    await expect(latestGroup).toHaveText('Read 6 files');
     await latestGroup.click();
     await expect
       .poll(async () => {
@@ -1435,7 +1388,7 @@ test('conversation: grouped activity and anchored automatic history', async ({ p
     expect(await page.locator('.timeline-row').count()).toBeLessThan(40);
     await page.getByRole('button', { name: 'Jump to latest' }).click();
     await expect(page.getByRole('heading', { name: 'Change 599', exact: true })).toBeVisible();
-    await expect(page.locator('.work-header-trigger').last()).toHaveAttribute(
+    await expect(page.locator('.activity-group > .disclosure-trigger').last()).toHaveAttribute(
       'aria-expanded',
       'true',
     );
@@ -1519,6 +1472,25 @@ test('Electron: bundled gateway, isolated renderer, and native folder bridge', a
       expect(brand.y).toBeGreaterThanOrEqual(toolbar.height);
       expect(toggle.y + toggle.height).toBeLessThanOrEqual(toolbar.height);
       await page.screenshot({ path: info.outputPath('mac-header-expanded.png') });
+      await expect(page.locator('.sidebar-header')).toHaveCSS('padding-left', '88px');
+      await application.evaluate(({ BrowserWindow }) => {
+        BrowserWindow.getAllWindows()[0]!.setFullScreen(true);
+      });
+      await expect(page.locator('html')).toHaveAttribute('data-fullscreen', 'true');
+      await expect(page.locator('.sidebar-header')).toHaveCSS('padding-left', '8px');
+      await page.keyboard.press('ControlOrMeta+b');
+      await expect(page.locator('.sidebar')).toBeHidden();
+      await expect(page.locator('.toolbar')).toHaveCSS('padding-left', '20px');
+      // Reloading while already fullscreen must recover the native snapshot.
+      await page.reload();
+      await expect(page.locator('html')).toHaveAttribute('data-fullscreen', 'true');
+      await expect(page.locator('.sidebar-header')).toHaveCSS('padding-left', '8px');
+      await page.screenshot({ path: info.outputPath('mac-header-fullscreen.png') });
+      await application.evaluate(({ BrowserWindow }) => {
+        BrowserWindow.getAllWindows()[0]!.setFullScreen(false);
+      });
+      await expect(page.locator('html')).toHaveAttribute('data-fullscreen', 'false');
+      await expect(page.locator('.sidebar-header')).toHaveCSS('padding-left', '88px');
     }
     await page.keyboard.press('ControlOrMeta+b');
     await expect(page.locator('.sidebar')).toBeHidden();
@@ -1575,18 +1547,19 @@ test('Electron: bundled gateway, isolated renderer, and native folder bridge', a
     await page.getByRole('button', { name: 'Explore the project' }).click();
     await expect(page.getByRole('heading', { name: 'Explore the project' })).toBeVisible();
     expect(await page.evaluate(() => 'require' in window || 'process' in window)).toBe(false);
-    await page.getByRole('button', { name: 'Thread summary', exact: true }).click();
-    const summary = page.getByRole('dialog', { name: 'Thread summary', exact: true });
-    await expect(summary).toContainText('Changes+0−0');
-    await summary.getByRole('button', { name: 'Project actions' }).click();
+    await page.getByRole('button', { name: 'Session details', exact: true }).click();
+    const summary = page.getByRole('dialog', { name: 'Session details', exact: true });
+    await expect(summary).toContainText('0 files changed+0 / −0');
+    await expect(summary.getByRole('button', { name: /^Subagents:/ })).toHaveCount(0);
+    await expect(summary.getByText('Usage', { exact: true })).toHaveCount(0);
+    await page.screenshot({ path: info.outputPath('session-details-electron.png') });
+    await page.keyboard.press('Escape');
+    await expect(summary).toBeHidden();
+    await page.getByRole('button', { name: 'Open in…', exact: true }).click();
     await expect(
       page.getByRole('menuitemradio', { name: openApps[0]!.label, exact: true }),
     ).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(summary).toBeVisible();
-    await page.screenshot({ path: info.outputPath('summary-electron.png') });
-    await page.keyboard.press('Escape');
-    await expect(summary).toBeHidden();
     await page.locator('input[type=file]').setInputFiles({
       name: 'download.txt',
       mimeType: 'text/plain',

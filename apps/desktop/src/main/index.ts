@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog } from 'electron';
 import { fileURLToPath } from 'node:url';
 import { startGateway } from '@opencodex/gateway';
+import { desktopChannels } from '@opencodex/contracts/desktop';
 import { registerNativeHandlers } from './ipc';
 import { createPreferences } from './preferences';
 import { registerLinkHandlers } from './links';
@@ -35,6 +36,12 @@ async function createWindow() {
     },
   });
   registerLinkHandlers(window, new URL(origin).origin);
+  const sendFullscreen = (fullscreen: boolean) => {
+    if (!window.webContents.isDestroyed())
+      window.webContents.send(desktopChannels.fullscreenChanged, fullscreen);
+  };
+  window.on('enter-full-screen', () => sendFullscreen(true));
+  window.on('leave-full-screen', () => sendFullscreen(false));
   window.once('ready-to-show', () => window.show());
   await window.loadURL(origin);
 }
