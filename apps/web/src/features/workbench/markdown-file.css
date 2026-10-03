@@ -64,7 +64,6 @@
   font-weight: 600;
 }
 .wb-markdown-prose th {
-  background: var(--secondary);
   text-align: left;
 }
 .wb-markdown-prose td,

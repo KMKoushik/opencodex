@@ -1800,16 +1800,40 @@ svg {
   padding-left: 16px;
   color: var(--text-secondary);
 }
-.markdown table {
-  display: block;
+.markdown-table-scroll {
+  min-width: 0;
   max-width: 100%;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.markdown-table-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.markdown table {
+  width: 100%;
+  font: inherit;
   border-collapse: collapse;
+  table-layout: auto;
+  /* Preserve words in intrinsic column sizing; wide tables scroll instead of crushing labels. */
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: normal;
+  font-variant-numeric: tabular-nums;
 }
 .markdown td,
 .markdown th {
-  border: 1px solid var(--border-heavy);
-  padding: 6px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+  text-align: start;
+  vertical-align: top;
+}
+.markdown th {
+  border-bottom-color: var(--border-heavy);
+  color: var(--text);
+  font-weight: 600;
 }
 .chat-status {
   min-height: 24px;

@@ -7,6 +7,7 @@ import type { WorkspaceFile } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { markdownUrl } from '../../lib/markdown-url';
 import { MarkdownLink } from '../chat/markdown-link';
+import { MarkdownTable } from '../chat/markdown-table';
 import { MarkdownImage } from '../chat/markdown-image';
 import { editorKey, useEditorDrafts } from './editor-drafts';
 import { resolveFileLink } from './file-link';
@@ -113,6 +114,7 @@ function MarkdownPreview({
   const components = useMemo<Components>(
     () => ({
       a: MarkdownLink,
+      table: MarkdownTable,
       img: ({ src, alt }) => <MarkdownImage key={src} src={src} alt={alt} sessionID={sessionID} />,
     }),
     [sessionID],

@@ -6,6 +6,7 @@ import type { LivePart } from './stream';
 import { ResponseMarks } from './response-marks';
 import { MarkdownImage } from './markdown-image';
 import { MarkdownLink } from './markdown-link';
+import { MarkdownTable } from './markdown-table';
 import { markdownUrl } from '../../lib/markdown-url';
 
 const noParts: LivePart[] = [];
@@ -29,6 +30,7 @@ export const StreamText = memo(function StreamText({
   const components = useMemo<Components>(
     () => ({
       a: MarkdownLink,
+      table: MarkdownTable,
       img: ({ src, alt }) => <MarkdownImage key={src} src={src} alt={alt} sessionID={sessionID} />,
     }),
     [sessionID],

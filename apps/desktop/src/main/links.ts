@@ -1,4 +1,11 @@
-import { clipboard, dialog, Menu, shell, type BrowserWindow } from 'electron';
+import {
+  clipboard,
+  dialog,
+  Menu,
+  shell,
+  type BrowserWindow,
+  type MenuItemConstructorOptions,
+} from 'electron';
 import { showTextMenu } from './context-menu';
 
 function isWebLink(value: string) {
@@ -35,19 +42,38 @@ export function registerLinkHandlers(window: BrowserWindow, origin: string) {
     openLink(url);
   });
   window.webContents.on('context-menu', (_event, params) => {
-    const { linkURL } = params;
-    if (params.isEditable || !linkURL) {
+    const { linkURL, mediaType, hasImageContents, x, y } = params;
+    if (params.isEditable || (!linkURL && !(mediaType === 'image' && hasImageContents))) {
       showTextMenu(window, params, openLink);
       return;
     }
-    Menu.buildFromTemplate([
-      { label: 'Open link', enabled: isWebLink(linkURL), click: () => openLink(linkURL) },
-      {
-        label: 'Copy link',
+    const items: MenuItemConstructorOptions[] = [];
+    if (mediaType === 'image' && hasImageContents)
+      items.push({
+        label: 'Copy image',
         click: () => {
-          void clipboard.writeText(linkURL).catch(() => reportFailure('Could not copy the link.'));
+          if (window.isDestroyed() || window.webContents.isDestroyed()) return;
+          try {
+            window.webContents.copyImageAt(x, y);
+          } catch {
+            reportFailure('Could not copy the image.');
+          }
         },
-      },
-    ]).popup({ window });
+      });
+    if (linkURL) {
+      if (items.length) items.push({ type: 'separator' });
+      items.push(
+        { label: 'Open link', enabled: isWebLink(linkURL), click: () => openLink(linkURL) },
+        {
+          label: 'Copy link',
+          click: () => {
+            void clipboard
+              .writeText(linkURL)
+              .catch(() => reportFailure('Could not copy the link.'));
+          },
+        },
+      );
+    }
+    if (items.length) Menu.buildFromTemplate(items).popup({ window });
   });
 }
