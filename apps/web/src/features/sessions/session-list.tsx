@@ -19,7 +19,7 @@ export function SessionList({
   onSelect: (id: string) => void;
 }) {
   const sessions = useSessions(directory, connected, live);
-  const [visibleCount, setVisibleCount] = useState(6);
+  const [visibleCount, setVisibleCount] = useState(4);
   const active = useQuery({
     queryKey: ['active'],
     queryFn: ({ signal }) => api.active(signal),
@@ -64,7 +64,7 @@ export function SessionList({
               const result = await sessions.fetchNextPage();
               if (result.isError) return;
             }
-            setVisibleCount((count) => count + 6);
+            setVisibleCount((count) => count + 4);
           }}
         >
           {sessions.isFetchingNextPage ? 'Loading…' : 'Show more'}

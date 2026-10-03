@@ -1,0 +1,172 @@
+.chat-column {
+  position: relative;
+}
+.thread-summary-toggle[aria-expanded='true'] {
+  color: var(--text);
+  background: var(--selected);
+}
+.thread-summary-toggle ~ .workspace-panel-toggle {
+  position: relative;
+  margin-left: 4px;
+}
+.thread-summary-toggle ~ .workspace-panel-toggle::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: -6px;
+  border-left: 1px solid var(--border-heavy);
+}
+.thread-summary-inline,
+.thread-summary-popover {
+  width: 300px;
+  max-height: calc(100dvh - var(--toolbar-height) - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border-heavy);
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--card-shadow);
+  font-size: 14px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  -webkit-app-region: no-drag;
+}
+.thread-summary-inline {
+  position: absolute;
+  top: calc(var(--toolbar-height) + 14px);
+  right: 16px;
+  max-height: calc(100% - var(--toolbar-height) - 32px);
+  z-index: 3;
+}
+.thread-summary-popover {
+  position: fixed;
+  position-anchor: --chat-toolbar;
+  inset: calc(var(--toolbar-height) + 14px) 16px auto auto;
+  top: calc(anchor(bottom) + 14px);
+  right: calc(anchor(right) + 16px);
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  padding: 0;
+}
+.thread-summary-card {
+  padding: 12px 14px 14px;
+}
+.thread-summary-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+  margin-bottom: 6px;
+  padding-left: 8px;
+  color: var(--text-tertiary);
+}
+.thread-summary-heading .open-app {
+  height: 24px;
+}
+.thread-summary-heading .open-app-trigger {
+  width: 24px;
+}
+.thread-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.thread-summary-row > svg {
+  flex: none;
+}
+.thread-summary-totals {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.thread-summary-added {
+  color: var(--success);
+}
+.thread-summary-meta,
+.thread-summary-note {
+  color: var(--text-tertiary);
+}
+.thread-summary-row:not(.thread-summary-subagents) > .thread-summary-meta {
+  margin-left: auto;
+}
+.thread-summary-section {
+  margin-top: 14px;
+}
+.thread-summary-section h2 {
+  margin-bottom: 8px;
+  padding-left: 8px;
+  color: var(--text-tertiary);
+  font-size: inherit;
+  font-weight: 400;
+}
+.thread-summary-subagents {
+  gap: 6px;
+}
+.thread-summary-avatars {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+}
+.thread-summary-avatars > :nth-child(3n + 1) {
+  color: var(--project-pink);
+}
+.thread-summary-avatars > :nth-child(3n + 2) {
+  color: var(--project-orange);
+}
+.thread-summary-avatars > :nth-child(3n) {
+  color: var(--project-purple);
+}
+.thread-summary-note,
+.thread-summary-error {
+  padding: 8px;
+  overflow-wrap: anywhere;
+}
+.thread-summary-error {
+  color: var(--error);
+  font-size: 12px;
+}
+.thread-summary-error button {
+  margin-top: 6px;
+  color: var(--text-secondary);
+}
+/* Use spare space before narrowing the conversation. At intermediate widths,
+   Codex shifts its unchanged centered text column by half the card + gap. */
+.chat-column[data-summary='shift']
+  :is(.timeline-row, .timeline-footer, .composer-area, .chat-empty, .chat-transcript) {
+  transform: translateX(-156px);
+}
+.chat-column[data-summary='shift'] .jump-to-latest {
+  margin-left: -156px;
+}
+.thread-summary-row:focus-visible {
+  background: var(--hover);
+  outline: 1px solid var(--border-heavy);
+}
+@media (hover: hover) {
+  .thread-summary-row:hover {
+    background: var(--hover);
+  }
+}
+@media (pointer: coarse) {
+  .thread-summary-row,
+  .thread-summary-heading .open-app,
+  .thread-summary-toggle {
+    min-height: 44px;
+  }
+  .thread-summary-heading .open-app-trigger,
+  .thread-summary-toggle {
+    min-width: 44px;
+  }
+}

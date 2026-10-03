@@ -1,5 +1,5 @@
 import { lazy, Suspense, useId, useRef, useState } from 'react';
-import { Cancel01Icon, DashboardSquare01Icon } from '@hugeicons/core-free-icons';
+import { Cancel01Icon, MoreHorizontalIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
 import './session-panel.css';
@@ -34,7 +34,7 @@ export function SessionPanelToggle({
         aria-controls={id}
         popoverTarget={id}
       >
-        <HugeiconsIcon icon={DashboardSquare01Icon} size={16} />
+        <HugeiconsIcon icon={MoreHorizontalIcon} size={16} />
       </Button>
       <div
         ref={panel}
@@ -42,7 +42,7 @@ export function SessionPanelToggle({
         popover="auto"
         role="dialog"
         aria-label="Session details"
-        className="session-panel"
+        className="session-panel scrollbar-on-hover"
         data-shortcut-boundary=""
         onToggle={(event) => {
           if (event.target === event.currentTarget) setOpen(event.newState === 'open');

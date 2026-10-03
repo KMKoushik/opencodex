@@ -389,6 +389,19 @@ export function createApp(
     return c.json({ ok: true });
   });
 
+  app.get('/api/session-search', async (c) => {
+    const search = c.req.query('search')?.trim() ?? '';
+    if (search.length > 256) return c.json({ message: 'Search with up to 256 characters.' }, 400);
+    return c.json(
+      await backend.sessions(
+        undefined,
+        c.req.query('cursor'),
+        c.req.raw.signal,
+        search || undefined,
+      ),
+    );
+  });
+
   app.get('/api/sessions', async (c) => {
     const input = projectInputSchema.safeParse({ directory: c.req.query('directory') });
     if (!input.success) return c.json({ message: 'Choose a project first.' }, 400);

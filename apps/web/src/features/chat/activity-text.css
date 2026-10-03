@@ -1,0 +1,38 @@
+.activity-text {
+  min-width: 0;
+}
+
+/* A quiet sweep across the glyphs, not a spinner or a layout animation. */
+.activity-text[data-active='true'] {
+  background-color: var(--activity-shimmer-base);
+  background-image: linear-gradient(
+    to right,
+    transparent 0%,
+    var(--activity-shimmer-highlight) 40%,
+    var(--activity-shimmer-highlight) 60%,
+    transparent 100%
+  );
+  background-size: 50% 200%;
+  background-position: -100% 0;
+  background-repeat: no-repeat;
+  background-clip: text;
+  color: transparent;
+  animation: activity-shimmer 2s steps(48, end) infinite;
+}
+
+@keyframes activity-shimmer {
+  0% {
+    background-position: -100% 0;
+  }
+  100% {
+    background-position: 250% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .activity-text[data-active='true'] {
+    animation: none;
+    background: none;
+    color: inherit;
+  }
+}

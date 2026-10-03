@@ -23,6 +23,9 @@
   --text: #ededf0;
   --text-secondary: #b0b0b3;
   --text-tertiary: #828285;
+  --activity-shimmer-base: #7d7d80;
+  --activity-shimmer-highlight: #ededf0;
+  --user-message: #303033;
   --border: rgb(237 237 240 / 0.084);
   --border-heavy: rgb(237 237 240 / 0.156);
   --hover: rgb(237 237 240 / 0.068);
@@ -43,6 +46,7 @@
   --link-underline: rgb(237 237 240 / 0.4);
   --scrim: rgb(0 0 0 / 0.5);
   --shadow: 0 12px 32px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.25);
+  --card-shadow: 0 2px 8px rgb(0 0 0 / 0.2), 0 8px 24px rgb(0 0 0 / 0.15);
   --bubble: #28282b;
   --code-bg: rgb(237 237 240 / 0.08);
   --wordmark-muted: #7d7d80;
@@ -76,8 +80,11 @@
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono:
     ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
-  --sidebar-width: 275px;
-  --toolbar-height: 46px;
+  --chat-font-size: 16px;
+  --chat-line-height: 26px;
+  --chat-code-font-size: 13px;
+  --sidebar-width: 300px;
+  --toolbar-height: 40px;
   --row-height: 36px;
   --thread-width: 768px;
 }
@@ -110,6 +117,9 @@
   --text: var(--ink-text);
   --text-secondary: var(--ink-text-secondary);
   --text-tertiary: var(--ink-text-tertiary);
+  --activity-shimmer-base: var(--ink-activity-shimmer-base);
+  --activity-shimmer-highlight: var(--ink-activity-shimmer-highlight);
+  --user-message: var(--ink-user-message);
   --border: var(--ink-border);
   --border-heavy: var(--ink-border-heavy);
   --hover: var(--ink-hover);
@@ -130,6 +140,7 @@
   --link-underline: var(--ink-link-underline);
   --scrim: var(--ink-scrim);
   --shadow: var(--ink-shadow);
+  --card-shadow: var(--ink-card-shadow);
   --bubble: var(--ink-bubble);
   --code-bg: var(--ink-code-bg);
   --wordmark-muted: var(--ink-wordmark-muted);

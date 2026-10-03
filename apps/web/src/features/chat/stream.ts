@@ -5,6 +5,7 @@ export type LivePart = {
   type: 'text' | 'reasoning';
   ordinal: number;
   text: string;
+  completed: boolean;
 };
 
 // Only an ephemeral display overlay. Durable messages always come from OpenCode.
@@ -20,6 +21,7 @@ export function updateStream(parts: LivePart[], event: OpenCodeEvent): LivePart[
         type,
         ordinal: event.data.ordinal,
         text: '',
+        completed: false,
       };
       return [...parts.filter((item) => !matches(item, part)), part];
     }
@@ -36,6 +38,7 @@ export function updateStream(parts: LivePart[], event: OpenCodeEvent): LivePart[
           ? {
               ...part,
               text: 'delta' in event.data ? part.text + event.data.delta : event.data.text,
+              completed: 'delta' in event.data ? part.completed : true,
             }
           : part,
       );

@@ -1,9 +1,15 @@
 import type { SessionMessageInfo, SessionMessageAssistantTool } from '@opencodex/contracts';
+import { toolKind } from './tool-activity';
 
 type Assistant = Extract<SessionMessageInfo, { type: 'assistant' }>;
 export type WorkEntry =
-  | { id: string; type: 'tool'; tool: SessionMessageAssistantTool }
-  | { id: string; type: 'skill'; message: Extract<SessionMessageInfo, { type: 'skill' }> }
+  | { id: string; type: 'tool'; messageID: string; tool: SessionMessageAssistantTool }
+  | {
+      id: string;
+      type: 'skill';
+      messageID: string;
+      message: Extract<SessionMessageInfo, { type: 'skill' }>;
+    }
   | {
       id: string;
       type: 'reasoning';
@@ -17,13 +23,22 @@ export type TimelineRow =
   | { id: string; type: 'text'; message: Assistant; ordinal: number; text: string }
   | {
       id: string;
+      type: 'work-header';
+      startedAt: number;
+      completedAt?: number;
+      outcome?: 'succeeded' | 'failed' | 'interrupted';
+      errors: number;
+      hasActivity: boolean;
+    }
+  | {
+      id: string;
       type: 'activity';
       entries: WorkEntry[];
       summary: string;
-      active: boolean;
+      current?: WorkEntry;
       errors: number;
     };
-type Entry = Exclude<TimelineRow, { type: 'activity' }> | WorkEntry;
+type Entry = Exclude<TimelineRow, { type: 'activity' | 'work-header' }> | WorkEntry;
 
 // Snapshot projection only: token deltas subscribe at the visible text row.
 // Reuse row identities and group keys, including when an older page extends a group.
@@ -54,17 +69,21 @@ export function createTimelineProjector() {
       work = [];
     };
     for (const message of messages) {
+      // Work from separate native executions must not merge across idle rows,
+      // even though those rows do not render transcript content themselves.
+      if (message.type === 'idle') flush();
       let entries = cache.get(message);
       if (!entries) {
         entries = [];
         if (message.type === 'assistant') {
           let text = 0;
           let reasoning = 0;
-          for (const part of message.content) {
+          for (const [index, part] of message.content.entries()) {
             if (part.type === 'tool')
               entries.push({
                 id: part.id,
                 type: 'tool',
+                messageID: message.id,
                 tool: part,
               });
             if (part.type === 'reasoning')
@@ -74,7 +93,10 @@ export function createTimelineProjector() {
                 messageID: message.id,
                 ordinal: reasoning++,
                 text: part.text,
-                completed: Boolean(message.time.completed),
+                completed:
+                  message.time.completed !== undefined ||
+                  part.time?.completed !== undefined ||
+                  index < message.content.length - 1,
               });
             if (part.type === 'text') {
               const ordinal = text++;
@@ -103,7 +125,7 @@ export function createTimelineProjector() {
               message: { ...message, content: [] },
             });
         } else if (message.type === 'skill')
-          entries.push({ id: message.id, type: 'skill', message });
+          entries.push({ id: message.id, type: 'skill', messageID: message.id, message });
         else if (
           message.type !== 'idle' &&
           message.type !== 'system' &&
@@ -135,28 +157,48 @@ function summarizeWork(entries: WorkEntry[]) {
     edits = 0,
     questions = 0,
     skills = 0,
+    subagents = 0,
     other = 0,
     errors = 0;
-  let active = false;
+  let current: WorkEntry | undefined;
   for (const entry of entries) {
     if (entry.type === 'skill') {
       skills++;
       continue;
     }
     if (entry.type !== 'tool') {
-      active ||= !entry.completed;
+      if (!entry.completed) current = entry;
       continue;
     }
     const tool = entry.tool;
-    active ||= tool.state.status === 'running' || tool.state.status === 'streaming';
+    if (tool.state.status === 'running' || tool.state.status === 'streaming') current = entry;
     if (tool.state.status === 'error') errors++;
-    if (/^(read|read_file)$/.test(tool.name)) reads++;
-    else if (/^(grep|glob|search|list|ls)$/.test(tool.name)) searches++;
-    else if (/^(shell|bash|exec|execute)$/.test(tool.name)) commands++;
-    else if (/^(edit|write|patch|apply_patch|write_file)$/.test(tool.name)) edits++;
-    else if (tool.name === 'question') questions++;
-    else if (tool.name === 'skill') skills++;
-    else other++;
+    switch (toolKind(tool.name)) {
+      case 'read':
+        reads++;
+        break;
+      case 'search':
+      case 'list':
+        searches++;
+        break;
+      case 'command':
+        commands++;
+        break;
+      case 'edit':
+        edits++;
+        break;
+      case 'question':
+        questions++;
+        break;
+      case 'skill':
+        skills++;
+        break;
+      case 'subagent':
+        subagents++;
+        break;
+      default:
+        other++;
+    }
   }
   const count = (n: number, singular: string, plural = `${singular}s`) =>
     `${n} ${n === 1 ? singular : plural}`;
@@ -168,9 +210,10 @@ function summarizeWork(entries: WorkEntry[]) {
       edits ? count(edits, 'edit') : '',
       questions ? count(questions, 'question') : '',
       skills ? `used ${count(skills, 'skill')}` : '',
+      subagents ? count(subagents, 'subagent') : '',
       other ? count(other, 'tool call') : '',
     ]
       .filter(Boolean)
       .join(' · ') || 'Thought process';
-  return { summary: summary.charAt(0).toUpperCase() + summary.slice(1), active, errors };
+  return { summary: summary.charAt(0).toUpperCase() + summary.slice(1), current, errors };
 }

@@ -1,12 +1,26 @@
 import { useId, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Copy01Icon, Folder01Icon, FolderOpenIcon, Tick02Icon } from '@hugeicons/core-free-icons';
+import {
+  Copy01Icon,
+  Folder01Icon,
+  FolderOpenIcon,
+  MoreHorizontalIcon,
+  Tick02Icon,
+} from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import type { OpenApp, OpenAppID } from '@opencodex/contracts/desktop';
 import { readStorage, writeStorage } from '../../lib/storage';
 import './open-in-app.css';
 
-export function OpenInApp({ directory, active }: { directory: string; active: boolean }) {
+export function OpenInApp({
+  directory,
+  active,
+  compact = false,
+}: {
+  directory: string;
+  active: boolean;
+  compact?: boolean;
+}) {
   const id = useId();
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -21,7 +35,7 @@ export function OpenInApp({ directory, active }: { directory: string; active: bo
   const apps = useQuery({
     queryKey: ['desktop', 'open-apps'],
     queryFn: () => desktop!.listOpenApps(),
-    enabled: canOpenApps && active,
+    enabled: canOpenApps && active && (!compact || expanded),
     staleTime: 5 * 60_000,
   });
   const selected = apps.data?.find((entry) => entry.id === selectedID) ?? apps.data?.[0];
@@ -53,8 +67,8 @@ export function OpenInApp({ directory, active }: { directory: string; active: bo
         ref={trigger}
         type="button"
         className="open-app-trigger"
-        aria-label="Open in…"
-        title="Open in…"
+        aria-label={compact ? 'Project actions' : 'Open in…'}
+        title={compact ? 'Project actions' : 'Open in…'}
         aria-haspopup="menu"
         aria-expanded={expanded}
         aria-controls={id}
@@ -66,7 +80,9 @@ export function OpenInApp({ directory, active }: { directory: string; active: bo
           }
         }}
       >
-        {selected ? (
+        {compact ? (
+          <HugeiconsIcon icon={MoreHorizontalIcon} size={16} />
+        ) : selected ? (
           <AppIcon key={selected.id} app={selected} />
         ) : (
           <HugeiconsIcon icon={FolderOpenIcon} size={18} />
@@ -75,7 +91,7 @@ export function OpenInApp({ directory, active }: { directory: string; active: bo
       <div
         ref={menu}
         id={id}
-        className="open-app-menu"
+        className="open-app-menu scrollbar-on-hover"
         popover="auto"
         role="menu"
         aria-label="Open project in application"

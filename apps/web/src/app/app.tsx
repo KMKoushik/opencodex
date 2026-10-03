@@ -2,9 +2,6 @@ import { lazy, Suspense, useCallback, useRef, useState } from 'react';
 import {
   PanelLeftCloseIcon,
   PanelLeftIcon,
-  Settings01Icon,
-  PencilEdit02Icon,
-  FolderOpenIcon,
   Folder01Icon,
   PanelRightIcon,
 } from '@hugeicons/core-free-icons';
@@ -34,6 +31,7 @@ import { useCommand } from '../features/shortcuts/use-command';
 import { shortcutProps } from '../features/shortcuts/commands';
 import { ShortcutsSettings } from '../features/shortcuts/shortcuts-settings';
 import { SessionPanelToggle } from '../features/session-panel/session-panel-toggle';
+import { ThreadSummaryToggle } from '../features/session-panel/thread-summary-toggle';
 import { SessionTitle } from '../features/sessions/session-title';
 import { WorkbenchRail } from '../features/workbench/workbench-rail';
 import { panels } from '../features/workbench/panels';
@@ -41,7 +39,9 @@ import { SidebarResize } from '../features/sidebar/sidebar-resize';
 import { readTerminalPlacement, type TerminalPlacement } from '../features/terminal/placement';
 import { writeStorage } from '../lib/storage';
 import { useDraftStore } from '../features/chat/draft-context';
-import { BrandIcon, Wordmark } from '../features/brand/brand';
+import { BrandIcon } from '../features/brand/brand';
+import { Sidebar } from '../features/sidebar/sidebar';
+import { useNavigationHistory } from '../features/sidebar/navigation-history';
 import { FileLinkContext } from '../features/workbench/file-link-context';
 import { resolveFileLink, type FileRequest } from '../features/workbench/file-link';
 
@@ -216,6 +216,12 @@ export function App() {
     selectProject(null);
   }
 
+  const history = useNavigationHistory({ project, sessionID: selectedID, settings }, (location) => {
+    if (project?.directory !== location.project?.directory) selectProject(location.project);
+    setSelectedID(location.sessionID);
+    navigate(location.settings);
+  });
+
   const terminalDirectory = selectedID ? info.data?.location.directory : project?.directory;
   const terminalVisible =
     terminalPlacement === 'bottom'
@@ -306,74 +312,58 @@ export function App() {
       </a>
       <aside ref={sidebar} className="sidebar" id="sidebar" aria-label="Sidebar">
         <SidebarResize />
-        <div className="sidebar-header">
-          <span className="sidebar-brand" aria-label="OpenCodex">
-            <BrandIcon size="small" className="sidebar-brand-icon" />
-            <Wordmark className="sidebar-wordmark" />
-          </span>
-          <Button
-            className="desktop-sidebar-toggle"
-            variant="ghost"
-            size="icon"
-            aria-label="Hide sidebar"
-            {...shortcutProps('sidebar.toggle')}
-            onClick={toggleSidebar}
-          >
-            <HugeiconsIcon icon={PanelLeftCloseIcon} size={16} />
-          </Button>
-        </div>
-        {settings ? (
-          <SettingsNav section={settings} onSelect={navigate} onBack={() => navigate(null)} />
-        ) : (
-          <>
-            <div className="sidebar-actions">
-              <button
-                className="nav-row"
-                disabled={!project || !connected || create.isPending || switchProject.isPending}
-                {...shortcutProps('chat.new')}
-                onClick={newChat}
-              >
-                <HugeiconsIcon icon={PencilEdit02Icon} size={16} />
-                <span>{create.isPending ? 'Creating…' : 'New chat'}</span>
-              </button>
-              <button className="nav-row" {...shortcutProps('project.open')} onClick={openProject}>
-                <HugeiconsIcon icon={FolderOpenIcon} size={16} />
-                <span>Open project</span>
-              </button>
+        <Sidebar
+          settings={settings}
+          connected={connected}
+          live={live}
+          canCreate={Boolean(project && connected && !create.isPending && !switchProject.isPending)}
+          creating={create.isPending}
+          canBack={history.canBack}
+          canForward={history.canForward}
+          onBack={history.back}
+          onForward={history.forward}
+          onToggle={toggleSidebar}
+          onNewChat={newChat}
+          onOpenProject={openProject}
+          onSettings={navigate}
+          onSelectSession={(session) => {
+            const next = projects.find((item) => item.directory === session.directory) ?? {
+              directory: session.directory,
+              name: session.directory.split(/[\\/]/).filter(Boolean).at(-1) ?? session.directory,
+            };
+            if (project?.directory !== next.directory) selectProject(next);
+            setSelectedID(session.id);
+            navigate(null);
+          }}
+        >
+          {settings ? (
+            <SettingsNav section={settings} onSelect={navigate} onBack={() => navigate(null)} />
+          ) : (
+            <>
               {create.isError && selectedID && (
                 <p className="sidebar-note text-error" role="alert">
                   {create.error.message}
                 </p>
               )}
-            </div>
-            <ProjectList
-              connected={connected}
-              live={live}
-              opened={projects}
-              current={project}
-              onSelect={selectProject}
-              onClose={closeProject}
-              onNewChat={newProjectChat}
-              creatingDirectory={create.isPending ? create.variables.directory : undefined}
-              selectedID={selectedID}
-              onSelectSession={(next, id) => {
-                if (project?.directory !== next.directory) selectProject(next);
-                setSelectedID(id);
-                setSidebarOpen(false);
-              }}
-            />
-            <div className="sidebar-footer">
-              <button
-                className="nav-row"
-                {...shortcutProps('settings.open')}
-                onClick={() => navigate('general')}
-              >
-                <HugeiconsIcon icon={Settings01Icon} size={16} />
-                <span>Settings</span>
-              </button>
-            </div>
-          </>
-        )}
+              <ProjectList
+                connected={connected}
+                live={live}
+                opened={projects}
+                current={project}
+                onSelect={selectProject}
+                onClose={closeProject}
+                onNewChat={newProjectChat}
+                creatingDirectory={create.isPending ? create.variables.directory : undefined}
+                selectedID={selectedID}
+                onSelectSession={(next, id) => {
+                  if (project?.directory !== next.directory) selectProject(next);
+                  setSelectedID(id);
+                  setSidebarOpen(false);
+                }}
+              />
+            </>
+          )}
+        </Sidebar>
       </aside>
 
       <div className="main-shell">
@@ -447,9 +437,25 @@ export function App() {
                   live={live}
                 />
               )}
+              {connected && selectedID && info.data?.location.directory && !settings && (
+                <ThreadSummaryToggle
+                  sessionID={selectedID}
+                  directory={info.data.location.directory}
+                  projectName={currentProject?.name}
+                  live={live}
+                  onOpen={(id) => {
+                    const panel = panels.find((panel) => panel.id === id);
+                    if (!panel) return;
+                    setWorkbenchLoaded(true);
+                    setWorkbenchPanel(panel);
+                    setWorkbenchOpen(true);
+                  }}
+                />
+              )}
               {connected && selectedID && !settings && (
                 <Button
                   ref={workbenchToggle}
+                  className="workspace-panel-toggle"
                   variant="ghost"
                   size="icon"
                   aria-label="Toggle workspace panel"
@@ -462,7 +468,7 @@ export function App() {
                 </Button>
               )}
             </header>
-            <main ref={main} id="main" className="main" tabIndex={-1}>
+            <main ref={main} id="main" className="main scrollbar-on-hover" tabIndex={-1}>
               {settings ? (
                 <div className="settings-page" data-section={settings}>
                   {settings !== 'projects' && <h1>{settingsTitle}</h1>}

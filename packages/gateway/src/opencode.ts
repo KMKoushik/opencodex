@@ -102,9 +102,10 @@ export class OpenCodeBackend {
   }
 
   async sessions(
-    directory: string,
+    directory: string | undefined,
     cursor: string | undefined,
     signal: AbortSignal,
+    search?: string,
   ): Promise<SessionPage> {
     const client = await this.requireClient();
     try {
@@ -112,6 +113,7 @@ export class OpenCodeBackend {
         {
           directory,
           cursor,
+          search,
           limit: 50,
           ...(cursor ? {} : { order: 'desc' as const }),
           parentID: null,

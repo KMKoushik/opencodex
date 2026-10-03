@@ -1,4 +1,5 @@
 .open-app {
+  anchor-scope: --open-app;
   display: inline-flex;
   flex: none;
   align-items: stretch;

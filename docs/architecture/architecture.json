@@ -33,7 +33,7 @@
       "x": 89,
       "y": 9,
       "width": 28,
-      "height": 8,
+      "height": 9,
       "title": "ELECTRON MAIN",
       "color": "#f6c177"
     },
@@ -91,7 +91,7 @@
     },
     {
       "points": [
-        [103, 16],
+        [103, 17],
         [103, 21]
       ],
       "color": "#f6c177"
@@ -199,11 +199,12 @@
       "anchor": "center"
     },
     { "x": 76, "y": 10, "value": "preload IPC", "color": "#f6c177" },
-    { "x": 76, "y": 13, "value": "link events", "color": "#f6c177" },
+    { "x": 76, "y": 13, "value": "web events", "color": "#f6c177" },
     { "x": 97, "y": 11, "value": "apps/desktop" },
     { "x": 92, "y": 13, "value": "Window lifecycle" },
     { "x": 92, "y": 14, "value": "Folder picker + open in" },
     { "x": 92, "y": 15, "value": "OS browser + clipboard" },
+    { "x": 92, "y": 16, "value": "OS edit + spelling menus" },
     { "x": 89, "y": 18, "value": "read / write", "color": "#f6c177" },
     { "x": 97, "y": 24, "value": "User-data dir" },
     { "x": 97, "y": 25, "value": "electron-store" },

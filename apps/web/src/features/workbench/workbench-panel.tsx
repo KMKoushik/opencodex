@@ -46,7 +46,7 @@ export function WorkbenchPanel({
       ref={ref}
       id="workbench"
       // Code sits on ink: themes with a review panel palette render this subtree dark.
-      className="workbench ink"
+      className="workbench ink scrollbar-on-hover"
       hidden={!open}
       aria-label="Workspace panel"
       style={{ width }}

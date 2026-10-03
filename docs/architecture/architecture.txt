@@ -11,11 +11,11 @@
   │  │                            │     │                            │   │  preload IPC  │                          │
   │  │  <>   Browser app          │     │  <>   Desktop app          │   │               │  <>   apps/desktop       │
   │  │                            │     │                            ├───┼──────────────▶│                          │
-  │  │  localStorage prefs        │     │  Sandboxed renderer        │   │  link events  │  Window lifecycle        │
+  │  │  localStorage prefs        │     │  Sandboxed renderer        │   │  web events   │  Window lifecycle        │
   │  │  Model intent + frequency  │     │  Native IPC available      ├───┼──────────────▶│  Folder picker + open in │
   │  └────────────────────────────┘     └────────────────────────────┘   │               │  OS browser + clipboard  │
-  │                                                                      │               └─────────────┬────────────┘
-  │             Zustand chat + editor drafts; Query API state            │                             │
+  │                                                                      │               │  OS edit + spelling menus│
+  │             Zustand chat + editor drafts; Query API state            │               └─────────────┬────────────┘
   │                                                                      │               read / write  │
   │          Lazy files, changes, subagents + dockable terminal          │                             │
   └────────────────────┬─────────────────────────────────────────────────┘                             │

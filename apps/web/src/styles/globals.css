@@ -1,5 +1,6 @@
 @import 'tailwindcss' source(none);
 @import './tokens.css';
+@import './scrollbars.css';
 @source '../';
 
 @theme inline {
@@ -96,7 +97,7 @@ svg {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  padding: 0 10px 10px;
+  --row-height: 32px;
   background: var(--surface-under);
 }
 .sidebar-header {
@@ -105,8 +106,7 @@ svg {
   justify-content: space-between;
   flex-shrink: 0;
   height: var(--toolbar-height);
-  padding: 0 6px;
-  margin-bottom: 10px;
+  padding: 0 8px;
   -webkit-app-region: drag;
 }
 .sidebar-header button {
@@ -115,20 +115,30 @@ svg {
 .sidebar-brand {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 5px;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
 }
 .sidebar-brand-icon {
   display: block;
   flex: none;
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   object-fit: contain;
 }
 .sidebar-wordmark {
   display: block;
-  width: auto;
+  width: 96px;
   height: 16.4px;
+  min-width: 0;
+  flex-shrink: 1;
+}
+/* Native macOS controls occupy the titlebar's left edge. */
+:root[data-platform='darwin'] .sidebar-header {
+  padding-left: 88px;
 }
 .toolbar-brand {
   display: inline-flex;
@@ -278,7 +288,7 @@ svg {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: var(--row-height);
+  min-height: 28px;
   padding: 0 2px 0 8px;
   color: var(--text-tertiary);
   font-size: 12px;
@@ -299,7 +309,7 @@ svg {
 .project-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-height: var(--row-height);
   padding: 0 8px;
   color: var(--text-secondary);
@@ -312,22 +322,23 @@ svg {
 .project-row > span {
   flex: 1;
 }
-.project-row > .project-icon {
+.project-folder .project-icon {
   flex: none;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   font-size: 12px;
   border-radius: 4px;
 }
 .session-list {
-  padding-block: 2px 8px;
+  padding-block: 0 14px;
 }
-/* Thread titles align with the project icon; status stays in the left gutter. */
+/* Project and thread titles share the design's text column. */
 .session-row,
 .session-more {
-  padding-left: 26px;
+  padding-left: 32px;
+  font-size: 13px;
 }
-.session-row > span {
+.session-row > .truncate-fade {
   flex: 1;
 }
 .session-row {
@@ -339,10 +350,7 @@ svg {
   color: var(--text-tertiary);
 }
 .session-activity {
-  position: absolute;
-  left: 26px;
-  margin-left: -16px;
-  top: calc(50% - 5px);
+  flex: none;
   width: 10px;
   height: 10px;
   border: 1.5px solid var(--border-heavy);
@@ -352,10 +360,7 @@ svg {
   animation: spin 900ms linear infinite;
 }
 .session-unread {
-  position: absolute;
-  left: 26px;
-  margin-left: -14px;
-  top: calc(50% - 3px);
+  flex: none;
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -370,7 +375,7 @@ svg {
   font-size: 12px;
 }
 .session-list .sidebar-note {
-  padding-left: 26px;
+  padding-left: 32px;
 }
 .sidebar-note .button {
   margin-top: 8px;
@@ -1130,6 +1135,10 @@ svg {
   .app-shell[data-sidebar-collapsed='true'] .sidebar {
     display: none;
   }
+  /* Native controls remain at the window's left edge when the sidebar hides. */
+  :root[data-platform='darwin'] .app-shell[data-sidebar-collapsed='true'] .toolbar {
+    padding-left: 96px;
+  }
 }
 
 @media (pointer: coarse) {
@@ -1232,7 +1241,7 @@ svg {
 
 /* Projects and conversation */
 .sidebar-actions {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 .sidebar-actions .nav-row {
   color: var(--text);
@@ -1500,11 +1509,12 @@ svg {
   gap: 8px;
 }
 .user-message-bubble {
-  max-width: min(80%, 460px);
-  padding: 10px 14px;
+  max-width: min(70%, 456px);
+  padding: 8px 12px;
   border-radius: 16px;
-  background: var(--bubble);
-  line-height: 1.5;
+  background: var(--user-message);
+  font-size: var(--chat-font-size);
+  line-height: 1.625;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -1513,7 +1523,9 @@ svg {
   flex-direction: column;
   gap: 14px;
   min-width: 0;
-  line-height: 1.6;
+  font-size: var(--chat-font-size);
+  font-weight: 400;
+  line-height: var(--chat-line-height);
   overflow-wrap: anywhere;
 }
 .message-note {
@@ -1521,13 +1533,14 @@ svg {
   font-size: 12px;
 }
 .skill-usage {
-  color: var(--text-secondary);
-  font-size: 12px;
+  color: var(--text-tertiary);
+  font-size: var(--chat-font-size);
+  line-height: 24px;
 }
 .skill-usage-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-height: 32px;
   padding: 4px 2px;
   overflow-wrap: anywhere;
@@ -1535,8 +1548,22 @@ svg {
 .skill-usage-label > svg {
   flex-shrink: 0;
 }
-.skill-usage-name {
-  color: var(--text);
+.context-compaction {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-tertiary);
+  font-size: var(--chat-font-size);
+  font-weight: 400;
+  line-height: 24px;
+  overflow-wrap: anywhere;
+}
+.context-compaction > svg {
+  margin-top: 4px;
+}
+.context-compaction[data-status='failed'] .activity-text {
+  color: var(--error);
 }
 .tool-details pre,
 .shell-output,
@@ -1556,6 +1583,7 @@ svg {
   min-height: 0;
 }
 .timeline-scroll {
+  scrollbar-gutter: stable both-edges;
   height: 100%;
   overflow-x: hidden;
   overscroll-behavior-y: contain;
@@ -1573,6 +1601,9 @@ svg {
   width: min(100%, var(--thread-width));
   margin-inline: auto;
   padding: 0 24px 20px;
+}
+.timeline-row:has(.user-message) {
+  padding-bottom: 28px;
 }
 .timeline-row[data-row-type='activity'] {
   padding-bottom: 8px;
@@ -1626,30 +1657,36 @@ svg {
   transform: rotate(90deg);
 }
 .activity-label {
+  font-weight: 400;
   overflow-wrap: anywhere;
 }
-.activity-meta,
-.activity-check {
+.activity-icon {
   color: var(--text-tertiary);
-  font-size: 12px;
 }
-.activity-entries {
-  margin: 4px 0 8px 8px;
-  padding-left: 12px;
-  overscroll-behavior-y: contain;
+.activity-group > .disclosure-trigger,
+.activity-item > .disclosure-trigger {
+  gap: 6px;
+  padding-inline: 0;
+  color: var(--text-tertiary);
+  font-size: var(--chat-font-size);
+  line-height: 24px;
 }
 .activity-group .disclosure-chevron {
-  display: none;
+  order: 1;
+  width: 12px;
+  height: 12px;
+  opacity: 0;
+}
+.activity-group .disclosure-trigger:focus-visible .disclosure-chevron {
+  opacity: 1;
+}
+.activity-entries {
+  margin: 4px 0 8px;
+  padding-left: 24px;
+  overscroll-behavior-y: contain;
 }
 .activity-item .disclosure-trigger {
-  font-size: 12px;
   padding-right: 8px;
-}
-.activity-target {
-  flex: 1;
-  color: var(--text-tertiary);
-  font-family: var(--font-mono);
-  font-size: 11px;
 }
 .tool-details,
 .reasoning-text,
@@ -1666,16 +1703,15 @@ svg {
 }
 .reasoning-text {
   color: var(--text-secondary);
-  line-height: 1.6;
-  white-space: pre-wrap;
+  font-size: var(--chat-font-size);
+  line-height: var(--chat-line-height);
 }
 @media (hover: hover) {
   .disclosure-trigger:hover {
     color: var(--text);
   }
-  .disclosure-trigger:hover .activity-target,
-  .disclosure-trigger:hover .activity-meta {
-    color: var(--text);
+  .activity-group .disclosure-trigger:hover .disclosure-chevron {
+    opacity: 1;
   }
 }
 @media (pointer: coarse) {
@@ -1688,18 +1724,36 @@ svg {
   .timeline-footer {
     padding-inline: 16px;
   }
+  .user-message-bubble {
+    max-width: 90%;
+  }
 }
 .markdown > * + * {
-  margin-top: 12px;
+  margin-top: 16px;
 }
 .markdown h1,
 .markdown h2,
 .markdown h3,
 .markdown h4 {
-  font-size: 16px;
+  font-size: 1.25em;
   font-weight: 600;
   line-height: 1.4;
-  margin-top: 20px;
+  margin-top: 24px;
+}
+.markdown h1 {
+  font-size: 1.75em;
+}
+.markdown h2 {
+  font-size: 1.5em;
+}
+.markdown h4 {
+  font-size: 1em;
+}
+.markdown > :first-child {
+  margin-top: 0;
+}
+.markdown strong {
+  font-weight: 600;
 }
 .markdown ul {
   list-style: disc;
@@ -1710,7 +1764,7 @@ svg {
   padding-left: 24px;
 }
 .markdown li + li {
-  margin-top: 4px;
+  margin-top: 6px;
 }
 .markdown pre {
   padding: 14px 16px;
@@ -1721,7 +1775,7 @@ svg {
   white-space: pre;
 }
 .markdown code {
-  font-size: 12.5px;
+  font-size: var(--chat-code-font-size);
 }
 .markdown :not(pre) > code {
   background: var(--code-bg);
@@ -1758,9 +1812,10 @@ svg {
   padding: 6px 10px;
 }
 .chat-status {
-  min-height: 20px;
+  min-height: 24px;
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: var(--chat-font-size);
+  line-height: 24px;
 }
 .chat-error {
   display: flex;
@@ -1995,7 +2050,11 @@ svg {
   background: transparent;
   color: var(--text);
   font: inherit;
+  font-size: var(--chat-font-size);
   line-height: 1.5;
+  cursor: text;
+  user-select: text;
+  -webkit-app-region: no-drag;
 }
 .composer > textarea:focus-visible {
   outline: none;
