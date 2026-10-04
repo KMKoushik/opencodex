@@ -122,6 +122,49 @@ describe('gateway and the real OpenCode client', () => {
     expect((await unread({ action: 'mark' })).status).toBe(502);
     expect(metadata.opencodexUnread).toBeNull();
   });
+  it('pins and marks threads done through native metadata, keeping other fields', async () => {
+    let metadata: Record<string, unknown> = { opencodexUnread: 'mark', otherClient: true };
+    let running = false;
+    const url = await upstream((req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      if (req.url === '/api/session/active')
+        return res.end(JSON.stringify({ data: running ? { ses_focus: { type: 'running' } } : {} }));
+      expect(req.url).toBe('/api/session/ses_focus');
+      if (req.method === 'GET')
+        return res.end(
+          JSON.stringify({
+            data: { id: 'ses_focus', metadata, time: { created: 10, updated: 900, idle: 50 } },
+          }),
+        );
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        metadata = JSON.parse(body).metadata;
+        res.writeHead(204).end();
+      });
+    });
+    const app = createApp(new OpenCodeBackend(async () => ({ url })));
+    const focus = (action: string) =>
+      app.request('http://localhost/api/sessions/ses_focus/focus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+    expect((await focus('archive')).status).toBe(400);
+    const pinned = await (await focus('pin')).json();
+    expect(pinned).toEqual({ pinned: expect.any(Number), done: null });
+    // Done records the last run, not the bumped update time, and replaces the pin.
+    expect(await (await focus('done')).json()).toEqual({ pinned: null, done: 50 });
+    expect(metadata).toEqual({
+      opencodexUnread: 'mark',
+      otherClient: true,
+      opencodexPinned: null,
+      opencodexDone: 50,
+    });
+    running = true;
+    expect((await focus('done')).status).toBe(409);
+    expect(await (await focus('undone')).json()).toEqual({ pinned: null, done: null });
+  });
   it('lists child sessions with native pagination and reads their transcripts without mutations', async () => {
     const calls: string[] = [];
     const limits: number[] = [];
@@ -643,8 +686,8 @@ describe('gateway and the real OpenCode client', () => {
               id: 'session-1',
               title: 'Review the workspace',
               location: { directory },
-              time: { updated: 42, idle: 40, viewed: 20 },
-              metadata: { opencodexUnread: 'manual-mark' },
+              time: { created: 10, updated: 42, idle: 40, viewed: 20 },
+              metadata: { opencodexUnread: 'manual-mark', opencodexPinned: 30 },
               model: { id: 'test-model' },
               fork: {
                 sessionID: 'source-session',
@@ -672,8 +715,9 @@ describe('gateway and the real OpenCode client', () => {
           title: 'Review the workspace',
           directory,
           updatedAt: 42,
-          time: { idle: 40, viewed: 20 },
+          time: { created: 10, idle: 40, viewed: 20 },
           unread: 'manual-mark',
+          pinned: 30,
           model: 'test-model',
           fork: { sessionID: 'source-session' },
         },

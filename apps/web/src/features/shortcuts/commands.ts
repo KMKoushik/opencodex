@@ -140,7 +140,8 @@ function bindingLabel(binding: Binding, mac: boolean) {
 export function shortcutProps(id: CommandID) {
   const command = commands.find((item) => item.id === id)!;
   return {
-    title: `${command.label} (${shortcutLabel(id)})`,
+    'data-tooltip': command.label,
+    'data-shortcut': shortcutLabel(id),
     // ARIA describes chords, not sequences; the tooltip describes double Escape.
     'aria-keyshortcuts':
       command.bindings

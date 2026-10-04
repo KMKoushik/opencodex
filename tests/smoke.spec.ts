@@ -846,6 +846,10 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
     await expect(projects.locator('.project-row')).toHaveCount(1);
     await page.getByRole('button', { name: 'Explore the project' }).click();
     await expect(page.getByRole('heading', { name: 'Explore the project' })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveCSS(
+      'font-size',
+      '14px',
+    );
     await expect(page.locator('.sidebar-rail')).toHaveCount(0);
     await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Keep my draft');
     await page.getByRole('button', { name: 'Search threads', exact: true }).click();
@@ -1058,6 +1062,12 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
     );
     await page.getByRole('button', { name: 'Send message' }).click();
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeEnabled();
+    const stop = page.getByRole('button', { name: 'Stop', exact: true });
+    const send = page.getByRole('button', { name: 'Send message' });
+    expect(await stop.boundingBox()).toMatchObject({ width: 34, height: 34 });
+    expect(await send.boundingBox()).toMatchObject({ width: 34, height: 34 });
+    await expect(stop.locator('svg')).toHaveAttribute('width', '16');
+    await expect(send.locator('svg')).toHaveAttribute('width', '16');
     await page.keyboard.press('ControlOrMeta+Shift+m');
     await expect(page.getByRole('combobox', { name: 'Search model', exact: true })).toBeVisible();
     await page.keyboard.press('Escape');
@@ -1085,6 +1095,18 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
     await page.getByRole('button', { name: 'Settings' }).click();
     await page.getByRole('button', { name: 'Toggle sidebar' }).click();
     await page.getByRole('button', { name: 'Appearance' }).click();
+    const fontSize = page.getByRole('slider', { name: 'Chat font size', exact: true });
+    await expect(fontSize).toHaveValue('14');
+    await fontSize.focus();
+    await page.keyboard.press('End');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    await expect(fontSize).toHaveValue('18');
+    await expect(page.getByLabel('Chat font preview')).toHaveCSS('font-size', '18px');
+    await page.screenshot({
+      path: info.outputPath('appearance-typography-mobile.png'),
+      animations: 'disabled',
+    });
     await expect(page.getByRole('radio', { name: 'System' })).toBeChecked();
     await page.getByRole('button', { name: 'Light theme' }).click();
     await page.getByRole('option', { name: 'Catppuccin Latte' }).click();
@@ -1098,6 +1120,39 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
     await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(30, 30, 46)');
     await page.reload();
     await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(30, 30, 46)');
+    await expect(page.locator('html')).toHaveCSS('--chat-font-size', '18px');
+    await page.getByRole('button', { name: 'Toggle sidebar' }).click();
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: 'Toggle sidebar' }).click();
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await expect(fontSize).toHaveValue('18');
+    await page.getByRole('button', { name: 'Toggle sidebar' }).click();
+    await page.getByRole('button', { name: 'Back to app' }).click();
+    await page.setViewportSize({ width: 1444, height: 1000 });
+    await projects.getByTitle(directory, { exact: true }).click();
+    await page
+      .getByRole('navigation', { name: 'Sessions', exact: true })
+      .getByRole('button', { name: /^New chat/ })
+      .click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator('.assistant-message').first()).toHaveCSS('font-size', '18px');
+    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveCSS(
+      'font-size',
+      '18px',
+    );
+    await page.setViewportSize({ width: 1444, height: 1000 });
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('button', { name: 'Reset chat font size' }).click();
+    await expect(fontSize).toHaveValue('14');
+    await expect(page.getByLabel('Chat font preview')).toHaveCSS('font-size', '14px');
+    await page.screenshot({ path: info.outputPath('appearance-typography-desktop.png') });
+    await page.getByRole('button', { name: 'Back to app' }).click();
+    await expect(page.locator('.assistant-message').first()).toHaveCSS('font-size', '14px');
+    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveCSS(
+      'font-size',
+      '14px',
+    );
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
@@ -1150,6 +1205,8 @@ test('workspace: combined session details, shared thread actions and native scro
     await page.getByRole('button', { name: 'Open', exact: true }).click();
     await page.getByRole('button', { name: 'Explore the project' }).click();
     await expect(page.getByRole('heading', { name: 'Change 59', exact: true })).toBeVisible();
+    await expect(page.locator('.assistant-message').first()).toHaveCSS('font-size', '14px');
+    await expect(page.locator('.user-message-bubble').first()).toHaveCSS('font-size', '14px');
     // The active thread's hidden panel is ready before its first interaction.
     const retained = page.locator('.session-panel');
     await expect(retained.locator('.session-project-row')).toContainText([
@@ -1352,7 +1409,7 @@ test('workspace: combined session details, shared thread actions and native scro
     await actions.click();
     const menu = page.getByRole('menu', { name: 'Explore the project actions', exact: true });
     const labels = await menu.getByRole('menuitem').allTextContents();
-    expect(labels).toEqual(['Mark as unread']);
+    expect(labels).toEqual(['Pin thread', 'Mark as done', 'Mark as unread']);
     await page.keyboard.press('Escape');
     await expect(actions).toBeFocused();
     await actions.click();

@@ -55,6 +55,7 @@ export function ContextIndicator({
         variant="ghost"
         size="icon"
         className="context-indicator-trigger"
+        tooltip={false}
         aria-label={label}
         aria-describedby={open ? id : undefined}
         aria-expanded={open}

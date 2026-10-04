@@ -97,7 +97,8 @@ export function ModelControls({
       <Select
         triggerRef={thinking}
         triggerProps={{
-          title: `${chooseShortcut.title}; ${cycleShortcut.title}`,
+          'data-tooltip': 'Thinking level',
+          'data-shortcut': `${chooseShortcut['data-shortcut']} · ${cycleShortcut['data-shortcut']} to cycle`,
           'aria-keyshortcuts': `${chooseShortcut['aria-keyshortcuts']} ${cycleShortcut['aria-keyshortcuts']}`,
         }}
         label="Thinking level"

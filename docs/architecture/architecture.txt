@@ -11,7 +11,7 @@
   │  │                            │     │                            │   │  preload IPC  │                          │
   │  │  <>   Browser app          │     │  <>   Desktop app          ├───┼──────────────▶│  <>   apps/desktop       │
   │  │                            │     │                            │◀──┼───────────────┤                          │
-  │  │  localStorage prefs        │     │  Sandboxed renderer        │   │  web events   │  Window + fullscreen     │
+  │  │  localStorage: UI + type   │     │  Sandboxed renderer        │   │  web events   │  Window + fullscreen     │
   │  │  Model/effort + frequency  │     │  Native IPC available      ├───┼──────────────▶│  Folder picker + open in │
   │  └────────────────────────────┘     └────────────────────────────┘   │               │  OS browser + clipboard  │
   │                                                                      │               │  OS edit + spelling menus│
@@ -25,7 +25,7 @@
      ┌──────────────────────── LOCAL GATEWAY ──────────┴─────────────┐                   │  <>   User-data dir      │
      │                                                               │                   │       electron-store     │
      │  <>   packages/gateway                                        │                   │  preferences.json        │
-     │                                                               │                   │  Projects, theme + layout│
+     │                                                               │                   │  Projects, UI + font size│
      │  Hono + V2 client; private service credentials                │                   │  Model/effort + frequency│
      │  Bounded images/diffs; version-checked file writes            │                   └──────────────────────────┘
      │  Native APIs + origin-checked, ticketed PTY relay             │

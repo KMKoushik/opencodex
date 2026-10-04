@@ -274,12 +274,13 @@ export function Composer({
             <Button
               variant="secondary"
               size="icon"
+              className="composer-stop"
               aria-label="Stop"
               {...shortcutProps('chat.stop')}
               disabled={stopping}
               onClick={onStop}
             >
-              <HugeiconsIcon icon={StopIcon} size={14} />
+              <HugeiconsIcon icon={StopIcon} size={16} />
             </Button>
           )}
           <Button

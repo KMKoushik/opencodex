@@ -54,7 +54,7 @@ export function OpenInApp({ directory, active }: { directory: string; active: bo
         type="button"
         className="open-app-trigger"
         aria-label="Open in…"
-        title="Open in…"
+        data-tooltip="Open in…"
         aria-haspopup="menu"
         aria-expanded={expanded}
         aria-controls={id}

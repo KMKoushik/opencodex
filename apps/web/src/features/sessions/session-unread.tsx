@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/ui/button';
 import { api } from '../../lib/api';
-import { refreshSessionUnread } from './unread';
+import { refreshSession } from './metadata';
 
 export function SessionUnread({
   sessionID,
@@ -20,7 +20,7 @@ export function SessionUnread({
     mutationKey: ['chat', sessionID, 'unread'],
     mutationFn: (marker: string) => api.unreadSession(sessionID, { action: 'clear', marker }),
     retry: false,
-    onSuccess: () => refreshSessionUnread(client, sessionID),
+    onSuccess: () => refreshSession(client, sessionID),
   });
   const { mutate, isPending } = clear;
   useEffect(() => {

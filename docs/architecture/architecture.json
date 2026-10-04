@@ -188,7 +188,7 @@
     },
     { "x": 38, "y": 7, "value": "React + TypeScript + TanStack Query", "anchor": "center" },
     { "x": 13, "y": 11, "value": "Browser app" },
-    { "x": 8, "y": 13, "value": "localStorage prefs" },
+    { "x": 8, "y": 13, "value": "localStorage: UI + type" },
     { "x": 8, "y": 14, "value": "Model/effort + frequency" },
     { "x": 48, "y": 11, "value": "Desktop app" },
     { "x": 43, "y": 13, "value": "Sandboxed renderer" },
@@ -222,7 +222,7 @@
     { "x": 97, "y": 24, "value": "User-data dir" },
     { "x": 97, "y": 25, "value": "electron-store" },
     { "x": 92, "y": 26, "value": "preferences.json" },
-    { "x": 92, "y": 27, "value": "Projects, theme + layout" },
+    { "x": 92, "y": 27, "value": "Projects, UI + font size" },
     { "x": 92, "y": 28, "value": "Model/effort + frequency" },
     { "x": 7, "y": 21, "value": "HTTP /api", "color": "#7bb8ff" },
     { "x": 7, "y": 22, "value": "+ WS input", "color": "#7bb8ff" },
@@ -275,7 +275,7 @@
     "Survives OpenCodex shutdown",
     "packages/contracts",
     "preferences.json",
-    "localStorage prefs",
+    "localStorage: UI + type",
     "RUNTIME HOSTING"
   ],
   "style": {

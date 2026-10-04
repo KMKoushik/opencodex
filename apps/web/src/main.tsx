@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './app/app';
 import { Providers } from './app/providers';
 import { applyInitialTheme } from './features/theme/use-theme';
+import { applyInitialChatFontSize } from './features/settings/chat-font-size';
 import { initializeStorage } from './lib/storage';
 import './styles/globals.css';
 
@@ -29,6 +30,7 @@ if (window.desktop) {
 }
 void initializeStorage().then(() => {
   applyInitialTheme();
+  applyInitialChatFontSize();
   createRoot(root).render(
     <StrictMode>
       <Providers>

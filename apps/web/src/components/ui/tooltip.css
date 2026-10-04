@@ -1,0 +1,30 @@
+.tooltip {
+  position: fixed;
+  inset: auto;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  max-width: min(280px, calc(100vw - 16px));
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border-heavy);
+  border-radius: 6px;
+  background: var(--elevated);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  line-height: 16px;
+  pointer-events: none;
+}
+.tooltip:popover-open {
+  display: flex;
+}
+.tooltip kbd {
+  flex: none;
+  color: var(--text-tertiary);
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.tooltip kbd[hidden] {
+  display: none;
+}

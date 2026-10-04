@@ -18,11 +18,23 @@ export type PreferenceKey =
   | 'terminalPlacement'
   | 'projectModels'
   | 'modelUsage'
-  | 'modelVariants';
+  | 'modelVariants'
+  | 'chatFontSize'
+  | 'threadView'
+  | 'pinnedThreads'
+  | 'focusExcluded';
 export type DesktopPreferences = Record<
   Exclude<
     PreferenceKey,
-    'openInApp' | 'terminalPlacement' | 'projectModels' | 'modelUsage' | 'modelVariants'
+    | 'openInApp'
+    | 'terminalPlacement'
+    | 'projectModels'
+    | 'modelUsage'
+    | 'modelVariants'
+    | 'chatFontSize'
+    | 'threadView'
+    | 'pinnedThreads'
+    | 'focusExcluded'
   >,
   string | null
 > & {
@@ -31,6 +43,10 @@ export type DesktopPreferences = Record<
   projectModels?: string | null;
   modelUsage?: string | null;
   modelVariants?: string | null;
+  chatFontSize?: string | null;
+  threadView?: string | null;
+  pinnedThreads?: string | null;
+  focusExcluded?: string | null;
 };
 
 export const openAppIDs = [

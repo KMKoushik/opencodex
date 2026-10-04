@@ -60,8 +60,7 @@ export function ProjectList({
     return metadata ? projectFolder(metadata) : project;
   });
   return (
-    <nav className="project-list scrollbar-on-hover" aria-label="Projects">
-      <div className="sidebar-heading">Projects</div>
+    <nav className="project-groups" aria-label="Projects">
       {opened.length > 0 && projects.isError && (
         <div className="sidebar-note" role="alert">
           <p>{projects.error.message}</p>

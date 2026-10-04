@@ -5,6 +5,12 @@ import { Button } from '../../components/ui/button';
 import { SegmentedControl } from '../../components/ui/segmented-control';
 import { Select } from '../../components/ui/select';
 import { SettingsGroup, SettingsRow } from '../settings/settings-layout';
+import {
+  defaultChatFontSize,
+  minChatFontSize,
+  maxChatFontSize,
+  useChatFontSize,
+} from '../settings/chat-font-size';
 import { presets, type Variant } from './presets';
 import { isCustomized, resolveSeed, type ThemeMode, type VariantPreference } from './theme';
 import { useTheme } from './use-theme';
@@ -36,6 +42,7 @@ export function AppearanceSettings({
           />
         </SettingsRow>
       </SettingsGroup>
+      <ChatFontSettings />
       <SettingsGroup title="Terminal">
         <SettingsRow
           label="Placement"
@@ -61,6 +68,51 @@ export function AppearanceSettings({
         />
       ))}
     </>
+  );
+}
+
+function ChatFontSettings() {
+  const id = useId();
+  const { size, update } = useChatFontSize();
+  return (
+    <SettingsGroup
+      title="Typography"
+      action={
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label="Reset chat font size"
+          disabled={size === defaultChatFontSize}
+          onClick={() => update(defaultChatFontSize)}
+        >
+          Reset
+        </Button>
+      }
+    >
+      <SettingsRow
+        label="Chat font size"
+        description="Messages and the prompt input. Code and sidebar text are unchanged."
+        htmlFor={id}
+      >
+        <div className="contrast-field chat-font-size-field">
+          <input
+            id={id}
+            type="range"
+            min={minChatFontSize}
+            max={maxChatFontSize}
+            step={1}
+            value={size}
+            aria-label="Chat font size"
+            aria-valuetext={`${size} pixels`}
+            onChange={(event) => update(Number(event.target.value))}
+          />
+          <output htmlFor={id}>{size}px</output>
+        </div>
+      </SettingsRow>
+      <div className="settings-chat-preview" aria-label="Chat font preview">
+        Good code should be easy to read.
+      </div>
+    </SettingsGroup>
   );
 }
 

@@ -36,7 +36,10 @@ export function Select<T extends Option>({
   placeholder?: string;
   disabled?: boolean;
   triggerRef?: Ref<HTMLButtonElement>;
-  triggerProps?: Pick<ButtonHTMLAttributes<HTMLButtonElement>, 'title' | 'aria-keyshortcuts'>;
+  triggerProps?: Pick<ButtonHTMLAttributes<HTMLButtonElement>, 'title' | 'aria-keyshortcuts'> & {
+    'data-tooltip'?: string;
+    'data-shortcut'?: string;
+  };
 }) {
   const id = useId();
   const root = useRef<HTMLDivElement>(null);

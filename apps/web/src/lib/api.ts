@@ -18,6 +18,8 @@ import {
   type CommandInfo,
   sessionActionSchema,
   sessionUnreadSchema,
+  type SessionAttention,
+  type SessionFocusAction,
   type FormAnswer,
   type ModelCatalog,
   type ModelRef,
@@ -128,6 +130,16 @@ export const api = {
     nativeRequest<{ ok: true }>(`${sessionPath(id)}/view`, post({ idle })),
   unreadSession: (id: string, input: z.infer<typeof sessionUnreadSchema>) =>
     nativeRequest<{ unread: string | null }>(`${sessionPath(id)}/unread`, post(input)),
+  focusSession: (id: string, action: SessionFocusAction) =>
+    nativeRequest<{ pinned: number | null; done: number | null }>(
+      `${sessionPath(id)}/focus`,
+      post({ action }),
+    ),
+  attention: (directories: string[], signal: AbortSignal) =>
+    nativeRequest<SessionAttention>(
+      `/attention?${new URLSearchParams(directories.map((directory) => ['directory', directory]))}`,
+      { signal },
+    ),
   subagents: (id: string, cursor: string | undefined, signal: AbortSignal) =>
     nativeRequest<SessionListOutput>(
       `${sessionPath(id)}/subagents${cursor ? `?${new URLSearchParams({ cursor })}` : ''}`,
@@ -180,6 +192,7 @@ export const api = {
     if (cursor) query.set('cursor', cursor);
     return request(`/sessions?${query}`, sessionPageSchema, { signal });
   },
+  /** All projects' root threads, newest update first. An empty search lists everything. */
   searchSessions: (search: string, cursor: string | undefined, signal: AbortSignal) => {
     const query = new URLSearchParams({ search });
     if (cursor) query.set('cursor', cursor);

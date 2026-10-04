@@ -20,7 +20,8 @@ import { resolveProject } from './project';
 import { workspaceRoutes } from './workspace';
 import { terminalRoutes } from './terminals';
 import { imageRoutes } from './images';
-import { sessionUnreadRoutes } from './session-unread';
+import { sessionMetadataRoutes } from './session-metadata';
+import { attention } from './attention';
 
 export function createApp(
   backend = new OpenCodeBackend(),
@@ -47,7 +48,17 @@ export function createApp(
   app.post('/api/connection', async (c) => c.json(await backend.connection(true)));
   app.route('/api/terminals', terminalRoutes(backend));
   app.route('/api/sessions', imageRoutes(backend));
-  app.route('/api/sessions', sessionUnreadRoutes(backend));
+  app.route('/api/sessions', sessionMetadataRoutes(backend));
+  app.get('/api/attention', async (c) => {
+    const directories = [...new Set(c.req.queries('directory') ?? [])];
+    if (directories.length > 32 || directories.some((item) => !item.trim() || item.length > 4096))
+      return c.json({ message: 'Choose up to 32 project directories.' }, 400);
+    return c.json(
+      await backend.request(c.req.raw.signal, (client, options) =>
+        attention(client, directories, options),
+      ),
+    );
+  });
 
   app.post('/api/projects/resolve', async (c) => {
     const input = projectInputSchema.safeParse(await c.req.json().catch(() => null));

@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '../../components/ui/button';
 import { api } from '../../lib/api';
+import { activityAt } from '../threads/focus';
+import { rememberPinned } from '../threads/pins';
 import { useSessions } from './use-sessions';
 import { SessionRow } from './session-row';
 
@@ -26,10 +28,27 @@ export function SessionList({
     enabled: connected,
     refetchOnMount: false,
   });
-  const items = useMemo(
+  const loaded = useMemo(
     () => sessions.data?.pages.flatMap((page) => page.sessions) ?? [],
     [sessions.data],
   );
+  // Pinned threads render above the project groups. Running threads stay on top; others
+  // follow their last run, because metadata writes (pins, done, unread) bump `updatedAt`.
+  const items = useMemo(
+    () =>
+      loaded
+        .filter((session) => !session.pinned)
+        .map((session) => ({
+          session,
+          order: active.data?.[session.id] ? session.updatedAt : activityAt(session),
+        }))
+        .sort((a, b) => b.order - a.order)
+        .map((item) => item.session),
+    [loaded, active.data],
+  );
+  useEffect(() => {
+    for (const session of loaded) if (session.pinned) rememberPinned(session.id, true);
+  }, [loaded]);
   const hasHidden = items.length > visibleCount;
   return (
     <nav className="session-list" aria-label="Sessions">

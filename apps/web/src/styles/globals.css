@@ -530,6 +530,12 @@ svg {
   font-size: 13px;
   font-weight: 600;
 }
+.settings-chat-preview {
+  padding: 16px;
+  border-top: 1px solid var(--border);
+  font-size: var(--chat-font-size);
+  line-height: var(--chat-line-height);
+}
 .settings-label {
   display: flex;
   flex-direction: column;
@@ -1099,6 +1105,10 @@ svg {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+.chat-font-size-field output {
+  width: 4ch;
+  flex-shrink: 0;
 }
 
 @media (hover: hover) {
@@ -2148,11 +2158,14 @@ svg {
   height: 30px;
   border-radius: 9px;
 }
-.composer-footer .composer-send {
-  position: relative;
+.composer-footer .composer-send,
+.composer-footer .composer-stop {
   width: 34px;
   height: 34px;
   border-radius: 12px;
+}
+.composer-footer .composer-send {
+  position: relative;
   overflow: hidden;
 }
 /* The glaze's wet highlight across the top of the send button. */
@@ -2221,7 +2234,7 @@ svg {
     font-size: 26px;
   }
   .composer textarea {
-    font-size: 16px;
+    font-size: max(16px, var(--chat-font-size));
   }
 }
 @media (pointer: coarse) {

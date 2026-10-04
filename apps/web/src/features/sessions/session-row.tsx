@@ -1,7 +1,9 @@
-import { useEffect, useId, useRef, useState } from 'react';
-import { GitForkIcon } from '@hugeicons/core-free-icons';
+import { useEffect, useId, useRef, useState, type ComponentProps, type MouseEvent } from 'react';
+import { GitForkIcon, Tick02Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import type { Session } from '@opencodex/contracts';
+import type { OpenCodeProject, Session } from '@opencodex/contracts';
+import { ProjectIcon } from '../projects/project-icon';
+import { activityAt, isSettled } from '../threads/focus';
 import { SessionActionsMenu, type SessionActionsHandle } from './session-actions-menu';
 import './session-row.css';
 
@@ -9,14 +11,27 @@ export function SessionRow({
   session,
   selected,
   responding,
+  attention,
+  project,
   connected,
+  checked,
+  selection,
+  onPick,
   onSelect,
 }: {
   session: Session;
   selected: boolean;
   responding: boolean;
+  /** A pending approval or question, which outranks the other indicators. */
+  attention?: 'permission' | 'question';
+  /** Shown when rows from several projects share a list. */
+  project?: { name: string; icon?: OpenCodeProject['icon'] };
   connected: boolean;
-  onSelect: () => void;
+  /** Defined while a multi-selection is active: whether this row is in it. */
+  checked?: boolean;
+  selection?: ComponentProps<typeof SessionActionsMenu>['selection'];
+  onPick?: () => void;
+  onSelect: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
   const id = useId();
   const detailsID = `${id}-details`;
@@ -24,7 +39,9 @@ export function SessionRow({
   const menu = useRef<SessionActionsHandle>(null);
   const details = useRef<HTMLDivElement>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const [age, setAge] = useState(() => formatAge(session.updatedAt));
+  const [age, setAge] = useState(() => formatAge(activityAt(session)));
+  const unread =
+    session.unread || (!responding && (session.time.idle ?? 0) > (session.time.viewed ?? 0));
   const [expanded, setExpanded] = useState(false);
   useEffect(() => () => clearTimeout(hoverTimer.current), []);
   function hideDetails() {
@@ -34,7 +51,7 @@ export function SessionRow({
   function showDetails(delay = 0) {
     hideDetails();
     if (expanded) return;
-    setAge(formatAge(session.updatedAt));
+    setAge(formatAge(activityAt(session)));
     hoverTimer.current = setTimeout(() => {
       const popup = details.current;
       const row = trigger.current;
@@ -51,7 +68,11 @@ export function SessionRow({
     menu.current?.show(point);
   }
   return (
-    <div className="session-entry" data-selected={selected || undefined}>
+    <div
+      className="session-entry"
+      data-selected={selected || undefined}
+      data-checked={checked || undefined}
+    >
       <div
         className="session-entry-row"
         onContextMenu={(event) => {
@@ -63,6 +84,7 @@ export function SessionRow({
           ref={trigger}
           className="nav-row session-row"
           aria-current={selected ? 'page' : undefined}
+          aria-pressed={checked}
           aria-haspopup="menu"
           aria-expanded={expanded}
           aria-controls={id}
@@ -73,9 +95,10 @@ export function SessionRow({
           onPointerLeave={hideDetails}
           onFocus={() => showDetails()}
           onBlur={hideDetails}
-          onClick={() => {
+          onClick={(event) => {
             hideDetails();
-            onSelect();
+            menu.current?.dismiss();
+            onSelect(event);
           }}
           onKeyDown={(event) => {
             if (event.key === 'Escape') hideDetails();
@@ -85,6 +108,20 @@ export function SessionRow({
             }
           }}
         >
+          {checked !== undefined ? (
+            <span className="session-check" aria-hidden="true">
+              {checked && <HugeiconsIcon icon={Tick02Icon} size={11} strokeWidth={2.5} />}
+            </span>
+          ) : project ? (
+            <span
+              className="session-project"
+              role="img"
+              aria-label={project.name}
+              title={project.name}
+            >
+              <ProjectIcon name={project.name} icon={project.icon} />
+            </span>
+          ) : null}
           <span className="truncate-fade">{session.title}</span>
           {session.fork && (
             <span
@@ -96,23 +133,36 @@ export function SessionRow({
               <HugeiconsIcon icon={GitForkIcon} size={14} aria-hidden="true" />
             </span>
           )}
-          {responding && (
+          {attention ? (
             <span
-              className="session-activity"
+              className="session-attention"
+              data-kind={attention}
               role="img"
-              aria-label="Responding"
-              title="Responding…"
-            />
-          )}
-          {(session.unread ||
-            (!responding && (session.time.idle ?? 0) > (session.time.viewed ?? 0))) && (
-            <span
-              className="session-unread"
-              data-responding={responding || undefined}
-              role="img"
-              aria-label={session.unread ? 'Unread thread' : 'Unread reply'}
-              title={session.unread ? 'Unread thread' : 'Unread reply'}
-            />
+              aria-label={attention === 'permission' ? 'Needs approval' : 'Has a question'}
+              title={attention === 'permission' ? 'Needs approval' : 'Has a question'}
+            >
+              {attention === 'permission' ? '!' : '?'}
+            </span>
+          ) : (
+            <>
+              {responding && (
+                <span
+                  className="session-activity"
+                  role="img"
+                  aria-label="Responding"
+                  title="Responding…"
+                />
+              )}
+              {unread && (
+                <span
+                  className="session-unread"
+                  data-responding={responding || undefined}
+                  role="img"
+                  aria-label={session.unread ? 'Unread thread' : 'Unread reply'}
+                  title={session.unread ? 'Unread thread' : 'Unread reply'}
+                />
+              )}
+            </>
           )}
         </button>
         <div
@@ -124,7 +174,7 @@ export function SessionRow({
         >
           <p>{session.title}</p>
           <p className="session-details-time">
-            <time dateTime={new Date(session.updatedAt).toISOString()}>{age}</time>
+            <time dateTime={new Date(activityAt(session)).toISOString()}>{age}</time>
           </p>
         </div>
         <SessionActionsMenu
@@ -133,6 +183,11 @@ export function SessionRow({
           sessionID={session.id}
           title={session.title}
           connected={connected}
+          pinned={Boolean(session.pinned)}
+          done={isSettled(session)}
+          running={responding}
+          selection={checked ? selection : undefined}
+          onPick={onPick}
           anchor={trigger}
           onOpenChange={setExpanded}
         />

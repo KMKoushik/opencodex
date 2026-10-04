@@ -5,7 +5,7 @@ import { api } from '../../lib/api';
 import { updateStream, type LivePart } from '../chat/stream';
 import { updateSessionViewed } from '../sessions/viewed';
 import type { SubagentCost } from '../session-panel/session-cost';
-import { updateSessionUnread } from '../sessions/unread';
+import { updateSessionMetadata } from '../sessions/metadata';
 
 export function useEvents(enabled: boolean) {
   const client = useQueryClient();
@@ -35,6 +35,7 @@ export function useEvents(enabled: boolean) {
     };
     const changed = new Set<string>();
     const costChanged = new Set<string>();
+    let requestsChanged = false;
     const refreshSubagents = (ids: ReadonlySet<string>) =>
       client.invalidateQueries({
         queryKey: ['subagents'],
@@ -76,6 +77,8 @@ export function useEvents(enabled: boolean) {
         void client.invalidateQueries({ queryKey: ['sessions'] });
         void client.invalidateQueries({ queryKey: ['projects'] });
         void client.invalidateQueries({ queryKey: ['active'] });
+        if (requestsChanged) void client.invalidateQueries({ queryKey: ['attention'] });
+        requestsChanged = false;
         void refreshSubagents(changed);
         if (costChanged.size)
           void client.invalidateQueries({
@@ -105,6 +108,7 @@ export function useEvents(enabled: boolean) {
       void client.invalidateQueries({ queryKey: ['workspace'] });
       void client.invalidateQueries({ queryKey: ['subagents'] });
       void client.invalidateQueries({ queryKey: ['session-cost'] });
+      void client.invalidateQueries({ queryKey: ['attention'] });
       // Subscriptions are live-only. Refetch after every reconnect to recover missed changes.
       void client.invalidateQueries({ queryKey: ['connection'] });
       void client.invalidateQueries({ queryKey: ['models'] });
@@ -151,7 +155,7 @@ export function useEvents(enabled: boolean) {
         return;
       }
       if (event.type === 'session.metadata.updated') {
-        updateSessionUnread(client, event.data.sessionID, event.data.metadata);
+        updateSessionMetadata(client, event.data.sessionID, event.data.metadata);
         return;
       }
       const directory = 'location' in event ? event.location?.directory : undefined;
@@ -192,6 +196,8 @@ export function useEvents(enabled: boolean) {
         costChanged.add(event.data.parentID);
       }
       if (event.type === 'session.deleted') costChanged.add(event.data.sessionID);
+      if (event.type.startsWith('permission.') || event.type.startsWith('form.'))
+        requestsChanged = true;
       const data = 'data' in event ? event.data : undefined;
       const id =
         data && 'sessionID' in data && typeof data.sessionID === 'string'

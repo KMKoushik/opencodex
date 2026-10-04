@@ -7,8 +7,15 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ModelCatalog, ModelRef, OpenCodeProject, Project } from '@opencodex/contracts';
+import type {
+  ModelCatalog,
+  ModelRef,
+  OpenCodeProject,
+  Project,
+  Session,
+} from '@opencodex/contracts';
 import { Button } from '../components/ui/button';
+import { TooltipLayer } from '../components/ui/tooltip-layer';
 import { useConnection } from '../features/connection/use-connection';
 import { useEvents } from '../features/connection/use-events';
 import {
@@ -24,6 +31,7 @@ import { AppearanceSettings } from '../features/theme/appearance-settings';
 import { useThemeEffect } from '../features/theme/use-theme';
 import { WorkspaceView } from '../features/workspace/workspace-view';
 import { ProjectList } from '../features/projects/project-list';
+import { ThreadsView } from '../features/threads/threads-view';
 import { ProjectsSettings } from '../features/projects/projects-settings';
 import { projectFolder } from '../features/projects/project-metadata';
 import { api } from '../lib/api';
@@ -174,6 +182,17 @@ export function App() {
     storeProjects(remaining);
   }
 
+  /** Open a thread from any project, adding its folder to the sidebar when needed. */
+  function openSession(session: Session) {
+    const next = projects.find((item) => item.directory === session.directory) ?? {
+      directory: session.directory,
+      name: session.directory.split(/[\\/]/).filter(Boolean).at(-1) ?? session.directory,
+    };
+    if (project?.directory !== next.directory) selectProject(next);
+    setSelectedID(session.id);
+    setSidebarOpen(false);
+  }
+
   function navigate(next: SettingsSection | null) {
     setSettings(next);
     setSidebarOpen(false);
@@ -311,6 +330,7 @@ export function App() {
       <a className="skip-link" href="#main">
         Skip to content
       </a>
+      <TooltipLayer />
       <aside ref={sidebar} className="sidebar" id="sidebar" aria-label="Sidebar">
         <SidebarResize />
         <Sidebar
@@ -328,12 +348,7 @@ export function App() {
           onOpenProject={openProject}
           onSettings={navigate}
           onSelectSession={(session) => {
-            const next = projects.find((item) => item.directory === session.directory) ?? {
-              directory: session.directory,
-              name: session.directory.split(/[\\/]/).filter(Boolean).at(-1) ?? session.directory,
-            };
-            if (project?.directory !== next.directory) selectProject(next);
-            setSelectedID(session.id);
+            openSession(session);
             navigate(null);
           }}
         >
@@ -346,22 +361,29 @@ export function App() {
                   {create.error.message}
                 </p>
               )}
-              <ProjectList
+              <ThreadsView
                 connected={connected}
                 live={live}
-                opened={projects}
-                current={project}
-                onSelect={selectProject}
-                onClose={closeProject}
-                onNewChat={newProjectChat}
-                creatingDirectory={create.isPending ? create.variables.directory : undefined}
                 selectedID={selectedID}
-                onSelectSession={(next, id) => {
-                  if (project?.directory !== next.directory) selectProject(next);
-                  setSelectedID(id);
-                  setSidebarOpen(false);
-                }}
-              />
+                onSelect={openSession}
+              >
+                <ProjectList
+                  connected={connected}
+                  live={live}
+                  opened={projects}
+                  current={project}
+                  onSelect={selectProject}
+                  onClose={closeProject}
+                  onNewChat={newProjectChat}
+                  creatingDirectory={create.isPending ? create.variables.directory : undefined}
+                  selectedID={selectedID}
+                  onSelectSession={(next, id) => {
+                    if (project?.directory !== next.directory) selectProject(next);
+                    setSelectedID(id);
+                    setSidebarOpen(false);
+                  }}
+                />
+              </ThreadsView>
             </>
           )}
         </Sidebar>

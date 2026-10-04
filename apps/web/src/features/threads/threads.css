@@ -1,0 +1,200 @@
+/* The view switch shows state, so it stays visible unlike hover-only heading actions. */
+/* Square and in the same column as the search and project action buttons. */
+.sidebar-heading .button.thread-view-toggle {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  margin-right: -2px;
+  padding: 0;
+  color: var(--text-tertiary);
+  opacity: 1;
+}
+/* Keep the heading's 28px buttons from touching the first row below. */
+.thread-section > .sidebar-heading,
+.project-list > .sidebar-heading {
+  margin-bottom: 6px;
+}
+.sidebar-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: -2px;
+}
+.sidebar-heading-actions .button.thread-view-toggle {
+  margin-right: 0;
+}
+.project-filter-trigger {
+  anchor-name: --project-filter;
+}
+.project-filter {
+  position: fixed;
+  position-anchor: --project-filter;
+  top: anchor(bottom);
+  right: anchor(right);
+  inset-inline-start: auto;
+  bottom: auto;
+  width: 220px;
+  max-height: min(360px, calc(100vh - 80px));
+  margin: 4px 0 0;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--border-heavy);
+  border-radius: 8px;
+  background: var(--elevated);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+}
+.project-filter-heading,
+.project-filter-empty {
+  padding: 6px 8px 4px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 500;
+}
+.project-filter button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.project-filter button > .truncate {
+  flex: 1;
+}
+.project-filter button[aria-checked='false'] {
+  color: var(--text-tertiary);
+}
+.project-filter button > .project-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+.project-filter button[aria-checked='false'] > .project-icon {
+  opacity: 0.5;
+}
+.project-filter .project-filter-reset {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 6px 6px;
+  color: var(--text-secondary);
+}
+.project-filter button:focus-visible {
+  background: var(--hover);
+  outline: none;
+}
+@media (hover: hover) {
+  .project-filter button:hover {
+    background: var(--hover);
+  }
+}
+.sidebar-heading .button.thread-view-toggle[aria-pressed='true'] {
+  background: var(--selected);
+  color: var(--text);
+}
+.thread-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-bottom: 14px;
+}
+/* Cross-project rows are not nested under a folder, so they start at the row edge. */
+.thread-section .session-row,
+.thread-section .session-more,
+.thread-section .sidebar-note {
+  padding-left: 8px;
+}
+.session-project {
+  display: grid;
+  flex: none;
+  place-items: center;
+}
+.session-project > .project-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+.session-attention {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.session-attention[data-kind='permission'] {
+  background: var(--warning);
+  color: var(--surface);
+}
+.session-attention[data-kind='question'] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.session-check {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border-heavy);
+  border-radius: 4px;
+}
+.session-entry[data-checked] .session-check {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+/* While selecting, highlight the chosen rows rather than the open thread. */
+[data-picking] .session-entry[data-selected]:not([data-checked]) .session-entry-row {
+  background: transparent;
+}
+[data-picking] .session-entry[data-checked] .session-entry-row {
+  background: var(--selected);
+}
+.thread-section-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.thread-undo {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  margin-top: 8px;
+  padding: 2px 2px 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--elevated);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.thread-undo > span {
+  flex: 1;
+}
+.thread-undo .button-icon {
+  width: 24px;
+  min-height: 24px;
+}
+@media (hover: hover) {
+  .thread-section-toggle:hover {
+    color: var(--text);
+  }
+}

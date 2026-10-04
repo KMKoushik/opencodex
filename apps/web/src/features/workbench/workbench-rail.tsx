@@ -28,7 +28,7 @@ export function WorkbenchRail({
           type="button"
           aria-label={view.label}
           aria-describedby={view.id === 'subagents' ? `running-subagents-${sessionID}` : undefined}
-          title={view.label}
+          data-tooltip={view.label}
           aria-pressed={active === view.id}
           onClick={() => onSelect(view)}
         >

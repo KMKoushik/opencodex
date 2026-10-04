@@ -3,6 +3,7 @@ import type {
   ModelListOutput,
   ModelRef,
   ProviderInfo,
+  SessionInfo,
   SessionPromptInput,
   SkillInfo,
   VcsInfo,
@@ -45,8 +46,14 @@ export const sessionSchema = z.object({
   title: z.string(),
   directory: z.string(),
   updatedAt: z.number(),
-  time: z.object({ idle: z.number().optional(), viewed: z.number().optional() }),
+  time: z.object({
+    created: z.number(),
+    idle: z.number().optional(),
+    viewed: z.number().optional(),
+  }),
   unread: z.string().optional(),
+  pinned: z.number().optional(),
+  done: z.number().optional(),
   model: z.string().optional(),
   fork: z.object({ sessionID: z.string() }).optional(),
 });
@@ -138,6 +145,35 @@ export const SESSION_UNREAD_KEY = 'opencodexUnread';
 export function sessionUnread(session: { metadata?: Record<string, unknown> }): string | undefined {
   const marker = session.metadata?.[SESSION_UNREAD_KEY];
   return typeof marker === 'string' && marker ? marker : undefined;
+}
+/** When the thread was pinned. */
+export const SESSION_PINNED_KEY = 'opencodexPinned';
+/** The thread's last activity when it was marked done; newer activity reopens it. */
+export const SESSION_DONE_KEY = 'opencodexDone';
+export function sessionMarker(
+  session: { metadata?: Record<string, unknown> },
+  key: typeof SESSION_PINNED_KEY | typeof SESSION_DONE_KEY,
+): number | undefined {
+  const value = session.metadata?.[key];
+  return typeof value === 'number' && value > 0 ? value : undefined;
+}
+export const sessionFocusSchema = z.object({ action: z.enum(['pin', 'unpin', 'done', 'undone']) });
+export type SessionFocusAction = z.infer<typeof sessionFocusSchema>['action'];
+/** Root threads waiting on an approval or a question, including requests from their subagents. */
+export type SessionAttention = Record<string, 'permission' | 'question'>;
+export function sessionSummary(session: SessionInfo): Session {
+  return {
+    id: session.id,
+    title: session.title || 'Untitled session',
+    directory: session.location.directory,
+    updatedAt: session.time.updated,
+    time: { created: session.time.created, idle: session.time.idle, viewed: session.time.viewed },
+    unread: sessionUnread(session),
+    pinned: sessionMarker(session, SESSION_PINNED_KEY),
+    done: sessionMarker(session, SESSION_DONE_KEY),
+    model: session.model?.id,
+    fork: session.fork ? { sessionID: session.fork.sessionID } : undefined,
+  };
 }
 export const sessionCreateSchema = projectInputSchema.extend({
   model: modelInputSchema.shape.model.optional(),
