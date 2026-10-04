@@ -42,7 +42,7 @@ import { SessionPanelToggle } from '../features/session-panel/session-panel-togg
 import { SessionActionsToggle } from '../features/sessions/session-actions-toggle';
 import { SessionTitle } from '../features/sessions/session-title';
 import { WorkbenchRail } from '../features/workbench/workbench-rail';
-import { panels } from '../features/workbench/panels';
+import { panels, type SubagentRequest } from '../features/workbench/panels';
 import { SidebarResize } from '../features/sidebar/sidebar-resize';
 import { readTerminalPlacement, type TerminalPlacement } from '../features/terminal/placement';
 import { writeStorage } from '../lib/storage';
@@ -59,6 +59,7 @@ const TerminalDrawer = lazy(() =>
   })),
 );
 const terminalPanel = panels.find((panel) => panel.id === 'terminal')!;
+const subagentsPanel = panels.find((panel) => panel.id === 'subagents')!;
 
 const ChatView = lazy(() =>
   import('../features/chat/chat-view').then((module) => ({ default: module.ChatView })),
@@ -86,6 +87,7 @@ export function App() {
   const [workbenchPanel, setWorkbenchPanel] = useState(panels[0]!);
   const [workbenchLoaded, setWorkbenchLoaded] = useState(false);
   const [fileRequest, setFileRequest] = useState<FileRequest>();
+  const [subagentRequest, setSubagentRequest] = useState<SubagentRequest>();
   const workbenchToggle = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
   const main = useRef<HTMLElement>(null);
@@ -537,6 +539,12 @@ export function App() {
                       key={selectedID}
                       sessionID={selectedID}
                       onOpenSession={setSelectedID}
+                      onOpenSubagent={(childID) => {
+                        setSubagentRequest({ sessionID: selectedID, childID });
+                        setWorkbenchLoaded(true);
+                        setWorkbenchPanel(subagentsPanel);
+                        setWorkbenchOpen(true);
+                      }}
                       live={live}
                       projectName={currentProject?.name}
                       project={currentProject}
@@ -594,6 +602,9 @@ export function App() {
                     if (next) setWorkbenchPanel(next);
                   }}
                   fileRequest={fileRequest?.sessionID === selectedID ? fileRequest : undefined}
+                  subagentRequest={
+                    subagentRequest?.sessionID === selectedID ? subagentRequest : undefined
+                  }
                   onClose={() => {
                     if (workbenchPanel.id === 'terminal') {
                       closeTerminal();

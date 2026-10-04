@@ -23,6 +23,7 @@ import { Starters } from './starters';
 import { sessionUnread } from '@opencodex/contracts';
 import { ProjectSwitcher } from '../projects/project-switcher';
 import { undoDraft } from './undo-draft';
+import { SubagentTray } from '../subagents/subagent-tray';
 
 export function ChatView({
   sessionID,
@@ -34,6 +35,7 @@ export function ChatView({
   switchError,
   onSwitchProject,
   onOpenSession,
+  onOpenSubagent,
 }: {
   sessionID: string;
   live: boolean;
@@ -44,6 +46,7 @@ export function ChatView({
   switchError?: string;
   onSwitchProject: (project: Project, model?: ModelRef) => void;
   onOpenSession: (id: string) => void;
+  onOpenSubagent: (id: string) => void;
 }) {
   const client = useQueryClient();
   const chat = useChat(sessionID, live);
@@ -420,6 +423,7 @@ export function ChatView({
             {stop.error.message}
           </p>
         )}
+        <SubagentTray sessionID={sessionID} live={live} onOpen={onOpenSubagent} />
         {chat.forms.data?.[0] ? (
           <QuestionDock
             key={chat.forms.data[0].id}

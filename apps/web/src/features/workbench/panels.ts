@@ -14,7 +14,11 @@ export type PanelContext = {
   /** Switches the workspace panel to another view, e.g. Files ↔ Changes. */
   selectView?: (id: string) => void;
   fileRequest?: FileRequest;
+  subagentRequest?: SubagentRequest;
 };
+
+/** Opens one child session in the Subagents panel; each request object applies once. */
+export type SubagentRequest = { sessionID: string; childID: string };
 
 export type PanelDefinition = {
   id: string;

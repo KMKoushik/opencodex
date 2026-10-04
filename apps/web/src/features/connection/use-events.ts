@@ -77,7 +77,10 @@ export function useEvents(enabled: boolean) {
         void client.invalidateQueries({ queryKey: ['sessions'] });
         void client.invalidateQueries({ queryKey: ['projects'] });
         void client.invalidateQueries({ queryKey: ['active'] });
-        if (requestsChanged) void client.invalidateQueries({ queryKey: ['attention'] });
+        if (requestsChanged) {
+          void client.invalidateQueries({ queryKey: ['attention'] });
+          void client.invalidateQueries({ queryKey: ['subagent-attention'] });
+        }
         requestsChanged = false;
         void refreshSubagents(changed);
         if (costChanged.size)
@@ -109,6 +112,7 @@ export function useEvents(enabled: boolean) {
       void client.invalidateQueries({ queryKey: ['subagents'] });
       void client.invalidateQueries({ queryKey: ['session-cost'] });
       void client.invalidateQueries({ queryKey: ['attention'] });
+      void client.invalidateQueries({ queryKey: ['subagent-attention'] });
       // Subscriptions are live-only. Refetch after every reconnect to recover missed changes.
       void client.invalidateQueries({ queryKey: ['connection'] });
       void client.invalidateQueries({ queryKey: ['models'] });

@@ -6,6 +6,7 @@ import type { ModelRef } from '@opencodex/contracts';
 import { useChat } from '../chat/use-chat';
 import { Timeline } from '../chat/timeline';
 import { MessageAttachments } from '../chat/message-attachments';
+import { PermissionCard } from '../chat/requests';
 import { Button } from '../../components/ui/button';
 import { api } from '../../lib/api';
 import { ProviderLogo } from '../chat/provider-logo';
@@ -65,6 +66,9 @@ export function SubagentSession({
             </article>
           ),
       )}
+      {chat.permissions.data?.map((request) => (
+        <PermissionCard key={request.id} request={request} />
+      ))}
       {!running && (chat.executionError.data || chat.info.data?.outcome === 'failed') && (
         <p className="text-error" role="alert">
           {chat.executionError.data || 'This subagent run failed.'}

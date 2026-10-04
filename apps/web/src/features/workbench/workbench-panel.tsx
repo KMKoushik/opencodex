@@ -2,7 +2,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { Cancel01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
-import type { PanelDefinition } from './panels';
+import type { PanelDefinition, SubagentRequest } from './panels';
 import type { FileRequest } from './file-link';
 import './workbench.css';
 
@@ -13,6 +13,7 @@ export function WorkbenchPanel({
   open,
   panel,
   fileRequest,
+  subagentRequest,
   onClose,
   onSelectPanel,
 }: {
@@ -22,6 +23,7 @@ export function WorkbenchPanel({
   open: boolean;
   panel: PanelDefinition;
   fileRequest?: FileRequest;
+  subagentRequest?: SubagentRequest;
   onClose: () => void;
   onSelectPanel?: (id: string) => void;
 }) {
@@ -130,6 +132,7 @@ export function WorkbenchPanel({
                 headerElement,
                 selectView: onSelectPanel,
                 fileRequest,
+                subagentRequest,
               })}
             </Suspense>
           </div>

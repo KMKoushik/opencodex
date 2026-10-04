@@ -12,8 +12,13 @@ import { SubagentSession } from './subagent-session';
 import { noSubagents, subagentsQuery } from './subagents-query';
 import './subagents.css';
 
-export function SubagentsPanel({ sessionID, live, active }: PanelContext) {
+export function SubagentsPanel({ sessionID, live, active, subagentRequest }: PanelContext) {
   const [selectedID, setSelectedID] = useState<string>();
+  const [handledRequest, setHandledRequest] = useState<typeof subagentRequest>();
+  if (subagentRequest && subagentRequest !== handledRequest) {
+    setHandledRequest(subagentRequest);
+    setSelectedID(subagentRequest.childID);
+  }
   // Retain selection, but release readers, stream observers, and polling when hidden.
   if (!active) return null;
   if (selectedID)
