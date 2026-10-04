@@ -12,11 +12,11 @@
   │  │  <>   Browser app          │     │  <>   Desktop app          ├───┼──────────────▶│  <>   apps/desktop       │
   │  │                            │     │                            │◀──┼───────────────┤                          │
   │  │  localStorage prefs        │     │  Sandboxed renderer        │   │  web events   │  Window + fullscreen     │
-  │  │  Model intent + frequency  │     │  Native IPC available      ├───┼──────────────▶│  Folder picker + open in │
+  │  │  Model/effort + frequency  │     │  Native IPC available      ├───┼──────────────▶│  Folder picker + open in │
   │  └────────────────────────────┘     └────────────────────────────┘   │               │  OS browser + clipboard  │
   │                                                                      │               │  OS edit + spelling menus│
   │             Zustand chat + editor drafts; Query API state            │               └─────────────┬────────────┘
-  │                                                                      │               read / write  │
+  │            Warm session card; small screens use a popover            │               read / write  │
   │          Lazy files, changes, subagents + dockable terminal          │                             │
   └────────────────────┬─────────────────────────────────────────────────┘                             │
        HTTP /api       │                               ▲  SSE + WS                                     ▼
@@ -26,7 +26,7 @@
      │                                                               │                   │       electron-store     │
      │  <>   packages/gateway                                        │                   │  preferences.json        │
      │                                                               │                   │  Projects, theme + layout│
-     │  Hono + V2 client; private service credentials                │                   │  Model intent + frequency│
+     │  Hono + V2 client; private service credentials                │                   │  Model/effort + frequency│
      │  Bounded images/diffs; version-checked file writes            │                   └──────────────────────────┘
      │  Native APIs + origin-checked, ticketed PTY relay             │
      └─────────────────┬─────────────────────────────────────────────┘

@@ -5,7 +5,7 @@ import {
   type InfiniteData,
   type UseInfiniteQueryResult,
 } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import type { SessionInfo, SessionListOutput, TokenUsageInfo } from '@opencodex/contracts';
 import {
   ArrowRight01Icon,
@@ -15,6 +15,7 @@ import {
   Layers01Icon,
   Coins01Icon,
   BotIcon,
+  Folder01Icon,
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
@@ -33,7 +34,7 @@ const money = new Intl.NumberFormat(undefined, {
 });
 const percent = new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 1 });
 
-export function SessionPanel({
+export const SessionPanel = memo(function SessionPanel({
   sessionID,
   projectName,
   live,
@@ -93,6 +94,9 @@ export function SessionPanel({
   });
   const workspaceOptions = {
     enabled: Boolean(directory),
+    // Shared project snapshots survive thread switches; events invalidate them
+    // immediately. Opening the already-mounted panel never starts a fetch.
+    staleTime: 15_000,
     refetchInterval: live ? (false as const) : 15_000,
   };
   const vcs = useQuery({
@@ -138,9 +142,9 @@ export function SessionPanel({
           max={1}
           aria-valuetext={ratio === undefined ? 'No usage reported' : percent.format(ratio)}
         />
-        <p className="session-panel-note">
+        <p className="session-panel-note" title="Context used by the latest response">
           {tokens !== undefined
-            ? `${number.format(tokens)}${model?.limit.context ? ` / ${number.format(model.limit.context)}` : ''} tokens · latest response`
+            ? `${number.format(tokens)}${model?.limit.context ? ` / ${number.format(model.limit.context)}` : ''} tokens`
             : messages.isPending
               ? 'Loading context…'
               : 'Usage appears after the first response.'}
@@ -149,11 +153,11 @@ export function SessionPanel({
         <QueryError query={models} />
       </section>
       <section className="session-panel-section" aria-label="Project details">
-        <div className="session-panel-row">
-          <h3>Project</h3>
-          <span className="truncate" title={directory}>
+        <div className="session-panel-row session-project-heading">
+          <HugeiconsIcon icon={Folder01Icon} size={16} />
+          <h3 className="truncate" title={directory}>
             {projectName || directory?.split('/').filter(Boolean).at(-1) || 'Project'}
-          </span>
+          </h3>
         </div>
         {vcs.data && (
           <>
@@ -295,7 +299,7 @@ export function SessionPanel({
       </PanelDetails>
     </>
   );
-}
+});
 
 function SubagentsSummary({
   query: children,

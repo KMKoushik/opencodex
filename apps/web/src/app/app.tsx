@@ -81,6 +81,7 @@ export function App() {
   const workbenchToggle = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
   const main = useRef<HTMLElement>(null);
+  const chatColumn = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const drafts = useDraftStore();
   const { connected } = useConnection();
@@ -368,7 +369,7 @@ export function App() {
 
       <div className="main-shell">
         <div className="workspace-body">
-          <div className="chat-column">
+          <div ref={chatColumn} className="chat-column">
             <header className="toolbar">
               {sidebarCollapsed && (
                 <span className="toolbar-brand" aria-label="OpenCodex">
@@ -443,6 +444,8 @@ export function App() {
                   sessionID={selectedID}
                   projectName={currentProject?.name}
                   live={live}
+                  column={chatColumn}
+                  workspaceOpen={workbenchOpen}
                   onOpen={(id) => {
                     const panel = panels.find((panel) => panel.id === id);
                     if (!panel) return;

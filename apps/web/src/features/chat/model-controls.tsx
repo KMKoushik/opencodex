@@ -90,7 +90,7 @@ export function ModelControls({
                 : 'No models available')
         }
         onChange={(next) => {
-          // A new model starts with its own default, never the previous model's variant.
+          // Selection restores this model's remembered effort, never another model's variant.
           if (next.id !== model?.id || next.providerID !== model.providerID) onChange(next);
         }}
       />

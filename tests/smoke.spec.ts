@@ -927,6 +927,29 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
     await page.getByRole('button', { name: 'Thinking level', exact: true }).click();
     await expect(page.getByRole('option', { name: 'High', exact: true })).toHaveCount(0);
     await page.getByRole('option', { name: 'Medium', exact: true }).click();
+    // Effort follows provider + model identity, not a model ID alone.
+    await page.getByRole('button', { name: 'Model', exact: true }).click();
+    await page
+      .getByRole('combobox', { name: 'Search model', exact: true })
+      .fill('fixture reasoner');
+    await page.keyboard.press('Enter');
+    await expect(thinkingLevel).toHaveText('High');
+    await thinkingLevel.click();
+    await page.getByRole('option', { name: 'Default', exact: true }).click();
+    await page.getByRole('button', { name: 'Model', exact: true }).click();
+    await page.getByRole('combobox', { name: 'Search model', exact: true }).fill('other');
+    await page.keyboard.press('Enter');
+    await expect(thinkingLevel).toHaveText('Medium');
+    await page.getByRole('button', { name: 'Model', exact: true }).click();
+    await page
+      .getByRole('combobox', { name: 'Search model', exact: true })
+      .fill('fixture reasoner');
+    await page.keyboard.press('Enter');
+    await expect(thinkingLevel).toHaveText('Default');
+    await page.getByRole('button', { name: 'Model', exact: true }).click();
+    await page.getByRole('combobox', { name: 'Search model', exact: true }).fill('other');
+    await page.keyboard.press('Enter');
+    await expect(thinkingLevel).toHaveText('Medium');
     expect(upstream.sessions[0]?.model).toBeUndefined();
     expect(selectionRequests).toEqual([]);
     await page.getByRole('button', { name: /^Updated through/ }).click();
@@ -1127,15 +1150,41 @@ test('workspace: combined session details, shared thread actions and native scro
     await page.getByRole('button', { name: 'Open', exact: true }).click();
     await page.getByRole('button', { name: 'Explore the project' }).click();
     await expect(page.getByRole('heading', { name: 'Change 59', exact: true })).toBeVisible();
-    expect(reads).toEqual([]);
-
-    const panel = page.getByRole('dialog', { name: 'Session details', exact: true });
+    // The active thread's hidden panel is ready before its first interaction.
+    const retained = page.locator('.session-panel');
+    await expect(retained.locator('.session-project-row')).toContainText([
+      'main',
+      '1 file changed',
+    ]);
+    await expect(retained.locator('.session-subagents-more')).toHaveText('+10 more');
+    await expect(retained.locator('.session-details-value')).toContainText([
+      '$0.25',
+      '0/0',
+      '0 available',
+    ]);
+    const panel = retained;
     const toggle = page.getByRole('button', { name: 'Session details', exact: true });
     await page.setViewportSize({ width: 1444, height: 1000 });
     await expect(panel).toBeHidden();
+    await expect(panel).toHaveAttribute('data-layout', 'popover');
     await expect(page.getByRole('button', { name: 'Thread summary', exact: true })).toHaveCount(0);
     await expect(page.locator('.composer-area')).toHaveCSS('transform', 'none');
-    await toggle.click();
+    const readsBeforeOpen = reads.length;
+    const opening = await toggle.evaluate((button: HTMLButtonElement) => {
+      const panel = document.getElementById(button.getAttribute('popovertarget')!)!;
+      const before = performance.now();
+      button.click();
+      return {
+        elapsed: performance.now() - before,
+        open: panel.matches(':popover-open'),
+        ready: !panel.textContent?.includes('Loading'),
+      };
+    });
+    expect(opening.open).toBe(true);
+    expect(opening.ready).toBe(true);
+    expect(opening.elapsed).toBeLessThan(50);
+    console.log(`Session panel first open: ${opening.elapsed.toFixed(1)}ms`);
+    expect(reads.length).toBe(readsBeforeOpen);
     await expect(panel.getByRole('button', { name: /1 file changed/ })).toHaveText(
       '1 file changed+258 / −35',
     );
@@ -1161,8 +1210,89 @@ test('workspace: combined session details, shared thread actions and native scro
     await page.keyboard.press('Escape');
     await expect(panel).toBeHidden();
     await expect(toggle).toBeFocused();
-    await page.setViewportSize({ width: 2000, height: 1000 });
+    expect(
+      await retained
+        .locator('details')
+        .first()
+        .evaluate((node: HTMLDetailsElement) => node.open),
+    ).toBe(true);
+    upstream.diffs[0]!.additions = 259;
+    upstream.emit({ type: 'filesystem.changed', location: { directory }, data: {} });
+    await expect(retained.locator('.session-additions')).toHaveText('+259');
     await expect(panel).toBeHidden();
+    await page.setViewportSize({ width: 2000, height: 1000 });
+    await expect(panel).toHaveAttribute('data-layout', 'inline');
+    await expect(panel).toBeVisible();
+    // A 1728px desktop with its 300px sidebar must pin the card too.
+    await page.setViewportSize({ width: 1728, height: 1000 });
+    await expect(panel).toHaveAttribute('data-layout', 'inline');
+    await expect(panel).toBeVisible();
+    await expect(panel).not.toHaveCSS('width', '288px');
+    const fitted = await page.evaluate(() => ({
+      card: document.querySelector('.session-panel')!.getBoundingClientRect().toJSON(),
+      composer: document.querySelector('.composer-area')!.getBoundingClientRect().toJSON(),
+    }));
+    expect(fitted.card.width).toBeGreaterThanOrEqual(240);
+    expect(fitted.card.width).toBeLessThan(288);
+    expect(fitted.card.left).toBeGreaterThanOrEqual(fitted.composer.right);
+    await page.getByRole('textbox', { name: 'Message', exact: true }).click();
+    await expect(panel).toBeVisible();
+    await page.screenshot({ path: info.outputPath('session-card-1728.png') });
+    await page.setViewportSize({ width: 2000, height: 1000 });
+    await expect(panel).toHaveCSS('width', '288px');
+    await expect(panel).toHaveAttribute('role', 'region');
+    expect(await panel.getAttribute('popover')).toBeNull();
+    expect(await toggle.getAttribute('popovertarget')).toBeNull();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await panel.getByText('Usage', { exact: true }).click();
+    const bounds = await page.evaluate(() => ({
+      chat: document.querySelector('.chat-column')!.getBoundingClientRect().toJSON(),
+      card: document.querySelector('.session-panel')!.getBoundingClientRect().toJSON(),
+      composer: document.querySelector('.composer-area')!.getBoundingClientRect().toJSON(),
+    }));
+    expect(bounds.card.width).toBe(288);
+    expect(bounds.card.height).toBeLessThan(360);
+    expect(bounds.card.left).toBeGreaterThanOrEqual(
+      (bounds.chat.left + bounds.chat.right + 768) / 2,
+    );
+    expect(bounds.composer.right).toBeLessThanOrEqual(bounds.card.left);
+    await toggle.click();
+    await expect(panel).toBeHidden();
+    expect(await page.locator('.composer-area').boundingBox()).toMatchObject({
+      x: bounds.composer.x,
+      width: bounds.composer.width,
+    });
+    await toggle.click();
+    await expect(panel).toBeVisible();
+    expect(await page.locator('.composer-area').boundingBox()).toMatchObject({
+      x: bounds.composer.x,
+      width: bounds.composer.width,
+    });
+    await page.getByRole('textbox', { name: 'Message', exact: true }).click();
+    await expect(panel).toBeVisible();
+    await page.getByRole('button', { name: 'Model', exact: true }).click();
+    await expect(page.getByRole('combobox', { name: 'Search model', exact: true })).toBeVisible();
+    await expect(panel).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeVisible();
+    await page.getByRole('button', { name: 'Thread actions', exact: true }).click();
+    await expect(page.getByRole('menuitem', { name: 'Mark as unread' })).toBeVisible();
+    await expect(panel).toBeVisible();
+    await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Keep the card pinned');
+    await expect(panel).toBeVisible();
+    await panel.locator('summary').first().focus();
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeVisible();
+    await page.getByRole('textbox', { name: 'Message', exact: true }).fill('');
+    await page.locator('.timeline-scroll').evaluate((element) => {
+      element.scrollTop -= 120;
+    });
+    await expect(panel).toBeVisible();
+    expect(await page.locator('.composer-area').boundingBox()).toMatchObject({
+      x: bounds.composer.x,
+      width: bounds.composer.width,
+    });
+    await page.screenshot({ path: info.outputPath('session-card-wide-light.png') });
     await expect(page.locator('.composer-area')).toHaveCSS('transform', 'none');
 
     const scroll = page.locator('.timeline-scroll');
@@ -1177,21 +1307,29 @@ test('workspace: combined session details, shared thread actions and native scro
     await expect(scroll).toHaveCSS('scrollbar-color', 'auto');
     await expect(scroll).toHaveCSS('scrollbar-width', 'auto');
     await page.emulateMedia({ forcedColors: 'none' });
-    await toggle.click();
+    await page.setViewportSize({ width: 2800, height: 1000 });
     await panel.getByRole('button', { name: /1 file changed/ }).click();
     await expect(panel).toBeHidden();
     await expect(page.getByRole('combobox', { name: 'Changes comparison' })).toBeVisible();
+    expect(
+      await page.locator('.chat-column').evaluate((element) => element.clientWidth),
+    ).toBeGreaterThan(1408);
     await page.getByRole('button', { name: 'Close workspace panel' }).click();
+    await page.setViewportSize({ width: 2000, height: 1000 });
+    await expect(panel).toHaveAttribute('data-layout', 'inline');
+    await expect(panel).toBeVisible();
 
     upstream.sessions.find((session) => session.id === 'summary-child-0')!.outcome = 'failed';
     upstream.emit({
       type: 'session.status',
       data: { sessionID: 'summary-child-0', status: { type: 'idle' } },
     });
-    await toggle.click();
     await expect(subagents).toHaveAttribute('aria-label', 'Subagents: 13 subagents');
     await page.screenshot({ path: info.outputPath('session-details-dark.png') });
     await page.setViewportSize({ width: 390, height: 844 });
+    await expect(panel).toHaveAttribute('data-layout', 'popover');
+    await expect(panel).toBeHidden();
+    await toggle.click();
     await expect(panel).toBeVisible();
     await page.screenshot({ path: info.outputPath('session-details-mobile.png') });
     await subagents.click();

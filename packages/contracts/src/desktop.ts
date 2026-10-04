@@ -17,15 +17,20 @@ export type PreferenceKey =
   | 'openInApp'
   | 'terminalPlacement'
   | 'projectModels'
-  | 'modelUsage';
+  | 'modelUsage'
+  | 'modelVariants';
 export type DesktopPreferences = Record<
-  Exclude<PreferenceKey, 'openInApp' | 'terminalPlacement' | 'projectModels' | 'modelUsage'>,
+  Exclude<
+    PreferenceKey,
+    'openInApp' | 'terminalPlacement' | 'projectModels' | 'modelUsage' | 'modelVariants'
+  >,
   string | null
 > & {
   openInApp?: string | null;
   terminalPlacement?: string | null;
   projectModels?: string | null;
   modelUsage?: string | null;
+  modelVariants?: string | null;
 };
 
 export const openAppIDs = [

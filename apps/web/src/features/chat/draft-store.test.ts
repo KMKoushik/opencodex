@@ -56,6 +56,25 @@ it('persists model and thinking per project without persisting drafts or changin
   expect(store.getState().projectModels['/project-0']).toBeUndefined();
 });
 
+it('persists thinking per provider/model, including an explicit Default', () => {
+  let saved = '{}';
+  const store = createDraftStore({
+    saveVariants: (variants) => {
+      saved = JSON.stringify(variants);
+    },
+  });
+  const first = { id: 'reasoner', providerID: 'one', variant: 'high' };
+  const second = { id: 'reasoner', providerID: 'two', variant: 'medium' };
+  store.getState().rememberVariant(first);
+  store.getState().rememberVariant(second);
+  store.getState().rememberVariant({ ...first, variant: undefined });
+  const reopened = createDraftStore({ variants: JSON.parse(saved) });
+  expect(reopened.getState().modelVariants).toEqual({
+    '["one","reasoner"]': null,
+    '["two","reasoner"]': 'medium',
+  });
+});
+
 it('keeps review context separate and preserves comments edited during a send', () => {
   const store = createDraftStore();
   const actions = store.getState();

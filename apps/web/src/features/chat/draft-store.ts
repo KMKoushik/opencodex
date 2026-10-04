@@ -2,6 +2,7 @@ import { createStore } from 'zustand/vanilla';
 import { attachmentLimitError, type ModelRef } from '@opencodex/contracts';
 import { EMPTY_ATTACHMENTS, imageAttachment, type DraftAttachment } from './attachments';
 import { EMPTY_COMMENTS, reviewPrompt, type ReviewComment } from './review-comments';
+import { modelKey } from './model-usage';
 
 type Draft = Readonly<{
   text: string;
@@ -14,6 +15,8 @@ export type DraftSnapshot = Draft & { readonly sessionID: string };
 type DraftState = {
   drafts: Readonly<Record<string, Draft | undefined>>;
   projectModels: Readonly<Record<string, ModelRef>>;
+  modelVariants: Readonly<Record<string, string | null>>;
+  rememberVariant: (model: ModelRef) => void;
   rememberModel: (directory: string, model: ModelRef) => void;
   editText: (sessionID: string, text: string) => void;
   selectModel: (sessionID: string, model: ModelRef) => void;
@@ -32,6 +35,8 @@ export function createDraftStore(
   preferences: {
     models?: Readonly<Record<string, ModelRef>>;
     saveModels?: (models: Readonly<Record<string, ModelRef>>) => void;
+    variants?: Readonly<Record<string, string | null>>;
+    saveVariants?: (variants: Readonly<Record<string, string | null>>) => void;
   } = {},
 ) {
   // Never reuse a revision, even if a draft is cleared and recreated with identical text.
@@ -39,6 +44,22 @@ export function createDraftStore(
   return createStore<DraftState>((set, get) => ({
     drafts: {},
     projectModels: preferences.models ?? {},
+    modelVariants: preferences.variants ?? {},
+    rememberVariant(model) {
+      const key = modelKey(model);
+      const variant = model.variant === 'default' ? null : (model.variant ?? null);
+      const current = get().modelVariants;
+      if (current[key] === variant) return;
+      const entries = Object.entries(current).filter(([id]) => id !== key);
+      entries.push([key, variant]);
+      let modelVariants = Object.fromEntries(entries);
+      while (entries.length > 64 || JSON.stringify(modelVariants).length > 16_384) {
+        entries.shift();
+        modelVariants = Object.fromEntries(entries);
+      }
+      set({ modelVariants });
+      preferences.saveVariants?.(modelVariants);
+    },
     rememberModel(directory, model) {
       const current = get().projectModels;
       const previous = current[directory];

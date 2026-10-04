@@ -11,6 +11,7 @@ export const preferenceInputSchema = z.object({
     'terminalPlacement',
     'projectModels',
     'modelUsage',
+    'modelVariants',
   ]),
   value: z.string().max(16_384).nullable(),
 });
@@ -29,6 +30,7 @@ export function createPreferences() {
       terminalPlacement: { enum: ['bottom', 'right', null] },
       projectModels: { type: ['string', 'null'] },
       modelUsage: { type: ['string', 'null'] },
+      modelVariants: { type: ['string', 'null'] },
     },
     accessPropertiesByDotNotation: false,
     clearInvalidConfig: true,

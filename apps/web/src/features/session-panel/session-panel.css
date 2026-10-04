@@ -30,20 +30,32 @@
   position-anchor: --chat-toolbar;
   top: calc(anchor(bottom) + 8px);
   right: calc(anchor(right) + 12px);
-  width: min(340px, calc(100vw - 32px));
+  width: min(288px, calc(100vw - 32px));
   max-width: calc(anchor-size(width) - 24px);
   max-height: calc(100dvh - var(--toolbar-height) - 32px);
   margin: 0;
-  padding: 0 16px;
+  padding: 0 12px;
   overflow-y: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--border-heavy);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--surface);
   color: var(--text);
-  font-size: 13px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   -webkit-app-region: no-drag;
+}
+.chat-column {
+  position: relative;
+}
+.session-panel[data-layout='inline'] {
+  position: absolute;
+  z-index: 2;
+  position-anchor: auto;
+  inset: calc(var(--toolbar-height) + 16px) 16px auto auto;
+  width: var(--session-card-width, 288px);
+  max-width: none;
+  max-height: calc(100% - var(--toolbar-height) - 32px);
 }
 .session-panel-heading,
 .session-panel-row,
@@ -55,7 +67,10 @@
 }
 .session-panel-heading {
   justify-content: space-between;
-  padding-top: 10px;
+  padding-top: 6px;
+}
+.session-panel-heading h2 {
+  font-size: 13px;
 }
 .session-panel h2,
 .session-panel h3 {
@@ -74,7 +89,7 @@
   color: var(--text-secondary);
 }
 .session-panel-section {
-  padding-block: 16px;
+  padding-block: 8px;
 }
 .session-panel-section + .session-panel-section {
   border-top: 1px solid var(--border);
@@ -84,14 +99,14 @@
   color: var(--text-secondary);
 }
 .session-context {
-  padding-top: 8px;
+  padding-top: 4px;
 }
 .session-context-meter {
   display: block;
   appearance: none;
   width: 100%;
   height: 4px;
-  margin-block: 10px;
+  margin-block: 8px;
   border: 0;
   border-radius: 4px;
   overflow: hidden;
@@ -115,7 +130,10 @@
   overflow-wrap: anywhere;
 }
 .session-project-row {
-  margin-top: 12px;
+  margin-top: 6px;
+}
+.session-project-heading {
+  justify-content: flex-start;
 }
 .session-project-row > span {
   flex: 1;
@@ -241,6 +259,7 @@
 @media (max-width: 720px) {
   .session-panel {
     font-size: 16px;
+    width: min(320px, calc(100vw - 32px));
   }
   .session-panel-details > summary {
     min-height: 44px;
