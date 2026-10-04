@@ -16,7 +16,8 @@ import type { SessionMessageInfo } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { Activity } from './activity';
 import { DisclosureProvider } from './disclosure';
-import { createTimelineProjector, type TimelineRow } from './timeline-model';
+import { createTimelineProjector, createTurnGrouper, type DisplayRow } from './timeline-model';
+import { TurnHeader } from './turn-header';
 import { Message } from './message';
 import { StreamText } from './stream-text';
 import { ResponseSelection } from './response-selection';
@@ -26,7 +27,7 @@ const followOutput = {
   animated: false,
   on: { dataChange: true, itemLayout: true, footerLayout: true, layout: true },
 };
-const rowKey = (row: TimelineRow) => row.id;
+const rowKey = (row: DisplayRow) => row.id;
 
 export function Timeline({
   ref,
@@ -37,6 +38,7 @@ export function Timeline({
   historyError,
   fetchEarlier,
   footer,
+  running = false,
   readOnly = false,
 }: {
   ref?: Ref<TimelineHandle>;
@@ -47,10 +49,23 @@ export function Timeline({
   historyError: boolean;
   fetchEarlier: () => Promise<unknown>;
   footer: ReactNode;
+  /** The session is running, so its last turn is still working. */
+  running?: boolean;
   readOnly?: boolean;
 }) {
   const [project] = useState(createTimelineProjector);
-  const rows = useMemo(() => project(messages), [project, messages]);
+  const [group] = useState(createTurnGrouper);
+  // Explicit open/closed choices per turn; otherwise a turn is open only while it works.
+  const [overrides, setOverrides] = useState<ReadonlyMap<string, boolean>>(() => new Map());
+  const projected = useMemo(() => project(messages), [project, messages]);
+  const rows = useMemo(
+    () => group(projected, messages, running, overrides),
+    [group, projected, messages, running, overrides],
+  );
+  const toggleTurn = useCallback(
+    (id: string, open: boolean) => setOverrides((previous) => new Map(previous).set(id, open)),
+    [],
+  );
   const list = useRef<LegendListRef>(null);
   const scope = useRef<HTMLDivElement>(null);
   const ready = useRef(false);
@@ -79,8 +94,10 @@ export function Timeline({
   };
   useImperativeHandle(ref, () => ({ scrollToLatest }));
   const renderItem = useCallback(
-    ({ item }: { item: TimelineRow }) => <Row key={item.id} row={item} sessionID={sessionID} />,
-    [sessionID],
+    ({ item }: { item: DisplayRow }) => (
+      <Row key={item.id} row={item} sessionID={sessionID} onToggleTurn={toggleTurn} />
+    ),
+    [sessionID, toggleTurn],
   );
   return (
     <DisclosureProvider>
@@ -88,7 +105,9 @@ export function Timeline({
         className="timeline"
         ref={scope}
         onClickCapture={(event) => {
-          if ((event.target as HTMLElement).closest('.disclosure-trigger')) setFollowing(false);
+          // Opening history never pulls the reader back to the newest output.
+          if ((event.target as HTMLElement).closest('.disclosure-trigger, .turn-work'))
+            setFollowing(false);
         }}
       >
         <LegendList
@@ -150,10 +169,20 @@ export function Timeline({
   );
 }
 
-const Row = memo(function Row({ row, sessionID }: { row: TimelineRow; sessionID: string }) {
+const Row = memo(function Row({
+  row,
+  sessionID,
+  onToggleTurn,
+}: {
+  row: DisplayRow;
+  sessionID: string;
+  onToggleTurn: (id: string, open: boolean) => void;
+}) {
   return (
     <div className="timeline-row" data-row-id={row.id} data-row-type={row.type}>
-      {row.type === 'activity' ? (
+      {row.type === 'turn' ? (
+        <TurnHeader row={row} onToggle={onToggleTurn} />
+      ) : row.type === 'activity' ? (
         <Activity row={row} sessionID={sessionID} />
       ) : row.type === 'text' ? (
         <article className="assistant-message" aria-label="Assistant">

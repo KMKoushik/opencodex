@@ -128,6 +128,136 @@ export function createTimelineProjector() {
   };
 }
 
+/** Header for a turn's work: tool activity, reasoning, and progress text before the answer. */
+export type TurnRow = {
+  id: string;
+  type: 'turn';
+  status: 'working' | 'worked' | 'stopped';
+  start: number;
+  end: number | undefined;
+  open: boolean;
+};
+export type DisplayRow = TimelineRow | TurnRow;
+
+type TurnTime = { start: number; end: number | undefined; outcome: string | undefined };
+
+/**
+ * Folds each turn's work under one header, Codex-style. OpenCode does not mark which text is
+ * the final answer, so a finished turn's last text is the answer and everything else is work.
+ * While a turn runs, its newest text stays below the header until more work follows it.
+ * Runs on snapshots and toggles only; header IDs survive older pages and turn completion.
+ */
+export function createTurnGrouper() {
+  let previous = new Map<string, TurnRow>();
+  let owners = new Map<string, string>();
+  return (
+    rows: TimelineRow[],
+    messages: SessionMessageInfo[],
+    running: boolean,
+    overrides: ReadonlyMap<string, boolean>,
+  ) => {
+    const times = turnTimes(messages);
+    const out: DisplayRow[] = [];
+    const nextHeaders = new Map<string, TurnRow>();
+    const nextOwners = new Map<string, string>();
+    const claimed = new Set<string>();
+    let start = 0;
+    while (start < rows.length) {
+      const user = isUser(rows[start]!) ? rows[start] : undefined;
+      if (user) out.push(user);
+      let end = user ? start + 1 : start;
+      while (end < rows.length && !isUser(rows[end]!)) end++;
+      const turn = rows.slice(user ? start + 1 : start, end);
+      const live = running && end === rows.length;
+      let answer = -1;
+      for (let i = turn.length - 1; i >= 0; i--) {
+        const row = turn[i]!;
+        if (row.type === 'text') {
+          answer = i;
+          break;
+        }
+        // While running, text is only the answer so far if no work has followed it.
+        if (live && row.type === 'activity') break;
+      }
+      const members = new Set(
+        turn.filter((row, i) => i !== answer && (row.type === 'activity' || row.type === 'text')),
+      );
+      if (!members.size) {
+        out.push(...turn);
+        start = end;
+        continue;
+      }
+      const id =
+        [...members].map((row) => owners.get(row.id)).find((key) => key && !claimed.has(key)) ??
+        `turn:${user?.id ?? [...members][0]!.id}`;
+      claimed.add(id);
+      const time = times.get(user?.id ?? '');
+      const status = live ? 'working' : time?.outcome === 'interrupted' ? 'stopped' : 'worked';
+      const open = overrides.get(id) ?? live;
+      const old = previous.get(id);
+      const header: TurnRow =
+        old &&
+        old.status === status &&
+        old.open === open &&
+        old.start === time?.start &&
+        old.end === (live ? undefined : time?.end)
+          ? old
+          : {
+              id,
+              type: 'turn',
+              status,
+              start: time?.start ?? 0,
+              end: live ? undefined : time?.end,
+              open,
+            };
+      nextHeaders.set(id, header);
+      let placed = false;
+      for (const row of turn) {
+        const member = members.has(row);
+        if (member) nextOwners.set(row.id, id);
+        if (member && !placed) {
+          out.push(header);
+          placed = true;
+        }
+        if (!member || open) out.push(row);
+      }
+      start = end;
+    }
+    previous = nextHeaders;
+    owners = nextOwners;
+    return out;
+  };
+}
+
+function isUser(row: TimelineRow) {
+  return row.type === 'message' && row.message.type === 'user';
+}
+
+/** Start, end, and outcome per turn, keyed by its user message ('' before the first). */
+function turnTimes(messages: SessionMessageInfo[]) {
+  const times = new Map<string, TurnTime>();
+  let current: TurnTime | undefined;
+  for (const message of messages) {
+    if (message.type === 'user') {
+      current = { start: message.time.created, end: undefined, outcome: undefined };
+      times.set(message.id, current);
+      continue;
+    }
+    if (!current) {
+      current = { start: message.time.created, end: undefined, outcome: undefined };
+      times.set('', current);
+    }
+    if (message.type === 'idle') {
+      current.end = message.time.created;
+      current.outcome = message.outcome;
+    } else if (message.type === 'assistant' && current.outcome === undefined) {
+      const done = message.time.completed ?? message.time.created;
+      current.end = Math.max(current.end ?? 0, done);
+    }
+  }
+  return times;
+}
+
 function summarizeWork(entries: WorkEntry[]) {
   let reads = 0,
     searches = 0,

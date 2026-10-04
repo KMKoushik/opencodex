@@ -1033,6 +1033,13 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
     await expect.poll(() => upstream.answer).toEqual({ scope: 'all' });
     upstream.finishText('Here is the **streaming response**.');
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).not.toBeVisible();
+    // A finished turn folds its work under "Worked for", leaving the answer visible.
+    const worked = page.locator('.turn-work').last();
+    await expect(worked).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByRole('article', { name: 'Assistant' }).last()).toContainText(
+      'streaming response',
+    );
+    await worked.click();
     await page.getByRole('button', { name: 'Read 1 file', exact: true }).click();
     await page.getByRole('button', { name: /Read README.md/ }).click();
     await expect(page.getByText('Project README contents')).toBeVisible();
@@ -1043,10 +1050,12 @@ test('browser: real gateway, projects, live sessions, and mobile navigation', as
       .getByRole('navigation', { name: 'Sessions', exact: true })
       .getByRole('button', { name: /^New chat/ })
       .click();
+    // The recovered text is now the answer; earlier progress text folds into the turn's work.
+    await expect(page.getByText('Recovered after reconnect.', { exact: true })).toBeVisible();
+    await page.locator('.turn-work').last().click();
     await expect(page.getByRole('article', { name: 'Assistant' }).locator('strong')).toHaveText(
       'streaming response',
     );
-    await expect(page.getByText('Recovered after reconnect.', { exact: true })).toBeVisible();
     await page.getByRole('textbox', { name: 'Message', exact: true }).fill('One more thing');
     await page
       .getByRole('navigation', { name: 'Sessions', exact: true })
@@ -1491,10 +1500,16 @@ test('conversation: tool activity keeps its input, output and status visible', a
     await expect(summary).toHaveText('Read 1 file');
     await expect(details.locator('[aria-label="Completed"]')).toBeVisible();
     await expect(group.locator('.tool-details')).toContainText('Project README contents');
-    await expect(page.locator('.work-header')).toHaveCount(0);
+    // The running turn's work stays open under a live header.
+    const turn = page.locator('.turn-work').last();
+    await expect(turn).toContainText('Working');
+    await expect(turn).toHaveAttribute('aria-expanded', 'true');
     await page.screenshot({ path: info.outputPath('tool-activity.png') });
     await page.getByRole('button', { name: 'Stop', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).not.toBeVisible();
+    await expect(turn).toHaveAttribute('aria-expanded', 'false');
+    await expect(turn).not.toContainText('Working');
+    await turn.click();
     await expect(summary).toHaveText('Read 1 file');
   } finally {
     await gateway.close();
@@ -1524,6 +1539,11 @@ test('conversation: grouped activity and anchored automatic history', async ({ p
     await expect(page.locator('.tool-details')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0);
     await page.screenshot({ path: info.outputPath('activity-collapsed.png') });
+    // History loads with each turn's work folded; the answer stays visible.
+    const latestTurn = page.locator('.turn-work').last();
+    await expect(latestTurn).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('.activity-group')).toHaveCount(0);
+    await latestTurn.click();
     const latestGroup = page.locator('.activity-group > .disclosure-trigger').last();
     await expect(latestGroup).toHaveText('Read 6 files');
     await latestGroup.click();

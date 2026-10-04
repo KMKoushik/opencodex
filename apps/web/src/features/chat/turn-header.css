@@ -1,0 +1,41 @@
+.timeline-row[data-row-type='turn'] {
+  padding-bottom: 12px;
+}
+/* A quiet label between a turn's work and its answer. */
+.turn-work {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+}
+.turn-work-label {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.turn-work-chevron {
+  flex: none;
+  transition: transform 120ms ease;
+}
+.turn-work-chevron[data-open='true'] {
+  transform: rotate(90deg);
+}
+.turn-work:focus-visible {
+  color: var(--text);
+}
+@media (hover: hover) {
+  .turn-work:hover {
+    color: var(--text-secondary);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .turn-work-chevron {
+    transition: none;
+  }
+}

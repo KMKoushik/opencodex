@@ -129,6 +129,7 @@ export function SubagentSession({
           historyError={chat.messages.isFetchNextPageError}
           fetchEarlier={chat.messages.fetchNextPage}
           footer={footer}
+          running={running}
           readOnly
         />
       ) : (
