@@ -1,5 +1,6 @@
 appId: dev.opencodex.app
 productName: OpenCodex
+artifactName: ${productName}-${version}-${arch}.${ext}
 directories:
   output: release
 files:
@@ -8,8 +9,18 @@ files:
 asar: true
 mac:
   category: public.app-category.developer-tools
-  target: dmg
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
   icon: build/icon.icns
+  # Used when a Developer ID certificate is configured; unsigned builds skip signing.
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+dmg:
+  title: ${productName} ${version}
 win:
   target: nsis
   icon: build/icon.ico

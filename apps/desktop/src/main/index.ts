@@ -5,11 +5,16 @@ import { desktopChannels } from '@opencodex/contracts/desktop';
 import { registerNativeHandlers } from './ipc';
 import { createPreferences } from './preferences';
 import { registerLinkHandlers } from './links';
+import { loadShellEnvironment } from './shell-env';
 
 // Keep existing development preferences when replacing Electron's default display name.
 const userData = app.getPath('userData');
 app.setName('OpenCodex');
 app.setPath('userData', userData);
+
+// A packaged app may start from Finder without the shell PATH that finds `opencode`, and a
+// service it starts passes that PATH on to agent tools. Probe while Electron starts up.
+const shellEnvironment = app.isPackaged ? loadShellEnvironment() : Promise.resolve();
 
 let gateway: Awaited<ReturnType<typeof startGateway>> | undefined;
 let origin: string;
@@ -55,6 +60,7 @@ app
     if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
       origin = process.env.ELECTRON_RENDERER_URL;
     } else {
+      await shellEnvironment;
       gateway = await startGateway({
         assets: fileURLToPath(new URL('../renderer/', import.meta.url)),
       });

@@ -74,7 +74,7 @@ bun run build        # Web + Electron bundles
 bun package:desktop  # Installer for the current operating system
 ```
 
-The desktop bundle starts its gateway on an available loopback port and serves the built UI from it. OpenCode is an installed prerequisite; its executable is not bundled yet. App icons live in `apps/desktop/build/`; distribution signing and updates are not configured.
+The desktop bundle starts its gateway on an available loopback port and serves the built UI from it. OpenCode is an installed prerequisite; its executable is not bundled yet. App icons live in `apps/desktop/build/`. Downloadable macOS DMGs are published from tags; see [docs/release.md](docs/release.md). Auto-updates are not configured.
 
 ## Backend configuration
 
