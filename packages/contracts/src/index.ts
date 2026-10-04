@@ -31,11 +31,17 @@ export const projectUpdateSchema = z.object({
       override: z
         .string()
         .max(2_000_000)
-        .refine(
-          (value) =>
-            !value || /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]*={0,2}$/.test(value),
-          'Choose a PNG, JPEG, WebP, or GIF image.',
-        ),
+        .refine((value) => {
+          if (!value || /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]*={0,2}$/.test(value))
+            return true;
+          if (value.length > 4096) return false;
+          try {
+            const url = new URL(value);
+            return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password;
+          } catch {
+            return false;
+          }
+        }, 'Choose a PNG, JPEG, WebP, or GIF image, or an HTTP(S) icon URL without credentials.'),
     })
     .optional(),
 });

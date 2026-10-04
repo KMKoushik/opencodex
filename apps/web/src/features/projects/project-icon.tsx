@@ -12,6 +12,7 @@ export function ProjectIcon({ name, icon }: { name: string; icon?: OpenCodeProje
           alt=""
           loading="lazy"
           decoding="async"
+          referrerPolicy="no-referrer"
           onError={() => setFailed(source)}
         />
       ) : (

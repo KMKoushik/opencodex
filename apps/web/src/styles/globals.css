@@ -801,10 +801,21 @@ svg {
   border-radius: 10px;
   font-size: 26px;
 }
-.project-editor-icon p {
+.project-editor-icon p,
+.project-editor-url p {
   margin-top: 6px;
   color: var(--text-tertiary);
   font-size: 12px;
+}
+.project-editor-url {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.project-editor-url-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .project-color-field {
   border: 0;
