@@ -96,8 +96,10 @@ app.whenReady().then(() => {
     applications.push(app);
   }
   // The candidate must satisfy the installed app's actual designated requirement.
-  const { stderr } = await execute('/usr/bin/codesign', ['-d', '-r-', applications[0]]);
-  const requirement = stderr.split('\n').find((line) => line.startsWith('designated => '));
+  const { stdout, stderr } = await execute('/usr/bin/codesign', ['-d', '-r-', applications[0]]);
+  const requirement = (stdout + stderr)
+    .split('\n')
+    .find((line) => line.startsWith('designated => '));
   if (!requirement) throw new Error('The installed smoke app has no designated requirement.');
   await execute('/usr/bin/codesign', [
     '--verify',
