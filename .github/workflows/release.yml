@@ -1,6 +1,6 @@
 name: Release desktop
 
-# Push a tag like v0.2.0 to publish DMGs to a GitHub Release.
+# Push a tag like v0.2.0 to publish installers and update metadata to a GitHub Release.
 # Run manually to build DMGs as a workflow artifact without publishing.
 on:
   push:
@@ -52,18 +52,28 @@ jobs:
           bun run typecheck
           bun run test
 
+      - name: Import self-signed identity
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: bash scripts/import-signing-identity.sh
+
+      - name: Verify native self-signed update installation
+        run: node scripts/smoke-self-signed-update.mjs
+
       - name: Package
         env:
           VERSION: ${{ steps.version.outputs.version }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
           args=(--mac --publish never "-c.extraMetadata.version=$VERSION")
-          if [[ -n "$CSC_LINK" && -n "$CSC_KEY_PASSWORD" ]]; then
-            echo "Signing with the Developer ID certificate."
+          args+=("-c.forceCodeSigning=true" "-c.mac.identity=$CSC_NAME")
+          if [[ "$OPENCODEX_SELF_SIGNED" == true ]]; then
+            echo "Signing with the stable self-signed identity (not notarized)."
+            unset APPLE_API_KEY_ID APPLE_API_ISSUER
+          else
             if [[ -n "$APPLE_API_KEY_CONTENT" && -n "$APPLE_API_KEY_ID" && -n "$APPLE_API_ISSUER" ]]; then
               echo "Notarizing with the App Store Connect API key."
               key="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
@@ -72,12 +82,6 @@ jobs:
             else
               unset APPLE_API_KEY_ID APPLE_API_ISSUER
             fi
-          else
-            # Without a certificate, sign ad hoc so Apple silicon accepts a consistent bundle.
-            echo "No signing certificate configured; building an ad-hoc signed, unnotarized app."
-            unset CSC_LINK CSC_KEY_PASSWORD APPLE_API_KEY_ID APPLE_API_ISSUER
-            export CSC_IDENTITY_AUTO_DISCOVERY=false
-            args+=("-c.mac.identity=-")
           fi
           unset APPLE_API_KEY_CONTENT
           bun run --cwd apps/desktop package "${args[@]}"
@@ -85,7 +89,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: OpenCodex-${{ steps.version.outputs.version }}-mac
-          path: apps/desktop/release/*.dmg
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.yml
+            apps/desktop/release/*.blockmap
           if-no-files-found: error
 
       - name: Publish GitHub Release
@@ -96,4 +104,8 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ steps.version.outputs.prerelease }}
           fail_on_unmatched_files: true
-          files: apps/desktop/release/*.dmg
+          files: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/latest-mac.yml
+            apps/desktop/release/*.blockmap
