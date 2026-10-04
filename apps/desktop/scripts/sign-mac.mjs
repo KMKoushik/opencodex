@@ -6,7 +6,12 @@ export default async function signMac(options) {
   await sign({
     ...options,
     ...(process.env.OPENCODEX_SELF_SIGNED === 'true'
-      ? { preAutoEntitlements: false, preEmbedProvisioningProfile: false, timestamp: 'none' }
+      ? {
+          identityValidation: false,
+          preAutoEntitlements: false,
+          preEmbedProvisioningProfile: false,
+          timestamp: 'none',
+        }
       : {}),
   });
 }
