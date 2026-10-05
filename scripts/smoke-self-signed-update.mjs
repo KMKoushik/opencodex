@@ -14,7 +14,7 @@ const artifacts = join(process.env.RUNNER_TEMP, 'opencodex-update-fixtures');
 const execute = (file, args) =>
   new Promise((resolve, reject) => {
     const child = execFile(file, args, { timeout: 60_000 }, (error, stdout, stderr) => {
-      if (error) reject(error);
+      if (error) reject(Object.assign(error, { stdout, stderr }));
       else resolve({ stdout, stderr });
     });
     child.stdin.end();
@@ -129,7 +129,9 @@ async function verify() {
   } catch (error) {
     if (
       error.killed ||
-      !/not trusted|TrustFailure/i.test(`${error.stdout ?? ''}${error.stderr ?? ''}`)
+      !/CSSMERR_TP_NOT_TRUSTED|kSecTrustResultRecoverableTrustFailure/.test(
+        `${error.stdout ?? ''}${error.stderr ?? ''}`,
+      )
     )
       throw error;
     console.log('Confirmed: the fresh runner does not trust the signing certificate.');
