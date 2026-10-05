@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand';
-import { Cancel01Icon } from '@hugeicons/core-free-icons';
+import { Cancel01Icon, MaximizeScreenIcon, MinimizeScreenIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
 import type { PanelDefinition, SubagentRequest } from './panels';
@@ -14,20 +14,24 @@ export function WorkbenchPanel({
   sessionID,
   live,
   open,
+  expanded,
   panel,
   fileRequest,
   subagentRequest,
   onClose,
+  onExpandedChange,
   onSelectPanel,
 }: {
   directory: string;
   sessionID: string;
   live: boolean;
   open: boolean;
+  expanded: boolean;
   panel: PanelDefinition;
   fileRequest?: FileRequest;
   subagentRequest?: SubagentRequest;
   onClose: () => void;
+  onExpandedChange: (expanded: boolean) => void;
   onSelectPanel?: (id: string) => void;
 }) {
   const store = useWorkbenchStore();
@@ -59,8 +63,9 @@ export function WorkbenchPanel({
       // Code sits on ink: themes with a review panel palette render this subtree dark.
       className="workbench ink scrollbar-on-hover"
       hidden={!open}
+      data-expanded={expanded}
       aria-label="Workspace panel"
-      style={{ width }}
+      style={{ width: expanded ? undefined : width }}
       data-shortcut-boundary=""
       onKeyDown={(event) => {
         if (
@@ -70,12 +75,14 @@ export function WorkbenchPanel({
           !(event.target as HTMLElement).closest('.cm-editor')
         ) {
           event.stopPropagation();
-          onClose();
+          if (expanded) onExpandedChange(false);
+          else onClose();
         }
       }}
     >
       <div
         className="wb-resize"
+        hidden={expanded}
         role="separator"
         aria-label="Resize workspace panel"
         aria-orientation="vertical"
@@ -115,6 +122,15 @@ export function WorkbenchPanel({
       <header className="wb-header">
         <div className="wb-header-content" ref={setHeaderElement} />
         <span className="wb-heading">{panel.label}</span>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={expanded ? 'Restore workspace panel' : 'Expand workspace panel'}
+          aria-pressed={expanded}
+          onClick={() => onExpandedChange(!expanded)}
+        >
+          <HugeiconsIcon icon={expanded ? MinimizeScreenIcon : MaximizeScreenIcon} size={16} />
+        </Button>
         <Button variant="ghost" size="icon" aria-label="Close workspace panel" onClick={onClose}>
           <HugeiconsIcon icon={Cancel01Icon} size={16} />
         </Button>

@@ -16,6 +16,31 @@
 .workbench [hidden] {
   display: none !important;
 }
+.workspace-body[data-workbench-expanded='true'] > .chat-column {
+  visibility: hidden;
+}
+.workbench[data-expanded='true'] {
+  position: absolute;
+  inset: 0 44px 0 0;
+  width: auto !important;
+  min-width: 0;
+  max-width: none;
+  border-left: 0;
+  z-index: 5;
+}
+@media (pointer: coarse) {
+  .workbench[data-expanded='true'] {
+    right: 52px;
+  }
+}
+@media (min-width: 721px) {
+  :root[data-platform='darwin']:not([data-fullscreen='true'])
+    .app-shell[data-sidebar-collapsed='true']
+    .workbench[data-expanded='true']
+    .wb-header {
+    padding-left: 88px;
+  }
+}
 .wb-content,
 .wb-surface,
 .wb-diff-preview,

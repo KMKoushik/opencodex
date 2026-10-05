@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 const layoutSchema = z.object({
   open: z.boolean().default(false),
+  expanded: z.boolean().default(false),
   panel: z.enum(['files', 'changes', 'terminal', 'subagents']).default('files'),
   width: z.number().min(340).max(2400).default(820),
 });

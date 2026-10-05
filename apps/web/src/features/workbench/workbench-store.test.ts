@@ -3,7 +3,7 @@ import { createWorkbenchStore, defaultWorkspaceState, serializeWorkbench } from 
 
 it('restores independent session layouts and document tabs without saving document data', () => {
   const store = createWorkbenchStore();
-  store.getState().layout('one', { open: true, panel: 'changes', width: 640 });
+  store.getState().layout('one', { open: true, expanded: true, panel: 'changes', width: 640 });
   store.getState().workspace('one', {
     ...defaultWorkspaceState,
     tabs: [
@@ -24,10 +24,18 @@ it('restores independent session layouts and document tabs without saving docume
   expect(reopened.getState().entries.one).toEqual(store.getState().entries.one);
   expect(reopened.getState().entries.two?.layout).toMatchObject({
     open: false,
+    expanded: false,
     panel: 'subagents',
     width: 820,
   });
   expect(reopened.getState().entries.two?.workspace.tabs).toEqual([]);
+  reopened.getState().layout('one', { expanded: false });
+  expect(reopened.getState().entries.one?.layout.width).toBe(640);
+  const legacy = JSON.parse(serializeWorkbench(store.getState().entries));
+  delete legacy.entries[0][1].layout.expanded;
+  expect(createWorkbenchStore(JSON.stringify(legacy)).getState().entries.one?.layout.expanded).toBe(
+    false,
+  );
   expect(createWorkbenchStore('{broken').getState().entries).toEqual({});
 });
 

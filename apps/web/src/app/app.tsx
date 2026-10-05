@@ -275,6 +275,14 @@ export function App() {
   });
 
   const terminalDirectory = selectedID ? info.data?.location.directory : project?.directory;
+  const workbenchExpanded = Boolean(
+    workbenchOpen &&
+    workbenchLayout.expanded &&
+    connected &&
+    terminalDirectory &&
+    (selectedID || workbenchPanel.id === 'terminal') &&
+    !settings,
+  );
   const terminalVisible =
     terminalPlacement === 'bottom'
       ? terminalOpen
@@ -303,8 +311,11 @@ export function App() {
     if (terminalPlacement === 'bottom') setTerminalOpen(false);
     else setWorkbenchOpen(false);
     const target = terminalFocus.current;
-    if (target?.isConnected) target.focus({ preventScroll: true });
-    else main.current?.focus({ preventScroll: true });
+    requestAnimationFrame(() => {
+      if (target?.isConnected && !target.closest('[hidden], [inert]'))
+        target.focus({ preventScroll: true });
+      else main.current?.focus({ preventScroll: true });
+    });
   }
   function toggleTerminal() {
     if (!connected || !terminalDirectory || settings) return false;
@@ -335,7 +346,9 @@ export function App() {
     if (rightTerminalHidden) setWorkbenchPanel(panels[0]!);
     setWorkbenchOpen(!workbenchOpen);
     if (workbenchOpen && document.activeElement?.closest('#workbench')) {
-      (workbenchToggle.current ?? main.current)?.focus({ preventScroll: true });
+      requestAnimationFrame(() =>
+        (workbenchToggle.current ?? main.current)?.focus({ preventScroll: true }),
+      );
     }
   }
 
@@ -423,8 +436,8 @@ export function App() {
       </aside>
 
       <div className="main-shell">
-        <div className="workspace-body">
-          <div ref={chatColumn} className="chat-column">
+        <div className="workspace-body" data-workbench-expanded={workbenchExpanded}>
+          <div ref={chatColumn} className="chat-column" inert={workbenchExpanded}>
             <header className="toolbar">
               {sidebarCollapsed && (
                 <span className="toolbar-brand" aria-label={appName}>
@@ -630,6 +643,10 @@ export function App() {
                   sessionID={selectedID ?? ''}
                   live={live}
                   open={workbenchOpen}
+                  expanded={workbenchLayout.expanded}
+                  onExpandedChange={(expanded) =>
+                    workbench.getState().layout(workspaceKey, { expanded })
+                  }
                   panel={workbenchPanel}
                   onSelectPanel={(id) => {
                     const next = panels.find((panel) => panel.id === id);
@@ -645,7 +662,7 @@ export function App() {
                       return;
                     }
                     setWorkbenchOpen(false);
-                    workbenchToggle.current?.focus();
+                    requestAnimationFrame(() => workbenchToggle.current?.focus());
                   }}
                 />
               </Suspense>
