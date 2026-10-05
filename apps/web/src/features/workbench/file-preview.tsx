@@ -5,6 +5,7 @@ import { QueryError } from './query-error';
 import { Annotation, type AnnotationTarget } from './annotation';
 import { ImageViewer } from './image-viewer';
 import { FileLinkContext } from './file-link-context';
+import { VideoViewer } from './video-viewer';
 const MarkdownFile = lazy(() =>
   import('./markdown-file').then((module) => ({ default: module.MarkdownFile })),
 );
@@ -70,6 +71,9 @@ export function FilePreview({
           bytes={query.data.bytes}
           onComment={(quote) => setAnnotation({ path, directory, quote })}
         />
+      )}
+      {query.data?.kind === 'video' && (
+        <VideoViewer directory={directory} path={path} bytes={query.data.bytes} />
       )}
       {query.data?.kind === 'binary' && (
         <p className="wb-empty">

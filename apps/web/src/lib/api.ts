@@ -60,6 +60,12 @@ const sessionPath = (id: string) => `/sessions/${encodeURIComponent(id)}`;
 const post = (body?: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) });
 
 export const api = {
+  videoURL: (directory: string, path: string) =>
+    `/api/workspace/video?${new URLSearchParams({ directory, path })}`,
+  fileLocation: (directory: string, path: string) =>
+    nativeRequest<{ path: string }>(
+      `/workspace/file-location?${new URLSearchParams({ directory, path })}`,
+    ),
   shells: (directory: string, signal: AbortSignal) =>
     nativeRequest<ShellInfo[]>(`/shells?${new URLSearchParams({ directory })}`, { signal }),
   shell: (directory: string, id: string, signal: AbortSignal) =>

@@ -1,0 +1,26 @@
+.wb-file-reveal {
+  position: relative;
+  flex: none;
+}
+.wb-file-reveal-error {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1;
+  width: min(280px, 70vw);
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--glaze-shadow);
+}
+.wb-file-reveal-error p {
+  margin: 0 0 8px;
+}
+@media (pointer: coarse) {
+  .wb-file-reveal button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}

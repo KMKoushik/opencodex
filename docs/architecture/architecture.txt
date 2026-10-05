@@ -12,7 +12,7 @@
   │  │  <>   Browser app          │     │  <>   Desktop app          ├───┼──────────────▶│  <>   apps/desktop       │
   │  │                            │     │                            │◀──┼───────────────┤                          │
   │  │  localStorage: UI + type   │     │  Sandboxed renderer        │   │  web events   │  Window + fullscreen     │
-  │  │  Models + session layout   │     │  Native IPC available      ├───┼──────────────▶│  Folder picker + open in │
+  │  │  Models + session layout   │     │  Native IPC available      ├───┼──────────────▶│  Pick/open/reveal files  │
   │  └────────────────────────────┘     └────────────────────────────┘   │               │  OS browser + clipboard  │
   │                                                                      │               │  OS edit + spelling menus│
   │           Zustand drafts + session layout; Query API state           │               │  Updates + restart       │
@@ -29,9 +29,9 @@
      │  Hono + V2 client; private service credentials                │                   │  Models + session layout │
      │  Bounded previews/logs; version-checked file writes           │                   │  Updater download cache  │
      │  Native APIs + origin-checked, ticketed PTY relay             │                   └──────────────────────────┘
+     │  Host files: read-only video ranges + reveal targets          │
      └─────────────────┬─────────────────────────────────────────────┘
-                       │                               ▲
-       HTTP + WS       │                               │  Events + WS
+       HTTP + WS       │                               ▲  Events + WS
        official client │                               │                                 ┌──── SHARED CONTRACTS ────┐
                        │                               │                                 │                          │
                        ▼                               │                                 │  <>   Shared types       │

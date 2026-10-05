@@ -85,6 +85,7 @@ export type WorkspaceSkills = Pick<SkillInfo, 'id' | 'name' | 'description'>[];
 export type WorkspaceFile =
   | { kind: 'text'; text: string; version: string; bytes: number }
   | { kind: 'image'; uri: string; bytes: number }
+  | { kind: 'video'; mime: string; bytes: number }
   | { kind: 'binary'; bytes: number };
 export const MAX_PREVIEW_BYTES = 2 * 1024 * 1024;
 export const workspaceFileInputSchema = projectInputSchema.extend({

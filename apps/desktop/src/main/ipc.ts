@@ -1,7 +1,7 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron';
 import { desktopChannels } from '@opencodex/contracts/desktop';
 import { createPreferences, preferenceInputSchema } from './preferences';
-import { listOpenApps, openInApp, openAppInput } from './open-apps';
+import { listOpenApps, openInApp, openAppInput, revealFile, revealFileInput } from './open-apps';
 import type { createUpdates } from './updates';
 
 export function registerNativeHandlers(
@@ -42,6 +42,10 @@ export function registerNativeHandlers(
   ipcMain.handle(desktopChannels.openInApp, (event, input: unknown) => {
     requireWindow(event);
     return openInApp(openAppInput.parse(input));
+  });
+  ipcMain.handle(desktopChannels.revealFile, (event, input: unknown) => {
+    requireWindow(event);
+    return revealFile(revealFileInput.parse(input));
   });
   ipcMain.handle(desktopChannels.setPreference, (event, input: unknown) => {
     requireWindow(event);

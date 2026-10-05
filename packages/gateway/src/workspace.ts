@@ -13,6 +13,8 @@ import {
 import { OpenCodeBackend } from './opencode';
 import { GatewayError } from './errors';
 import { imageMime } from './images';
+import { videoMime } from './videos';
+import { localFile } from './local-files';
 
 const version = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 const browseInput = projectInputSchema.extend({
@@ -56,6 +58,13 @@ export function workspaceRoutes(backend: OpenCodeBackend) {
     const input = workspaceFileInputSchema.safeParse(c.req.query());
     if (!input.success) return c.json({ message: 'Choose a file within the project.' }, 400);
     const { directory, path } = input.data;
+    const video = videoMime(path);
+    if (video) {
+      await backend.requireLocalFiles();
+      const { file, info } = await localFile(directory, path);
+      await file.close();
+      return c.json({ kind: 'video', mime: video, bytes: info.size } satisfies WorkspaceFile);
+    }
     const bytes = await backend.request(c.req.raw.signal, (client, options) =>
       client.file.read({ location: { directory }, path }, options),
     );

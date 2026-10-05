@@ -25,6 +25,7 @@ export async function startGateway(options: { port?: number; assets?: string } =
           }
         : undefined,
     ),
+    !url,
   );
   const app = createApp(backend, shutdown.signal);
   if (options.assets) {

@@ -10,6 +10,7 @@ import { Button } from '../../components/ui/button';
 import { SegmentedControl } from '../../components/ui/segmented-control';
 import { WorkspaceTree } from './file-tree';
 import { FilePreview } from './file-preview';
+import { FileReveal } from './file-reveal';
 import { QueryError } from './query-error';
 import { editorKey, useEditorDrafts } from './editor-drafts';
 import { resolveFileLink, type FileRequest } from './file-link';
@@ -246,6 +247,9 @@ export function WorkspaceEditor({
                   </span>
                 ))}
               </nav>
+            )}
+            {current && (
+              <FileReveal key={current.id} directory={current.directory} path={current.path} />
             )}
             <Button
               variant="ghost"

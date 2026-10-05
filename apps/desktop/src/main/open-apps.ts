@@ -31,6 +31,15 @@ export const openAppInput = z.object({
   appID: z.enum(openAppIDs),
 });
 
+export const revealFileInput = z.object({
+  path: openAppInput.shape.directory,
+});
+
+export async function revealFile({ path }: z.infer<typeof revealFileInput>) {
+  if (!(await stat(path)).isFile()) throw new Error('Choose a regular file.');
+  shell.showItemInFolder(path);
+}
+
 async function exists(path: string) {
   try {
     await access(path);

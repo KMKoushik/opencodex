@@ -20,7 +20,10 @@ export class OpenCodeBackend {
   private client?: OpenCodeClient;
   private resolving?: Promise<OpenCodeClient | undefined>;
 
-  constructor(private readonly resolveEndpoint: ResolveEndpoint = localEndpointResolver()) {}
+  constructor(
+    private readonly resolveEndpoint: ResolveEndpoint = localEndpointResolver(),
+    private readonly localFiles = true,
+  ) {}
 
   private async resolve(start = false): Promise<OpenCodeClient | undefined> {
     if (this.client) return this.client;
@@ -76,6 +79,19 @@ export class OpenCodeBackend {
     const client = await this.resolve();
     if (!client) throw new GatewayError('Connect to OpenCode first.', 503);
     return client;
+  }
+
+  async requireLocalFiles() {
+    await this.requireClient();
+    if (
+      !this.localFiles ||
+      !this.endpoint ||
+      !['127.0.0.1', 'localhost', '[::1]'].includes(new URL(this.endpoint.url).hostname)
+    )
+      throw new GatewayError(
+        'Video playback and revealing files require the locally discovered OpenCode service. External connections are not supported.',
+        422,
+      );
   }
 
   async request<T>(

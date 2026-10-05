@@ -7,6 +7,7 @@ export interface DesktopBridge {
   setPreference(key: PreferenceKey, value: string | null): Promise<void>;
   listOpenApps(): Promise<OpenApp[]>;
   openInApp(directory: string, appID: OpenAppID): Promise<void>;
+  revealFile(path: string): Promise<void>;
   getUpdateState(): Promise<DesktopUpdateState>;
   onUpdateStateChanged(callback: (state: DesktopUpdateState) => void): () => void;
   checkForUpdates(): Promise<void>;
@@ -98,6 +99,7 @@ export const desktopChannels = {
   setPreference: 'desktop:set-preference',
   listOpenApps: 'desktop:list-open-apps',
   openInApp: 'desktop:open-in-app',
+  revealFile: 'desktop:reveal-file',
   getUpdateState: 'desktop:get-update-state',
   updateStateChanged: 'desktop:update-state-changed',
   checkForUpdates: 'desktop:check-for-updates',

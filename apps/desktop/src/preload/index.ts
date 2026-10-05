@@ -16,6 +16,7 @@ const desktop: DesktopBridge = {
   listOpenApps: () => ipcRenderer.invoke(desktopChannels.listOpenApps),
   openInApp: (directory, appID) =>
     ipcRenderer.invoke(desktopChannels.openInApp, { directory, appID }),
+  revealFile: (path) => ipcRenderer.invoke(desktopChannels.revealFile, { path }),
   getUpdateState: () => ipcRenderer.invoke(desktopChannels.getUpdateState),
   onUpdateStateChanged: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, state: Parameters<typeof callback>[0]) =>
