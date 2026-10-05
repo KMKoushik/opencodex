@@ -28,6 +28,7 @@ const receipt = join(directory, 'receipt.json');
 const archive = join(directory, 'update.zip');
 let child;
 let output = '';
+let trustRemoved = false;
 const server = createServer((request, response) => {
   if (request.url === '/update.zip') {
     response.setHeader('Content-Type', 'application/zip');
@@ -125,6 +126,7 @@ app.whenReady().then(() => {
     '-d',
     join(process.env.RUNNER_TEMP, 'opencodex-signing/certificate.pem'),
   ]);
+  trustRemoved = true;
   console.log('Certificate trust removed; launching the installed smoke app.');
 
   await new Promise((resolve, reject) => {
@@ -157,20 +159,25 @@ app.whenReady().then(() => {
   console.log(
     'Native self-signed update passed: 1.0.0 downloaded, installed, and relaunched as 1.0.1.',
   );
+} catch (error) {
+  console.error('Native update smoke failed:', error);
+  throw error;
 } finally {
   if (child?.exitCode === null) child.kill();
-  await execute('/usr/bin/sudo', [
-    'security',
-    'add-trusted-cert',
-    '-d',
-    '-r',
-    'trustRoot',
-    '-p',
-    'codeSign',
-    '-k',
-    process.env.CSC_KEYCHAIN,
-    join(process.env.RUNNER_TEMP, 'opencodex-signing/certificate.pem'),
-  ]);
+  if (trustRemoved) {
+    await execute('/usr/bin/sudo', [
+      'security',
+      'add-trusted-cert',
+      '-d',
+      '-r',
+      'trustRoot',
+      '-p',
+      'codeSign',
+      '-k',
+      process.env.CSC_KEYCHAIN,
+      join(process.env.RUNNER_TEMP, 'opencodex-signing/certificate.pem'),
+    ]);
+  }
   server.closeAllConnections();
   await new Promise((resolve) => server.close(resolve));
   await rm(directory, { recursive: true, force: true });

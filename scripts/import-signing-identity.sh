@@ -31,6 +31,9 @@ security import "$directory/signing.p12" -k "$keychain" -P "$CSC_KEY_PASSWORD" -
 security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" >/dev/null
 # Squirrel verifies the new bundle against the installed bundle's designated requirement.
 # This trust allows CI to sign; end users still get Gatekeeper's unnotarized-app warning.
+# Trust changes otherwise open an authorization dialog when invoked by the Node smoke process.
+# This permission change is confined to the disposable runner by the guard above.
+sudo security authorizationdb write com.apple.trust-settings.admin allow
 sudo security add-trusted-cert -d -r trustRoot -p codeSign -k "$keychain" "$directory/certificate.pem"
 security list-keychains -d user -s "$keychain" "$HOME/Library/Keychains/login.keychain-db"
 security find-identity -v -p codesigning "$keychain"
