@@ -50,5 +50,8 @@
   "trustedDependencies": [
     "electron",
     "esbuild"
-  ]
+  ],
+  "patchedDependencies": {
+    "@khalilgharbaoui/opencode-claude-code-plugin@0.40.0": "patches/@khalilgharbaoui%2Fopencode-claude-code-plugin@0.40.0.patch"
+  }
 }

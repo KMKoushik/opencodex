@@ -1,0 +1,51 @@
+diff --git a/dist/index.js b/dist/index.js
+index 8365b43d211a2473e7f48082c589fb758d571b39..bce101f8360afa9d4d311e1679d441f8b08e6989 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -13743,12 +13743,19 @@ var ClaudeCodeLanguageModel = class {
+               });
+               let partialText = false;
+               {
+-                const replayId = state.startTextBlock();
+-                controller.enqueue({
+-                  type: "text-delta",
+-                  id: replayId,
+-                  delta: formatUnattendedReplayNote(unattended.dropped)
+-                });
++                // A detached stream also receives progress, usage and protocol
++                // frames. Only open a replay block for actual narration (or loss).
++                let replayId;
++                const startReplay = () => {
++                  if (replayId !== void 0) return;
++                  replayId = state.startTextBlock();
++                  controller.enqueue({
++                    type: "text-delta",
++                    id: replayId,
++                    delta: formatUnattendedReplayNote(unattended.dropped)
++                  });
++                };
++                if (unattended.dropped > 0) startReplay();
+                 for (const line of unattended.lines) {
+                   try {
+                     const outer = JSON.parse(line);
+@@ -13756,7 +13763,7 @@ var ClaudeCodeLanguageModel = class {
+                     let text = "";
+                     if (msg.type === "content_block_delta" && msg.delta?.type === "text_delta") {
+                       text = msg.delta.text ?? "";
+-                      partialText = true;
++                      partialText ||= Boolean(text);
+                     } else if (msg.type === "assistant") {
+                       if (!partialText) text = (msg.message?.content ?? []).filter((part) => part.type === "text").map((part) => part.text ?? "").join("");
+                       partialText = false;
+@@ -13768,7 +13775,10 @@ var ClaudeCodeLanguageModel = class {
+                       if (outer.session_id) setClaudeSessionId(sk, outer.session_id);
+                       if (msg.is_error && msg.result) text = msg.result;
+                     }
+-                    if (text) controller.enqueue({ type: "text-delta", id: state.currentTextId ?? state.startTextBlock(), delta: text });
++                    if (text) {
++                      startReplay();
++                      controller.enqueue({ type: "text-delta", id: replayId, delta: text });
++                    }
+                   } catch {
+                   }
+                 }

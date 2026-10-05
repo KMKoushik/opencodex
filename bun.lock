@@ -120,6 +120,9 @@
     "electron",
     "esbuild",
   ],
+  "patchedDependencies": {
+    "@khalilgharbaoui/opencode-claude-code-plugin@0.40.0": "patches/@khalilgharbaoui%2Fopencode-claude-code-plugin@0.40.0.patch",
+  },
   "packages": {
     "@ai-sdk/provider": ["@ai-sdk/provider@3.0.18", "", { "dependencies": { "json-schema": "^0.4.0" } }, "sha512-IpefF5ssZVOZCD4Wu7zxt6PwZoGT2HLVjxpJ10Bjx6EAmRfLYJPjyrfxb0RYDlwvXnDb9nkQ7Do/oJVDuRFzew=="],
 
