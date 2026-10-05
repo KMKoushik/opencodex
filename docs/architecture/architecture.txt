@@ -1,12 +1,12 @@
   OPENCODEX ARCHITECTURE
-
-  Two surfaces. One shared UI. One OpenCode backend.
-
-
-  ┌──────────────────────── SHARED UI / apps/web ────────────────────────┐
-  │                                                                      │
-  │                  React + TypeScript + TanStack Query                 │
-  │                                                                      │
+                                                                                         ┌──── GITHUB RELEASES ─────┐
+  Two surfaces. One shared UI. One OpenCode backend.                                     │  DMG + ZIP + manifest    │
+                                                                                         │  Same self-signed key    │
+                                                                                         │  Public HTTPS update feed│
+  ┌──────────────────────── SHARED UI / apps/web ────────────────────────┐               │                          │
+  │                                                                      │               └─────────────────────────┬┘
+  │                  React + TypeScript + TanStack Query                 │               HTTPS         ▲           │
+  │                                                                      │                             │           ▼
   │  ┌───────── BROWSER ──────────┐     ┌──── ELECTRON RENDERER ─────┐   │               ┌───── ELECTRON MAIN ──────┐
   │  │                            │     │                            │   │  preload IPC  │                          │
   │  │  <>   Browser app          │     │  <>   Desktop app          ├───┼──────────────▶│  <>   apps/desktop       │
@@ -15,20 +15,20 @@
   │  │  Model/effort + frequency  │     │  Native IPC available      ├───┼──────────────▶│  Folder picker + open in │
   │  └────────────────────────────┘     └────────────────────────────┘   │               │  OS browser + clipboard  │
   │                                                                      │               │  OS edit + spelling menus│
-  │             Zustand chat + editor drafts; Query API state            │               └─────────────┬────────────┘
-  │            Warm session card; small screens use a popover            │               read / write  │
-  │       Lazy workspace panels; activity tray + dockable terminal       │                             │
+  │             Zustand chat + editor drafts; Query API state            │               │  Updates + restart       │
+  │            Warm session card; small screens use a popover            │               └─────────────┬────────────┘
+  │       Lazy workspace panels; activity tray + dockable terminal       │               read / write  │
   └────────────────────┬─────────────────────────────────────────────────┘                             │
        HTTP /api       │                               ▲  SSE + WS                                     ▼
-       + WS input      │                               │  output                         ┌── DESKTOP PREFERENCES ───┐
+       + WS input      │                               │  output                         ┌──── DESKTOP STORAGE ─────┐
                        ▼                               │                                 │                          │
-     ┌──────────────────────── LOCAL GATEWAY ──────────┴─────────────┐                   │  <>   User-data dir      │
+     ┌──────────────────────── LOCAL GATEWAY ──────────┴─────────────┐                   │  <>   Local app storage  │
      │                                                               │                   │       electron-store     │
      │  <>   packages/gateway                                        │                   │  preferences.json        │
      │                                                               │                   │  Projects, UI + font size│
      │  Hono + V2 client; private service credentials                │                   │  Model/effort + frequency│
-     │  Bounded previews/logs; version-checked file writes           │                   └──────────────────────────┘
-     │  Native APIs + origin-checked, ticketed PTY relay             │
+     │  Bounded previews/logs; version-checked file writes           │                   │  Updater download cache  │
+     │  Native APIs + origin-checked, ticketed PTY relay             │                   └──────────────────────────┘
      └─────────────────┬─────────────────────────────────────────────┘
                        │                               ▲
        HTTP + WS       │                               │  Events + WS
