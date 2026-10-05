@@ -1,6 +1,6 @@
 import { sign } from '@electron/osx-sign';
 
-// Self-signed identities have no Apple Team ID. Disable only Apple's entitlement automation;
+// Self-signed identities have no Apple Team ID. Skip Apple-only identity/entitlement automation;
 // keep the normal inside-out code signing and verification, including nested Electron helpers.
 export default async function signMac(options) {
   await sign({
