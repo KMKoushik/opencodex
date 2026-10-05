@@ -372,6 +372,19 @@ export function App() {
   useCommand('workspace.toggle', toggleWorkbench);
   useCommand('terminal.toggle', toggleTerminal);
   useCommand('sidebar.toggle', toggleSidebar);
+  useCommand('sidebar.focus', () => {
+    if (!connected || settings) return false;
+    setSidebarCollapsed(false);
+    setSidebarOpen(true);
+    requestAnimationFrame(() => {
+      const rows = Array.from(
+        sidebar.current?.querySelectorAll<HTMLButtonElement>('.session-row') ?? [],
+      ).filter((row) => row.getClientRects().length > 0);
+      const target = rows.find((row) => row.getAttribute('aria-current') === 'page') ?? rows[0];
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ block: 'nearest' });
+    });
+  });
   useCommand('chat.new', newChat);
   useCommand('project.open', openProject);
   useCommand('settings.open', () => navigate('general'));

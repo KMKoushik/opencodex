@@ -83,6 +83,13 @@ export const commands = [
     inInput: true,
   },
   {
+    id: 'sidebar.focus',
+    label: 'Focus thread navigation',
+    group: 'App',
+    bindings: [{ key: 'k', mod: true, shift: true }],
+    inInput: true,
+  },
+  {
     id: 'model.choose',
     label: 'Choose model',
     group: 'Chat',

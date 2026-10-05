@@ -4,6 +4,8 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import type { OpenCodeProject, Session } from '@opencodex/contracts';
 import { ProjectIcon } from '../projects/project-icon';
 import { activityAt, isSettled } from '../threads/focus';
+import { isMac } from '../shortcuts/commands';
+import { useCommandRegistry } from '../shortcuts/shortcut-context';
 import { SessionActionsMenu, type SessionActionsHandle } from './session-actions-menu';
 import './session-row.css';
 
@@ -34,6 +36,7 @@ export function SessionRow({
   onSelect: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
   const id = useId();
+  const commands = useCommandRegistry();
   const detailsID = `${id}-details`;
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<SessionActionsHandle>(null);
@@ -89,6 +92,7 @@ export function SessionRow({
           aria-expanded={expanded}
           aria-controls={id}
           aria-describedby={detailsID}
+          aria-keyshortcuts={isMac ? 'Meta+Enter' : 'Control+Enter'}
           onPointerEnter={(event) => {
             if (event.pointerType === 'mouse') showDetails(400);
           }}
@@ -101,6 +105,69 @@ export function SessionRow({
             onSelect(event);
           }}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing || event.defaultPrevented || expanded) return;
+            if (
+              selected &&
+              event.key === 'Enter' &&
+              !event.metaKey &&
+              !event.ctrlKey &&
+              !event.altKey &&
+              !event.shiftKey
+            ) {
+              event.preventDefault();
+              hideDetails();
+              commands.execute('composer.focus');
+              return;
+            }
+            const list = event.currentTarget.closest('.project-list');
+            const navigating =
+              !event.metaKey &&
+              !event.ctrlKey &&
+              !event.altKey &&
+              !event.shiftKey &&
+              ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key);
+            const completing =
+              (isMac ? event.metaKey : event.ctrlKey) &&
+              event.key === 'Enter' &&
+              !event.altKey &&
+              !event.shiftKey;
+            if (list && (navigating || completing)) {
+              event.preventDefault();
+              const rows = Array.from(
+                list.querySelectorAll<HTMLButtonElement>('.session-row'),
+              ).filter((row) => row.getClientRects().length > 0);
+              const index = rows.indexOf(event.currentTarget);
+              if (navigating) {
+                const next =
+                  event.key === 'Home'
+                    ? 0
+                    : event.key === 'End'
+                      ? rows.length - 1
+                      : Math.max(
+                          0,
+                          Math.min(rows.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)),
+                        );
+                const target = rows[next];
+                target?.focus({ preventScroll: true });
+                target?.scrollIntoView({ block: 'nearest' });
+                if (checked === undefined && next !== index) target?.click();
+              } else if (!event.repeat) {
+                const current = event.currentTarget;
+                const next = rows[index + 1] ?? rows[index - 1];
+                menu.current?.markDone(() => {
+                  if (
+                    document.activeElement !== current &&
+                    document.activeElement !== document.body
+                  )
+                    return;
+                  if (!next?.isConnected) return;
+                  next.focus({ preventScroll: true });
+                  next.scrollIntoView({ block: 'nearest' });
+                  next.click();
+                });
+              }
+              return;
+            }
             if (event.key === 'Escape') hideDetails();
             if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
               event.preventDefault();

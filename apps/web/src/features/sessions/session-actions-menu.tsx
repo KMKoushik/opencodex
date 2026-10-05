@@ -4,11 +4,13 @@ import { api } from '../../lib/api';
 import { cn } from '../../lib/utils';
 import { useThreadFocus } from '../threads/use-thread-focus';
 import { refreshSession } from './metadata';
+import { isMac } from '../shortcuts/commands';
 import './session-row.css';
 
 export type SessionActionsHandle = {
   show: (point?: { top: number; left: number }) => void;
   dismiss: () => void;
+  markDone: (onSuccess: () => void) => void;
 };
 
 export function SessionActionsMenu({
@@ -94,19 +96,32 @@ export function SessionActionsMenu({
     close();
     anchor.current?.focus({ preventScroll: true });
   }
+  function show(point?: { top: number; left: number }) {
+    if (!connected || !menu.current || !anchor.current) return;
+    const rect = anchor.current.getBoundingClientRect();
+    if (!menu.current.matches(':popover-open')) {
+      menu.current.showPopover();
+      listen();
+    }
+    const { width, height } = menu.current.getBoundingClientRect();
+    menu.current.style.top = `${Math.max(8, Math.min(point?.top ?? rect.bottom + 4, innerHeight - height - 8))}px`;
+    menu.current.style.left = `${Math.max(8, Math.min(point?.left ?? (align === 'end' ? rect.right - width : rect.left), innerWidth - width - 8))}px`;
+  }
   useImperativeHandle(ref, () => ({
     dismiss,
-    show(point) {
-      if (!connected || !menu.current || !anchor.current) return;
-      const rect = anchor.current.getBoundingClientRect();
-      if (!menu.current.matches(':popover-open')) {
-        menu.current.showPopover();
-        listen();
+    markDone(onSuccess) {
+      if (!connected || focus.pending) return;
+      if (selection) {
+        if (selection.ready) selection.onDone();
+        return;
       }
-      const { width, height } = menu.current.getBoundingClientRect();
-      menu.current.style.top = `${Math.max(8, Math.min(point?.top ?? rect.bottom + 4, innerHeight - height - 8))}px`;
-      menu.current.style.left = `${Math.max(8, Math.min(point?.left ?? (align === 'end' ? rect.right - width : rect.left), innerWidth - width - 8))}px`;
+      if (running || done) return;
+      focus.mutate('done', {
+        onSuccess,
+        onError: () => show(),
+      });
     },
+    show,
   }));
   return (
     <div
@@ -189,6 +204,7 @@ export function SessionActionsMenu({
             onClick={() => focus.mutate(done ? 'undone' : 'done', { onSuccess: dismiss })}
           >
             {done ? 'Mark as not done' : 'Mark as done'}
+            {!done && onPick && <span>{isMac ? '⌘' : 'Ctrl+'}Enter</span>}
           </button>
           <button
             type="button"
