@@ -19,7 +19,8 @@ if (
     'The native update smoke requires a disposable, signing-configured macOS runner.',
   );
 
-const execute = promisify(execFile);
+const runCommand = promisify(execFile);
+const execute = (file, args) => runCommand(file, args, { timeout: 60_000 });
 const require = createRequire(new URL('../apps/desktop/package.json', import.meta.url));
 const template = resolve(dirname(require('electron')), '../..');
 const directory = await mkdtemp(join(process.env.RUNNER_TEMP, 'opencodex-update-smoke-'));
@@ -93,6 +94,7 @@ app.whenReady().then(() => {
       }),
     });
     await execute('/usr/bin/codesign', ['--verify', '--deep', '--strict', app]);
+    console.log(`Signed and verified smoke version ${version}.`);
     applications.push(app);
   }
   // The candidate must satisfy the installed app's actual designated requirement.
@@ -114,6 +116,7 @@ app.whenReady().then(() => {
     applications[1],
     archive,
   ]);
+  console.log('The candidate satisfies the installed app’s designated signing requirement.');
 
   // Match an end user's Mac: the self-signed certificate is NOT a trusted root there.
   await execute('/usr/bin/sudo', [
@@ -122,6 +125,7 @@ app.whenReady().then(() => {
     '-d',
     join(process.env.RUNNER_TEMP, 'opencodex-signing/certificate.pem'),
   ]);
+  console.log('Certificate trust removed; launching the installed smoke app.');
 
   await new Promise((resolve, reject) => {
     const finish = (error) => {
@@ -133,6 +137,7 @@ app.whenReady().then(() => {
     const watcher = watch(directory, async (_event, file) => {
       if (file !== 'receipt.json') return;
       const result = JSON.parse(await readFile(receipt, 'utf8'));
+      console.log(`Native updater: ${result.status} (v${result.version}).`);
       if (result.status.startsWith('error:')) finish(new Error(result.status));
       else if (result.status === 'installed' && result.version === '1.0.1') finish();
     });
