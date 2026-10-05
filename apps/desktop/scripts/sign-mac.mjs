@@ -10,7 +10,10 @@ export default async function signMac(options) {
           identityValidation: false,
           preAutoEntitlements: false,
           preEmbedProvisioningProfile: false,
-          timestamp: 'none',
+          optionsForFile: (file, context) => ({
+            ...options.optionsForFile?.(file, context),
+            timestamp: 'none',
+          }),
         }
       : {}),
   });

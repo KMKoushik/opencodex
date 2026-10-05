@@ -18,6 +18,7 @@ export function createUpdates(beforeInstall: () => Promise<void>) {
     ...(disabledReason ? { disabledReason } : {}),
   };
   const { autoUpdater } = updater;
+  let finishingInstall = false;
   function publish(next: DesktopUpdateState) {
     state = next;
     for (const window of BrowserWindow.getAllWindows()) {
@@ -26,6 +27,7 @@ export function createUpdates(beforeInstall: () => Promise<void>) {
     }
   }
   function fail(error: unknown) {
+    finishingInstall = false;
     console.error('Desktop update failed:', error);
     publish({
       ...state,
@@ -86,7 +88,8 @@ export function createUpdates(beforeInstall: () => Promise<void>) {
       publish({ currentVersion: state.currentVersion, status: 'ready', version: info.version });
     });
     nativeUpdater.on('update-downloaded', () => {
-      if (state.status !== 'installing') return;
+      if (state.status !== 'installing' || finishingInstall) return;
+      finishingInstall = true;
       void beforeInstall()
         .then(() => autoUpdater.quitAndInstall())
         .catch(fail);
