@@ -2,7 +2,6 @@ import { createRequire } from 'node:module';
 import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { watch } from 'node:fs';
 import { execFile, spawn } from 'node:child_process';
-import { promisify } from 'node:util';
 import { dirname, join, resolve } from 'node:path';
 import { createServer } from 'node:http';
 import { createReadStream } from 'node:fs';
@@ -19,8 +18,15 @@ if (
     'The native update smoke requires a disposable, signing-configured macOS runner.',
   );
 
-const runCommand = promisify(execFile);
-const execute = (file, args) => runCommand(file, args, { timeout: 60_000 });
+const execute = (file, args) =>
+  new Promise((resolve, reject) => {
+    const process = execFile(file, args, { timeout: 60_000 }, (error, stdout, stderr) => {
+      if (error) reject(error);
+      else resolve({ stdout, stderr });
+    });
+    // Match a non-interactive workflow shell; do not leave utilities waiting for stdin EOF.
+    process.stdin.end();
+  });
 const require = createRequire(new URL('../apps/desktop/package.json', import.meta.url));
 const template = resolve(dirname(require('electron')), '../..');
 const directory = await mkdtemp(join(process.env.RUNNER_TEMP, 'opencodex-update-smoke-'));
