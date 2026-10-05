@@ -22,7 +22,7 @@ A tag with a suffix, such as `v0.2.0-beta.1`, publishes a prerelease. Installed 
 
 ## Test a build without releasing
 
-Run **Release desktop** manually (Actions → Release desktop → Run workflow). It builds installers and update packages as a workflow artifact named `OpenCodex-<version>-dev.<run>-mac` and does not create a release. Every build first tests a real native two-version self-signed update on the disposable runner, including install and relaunch without certificate trust.
+Run **Release desktop** manually (Actions → Release desktop → Run workflow). It builds installers and update packages as a workflow artifact named `OpenCodex-<version>-dev.<run>-mac` and does not create a release. Every build first signs two native fixtures on one disposable Mac and tests install/relaunch on a separate fresh Mac that never imports or trusts the certificate. Only signed fixture ZIPs and the public certificate travel between these jobs; signing credentials stay on the signing runner.
 
 To build locally instead:
 
