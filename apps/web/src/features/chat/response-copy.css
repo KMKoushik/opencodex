@@ -1,0 +1,21 @@
+.response-copy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+@media (hover: hover) and (pointer: fine) {
+  .response-copy {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .assistant-message:hover .response-copy,
+  .assistant-message:focus-within .response-copy,
+  .response-copy[data-visible='true'] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}

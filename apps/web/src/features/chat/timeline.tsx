@@ -21,6 +21,7 @@ import { TurnHeader } from './turn-header';
 import { Message } from './message';
 import { StreamText } from './stream-text';
 import { ResponseSelection } from './response-selection';
+import { ResponseCopy } from './response-copy';
 
 export type TimelineHandle = { scrollToLatest: () => void };
 const followOutput = {
@@ -247,6 +248,7 @@ const Row = memo(function Row({
             text={row.text}
             completed={Boolean(row.message.time.completed)}
           />
+          {row.copyable && <ResponseCopy text={row.text} />}
         </article>
       ) : (
         <Message message={row.message} />

@@ -14,7 +14,14 @@ export type WorkEntry =
     };
 export type TimelineRow =
   | { id: string; type: 'message'; message: SessionMessageInfo }
-  | { id: string; type: 'text'; message: Assistant; ordinal: number; text: string }
+  | {
+      id: string;
+      type: 'text';
+      message: Assistant;
+      ordinal: number;
+      text: string;
+      copyable?: boolean;
+    }
   | {
       id: string;
       type: 'activity';
@@ -150,6 +157,16 @@ type TurnTime = { start: number; end: number | undefined; outcome: string | unde
 export function createTurnGrouper() {
   let previous = new Map<string, TurnRow>();
   let owners = new Map<string, string>();
+  // Keep final-answer row identity stable across snapshots and disclosure changes.
+  const answers = new WeakMap<TimelineRow, TimelineRow>();
+  function withCopy(row: TimelineRow) {
+    if (row.type !== 'text' || !row.message.time.completed) return row;
+    const old = answers.get(row);
+    if (old) return old;
+    const answer = { ...row, copyable: true };
+    answers.set(row, answer);
+    return answer;
+  }
   return (
     rows: TimelineRow[],
     messages: SessionMessageInfo[],
@@ -179,11 +196,13 @@ export function createTurnGrouper() {
         // While running, text is only the answer so far if no work has followed it.
         if (live && row.type === 'activity') break;
       }
+      const response = turn[answer];
+      const final = response && !live ? withCopy(response) : response;
       const members = new Set(
         turn.filter((row, i) => i !== answer && (row.type === 'activity' || row.type === 'text')),
       );
       if (!members.size) {
-        out.push(...turn);
+        for (const row of turn) out.push(row === response ? final! : row);
         start = end;
         continue;
       }
@@ -219,7 +238,7 @@ export function createTurnGrouper() {
           out.push(header);
           placed = true;
         }
-        if (!member || open) out.push(row);
+        if (!member || open) out.push(row === response ? final! : row);
       }
       start = end;
     }
