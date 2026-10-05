@@ -16,6 +16,16 @@ const desktop: DesktopBridge = {
   listOpenApps: () => ipcRenderer.invoke(desktopChannels.listOpenApps),
   openInApp: (directory, appID) =>
     ipcRenderer.invoke(desktopChannels.openInApp, { directory, appID }),
+  getUpdateState: () => ipcRenderer.invoke(desktopChannels.getUpdateState),
+  onUpdateStateChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: Parameters<typeof callback>[0]) =>
+      callback(state);
+    ipcRenderer.on(desktopChannels.updateStateChanged, listener);
+    return () => ipcRenderer.removeListener(desktopChannels.updateStateChanged, listener);
+  },
+  checkForUpdates: () => ipcRenderer.invoke(desktopChannels.checkForUpdates),
+  downloadUpdate: () => ipcRenderer.invoke(desktopChannels.downloadUpdate),
+  installUpdate: () => ipcRenderer.invoke(desktopChannels.installUpdate),
 };
 
 contextBridge.exposeInMainWorld('desktop', desktop);

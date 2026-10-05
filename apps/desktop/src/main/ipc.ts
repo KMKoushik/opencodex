@@ -2,10 +2,12 @@ import { BrowserWindow, dialog, ipcMain } from 'electron';
 import { desktopChannels } from '@opencodex/contracts/desktop';
 import { createPreferences, preferenceInputSchema } from './preferences';
 import { listOpenApps, openInApp, openAppInput } from './open-apps';
+import type { createUpdates } from './updates';
 
 export function registerNativeHandlers(
   allowedOrigin: string,
   preferences: ReturnType<typeof createPreferences>,
+  updates: ReturnType<typeof createUpdates>,
 ) {
   function requireWindow(event: Electron.IpcMainInvokeEvent) {
     const frame = event.senderFrame;
@@ -45,5 +47,21 @@ export function registerNativeHandlers(
     requireWindow(event);
     const { key, value } = preferenceInputSchema.parse(input);
     return preferences.set(key, value);
+  });
+  ipcMain.handle(desktopChannels.getUpdateState, (event) => {
+    requireWindow(event);
+    return updates.getState();
+  });
+  ipcMain.handle(desktopChannels.checkForUpdates, (event) => {
+    requireWindow(event);
+    return updates.check();
+  });
+  ipcMain.handle(desktopChannels.downloadUpdate, (event) => {
+    requireWindow(event);
+    return updates.download();
+  });
+  ipcMain.handle(desktopChannels.installUpdate, (event) => {
+    requireWindow(event);
+    return updates.install();
   });
 }

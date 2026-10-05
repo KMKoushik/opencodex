@@ -6,6 +6,7 @@ import { registerNativeHandlers } from './ipc';
 import { createPreferences } from './preferences';
 import { registerLinkHandlers } from './links';
 import { loadShellEnvironment } from './shell-env';
+import { createUpdates } from './updates';
 
 // Keep existing development preferences when replacing Electron's default display name.
 const userData = app.getPath('userData');
@@ -19,6 +20,7 @@ const shellEnvironment = app.isPackaged ? loadShellEnvironment() : Promise.resol
 let gateway: Awaited<ReturnType<typeof startGateway>> | undefined;
 let origin: string;
 let quitting = false;
+let restartingForUpdate = false;
 
 async function createWindow() {
   const window = new BrowserWindow({
@@ -41,6 +43,10 @@ async function createWindow() {
     },
   });
   registerLinkHandlers(window, new URL(origin).origin);
+  window.webContents.on('will-prevent-unload', (event) => {
+    // The update dialog explicitly warned about unsaved files and drafts.
+    if (restartingForUpdate) event.preventDefault();
+  });
   const sendFullscreen = (fullscreen: boolean) => {
     if (!window.webContents.isDestroyed())
       window.webContents.send(desktopChannels.fullscreenChanged, fullscreen);
@@ -67,7 +73,12 @@ app
       origin = gateway.url;
     }
     const preferences = createPreferences();
-    registerNativeHandlers(new URL(origin).origin, preferences);
+    const updates = createUpdates(async () => {
+      await gateway?.close();
+      restartingForUpdate = true;
+      quitting = true;
+    });
+    registerNativeHandlers(new URL(origin).origin, preferences, updates);
     await createWindow();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) void createWindow();

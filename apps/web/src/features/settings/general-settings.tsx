@@ -2,6 +2,7 @@ import type { Project } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { useConnection } from '../connection/use-connection';
 import { SettingsGroup, SettingsRow } from './settings-layout';
+import { UpdateSettings } from '../updates/update-settings';
 
 export function GeneralSettings({
   live,
@@ -21,6 +22,7 @@ export function GeneralSettings({
 
   return (
     <>
+      <UpdateSettings />
       <SettingsGroup title="OpenCode">
         <SettingsRow
           label="Service"

@@ -16,6 +16,7 @@ import { BrandIcon, Wordmark } from '../brand/brand';
 import { shortcutProps } from '../shortcuts/commands';
 import type { SettingsSection } from '../settings/sections';
 import './sidebar.css';
+import { UpdateControl } from '../updates/update-control';
 
 const ThreadSearch = lazy(() =>
   import('./thread-search').then((module) => ({ default: module.ThreadSearch })),
@@ -194,6 +195,7 @@ export function Sidebar({
         {children}
         {!settings && (
           <div className="sidebar-footer">
+            <UpdateControl compact />
             <button
               className="nav-row"
               {...shortcutProps('settings.open')}
