@@ -85,6 +85,7 @@ export function Timeline({
   const fetching = useRef(false);
   // Following stops only on a reading gesture, never on scroll position alone: the list's
   // own measuring and end-following scrolls would otherwise be mistaken for the reader.
+  // History anchoring is enabled only while reading, so it cannot fight end-following on refresh.
   const [following, setFollowingState] = useState(true);
   const followingRef = useRef(true);
   const setFollowing = useCallback((value: boolean) => {
@@ -115,7 +116,9 @@ export function Timeline({
   }, [rows, loadingEarlier, loadEarlier]);
   const scrollToLatest = (animated = false) => {
     setFollowing(true);
-    void list.current?.scrollToEnd({ animated: animated && !reducedMotion() });
+    // Sending at the end only needs to resume following, not start another scroll target.
+    if (distanceFromEnd() > FOLLOW_BAND)
+      void list.current?.scrollToEnd({ animated: animated && !reducedMotion() });
   };
   useImperativeHandle(ref, () => ({ scrollToLatest }));
   const renderItem = useCallback(
@@ -166,7 +169,7 @@ export function Timeline({
           estimatedItemSize={100}
           drawDistance={500}
           initialScrollAtEnd
-          maintainVisibleContentPosition
+          maintainVisibleContentPosition={!following}
           maintainScrollAtEnd={
             following ? (running && !reducedMotion() ? followOutputSmooth : followOutput) : false
           }
