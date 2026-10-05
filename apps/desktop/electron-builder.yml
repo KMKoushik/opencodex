@@ -24,7 +24,7 @@ mac:
         - arm64
         - x64
   icon: build/icon.icns
-  sign: apps/desktop/scripts/sign-mac.mjs
+  sign: scripts/sign-mac.mjs
   # Self-signed releases use the same identity forever; Developer ID remains an optional upgrade.
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
