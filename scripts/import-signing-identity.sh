@@ -16,6 +16,12 @@ mkdir "$directory"
 printf '%s' "$CSC_LINK" | base64 --decode > "$directory/signing.p12"
 openssl pkcs12 -in "$directory/signing.p12" -clcerts -nokeys \
   -passin env:CSC_KEY_PASSWORD -out "$directory/certificate.pem"
+# Public fingerprint of the release identity. A changed secret must not silently strand installs.
+fingerprint="$(openssl x509 -in "$directory/certificate.pem" -outform DER | shasum -a 256 | cut -d ' ' -f 1)"
+[[ "$fingerprint" == d81bd29ad863a54a4569c97da94bd8948c4b2eeafbcbf1044c80e180e9be2c15 ]] || {
+  echo 'The certificate does not match the pinned OpenCodex update identity. Restore the signing backup.' >&2
+  exit 1
+}
 keychain="$directory/signing.keychain-db"
 password="$(openssl rand -base64 48)"
 security create-keychain -p "$password" "$keychain"

@@ -127,7 +127,8 @@ app.whenReady().then(() => {
     const finish = (error) => {
       clearTimeout(timeout);
       watcher.close();
-      error ? reject(error) : resolve();
+      if (error) reject(error);
+      else resolve();
     };
     const watcher = watch(directory, async (_event, file) => {
       if (file !== 'receipt.json') return;

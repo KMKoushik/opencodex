@@ -2,6 +2,15 @@
   "canvas": { "width": 119, "height": 57 },
   "boxes": [
     {
+      "id": "releases",
+      "x": 89,
+      "y": 1,
+      "width": 28,
+      "height": 6,
+      "title": "GITHUB RELEASES",
+      "color": "#f6c177"
+    },
+    {
       "id": "ui",
       "x": 2,
       "y": 5,
@@ -33,7 +42,7 @@
       "x": 89,
       "y": 9,
       "width": 28,
-      "height": 9,
+      "height": 10,
       "title": "ELECTRON MAIN",
       "color": "#f6c177"
     },
@@ -42,8 +51,8 @@
       "x": 89,
       "y": 22,
       "width": 28,
-      "height": 8,
-      "title": "DESKTOP PREFERENCES",
+      "height": 9,
+      "title": "DESKTOP STORAGE",
       "color": "#f6c177"
     },
     {
@@ -77,6 +86,20 @@
   "connectors": [
     {
       "points": [
+        [103, 9],
+        [103, 7]
+      ],
+      "color": "#f6c177"
+    },
+    {
+      "points": [
+        [115, 6],
+        [115, 8]
+      ],
+      "color": "#f6c177"
+    },
+    {
+      "points": [
         [69, 11],
         [88, 11]
       ],
@@ -98,7 +121,7 @@
     },
     {
       "points": [
-        [103, 17],
+        [103, 18],
         [103, 21]
       ],
       "color": "#f6c177"
@@ -179,6 +202,10 @@
     }
   ],
   "texts": [
+    { "x": 92, "y": 2, "value": "DMG + ZIP + manifest" },
+    { "x": 92, "y": 3, "value": "Same self-signed key" },
+    { "x": 92, "y": 4, "value": "Public HTTPS update feed" },
+    { "x": 89, "y": 7, "value": "HTTPS", "color": "#f6c177" },
     { "x": 2, "y": 0, "value": "OPENCODEX ARCHITECTURE", "color": "#ffffff" },
     {
       "x": 2,
@@ -218,12 +245,14 @@
     { "x": 92, "y": 14, "value": "Folder picker + open in" },
     { "x": 92, "y": 15, "value": "OS browser + clipboard" },
     { "x": 92, "y": 16, "value": "OS edit + spelling menus" },
-    { "x": 89, "y": 18, "value": "read / write", "color": "#f6c177" },
-    { "x": 97, "y": 24, "value": "User-data dir" },
+    { "x": 92, "y": 17, "value": "Updates + restart" },
+    { "x": 89, "y": 19, "value": "read / write", "color": "#f6c177" },
+    { "x": 97, "y": 24, "value": "Local app storage" },
     { "x": 97, "y": 25, "value": "electron-store" },
     { "x": 92, "y": 26, "value": "preferences.json" },
     { "x": 92, "y": 27, "value": "Projects, UI + font size" },
     { "x": 92, "y": 28, "value": "Model/effort + frequency" },
+    { "x": 92, "y": 29, "value": "Updater download cache" },
     { "x": 7, "y": 21, "value": "HTTP /api", "color": "#7bb8ff" },
     { "x": 7, "y": 22, "value": "+ WS input", "color": "#7bb8ff" },
     { "x": 58, "y": 21, "value": "SSE + WS", "color": "#5eead4" },
@@ -267,6 +296,8 @@
     "BROWSER",
     "ELECTRON RENDERER",
     "ELECTRON MAIN",
+    "GITHUB RELEASES",
+    "Updates + restart",
     "preload IPC",
     "packages/gateway",
     "HTTP /api",

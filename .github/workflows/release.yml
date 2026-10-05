@@ -64,27 +64,16 @@ jobs:
       - name: Package
         env:
           VERSION: ${{ steps.version.outputs.version }}
-          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
           args=(--mac --publish never "-c.extraMetadata.version=$VERSION")
           args+=("-c.forceCodeSigning=true" "-c.mac.identity=$CSC_NAME")
-          if [[ "$OPENCODEX_SELF_SIGNED" == true ]]; then
-            echo "Signing with the stable self-signed identity (not notarized)."
-            unset APPLE_API_KEY_ID APPLE_API_ISSUER
-          else
-            if [[ -n "$APPLE_API_KEY_CONTENT" && -n "$APPLE_API_KEY_ID" && -n "$APPLE_API_ISSUER" ]]; then
-              echo "Notarizing with the App Store Connect API key."
-              key="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
-              printf '%s' "$APPLE_API_KEY_CONTENT" > "$key"
-              export APPLE_API_KEY="$key"
-            else
-              unset APPLE_API_KEY_ID APPLE_API_ISSUER
-            fi
-          fi
-          unset APPLE_API_KEY_CONTENT
+          echo "Signing with the stable self-signed identity (not notarized)."
           bun run --cwd apps/desktop package "${args[@]}"
+
+      - name: Verify update artifacts
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: node scripts/verify-update-artifacts.mjs
 
       - uses: actions/upload-artifact@v4
         with:
@@ -92,20 +81,27 @@ jobs:
           path: |
             apps/desktop/release/*.dmg
             apps/desktop/release/*.zip
-            apps/desktop/release/*.yml
+            apps/desktop/release/*-mac.yml
             apps/desktop/release/*.blockmap
           if-no-files-found: error
 
-      - name: Publish GitHub Release
+      - name: Upload draft GitHub Release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
           name: OpenCodex ${{ steps.version.outputs.version }}
           generate_release_notes: true
+          draft: true
           prerelease: ${{ steps.version.outputs.prerelease }}
           fail_on_unmatched_files: true
           files: |
             apps/desktop/release/*.dmg
             apps/desktop/release/*.zip
-            apps/desktop/release/latest-mac.yml
+            apps/desktop/release/*-mac.yml
             apps/desktop/release/*.blockmap
+
+      - name: Publish complete update feed
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false
