@@ -30,7 +30,7 @@
      │  Bounded previews/logs; version-checked file writes           │                   │  Updater download cache  │
      │  Native APIs + origin-checked, ticketed PTY relay             │                   └──────────────────────────┘
      │  Host files: read-only video ranges + reveal targets          │
-     │  Side chats: native fork + guardrails; opt-in plugin file     │
+     │  Side chats; opt-in side-chat + Claude plugin files           │
      └─────────────────┬─────────────────────────────────────────────┘
        HTTP + WS       │                               ▲  Events + WS
        official client │                               │                                 ┌──── SHARED CONTRACTS ────┐
@@ -44,7 +44,22 @@
      │  Providers, tools, VCS + filesystem operations                │                   │                          │
      │  Survives OpenCodex shutdown                                  │                   └──────────────────────────┘
      │  Durable sessions; native agent shells + PTY replay           │
-     │  Loads plugins; side-chat tools read the main chat            │                   Code, not a service
+     │  Loads side-chat and optional Claude provider plugins         │                   Code, not a service
+     └─────────────────┬─────────────────────────────────────────────┘
+                       │                               ▲
+       spawn + stdin   │                               │  stdout + tools
+                       │                               │
+                       │                               │
+                       │                               │
+                       ▼                               │
+     ┌──────────────────── CLAUDE CODE (OPT-IN) ───────┴─────────────┐
+     │                                                               │
+     │  Official CLI subprocess on the OpenCode host                 │
+     │                                                               │
+     │  Own login, inference and Claude conversation files           │
+     │  Workspace tools return to OpenCode permissions               │
+     │  Plugin releases idle workers after five minutes              │
+     │                                                               │
      └───────────────────────────────────────────────────────────────┘
 
 

@@ -1,0 +1,60 @@
+// Forward V2's actual schemas, rather than the plugin's V1-shaped tool aliases.
+// Code Mode keeps MCP and catalog tools executing in OpenCode, with its credentials.
+const tools = [
+  'execute',
+  'shell',
+  'read',
+  'write',
+  'edit',
+  'glob',
+  'grep',
+  'subagent',
+  'question',
+  'skill',
+  'webfetch',
+  'websearch',
+  'read_main_chat',
+  'wait_main_chat',
+];
+
+export const CLAUDE_CODE_PRESET = {
+  package: '@khalilgharbaoui/opencode-claude-code-plugin@0.40.0',
+  options: {
+    proxyTools: [],
+    proxyOpencodeTools: tools,
+    bridgeOpencodeMcp: false,
+    strictMcpConfig: true,
+    // Only the proxy can perform workspace operations. Claude still owns inference,
+    // authentication, ToolSearch, and its internal conversation management.
+    extraDisallowedTools: [
+      'Bash',
+      'Read',
+      'Write',
+      'Edit',
+      'MultiEdit',
+      'Glob',
+      'Grep',
+      'Agent',
+      'Task',
+      'AskUserQuestion',
+      'Skill',
+      'WebFetch',
+      'WebSearch',
+      'NotebookEdit',
+      'REPL',
+      'JavaScript',
+    ],
+    // Headless Claude cannot display its own permission prompts. The disabled
+    // built-ins above are replaced by OpenCode calls, which still ask/deny normally.
+    skipPermissions: true,
+    permissionMode: 'bypassPermissions',
+    controlRequestBehavior: 'deny',
+    controlRequestToolBehaviors: Object.fromEntries(
+      tools.map((tool) => [`mcp__opencode_proxy__${tool}`, 'allow']),
+    ),
+    idleProcessTimeoutMs: 300_000,
+    autoContinueIncompleteTurns: false,
+    forkSessions: false,
+    resumeAfterRestart: false,
+  },
+};

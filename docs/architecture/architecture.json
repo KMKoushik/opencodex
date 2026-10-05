@@ -1,7 +1,7 @@
 {
   "canvas": {
     "width": 119,
-    "height": 59
+    "height": 74
   },
   "boxes": [
     {
@@ -77,6 +77,15 @@
       "color": "#c4a7ff"
     },
     {
+      "id": "claude",
+      "x": 5,
+      "y": 54,
+      "width": 65,
+      "height": 9,
+      "title": "CLAUDE CODE (OPT-IN)",
+      "color": "#c4a7ff"
+    },
+    {
       "id": "contracts",
       "x": 89,
       "y": 35,
@@ -87,6 +96,20 @@
     }
   ],
   "connectors": [
+    {
+      "points": [
+        [23, 47],
+        [23, 53]
+      ],
+      "color": "#c4a7ff"
+    },
+    {
+      "points": [
+        [55, 54],
+        [55, 48]
+      ],
+      "color": "#5eead4"
+    },
     {
       "points": [
         [103, 9],
@@ -161,8 +184,8 @@
   "lines": [
     {
       "points": [
-        [2, 50],
-        [114, 50]
+        [2, 65],
+        [114, 65]
       ],
       "color": "#626c7a"
     }
@@ -511,52 +534,84 @@
     },
     {
       "x": 2,
-      "y": 52,
+      "y": 67,
       "value": "RUNTIME HOSTING",
       "color": "#ffffff"
     },
     {
       "x": 2,
-      "y": 54,
+      "y": 69,
       "value": "DEV",
       "color": "#7bb8ff"
     },
     {
       "x": 15,
-      "y": 54,
+      "y": 69,
       "value": "Vite :5173 proxies /api to :4310; macOS launches cached OpenCodex.app."
     },
     {
       "x": 2,
-      "y": 55,
+      "y": 70,
       "value": "WEB BUILD",
       "color": "#5eead4"
     },
     {
       "x": 15,
-      "y": 55,
+      "y": 70,
       "value": "Node gateway serves the UI and API on one loopback origin."
     },
     {
       "x": 2,
-      "y": 56,
+      "y": 71,
       "value": "DESKTOP",
       "color": "#f6c177"
     },
     {
       "x": 15,
-      "y": 56,
+      "y": 71,
       "value": "Electron main hosts the gateway and built UI on a free loopback port."
     },
     {
       "x": 8,
       "y": 32,
-      "value": "Side chats: native fork + guardrails; opt-in plugin file"
+      "value": "Side chats; opt-in side-chat + Claude plugin files"
     },
     {
       "x": 8,
       "y": 46,
-      "value": "Loads plugins; side-chat tools read the main chat"
+      "value": "Loads side-chat and optional Claude provider plugins"
+    },
+    {
+      "x": 7,
+      "y": 49,
+      "value": "spawn + stdin",
+      "color": "#c4a7ff"
+    },
+    {
+      "x": 58,
+      "y": 49,
+      "value": "stdout + tools",
+      "color": "#5eead4"
+    },
+    {
+      "x": 8,
+      "y": 56,
+      "value": "Official CLI subprocess on the OpenCode host"
+    },
+    {
+      "x": 8,
+      "y": 58,
+      "value": "Own login, inference and Claude conversation files"
+    },
+    {
+      "x": 8,
+      "y": 59,
+      "value": "Workspace tools return to OpenCode permissions"
+    },
+    {
+      "x": 8,
+      "y": 60,
+      "value": "Plugin releases idle workers after five minutes"
     }
   ],
   "requiredLabels": [
@@ -577,7 +632,8 @@
     "preferences.json",
     "localStorage: UI + type",
     "RUNTIME HOSTING",
-    "opt-in plugin file"
+    "Claude plugin files",
+    "CLAUDE CODE (OPT-IN)"
   ],
   "style": {
     "background": "#000000",

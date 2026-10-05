@@ -82,6 +82,12 @@ export type ModelCatalog = ModelListOutput & {
 };
 export type WorkspaceVcs = { info: VcsInfo; files: VcsFileStatus[] };
 export type WorkspaceSkills = Pick<SkillInfo, 'id' | 'name' | 'description'>[];
+export type ClaudeCodeStatus = {
+  state: 'unavailable' | 'missing' | 'outdated' | 'loading' | 'active' | 'failed' | 'external';
+  removable: boolean;
+  path?: string;
+  message?: string;
+};
 export type WorkspaceFile =
   | { kind: 'text'; text: string; version: string; bytes: number }
   | { kind: 'image'; uri: string; bytes: number }

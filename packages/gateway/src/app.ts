@@ -26,6 +26,7 @@ import { createMetadataWriter, sessionMetadataRoutes } from './session-metadata'
 import { sideChatRoutes } from './side-chats';
 import { sessionAccessRoutes } from './session-access';
 import { attention } from './attention';
+import { claudeCodeRoutes } from './claude-code';
 
 export function createApp(
   backend = new OpenCodeBackend(),
@@ -57,6 +58,7 @@ export function createApp(
   const writeMetadata = createMetadataWriter(backend);
   app.route('/api/sessions', sessionMetadataRoutes(writeMetadata));
   app.route('/api', sideChatRoutes(backend, writeMetadata));
+  app.route('/api/claude-code', claudeCodeRoutes(backend));
   app.route('/api/sessions', sessionAccessRoutes(backend));
   app.get('/api/attention', async (c) => {
     const directories = [...new Set(c.req.queries('directory') ?? [])];

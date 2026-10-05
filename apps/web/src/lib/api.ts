@@ -35,6 +35,7 @@ import {
   type ShellInfo,
   type ShellOutputOutput,
   type SideChatPluginStatus,
+  type ClaudeCodeStatus,
 } from '@opencodex/contracts';
 
 async function nativeRequest<T>(path: string, options?: RequestInit): Promise<T> {
@@ -191,6 +192,13 @@ export const api = {
   installSideChatPlugin: () => nativeRequest<{ ok: true }>('/side-chat-plugin', { method: 'PUT' }),
   removeSideChatPlugin: () =>
     nativeRequest<{ ok: true }>('/side-chat-plugin', { method: 'DELETE' }),
+  claudeCode: (directory: string | undefined, signal: AbortSignal) =>
+    nativeRequest<ClaudeCodeStatus>(
+      `/claude-code${directory ? `?${new URLSearchParams({ directory })}` : ''}`,
+      { signal },
+    ),
+  installClaudeCode: () => nativeRequest<{ ok: true }>('/claude-code', { method: 'PUT' }),
+  removeClaudeCode: () => nativeRequest<{ ok: true }>('/claude-code', { method: 'DELETE' }),
   active: (signal: AbortSignal) =>
     nativeRequest<Record<string, SessionActive>>('/sessions/active', { signal }),
   messages: (id: string, cursor: string | undefined, signal: AbortSignal) =>

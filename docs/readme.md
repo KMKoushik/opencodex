@@ -32,6 +32,18 @@ Use the paperclip, paste from the clipboard, or drop files onto the composer to 
 
 Themes live in **Settings → Appearance**. Choose Light, Dark, or System mode, then pick a separate light and dark theme, such as OpenCodex, Catppuccin (Latte, Mocha, Macchiato, Frappé), GitHub, Nord, Gruvbox, Solarized, Rosé Pine, Tokyo Night, Dracula, Everforest, or One. As in Codex, each theme is three seed colors — accent, background, and foreground — plus a contrast level; you can adjust any of them, and every other color is derived from them, including the glazed ceramic controls. The OpenCodex and Catppuccin themes keep code on ink: the workspace panel and terminal use the theme's own dark palette even in light mode (Catppuccin Latte borrows Mocha's), with matching syntax colors in diffs and the editor. Choices persist across launches.
 
+### Claude Code subscriptions
+
+Install the official Claude Code CLI on the OpenCode host and sign in with `claude auth login`. In **Settings → General → Claude Code**, choose **Enable**, then select a **Claude Code** model in the composer. **Remove** uninstalls the bridge; **Update** installs the bundled version. This applies across projects on your locally discovered OpenCode service. External connections require installation on that server.
+
+The bridge runs the real Claude CLI with its existing authentication. Subscription usage follows Anthropic's current rules for your account; API-key and cloud-provider logins retain their billing paths. OpenCodex does not collect Claude credentials. Check your login with `claude auth status`; consult Anthropic's [subscription guidance](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan) for billing rules.
+
+OpenCode supplies app-visible sessions, permissions, and forwarded tools, including Code Mode/MCP, subagents, and side-chat context tools. Claude retains its internal agent loop, context management, and conversation files. The bridge wraps the pinned [OpenCode Claude Code plugin](https://github.com/khalilgharbaoui/opencode-claude-code-plugin) with an OpenCodex preset and interruption cleanup. Arbitrary direct custom tools need explicit forwarding; Claude hooks still belong to your CLI environment. Context and cost reports are adapter-specific.
+
+Forks and interrupted/steered turns rebuild Claude context from OpenCode history. The upstream adapter shortens older messages during reconstruction and flattens some role boundaries, so this is not lossless replay. For context-sensitive work, keep the experimental status in mind.
+
+The app installs one plugin under OpenCode's global `plugins/opencodex-claude-code/` folder and preserves customized files. Remove any separately configured Claude Code provider before enabling it. Loading is automatic; use **Check** if it has not appeared. Closing OpenCodex leaves ongoing work running; idle Claude workers expire after five minutes.
+
 ### Review and edit your workspace
 
 Use the **Files** and **Changes** icons on the far-right rail to open the workspace panel. Click the active icon again to close it. **Changes** shows uncommitted files (including staged and untracked files), or changes from the base branch. Select a file to review its diff; use the gutter **+** on a line or selected range to add feedback to your chat draft. Nothing is sent automatically.

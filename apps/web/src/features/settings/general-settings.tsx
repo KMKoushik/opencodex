@@ -4,6 +4,7 @@ import { useConnection } from '../connection/use-connection';
 import { SettingsGroup, SettingsRow } from './settings-layout';
 import { UpdateSettings } from '../updates/update-settings';
 import { SideChatPluginSettings } from '../side-chat/side-chat-plugin-settings';
+import { ClaudeCodeSettings } from './claude-code-settings';
 
 export function GeneralSettings({
   live,
@@ -47,6 +48,7 @@ export function GeneralSettings({
           description={connected ? (live ? 'Connected' : 'Reconnecting…') : 'Unavailable'}
         />
         {connected && <SideChatPluginSettings directory={project?.directory} />}
+        {connected && <ClaudeCodeSettings directory={project?.directory} />}
       </SettingsGroup>
       <SettingsGroup title="Project">
         <SettingsRow
