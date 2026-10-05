@@ -12,12 +12,12 @@
   │  │  <>   Browser app          │     │  <>   Desktop app          ├───┼──────────────▶│  <>   apps/desktop       │
   │  │                            │     │                            │◀──┼───────────────┤                          │
   │  │  localStorage: UI + type   │     │  Sandboxed renderer        │   │  web events   │  Window + fullscreen     │
-  │  │  Model/effort + frequency  │     │  Native IPC available      ├───┼──────────────▶│  Folder picker + open in │
+  │  │  Models + session layout   │     │  Native IPC available      ├───┼──────────────▶│  Folder picker + open in │
   │  └────────────────────────────┘     └────────────────────────────┘   │               │  OS browser + clipboard  │
   │                                                                      │               │  OS edit + spelling menus│
-  │             Zustand chat + editor drafts; Query API state            │               │  Updates + restart       │
+  │           Zustand drafts + session layout; Query API state           │               │  Updates + restart       │
   │            Warm session card; small screens use a popover            │               └─────────────┬────────────┘
-  │       Lazy workspace panels; activity tray + dockable terminal       │               read / write  │
+  │         Session workspace; activity tray + dockable terminal         │               read / write  │
   └────────────────────┬─────────────────────────────────────────────────┘                             │
        HTTP /api       │                               ▲  SSE + WS                                     ▼
        + WS input      │                               │  output                         ┌──── DESKTOP STORAGE ─────┐
@@ -26,7 +26,7 @@
      │                                                               │                   │       electron-store     │
      │  <>   packages/gateway                                        │                   │  preferences.json        │
      │                                                               │                   │  Projects, UI + font size│
-     │  Hono + V2 client; private service credentials                │                   │  Model/effort + frequency│
+     │  Hono + V2 client; private service credentials                │                   │  Models + session layout │
      │  Bounded previews/logs; version-checked file writes           │                   │  Updater download cache  │
      │  Native APIs + origin-checked, ticketed PTY relay             │                   └──────────────────────────┘
      └─────────────────┬─────────────────────────────────────────────┘
@@ -39,7 +39,7 @@
      │                                                               │                   │  packages/contracts      │
      │  <>   Shared agent backend                                    │                   │                          │
      │                                                               │                   │  API types + schemas     │
-     │  Owns sessions, forks, commands + execution                   │                   │  Native bridge types     │
+     │  Owns sessions, permission rules + execution                  │                   │  Native bridge types     │
      │  Providers, tools, VCS + filesystem operations                │                   │                          │
      │  Survives OpenCodex shutdown                                  │                   └──────────────────────────┘
      │  Durable sessions; native agent shells + PTY replay           │

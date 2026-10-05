@@ -4,6 +4,7 @@ import { ShortcutsProvider } from '../features/shortcuts/shortcuts-provider';
 import { DraftProvider } from '../features/chat/draft-provider';
 import { EditorDraftProvider } from '../features/workbench/editor-draft-provider';
 import { UpdateSync } from '../features/updates/update-sync';
+import { WorkbenchProvider } from '../features/workbench/workbench-provider';
 
 export function Providers({ children }: { children: ReactNode }) {
   const [client] = useState(
@@ -17,7 +18,9 @@ export function Providers({ children }: { children: ReactNode }) {
       <UpdateSync />
       <DraftProvider>
         <EditorDraftProvider>
-          <ShortcutsProvider>{children}</ShortcutsProvider>
+          <WorkbenchProvider>
+            <ShortcutsProvider>{children}</ShortcutsProvider>
+          </WorkbenchProvider>
         </EditorDraftProvider>
       </DraftProvider>
     </QueryClientProvider>

@@ -2,18 +2,33 @@ import calicoSmall from '../../assets/brand/calico-96.png';
 import calicoLarge from '../../assets/brand/calico-384.png';
 import catppuccinSmall from '../../assets/brand/catppuccin-96.png';
 import catppuccinLarge from '../../assets/brand/catppuccin-384.png';
+import devSmall from '../../assets/brand/dev-96.png';
+import devLarge from '../../assets/brand/dev-384.png';
 import { useThemeArt } from '../theme/use-theme';
+import { appName, development } from './identity';
 import './brand.css';
 
 const coats = {
   calico: { small: calicoSmall, large: calicoLarge },
   catppuccin: { small: catppuccinSmall, large: catppuccinLarge },
 };
+const dev = { small: devSmall, large: devLarge };
 
 /** The ceramic calico app icon, wearing the active theme's coat. Decorative: pair it with text. */
 export function BrandIcon({ size, className }: { size: 'small' | 'large'; className?: string }) {
   const coat = useThemeArt();
-  return <img className={className} src={coats[coat][size]} alt="" draggable={false} />;
+  return (
+    <img
+      className={className}
+      src={(development ? dev : coats[coat])[size]}
+      alt=""
+      draggable={false}
+    />
+  );
+}
+
+export function DevelopmentBadge() {
+  return development ? <span className="brand-dev-badge">Dev</span> : null;
 }
 
 /**
@@ -22,7 +37,7 @@ export function BrandIcon({ size, className }: { size: 'small' | 'large'; classN
  */
 export function Wordmark({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="5 -39 1017 174" role="img" aria-label="OpenCodex">
+    <svg className={className} viewBox="5 -39 1017 174" role="img" aria-label={appName}>
       <path
         className="wordmark-open"
         d="M57.85 102.65Q42.53 102.65 30.89 96.78Q19.26 90.91 12.64 79.17Q6.02 67.43 6.02 49.82Q6.02 32.19 12.64 20.54Q19.27 8.89 31 3.12Q42.73 -2.65 57.86 -2.65Q73.19 -2.65 84.91 3.22Q96.64 9.09 103.26 20.73Q109.88 32.38 109.88 50Q109.88 68 103.06 79.74Q96.25 91.48 84.43 97.07Q72.61 102.65 57.85 102.65ZM58.79 80.48Q65.58 80.48 70.12 77.35Q74.65 74.22 76.92 67.78Q79.18 61.35 79.18 51.89Q79.18 41.86 76.73 34.95Q74.27 28.04 69.45 24.35Q64.64 20.66 57.1 20.66Q50.49 20.66 45.87 23.79Q41.24 26.92 38.97 33.36Q36.71 39.8 36.71 49.44Q36.71 64.94 42.46 72.71Q48.22 80.48 58.79 80.48ZM125.83 132.1V51.14V0H150.69L151.06 28.47L154.6 28.84Q156.31 18.22 160.66 11.2Q165.02 4.18 171.92 0.76Q178.82 -2.65 187.73 -2.65Q200.96 -2.65 210.49 3.78Q220.02 10.2 225.21 22.13Q230.39 34.05 230.39 50.73Q230.39 65.59 225.93 77.33Q221.47 89.07 212.4 95.86Q203.33 102.65 189.58 102.65Q180.32 102.65 173.87 99.33Q167.43 96.01 162.99 89.55Q158.54 83.08 155.54 73.57H151.8Q152.94 78.69 153.97 83.92Q155.01 89.14 155.66 94.09Q156.32 99.03 156.32 103.59V132.1H125.83ZM178.4 78.57Q184.64 78.57 189.08 75.15Q193.52 71.74 195.96 65.49Q198.41 59.24 198.41 50.94Q198.41 42.07 195.86 35.73Q193.32 29.39 188.61 25.88Q183.89 22.38 177.66 22.38Q171.84 22.38 167.78 24.91Q163.73 27.44 161.17 31.5Q158.61 35.55 157.46 40.11Q156.31 44.67 156.31 48.72V52.82Q156.31 56.47 157.26 60.08Q158.22 63.69 160.11 67Q162 70.31 164.65 72.94Q167.3 75.57 170.78 77.07Q174.27 78.57 178.4 78.57ZM294.58 102.65Q282.03 102.65 272.19 99.32Q262.35 95.99 255.46 89.53Q248.58 83.08 244.91 73.62Q241.24 64.15 241.24 51.9Q241.24 39.99 244.73 29.96Q248.21 19.93 254.82 12.63Q261.43 5.33 270.99 1.34Q280.54 -2.65 292.5 -2.65Q304.45 -2.65 313.64 1.24Q322.82 5.14 328.87 12.73Q334.92 20.31 337.73 31.19Q340.54 42.07 339.57 56.04L261.3 56.62V40.69L322.18 40.12L311.36 47.56Q312.68 38.1 310.25 32.14Q307.81 26.17 303.1 23.42Q298.39 20.66 292.87 20.66Q286.23 20.66 281.14 24.26Q276.05 27.86 273.23 34.67Q270.42 41.48 270.42 51.31Q270.42 66.83 277.2 73.84Q283.97 80.85 294.39 80.85Q299.49 80.85 302.9 79.43Q306.3 78.02 308.47 75.84Q310.64 73.67 311.86 71Q313.08 68.34 313.81 65.84L340.36 71.61Q338.9 78.6 335.53 84.3Q332.16 90.01 326.59 94.12Q321.01 98.23 313.13 100.44Q305.25 102.65 294.58 102.65ZM356.32 100V39.86V0H380.79L381.16 29.44H385.07Q387.5 18.74 392.03 11.58Q396.56 4.41 403.57 0.88Q410.57 -2.65 420.08 -2.65Q437.66 -2.65 446.82 9.62Q455.98 21.9 455.98 48.85V100H425.3V52.27Q425.3 36.68 420.88 29.62Q416.46 22.57 407.8 22.57Q400.64 22.57 396 26.92Q391.37 31.26 389.09 38.5Q386.81 45.74 386.81 54.6V100H356.32Z"

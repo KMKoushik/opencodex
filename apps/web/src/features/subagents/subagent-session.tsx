@@ -67,7 +67,7 @@ export function SubagentSession({
           ),
       )}
       {chat.permissions.data?.map((request) => (
-        <PermissionCard key={request.id} request={request} />
+        <PermissionCard key={request.id} request={request} session={chat.info.data} />
       ))}
       {!running && (chat.executionError.data || chat.info.data?.outcome === 'failed') && (
         <p className="text-error" role="alert">

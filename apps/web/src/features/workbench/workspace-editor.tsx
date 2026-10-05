@@ -13,19 +13,14 @@ import { FilePreview } from './file-preview';
 import { QueryError } from './query-error';
 import { editorKey, useEditorDrafts } from './editor-drafts';
 import { resolveFileLink, type FileRequest } from './file-link';
+import { useWorkbenchStore, workbenchKey } from './workbench-context';
+import { defaultWorkspaceState, type WorkspaceTab } from './workbench-store';
 
 const DiffPreview = lazy(() =>
   import('./diff-preview').then((module) => ({ default: module.DiffPreview })),
 );
 const DiffPool = lazy(() => import('./diff-pool').then((module) => ({ default: module.DiffPool })));
-type Tab = {
-  id: string;
-  path: string;
-  directory: string;
-  kind: 'file' | 'diff';
-  mode: 'working' | 'branch';
-  pinned: boolean;
-};
+type Tab = WorkspaceTab;
 
 export function WorkspaceEditor({
   directory,
@@ -46,17 +41,27 @@ export function WorkspaceEditor({
   selectView?: (id: string) => void;
   fileRequest?: FileRequest;
 }) {
-  const [mode, setMode] = useState<'working' | 'branch'>('working');
-  const [diffStyle, setDiffStyle] = useState<'unified' | 'split'>('unified');
-  const [tabs, setTabs] = useState<Tab[]>([]);
-  const [selected, setSelected] = useState('');
-  const [treeVisible, setTreeVisible] = useState(true);
+  const workbench = useWorkbenchStore();
+  const key = workbenchKey(sessionID, directory);
+  const [initial] = useState(
+    () => workbench.getState().entries[key]?.workspace ?? defaultWorkspaceState,
+  );
+  const [mode, setMode] = useState(initial.mode);
+  const [diffStyle, setDiffStyle] = useState(initial.diffStyle);
+  const [tabs, setTabs] = useState<Tab[]>(initial.tabs);
+  const [selected, setSelected] = useState(initial.selected);
+  const [treeVisible, setTreeVisible] = useState(initial.treeVisible);
   const [previousView, setPreviousView] = useState(view);
   if (previousView !== view) {
     setPreviousView(view);
     setTreeVisible(true);
   }
-  const [treeWidth, setTreeWidth] = useState(220);
+  const [treeWidth, setTreeWidth] = useState(initial.treeWidth);
+  useEffect(() => {
+    workbench
+      .getState()
+      .workspace(key, { tabs, selected, mode, diffStyle, treeVisible, treeWidth });
+  }, [workbench, key, tabs, selected, mode, diffStyle, treeVisible, treeWidth]);
   const [toolbarSlot, setToolbarSlot] = useState<HTMLDivElement | null>(null);
   const tree = useRef<HTMLElement>(null);
   const drag = useRef<{ x: number; width: number } | null>(null);

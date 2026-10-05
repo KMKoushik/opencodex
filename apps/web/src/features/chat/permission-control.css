@@ -1,0 +1,28 @@
+.composer-footer .permission-control {
+  width: auto;
+  padding-inline: 8px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+.composer-footer .permission-control[data-full-access='true'] {
+  color: var(--accent);
+}
+
+@media (max-width: 540px) {
+  .composer-footer .permission-control {
+    width: 30px;
+    padding: 0;
+  }
+
+  .permission-control > span {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .composer-footer .permission-control {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

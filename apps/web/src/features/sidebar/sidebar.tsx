@@ -12,7 +12,8 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import type { Session } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
-import { BrandIcon, Wordmark } from '../brand/brand';
+import { BrandIcon, DevelopmentBadge, Wordmark } from '../brand/brand';
+import { appName } from '../brand/identity';
 import { shortcutProps } from '../shortcuts/commands';
 import type { SettingsSection } from '../settings/sections';
 import './sidebar.css';
@@ -105,12 +106,13 @@ export function Sidebar({
           <button
             ref={brand}
             className="sidebar-brand"
-            aria-label="OpenCodex menu"
+            aria-label={`${appName} menu`}
             aria-haspopup="menu"
             popoverTarget={menuID}
           >
             <BrandIcon size="small" className="sidebar-brand-icon" />
             <Wordmark className="sidebar-wordmark" />
+            <DevelopmentBadge />
             <HugeiconsIcon icon={ArrowDown01Icon} size={10} />
           </button>
           <Button
@@ -129,7 +131,7 @@ export function Sidebar({
             className="sidebar-app-menu"
             popover="auto"
             role="menu"
-            aria-label="OpenCodex"
+            aria-label={appName}
             data-shortcut-boundary=""
             onToggle={(event) => {
               if (event.newState === 'open')

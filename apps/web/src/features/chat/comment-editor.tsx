@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { Button } from '../../components/ui/button';
 import { useDraftStore } from './draft-context';
-import { commentLabel, type CommentTarget, type ReviewComment } from './review-comments';
+import {
+  commentLabel,
+  commentQuote,
+  type CommentTarget,
+  type ReviewComment,
+} from './review-comments';
 import './comments.css';
 
 export function CommentEditor({
@@ -54,7 +59,9 @@ export function CommentEditor({
       <div className="comment-source" title={commentLabel(target)}>
         {commentLabel(target)}
       </div>
-      {'messageID' in target && <blockquote>{target.quote}</blockquote>}
+      {('messageID' in target || ('previewQuote' in target && target.previewQuote)) && (
+        <blockquote>{commentQuote(target)}</blockquote>
+      )}
       <textarea
         aria-label="Review comment"
         placeholder="What should change?"
@@ -103,7 +110,7 @@ export function CommentCard({ sessionID, comment }: { sessionID: string; comment
         aria-label={`Edit comment on ${commentLabel(comment.target)}`}
       >
         <span className="comment-source">{commentLabel(comment.target)}</span>
-        <span className="comment-summary">{comment.text || comment.target.quote}</span>
+        <span className="comment-summary">{comment.text || commentQuote(comment.target)}</span>
       </button>
       <Button
         variant="ghost"

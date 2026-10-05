@@ -36,6 +36,70 @@ async function upstream(handler: (request: IncomingMessage, response: ServerResp
 }
 
 describe('gateway and the real OpenCode client', () => {
+  it('enables native full access, settles current approvals once, and restores prior session rules', async () => {
+    const original = [{ action: 'shell', resource: 'git push *', effect: 'deny' }];
+    let permissions = original;
+    let pending = [
+      {
+        id: 'perm_external',
+        sessionID: 'ses_access',
+        action: 'external_directory',
+        resources: ['/outside/*'],
+      },
+    ];
+    const writes: unknown[] = [];
+    const replies: unknown[] = [];
+    let fail = false;
+    const url = await upstream((req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      if (req.method === 'GET') {
+        return res.end(
+          JSON.stringify({
+            data: req.url!.endsWith('/permission') ? pending : { id: 'ses_access', permissions },
+          }),
+        );
+      }
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        const input = JSON.parse(body);
+        if (req.method === 'PATCH') {
+          expect(req.url).toBe('/api/session/ses_access');
+          expect(Object.keys(input)).toEqual(['permissions']);
+          if (fail) return res.writeHead(500).end();
+          permissions = input.permissions;
+          writes.push(input);
+        } else {
+          expect(req.url).toBe('/api/session/ses_access/permission/perm_external/reply');
+          replies.push(input);
+          pending = [];
+        }
+        res.writeHead(204).end();
+      });
+    });
+    const app = createApp(new OpenCodeBackend(async () => ({ url })));
+    const access = (mode: string) =>
+      app.request('http://localhost/api/sessions/ses_access/access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+    expect((await access('always')).status).toBe(400);
+    expect(writes).toEqual([]);
+    fail = true;
+    expect((await access('full')).status).toBe(502);
+    expect(replies).toEqual([]);
+    fail = false;
+    expect((await access('full')).status).toBe(200);
+    expect(permissions).toEqual([...original, { action: '*', resource: '*', effect: 'allow' }]);
+    expect(replies).toEqual([{ decision: 'once' }]);
+    expect((await access('full')).status).toBe(200);
+    expect(writes).toHaveLength(1);
+    expect((await access('default')).status).toBe(200);
+    expect(permissions).toEqual(original);
+    expect(writes).toHaveLength(2);
+    expect(replies).toHaveLength(1);
+  });
   it('observes native shell commands with bounded output and delegates explicit stops', async () => {
     const calls: string[] = [];
     let failed = false;

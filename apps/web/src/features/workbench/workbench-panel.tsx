@@ -1,9 +1,12 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
+import { useStore } from 'zustand';
 import { Cancel01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
 import type { PanelDefinition, SubagentRequest } from './panels';
 import type { FileRequest } from './file-link';
+import { useWorkbenchStore, workbenchKey } from './workbench-context';
+import { defaultWorkbenchLayout } from './workbench-store';
 import './workbench.css';
 
 export function WorkbenchPanel({
@@ -27,7 +30,13 @@ export function WorkbenchPanel({
   onClose: () => void;
   onSelectPanel?: (id: string) => void;
 }) {
-  const [width, setWidth] = useState(820);
+  const store = useWorkbenchStore();
+  const key = workbenchKey(sessionID, directory);
+  const width = useStore(
+    store,
+    (state) => state.entries[key]?.layout.width ?? defaultWorkbenchLayout.width,
+  );
+  const setWidth = (width: number) => store.getState().layout(key, { width });
   const [headerElement, setHeaderElement] = useState<HTMLDivElement | null>(null);
   const [visited, setVisited] = useState([panel]);
   const stateKey = panel.stateKey ?? panel.id;

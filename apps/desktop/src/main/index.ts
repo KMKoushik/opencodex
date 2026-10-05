@@ -10,7 +10,8 @@ import { createUpdates } from './updates';
 
 // Keep existing development preferences when replacing Electron's default display name.
 const userData = app.getPath('userData');
-app.setName('OpenCodex');
+const appName = app.isPackaged ? 'OpenCodex' : 'OpenCodex Dev';
+app.setName(appName);
 app.setPath('userData', userData);
 
 // A packaged app may start from Finder without the shell PATH that finds `opencode`, and a
@@ -24,7 +25,10 @@ let restartingForUpdate = false;
 
 async function createWindow() {
   const window = new BrowserWindow({
-    title: 'OpenCodex',
+    title: appName,
+    ...(!app.isPackaged
+      ? { icon: fileURLToPath(new URL('../../build/icon-dev.png', import.meta.url)) }
+      : {}),
     width: 1240,
     height: 840,
     minWidth: 760,
@@ -60,9 +64,9 @@ async function createWindow() {
 app
   .whenReady()
   .then(async () => {
-    // Packaged builds take the icon from the bundle; show the calico in the Dock during development too.
+    // Packaged builds take the production icon from the bundle.
     if (!app.isPackaged && process.platform === 'darwin')
-      app.dock?.setIcon(fileURLToPath(new URL('../../build/icon.png', import.meta.url)));
+      app.dock?.setIcon(fileURLToPath(new URL('../../build/icon-dev.png', import.meta.url)));
     if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
       origin = process.env.ELECTRON_RENDERER_URL;
     } else {
@@ -86,7 +90,7 @@ app
   })
   .catch(() => {
     dialog.showErrorBox(
-      'OpenCodex could not start',
+      `${appName} could not start`,
       'The local workspace server could not be started. Please relaunch the app.',
     );
     app.quit();

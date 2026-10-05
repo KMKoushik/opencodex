@@ -46,7 +46,8 @@ export type PreferenceKey =
   | 'chatFontSize'
   | 'threadView'
   | 'pinnedThreads'
-  | 'focusExcluded';
+  | 'focusExcluded'
+  | 'sessionWorkbench';
 export type DesktopPreferences = Record<
   Exclude<
     PreferenceKey,
@@ -60,6 +61,7 @@ export type DesktopPreferences = Record<
     | 'threadView'
     | 'pinnedThreads'
     | 'focusExcluded'
+    | 'sessionWorkbench'
   >,
   string | null
 > & {
@@ -73,6 +75,7 @@ export type DesktopPreferences = Record<
   threadView?: string | null;
   pinnedThreads?: string | null;
   focusExcluded?: string | null;
+  sessionWorkbench?: string | null;
 };
 
 export const openAppIDs = [

@@ -24,6 +24,7 @@ import { sessionUnread } from '@opencodex/contracts';
 import { ProjectSwitcher } from '../projects/project-switcher';
 import { undoDraft } from './undo-draft';
 import { ActivityTray } from './activity-tray';
+import { PermissionControl } from './permission-control';
 
 export function ChatView({
   sessionID,
@@ -243,7 +244,7 @@ export function ChatView({
         </article>
       ))}
       {chat.permissions.data?.map((request) => (
-        <PermissionCard key={request.id} request={request} />
+        <PermissionCard key={request.id} request={request} session={chat.info.data} />
       ))}
       {!running && (chat.executionError.data || chat.info.data?.outcome === 'failed') && (
         <p className="text-error" role="alert">
@@ -469,16 +470,23 @@ export function ChatView({
             stopping={stop.isPending}
             onStop={() => stop.mutate()}
             controls={
-              <ModelControls
-                sessionID={sessionID}
-                models={catalog.data?.data}
-                providers={catalog.data?.providers}
-                model={model}
-                disabled={!chat.info.isSuccess || sending || switching}
-                loading={catalog.isPending}
-                failed={catalog.isError}
-                onChange={select}
-              />
+              <>
+                <ModelControls
+                  sessionID={sessionID}
+                  models={catalog.data?.data}
+                  providers={catalog.data?.providers}
+                  model={model}
+                  disabled={!chat.info.isSuccess || sending || switching}
+                  loading={catalog.isPending}
+                  failed={catalog.isError}
+                  onChange={select}
+                />
+                <PermissionControl
+                  sessionID={sessionID}
+                  session={chat.info.data}
+                  disabled={sending || switching}
+                />
+              </>
             }
           />
         )}

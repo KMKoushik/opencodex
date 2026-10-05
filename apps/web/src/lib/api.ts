@@ -18,6 +18,7 @@ import {
   type CommandInfo,
   sessionActionSchema,
   sessionUnreadSchema,
+  sessionAccessSchema,
   type SessionAttention,
   type SessionFocusAction,
   type FormAnswer,
@@ -188,6 +189,8 @@ export const api = {
   interrupt: (id: string) => nativeRequest(`${sessionPath(id)}/interrupt`, post()),
   permissions: (id: string, signal: AbortSignal) =>
     nativeRequest<PermissionRequest[]>(`${sessionPath(id)}/permissions`, { signal }),
+  sessionAccess: (id: string, mode: z.infer<typeof sessionAccessSchema>['mode']) =>
+    nativeRequest<{ ok: true }>(`${sessionPath(id)}/access`, post({ mode })),
   replyPermission: (id: string, requestID: string, decision: PermissionReply) =>
     nativeRequest(
       `${sessionPath(id)}/permissions/${encodeURIComponent(requestID)}`,

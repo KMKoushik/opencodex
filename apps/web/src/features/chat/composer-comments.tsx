@@ -3,7 +3,7 @@ import { useStore } from 'zustand';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Cancel01Icon, Comment01Icon, Edit02Icon, Tick02Icon } from '@hugeicons/core-free-icons';
 import { useDraftStore } from './draft-context';
-import { commentLabel, EMPTY_COMMENTS, type ReviewComment } from './review-comments';
+import { commentLabel, commentQuote, EMPTY_COMMENTS, type ReviewComment } from './review-comments';
 import './comments.css';
 
 export const ComposerComments = memo(function ComposerComments({
@@ -146,8 +146,10 @@ function ContextEntry({
         </button>
       </header>
       <div className="context-entry-content">
-        {comment.target.quote && (
-          <blockquote data-code={!response}>{comment.target.quote}</blockquote>
+        {commentQuote(comment.target) && (
+          <blockquote data-code={!response && !('previewQuote' in comment.target)}>
+            {commentQuote(comment.target)}
+          </blockquote>
         )}
         {editing ? (
           <textarea

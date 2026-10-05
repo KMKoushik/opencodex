@@ -105,6 +105,22 @@ it('keeps review context separate and preserves comments edited during a send', 
   expect(reviewPrompt(quote.text, quote.comments)).toContain('> response excerpt');
   actions.acknowledge(quote);
   expect(store.getState().drafts.two).toBeUndefined();
+  actions.saveComment('preview', {
+    id: 'preview-selection',
+    target: {
+      path: 'notes.md',
+      start: 3,
+      end: 3,
+      version: 'original',
+      quote: 'Before **selected words** after.',
+      previewQuote: 'selected words',
+    },
+    text: 'Clarify this section',
+  });
+  const preview = actions.capture('preview');
+  expect(reviewPrompt(preview.text, preview.comments)).toContain('notes.md:3:\n> selected words');
+  expect(reviewPrompt(preview.text, preview.comments)).not.toContain('Before **');
+  expect(preview.comments?.[0]?.target.quote).toBe('Before **selected words** after.');
 });
 
 it('acknowledges only the captured revision, even if newer text is identical', () => {

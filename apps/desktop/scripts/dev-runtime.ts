@@ -1,6 +1,15 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { constants, cpSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from 'node:fs';
+import {
+  constants,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,9 +22,12 @@ export function developmentRuntime() {
   if (process.platform !== 'darwin') return executable;
 
   const source = resolve(dirname(executable), '../..');
-  const { productName } = require('../package.json') as { productName: string };
+  const { productName: releaseName } = require('../package.json') as { productName: string };
+  const productName = `${releaseName} Dev`;
+  const icon = fileURLToPath(new URL('../build/icon-dev.icns', import.meta.url));
   const version = createHash('sha256')
-    .update(JSON.stringify([1, source, statSync(executable).mtimeMs, productName]))
+    .update(JSON.stringify([2, source, statSync(executable).mtimeMs, productName]))
+    .update(readFileSync(icon))
     .digest('hex')
     .slice(0, 16);
   const cache = fileURLToPath(
@@ -40,9 +52,11 @@ export function developmentRuntime() {
       CFBundleName: productName,
       CFBundleDisplayName: productName,
       CFBundleIdentifier: 'dev.opencodex.app.development',
+      CFBundleIconFile: 'opencodex-dev.icns',
     })) {
       execFileSync('/usr/bin/plutil', ['-replace', key, '-string', value, plist]);
     }
+    cpSync(icon, join(pending, 'Contents/Resources/opencodex-dev.icns'));
     // Keep the executable named Electron so app.isPackaged stays false in dev.
     execFileSync('/usr/bin/codesign', [
       '--force',

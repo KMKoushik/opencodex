@@ -17,6 +17,7 @@ export const preferenceInputSchema = z.object({
     'threadView',
     'pinnedThreads',
     'focusExcluded',
+    'sessionWorkbench',
   ]),
   value: z.string().max(16_384).nullable(),
 });
@@ -41,6 +42,7 @@ export function createPreferences() {
       threadView: { enum: ['focus', 'projects', null] },
       pinnedThreads: { type: ['string', 'null'] },
       focusExcluded: { type: ['string', 'null'] },
+      sessionWorkbench: { type: ['string', 'null'] },
     },
     accessPropertiesByDotNotation: false,
     clearInvalidConfig: true,

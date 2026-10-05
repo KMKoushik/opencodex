@@ -22,6 +22,7 @@ import { terminalRoutes } from './terminals';
 import { shellRoutes } from './shells';
 import { imageRoutes } from './images';
 import { sessionMetadataRoutes } from './session-metadata';
+import { sessionAccessRoutes } from './session-access';
 import { attention } from './attention';
 
 export function createApp(
@@ -51,6 +52,7 @@ export function createApp(
   app.route('/api/shells', shellRoutes(backend));
   app.route('/api/sessions', imageRoutes(backend));
   app.route('/api/sessions', sessionMetadataRoutes(backend));
+  app.route('/api/sessions', sessionAccessRoutes(backend));
   app.get('/api/attention', async (c) => {
     const directories = [...new Set(c.req.queries('directory') ?? [])];
     if (directories.length > 32 || directories.some((item) => !item.trim() || item.length > 4096))

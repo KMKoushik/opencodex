@@ -241,6 +241,12 @@ export const promptInputSchema = z
     if (error) context.addIssue({ code: 'custom', message: error, path: ['files'] });
   });
 export const permissionReplySchema = z.object({ decision: z.enum(['once', 'always', 'reject']) });
+export const sessionAccessSchema = z.object({ mode: z.enum(['default', 'full']) });
+/** A trailing native allow-all rule is the session's explicit full-access override. */
+export function sessionFullAccess(session: Pick<SessionInfo, 'permissions'>): boolean {
+  const rule = session.permissions?.at(-1);
+  return rule?.action === '*' && rule.resource === '*' && rule.effect === 'allow';
+}
 export const sessionActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('fork'), before: z.string().min(1).optional() }),
   z.object({ action: z.literal('compact') }),

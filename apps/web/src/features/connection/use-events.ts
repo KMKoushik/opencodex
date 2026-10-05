@@ -193,6 +193,11 @@ export function useEvents(enabled: boolean) {
         void client.invalidateQueries({ queryKey: ['models'] });
         return;
       }
+      if (event.type === 'session.permissions') {
+        void client.invalidateQueries({ queryKey: ['chat', event.data.sessionID, 'info'] });
+        void refreshSubagents(new Set([event.data.sessionID]));
+        return;
+      }
       if (event.type === 'session.model.selected' || event.type === 'session.agent.selected') {
         void client.invalidateQueries({ queryKey: ['chat', event.data.sessionID, 'info'] });
         void client.invalidateQueries({ queryKey: ['sessions'] });

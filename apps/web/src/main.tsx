@@ -5,7 +5,17 @@ import { Providers } from './app/providers';
 import { applyInitialTheme } from './features/theme/use-theme';
 import { applyInitialChatFontSize } from './features/settings/chat-font-size';
 import { initializeStorage } from './lib/storage';
+import { appName, development } from './features/brand/identity';
 import './styles/globals.css';
+
+document.title = appName;
+if (development) {
+  document.querySelectorAll<HTMLLinkElement>('link[rel="icon"]').forEach((icon) => {
+    icon.href = '/favicon-dev.png';
+    icon.type = 'image/png';
+    icon.sizes.value = '32x32';
+  });
+}
 
 const root = document.getElementById('root');
 if (!root) throw new Error('The application root is missing.');

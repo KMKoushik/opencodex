@@ -4,3 +4,14 @@
 .wordmark-codex {
   fill: var(--text);
 }
+.brand-dev-badge {
+  flex: none;
+  margin-inline: 3px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--project-blue);
+  color: var(--on-project);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+}

@@ -264,7 +264,8 @@
     border-radius: 10px;
   }
 }
-::highlight(response-comment) {
+::highlight(response-comment),
+::highlight(preview-comment) {
   background: var(--accent-soft);
   color: var(--text);
 }

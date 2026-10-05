@@ -7,6 +7,7 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useStore } from 'zustand';
 import type {
   ModelCatalog,
   ModelRef,
@@ -47,11 +48,14 @@ import { SidebarResize } from '../features/sidebar/sidebar-resize';
 import { readTerminalPlacement, type TerminalPlacement } from '../features/terminal/placement';
 import { readStorage, writeStorage } from '../lib/storage';
 import { useDraftStore } from '../features/chat/draft-context';
-import { BrandIcon } from '../features/brand/brand';
+import { BrandIcon, DevelopmentBadge } from '../features/brand/brand';
+import { appName } from '../features/brand/identity';
 import { Sidebar } from '../features/sidebar/sidebar';
 import { useNavigationHistory } from '../features/sidebar/navigation-history';
 import { FileLinkContext } from '../features/workbench/file-link-context';
 import { resolveFileLink, type FileRequest } from '../features/workbench/file-link';
+import { useWorkbenchStore, workbenchKey } from '../features/workbench/workbench-context';
+import { defaultWorkbenchLayout } from '../features/workbench/workbench-store';
 
 const TerminalDrawer = lazy(() =>
   import('../features/terminal/terminal-drawer').then((module) => ({
@@ -86,11 +90,30 @@ export function App() {
   const [terminalLoaded, setTerminalLoaded] = useState(false);
   const terminalFocus = useRef<HTMLElement | null>(null);
 
-  const [workbenchOpen, setWorkbenchOpen] = useState(false);
-  const [workbenchPanel, setWorkbenchPanel] = useState(panels[0]!);
+  const workbench = useWorkbenchStore();
+  const workspaceKey = workbenchKey(selectedID, project?.directory);
+  const workbenchLayout = useStore(
+    workbench,
+    (state) => state.entries[workspaceKey]?.layout ?? defaultWorkbenchLayout,
+  );
+  const rightTerminalHidden =
+    workbenchLayout.panel === 'terminal' && terminalPlacement === 'bottom';
+  const workbenchOpen = workbenchLayout.open && !rightTerminalHidden;
+  const workbenchPanel = panels.find(
+    (panel) => panel.id === (rightTerminalHidden ? 'files' : workbenchLayout.panel),
+  )!;
+  const setWorkbenchOpen = (open: boolean) => workbench.getState().layout(workspaceKey, { open });
+  const setWorkbenchPanel = (panel: (typeof panels)[number]) =>
+    workbench.getState().layout(workspaceKey, { panel: panel.id as typeof workbenchLayout.panel });
   const [workbenchLoaded, setWorkbenchLoaded] = useState(false);
   const [fileRequest, setFileRequest] = useState<FileRequest>();
   const [subagentRequest, setSubagentRequest] = useState<SubagentRequest>();
+  const [requestSessionID, setRequestSessionID] = useState(selectedID);
+  if (requestSessionID !== selectedID) {
+    setRequestSessionID(selectedID);
+    setFileRequest(undefined);
+    setSubagentRequest(undefined);
+  }
   const workbenchToggle = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
   const main = useRef<HTMLElement>(null);
@@ -123,11 +146,10 @@ export function App() {
       if (!target) return false;
       setFileRequest({ ...target, sessionID: selectedID });
       setWorkbenchLoaded(true);
-      setWorkbenchPanel(panels[0]!);
-      setWorkbenchOpen(true);
+      workbench.getState().layout(workspaceKey, { panel: 'files', open: true });
       return true;
     },
-    [selectedID, fileDirectory],
+    [selectedID, fileDirectory, workbench, workspaceKey],
   );
   const create = useMutation({
     mutationFn: ({ directory, model }: { directory: string; model?: ModelRef }) =>
@@ -310,7 +332,8 @@ export function App() {
     )
       return false;
     setWorkbenchLoaded(true);
-    setWorkbenchOpen((open) => !open);
+    if (rightTerminalHidden) setWorkbenchPanel(panels[0]!);
+    setWorkbenchOpen(!workbenchOpen);
     if (workbenchOpen && document.activeElement?.closest('#workbench')) {
       (workbenchToggle.current ?? main.current)?.focus({ preventScroll: true });
     }
@@ -404,8 +427,9 @@ export function App() {
           <div ref={chatColumn} className="chat-column">
             <header className="toolbar">
               {sidebarCollapsed && (
-                <span className="toolbar-brand" aria-label="OpenCodex">
+                <span className="toolbar-brand" aria-label={appName}>
                   <BrandIcon size="small" className="sidebar-brand-icon" />
+                  <DevelopmentBadge />
                 </span>
               )}
               {sidebarCollapsed && (
@@ -455,7 +479,7 @@ export function App() {
                   disabled={!connected || !info.isSuccess}
                 />
               ) : !settings ? (
-                <h1 className="toolbar-title truncate">{project ? 'New thread' : 'OpenCodex'}</h1>
+                <h1 className="toolbar-title truncate">{project ? 'New thread' : appName}</h1>
               ) : null}
               {connected && !live && !settings && (
                 <span className="toolbar-status" role="status">
@@ -588,7 +612,7 @@ export function App() {
               )}
             </main>
           </div>
-          {workbenchLoaded &&
+          {(workbenchLoaded || workbenchOpen) &&
             connected &&
             terminalDirectory &&
             (selectedID || workbenchPanel.id === 'terminal') &&
@@ -639,7 +663,7 @@ export function App() {
                 }
                 setWorkbenchLoaded(true);
                 setWorkbenchPanel(panel);
-                setWorkbenchOpen((open) => panel.id !== workbenchPanel.id || !open);
+                setWorkbenchOpen(panel.id !== workbenchPanel.id || !workbenchOpen);
               }}
             />
           )}

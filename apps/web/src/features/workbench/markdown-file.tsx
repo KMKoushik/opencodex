@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useIsMutating } from '@tanstack/react-query';
 import { useStore } from 'zustand';
 import Markdown, { type Components } from 'react-markdown';
@@ -11,6 +11,8 @@ import { MarkdownTable } from '../chat/markdown-table';
 import { MarkdownImage } from '../chat/markdown-image';
 import { editorKey, useEditorDrafts } from './editor-drafts';
 import { resolveFileLink } from './file-link';
+import { TextSelection, type TextSelectionHandle } from '../chat/text-selection';
+import { markdownSourcePositions, markdownSelectionTarget } from './markdown-selection';
 import './markdown-file.css';
 
 // Larger documents retain the virtualized source editor instead of an unbounded DOM.
@@ -38,6 +40,7 @@ export function MarkdownFile({
     dirty || file.text.length > previewLimit ? 'source' : 'preview',
   );
   const saving = useIsMutating({ mutationKey: ['file-save', directory, path] }) > 0;
+  const selection = useRef<TextSelectionHandle>(null);
   return (
     <div className="wb-markdown-file">
       <div className="wb-subtoolbar">
@@ -64,7 +67,14 @@ export function MarkdownFile({
         {mode === 'preview' && (
           <div className="wb-actions">
             {dirty && <span className="wb-note">Unsaved edits</span>}
-            <Button variant="ghost" size="sm" onClick={onComment}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => {
+                if (!selection.current?.comment()) onComment();
+              }}
+            >
               Comment
             </Button>
           </div>
@@ -76,8 +86,9 @@ export function MarkdownFile({
         <MarkdownPreview
           directory={directory}
           path={path}
-          text={file.text}
+          file={file}
           sessionID={sessionID}
+          selection={selection}
           onSource={() => setMode('source')}
         />
       )}
@@ -88,19 +99,31 @@ export function MarkdownFile({
 function MarkdownPreview({
   directory,
   path,
-  text,
+  file,
   sessionID,
+  selection,
   onSource,
 }: {
   directory: string;
   path: string;
-  text: string;
+  file: Extract<WorkspaceFile, { kind: 'text' }>;
   sessionID: string;
+  selection: RefObject<TextSelectionHandle | null>;
   onSource: () => void;
 }) {
   const drafts = useEditorDrafts();
   const doc = useStore(drafts, (state) => state.edits[editorKey(directory, path)]?.state.doc);
-  const content = useMemo(() => doc?.toString() ?? text, [doc, text]);
+  const content = useMemo(
+    () => doc?.sliceString(0, doc.length, file.text.includes('\r\n') ? '\r\n' : '\n') ?? file.text,
+    [doc, file.text],
+  );
+  const scope = useRef<HTMLDivElement>(null);
+  const lines = useMemo(() => content.split('\n'), [content]);
+  const getTarget = useCallback(
+    (range: Range, quote: string) =>
+      markdownSelectionTarget(range, quote, { directory, path, version: file.version }, lines),
+    [directory, path, file.version, lines],
+  );
   const base = [directory.replace(/\/$/, ''), ...path.split('/').slice(0, -1)].join('/') || '/';
   const transform = useCallback(
     (url: string, key: string) => {
@@ -129,7 +152,12 @@ function MarkdownPreview({
       </div>
     );
   return (
-    <div className="wb-markdown-scroll" tabIndex={0} aria-label={`Markdown preview: ${path}`}>
+    <div
+      ref={scope}
+      className="wb-markdown-scroll"
+      tabIndex={0}
+      aria-label={`Markdown preview: ${path}`}
+    >
       <article
         className="markdown wb-markdown-prose"
         onClickCapture={(event) => {
@@ -160,10 +188,24 @@ function MarkdownPreview({
           }
         }}
       >
-        <Markdown remarkPlugins={[remarkGfm]} components={components} urlTransform={transform}>
+        <Markdown
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={[markdownSourcePositions]}
+          components={components}
+          urlTransform={transform}
+        >
           {content}
         </Markdown>
       </article>
+      <TextSelection
+        scope={scope}
+        handle={selection}
+        sessionID={sessionID}
+        getTarget={getTarget}
+        highlightName="preview-comment"
+        actionsLabel="Selected preview actions"
+        className="ink"
+      />
     </div>
   );
 }
