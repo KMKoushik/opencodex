@@ -135,7 +135,7 @@ export class OpenCodeBackend {
       for await (const event of client.event.subscribe({ signal })) {
         if (
           event.type === 'server.connected' ||
-          /^(session|project|permission|form|model|provider|credential|config|agent|filesystem|vcs|mcp|skill|pty)\./.test(
+          /^(session|project|permission|form|model|provider|credential|config|agent|filesystem|vcs|mcp|skill|pty|shell)\./.test(
             event.type,
           ) ||
           event.type === 'models-dev.refreshed'

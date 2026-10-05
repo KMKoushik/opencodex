@@ -27,7 +27,20 @@ const followOutput = {
   animated: false,
   on: { dataChange: true, itemLayout: true, footerLayout: true, layout: true },
 };
+// While a turn runs, each new line glides into view instead of jumping.
+const followOutputSmooth = { ...followOutput, animated: true };
+// Scrolling back within this distance of the end resumes following.
+const FOLLOW_BAND = 40;
+const AWAY_KEYS = new Set(['PageUp', 'Home', 'ArrowUp']);
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const rowKey = (row: DisplayRow) => row.id;
+
+/** A nested scroller (code, diffs) that the wheel moves before the transcript. */
+function scrollsInside(target: EventTarget, root: HTMLElement) {
+  for (let node = target as HTMLElement | null; node && node !== root; node = node.parentElement)
+    if (node.scrollTop > 0 && /auto|scroll/.test(getComputedStyle(node).overflowY)) return true;
+  return false;
+}
 
 export function Timeline({
   ref,
@@ -70,7 +83,19 @@ export function Timeline({
   const scope = useRef<HTMLDivElement>(null);
   const ready = useRef(false);
   const fetching = useRef(false);
-  const [following, setFollowing] = useState(true);
+  // Following stops only on a reading gesture, never on scroll position alone: the list's
+  // own measuring and end-following scrolls would otherwise be mistaken for the reader.
+  const [following, setFollowingState] = useState(true);
+  const followingRef = useRef(true);
+  const setFollowing = useCallback((value: boolean) => {
+    if (followingRef.current === value) return;
+    followingRef.current = value;
+    setFollowingState(value);
+  }, []);
+  const distanceFromEnd = () => {
+    const node = list.current?.getScrollableNode();
+    return node ? node.scrollHeight - node.scrollTop - node.clientHeight : 0;
+  };
   const loadEarlier = useCallback(() => {
     if (!ready.current || !hasEarlier || loadingEarlier || fetching.current || historyError) return;
     fetching.current = true;
@@ -88,9 +113,9 @@ export function Timeline({
     });
     return () => cancelAnimationFrame(frame);
   }, [rows, loadingEarlier, loadEarlier]);
-  const scrollToLatest = () => {
+  const scrollToLatest = (animated = false) => {
     setFollowing(true);
-    void list.current?.scrollToEnd({ animated: false });
+    void list.current?.scrollToEnd({ animated: animated && !reducedMotion() });
   };
   useImperativeHandle(ref, () => ({ scrollToLatest }));
   const renderItem = useCallback(
@@ -109,6 +134,29 @@ export function Timeline({
           if ((event.target as HTMLElement).closest('.disclosure-trigger, .turn-work'))
             setFollowing(false);
         }}
+        onWheel={(event) => {
+          if (event.deltaY >= 0 || event.ctrlKey || !followingRef.current) return;
+          const node = list.current?.getScrollableNode();
+          if (node && node.scrollTop > 0 && !scrollsInside(event.target, node)) setFollowing(false);
+        }}
+        onTouchMove={() => {
+          if (followingRef.current && distanceFromEnd() > FOLLOW_BAND) setFollowing(false);
+        }}
+        onPointerDown={(event) => {
+          // The scroll node itself is only the target for a scrollbar drag.
+          if (event.target === list.current?.getScrollableNode() || distanceFromEnd() > FOLLOW_BAND)
+            setFollowing(false);
+        }}
+        onKeyDown={(event) => {
+          const target = event.target as HTMLElement;
+          if (
+            AWAY_KEYS.has(event.key) &&
+            !event.metaKey &&
+            !event.ctrlKey &&
+            !target.closest('input, textarea, [contenteditable="true"]')
+          )
+            setFollowing(false);
+        }}
       >
         <LegendList
           ref={list}
@@ -119,8 +167,10 @@ export function Timeline({
           drawDistance={500}
           initialScrollAtEnd
           maintainVisibleContentPosition
-          maintainScrollAtEnd={following ? followOutput : false}
-          maintainScrollAtEndThreshold={0.1}
+          maintainScrollAtEnd={
+            following ? (running && !reducedMotion() ? followOutputSmooth : followOutput) : false
+          }
+          maintainScrollAtEndThreshold={1}
           onReady={() => {
             ready.current = true;
             const node = list.current?.getScrollableNode();
@@ -132,7 +182,8 @@ export function Timeline({
             if (!ready.current) return;
             const node = list.current?.getScrollableNode();
             if (!node) return;
-            setFollowing(node.scrollHeight - node.scrollTop - node.clientHeight < 48);
+            if (node.scrollHeight - node.scrollTop - node.clientHeight <= FOLLOW_BAND)
+              setFollowing(true);
             if (node.scrollTop < 240) loadEarlier();
           }}
           className="chat-scroll timeline-scroll scrollbar-on-hover"
@@ -158,7 +209,7 @@ export function Timeline({
         {!readOnly && <ResponseSelection key={sessionID} scope={scope} sessionID={sessionID} />}
         {!following && (
           <div className="jump-to-latest">
-            <Button variant="secondary" size="sm" onClick={scrollToLatest}>
+            <Button variant="secondary" size="sm" onClick={() => scrollToLatest(true)}>
               <HugeiconsIcon icon={ArrowDown02Icon} size={14} />
               Jump to latest
             </Button>

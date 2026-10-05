@@ -1,24 +1,10 @@
-/* A quiet tray tucked behind the composer's top edge while subagents run. */
-.subagent-tray[data-active='true'] {
-  margin: 0 14px -14px;
-  padding: 4px 6px 18px;
-  border: 1px solid var(--border);
-  border-bottom: 0;
-  border-radius: 14px 14px 0 0;
-  background: var(--surface-under);
-  font-size: 13px;
-}
-.subagent-tray {
-  container-type: inline-size;
-}
-.subagent-tray-toggle,
 .subagent-tray-row {
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
   min-width: 0;
-  min-height: 28px;
+  min-height: 30px;
   padding: 0 8px;
   border: 0;
   border-radius: 8px;
@@ -27,30 +13,7 @@
   font: inherit;
   text-align: left;
 }
-.subagent-tray-toggle {
-  color: var(--text-tertiary);
-  font-size: 12px;
-}
-.subagent-tray-toggle > svg:first-child {
-  color: var(--text-secondary);
-}
-.subagent-tray-chevron {
-  transition: transform 120ms ease;
-}
-.subagent-tray-chevron[data-open='true'] {
-  transform: rotate(90deg);
-}
-.subagent-tray-error {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 28px;
-  padding-left: 8px;
-  color: var(--error);
-  font-size: 12px;
-}
 .subagent-tray-list {
-  max-height: calc(28px * 4.5);
   margin: 0;
   padding: 0;
   overflow-y: auto;
@@ -107,7 +70,6 @@
   color: var(--text-tertiary);
   opacity: 0;
 }
-.subagent-tray-toggle:focus-visible,
 .subagent-tray-row:focus-visible {
   background: var(--selected);
   color: var(--text);
@@ -116,9 +78,6 @@
   opacity: 1;
 }
 @media (hover: hover) {
-  .subagent-tray-toggle:hover {
-    color: var(--text-secondary);
-  }
   .subagent-tray-row:hover {
     background: var(--hover);
     color: var(--text);
@@ -128,30 +87,16 @@
   }
 }
 @media (pointer: coarse) {
-  .subagent-tray-toggle,
   .subagent-tray-row {
-    min-height: 40px;
-  }
-  .subagent-tray-list {
-    max-height: calc(40px * 3.5);
+    min-height: 44px;
   }
   .subagent-tray-open {
     opacity: 1;
-  }
-}
-@media (max-width: 720px) {
-  .subagent-tray[data-active='true'] {
-    margin-inline: 10px;
   }
 }
 /* Narrow chat columns drop the agent name to keep each task title and status legible. */
 @container (max-width: 360px) {
   .subagent-tray-agent {
     display: none;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .subagent-tray-chevron {
-    transition: none;
   }
 }

@@ -45,7 +45,7 @@ import { WorkbenchRail } from '../features/workbench/workbench-rail';
 import { panels, type SubagentRequest } from '../features/workbench/panels';
 import { SidebarResize } from '../features/sidebar/sidebar-resize';
 import { readTerminalPlacement, type TerminalPlacement } from '../features/terminal/placement';
-import { writeStorage } from '../lib/storage';
+import { readStorage, writeStorage } from '../lib/storage';
 import { useDraftStore } from '../features/chat/draft-context';
 import { BrandIcon } from '../features/brand/brand';
 import { Sidebar } from '../features/sidebar/sidebar';
@@ -78,6 +78,9 @@ export function App() {
   const [settings, setSettings] = useState<SettingsSection | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sessionCardVisible, setSessionCardVisible] = useState(
+    () => readStorage('sessionCardVisible') !== 'false',
+  );
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalPlacement, setTerminalPlacement] = useState(readTerminalPlacement);
   const [terminalLoaded, setTerminalLoaded] = useState(false);
@@ -207,6 +210,11 @@ export function App() {
       main.current?.focus({ preventScroll: true });
     if (mobile) setSidebarOpen((open) => !open);
     else setSidebarCollapsed((collapsed) => !collapsed);
+  }
+
+  function changeSessionCardVisibility(visible: boolean) {
+    setSessionCardVisible(visible);
+    writeStorage('sessionCardVisible', String(visible));
   }
 
   function newChat() {
@@ -470,6 +478,8 @@ export function App() {
                   live={live}
                   column={chatColumn}
                   workspaceOpen={workbenchOpen}
+                  cardVisible={sessionCardVisible}
+                  onCardVisibilityChange={changeSessionCardVisibility}
                   onOpen={(id) => {
                     const panel = panels.find((panel) => panel.id === id);
                     if (!panel) return;

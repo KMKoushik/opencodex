@@ -671,6 +671,10 @@ svg {
 .project-icon[data-color='purple'] {
   background: var(--project-purple);
 }
+.project-icon[data-image] {
+  background: transparent;
+  box-shadow: none;
+}
 .project-icon img {
   width: 100%;
   height: 100%;
@@ -1635,6 +1639,17 @@ svg {
   bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
+  /* A brief scroll near the end resumes following before the pill would flash. */
+  animation: appear 160ms ease-out 150ms both;
+}
+/* Each block that arrives while text streams fades in once; finished text never animates. */
+@media (prefers-reduced-motion: no-preference) {
+  :is(.markdown, .reasoning-text)[data-streaming] > * {
+    transition: opacity 500ms ease-out;
+    @starting-style {
+      opacity: 0;
+    }
+  }
 }
 .jump-to-latest .button {
   background: var(--elevated);

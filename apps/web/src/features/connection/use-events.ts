@@ -167,6 +167,10 @@ export function useEvents(enabled: boolean) {
         refreshWorkspace(directory, ['terminals']);
         return;
       }
+      if (event.type.startsWith('shell.')) {
+        refreshWorkspace(directory, ['shells']);
+        return;
+      }
       if (event.type === 'filesystem.changed' || event.type === 'vcs.branch.updated') {
         refreshWorkspace(directory, ['vcs', 'diff', 'file', 'files']);
         return;

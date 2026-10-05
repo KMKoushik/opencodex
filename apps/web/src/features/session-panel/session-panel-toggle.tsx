@@ -1,5 +1,5 @@
 import { useCallback, useId, useLayoutEffect, useRef, useState, type RefObject } from 'react';
-import { Cancel01Icon, SlidersHorizontalIcon } from '@hugeicons/core-free-icons';
+import { Cancel01Icon, DashboardSquare02Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
 import { SessionPanel } from './session-panel';
@@ -11,6 +11,8 @@ export function SessionPanelToggle({
   live,
   column,
   workspaceOpen,
+  cardVisible,
+  onCardVisibilityChange,
   onOpen,
 }: {
   sessionID: string;
@@ -18,6 +20,8 @@ export function SessionPanelToggle({
   live: boolean;
   column: RefObject<HTMLDivElement | null>;
   workspaceOpen: boolean;
+  cardVisible: boolean;
+  onCardVisibilityChange: (visible: boolean) => void;
   onOpen: (id: string) => void;
 }) {
   const id = useId();
@@ -26,7 +30,6 @@ export function SessionPanelToggle({
   const close = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [wide, setWide] = useState(false);
-  const [cardVisible, setCardVisible] = useState(true);
   const inline = wide && !workspaceOpen;
   useLayoutEffect(() => {
     const element = column.current;
@@ -58,8 +61,8 @@ export function SessionPanelToggle({
     if (panel.current?.matches(':popover-open')) panel.current.hidePopover();
   }, [inline, workspaceOpen]);
   function dismiss() {
-    if (inline) setCardVisible(false);
-    else panel.current?.hidePopover();
+    onCardVisibilityChange(false);
+    if (!inline) panel.current?.hidePopover();
     trigger.current?.focus({ preventScroll: true });
   }
   const openWorkspace = useCallback(
@@ -81,9 +84,9 @@ export function SessionPanelToggle({
         aria-expanded={inline ? cardVisible : open}
         aria-controls={id}
         popoverTarget={inline ? undefined : id}
-        onClick={inline ? () => setCardVisible((visible) => !visible) : undefined}
+        onClick={() => onCardVisibilityChange(inline ? !cardVisible : !open)}
       >
-        <HugeiconsIcon icon={SlidersHorizontalIcon} size={17} />
+        <HugeiconsIcon icon={DashboardSquare02Icon} size={17} />
       </Button>
       <div
         ref={panel}

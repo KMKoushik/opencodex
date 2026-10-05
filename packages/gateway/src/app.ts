@@ -19,6 +19,7 @@ import { GatewayError } from './errors';
 import { resolveProject } from './project';
 import { workspaceRoutes } from './workspace';
 import { terminalRoutes } from './terminals';
+import { shellRoutes } from './shells';
 import { imageRoutes } from './images';
 import { sessionMetadataRoutes } from './session-metadata';
 import { attention } from './attention';
@@ -47,6 +48,7 @@ export function createApp(
   app.get('/api/connection', async (c) => c.json(await backend.connection()));
   app.post('/api/connection', async (c) => c.json(await backend.connection(true)));
   app.route('/api/terminals', terminalRoutes(backend));
+  app.route('/api/shells', shellRoutes(backend));
   app.route('/api/sessions', imageRoutes(backend));
   app.route('/api/sessions', sessionMetadataRoutes(backend));
   app.get('/api/attention', async (c) => {

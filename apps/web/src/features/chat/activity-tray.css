@@ -1,0 +1,120 @@
+.activity-tray {
+  container-type: inline-size;
+}
+.activity-tray[data-active='true'] {
+  padding: 4px 6px 18px;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  background: var(--surface-under);
+  font-size: 13px;
+}
+.composer-area > .activity-tray[data-active='true'] {
+  margin: 0 14px -14px;
+}
+.activity-tray-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.activity-tray-header,
+.activity-tray-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.activity-tray-tabs {
+  flex: 1;
+}
+.activity-tray-tab.button {
+  gap: 6px;
+  min-height: 30px;
+  padding-inline: 8px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 500;
+}
+.activity-tray-tab.button[aria-selected='true'] {
+  background: var(--selected);
+  color: var(--text);
+}
+.activity-tray-count {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.activity-tray-alert {
+  display: grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--warning);
+  color: var(--surface);
+  font-size: 9px;
+  font-weight: 700;
+}
+.activity-tray-alert[data-kind='error'] {
+  background: var(--error);
+}
+.activity-tray-alert[data-kind='question'] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.activity-tray-collapse.button {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  flex: none;
+  color: var(--text-tertiary);
+}
+.activity-tray-chevron[data-open='true'] {
+  transform: rotate(90deg);
+}
+.activity-tray-panel {
+  height: calc(var(--activity-tray-rows) * 30px + 4px);
+  padding-top: 4px;
+  overflow: hidden;
+}
+.activity-tray-panel[hidden] {
+  display: none;
+}
+.activity-tray-panel > ul {
+  height: 100%;
+  max-height: none;
+}
+.activity-tray-empty {
+  margin: 0;
+  padding: 12px 8px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.activity-tray-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  color: var(--error);
+  font-size: 12px;
+}
+@media (pointer: coarse) {
+  .activity-tray-tab.button,
+  .activity-tray-collapse.button {
+    min-height: 44px;
+  }
+  .activity-tray-collapse.button {
+    width: 44px;
+    height: 44px;
+  }
+  .activity-tray-panel {
+    height: calc(var(--activity-tray-rows) * 44px + 4px);
+  }
+}
+@media (max-width: 720px) {
+  .composer-area > .activity-tray[data-active='true'] {
+    margin-inline: 10px;
+  }
+}

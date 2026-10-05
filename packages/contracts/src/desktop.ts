@@ -16,6 +16,7 @@ export type PreferenceKey =
   | 'theme'
   | 'openInApp'
   | 'terminalPlacement'
+  | 'sessionCardVisible'
   | 'projectModels'
   | 'modelUsage'
   | 'modelVariants'
@@ -28,6 +29,7 @@ export type DesktopPreferences = Record<
     PreferenceKey,
     | 'openInApp'
     | 'terminalPlacement'
+    | 'sessionCardVisible'
     | 'projectModels'
     | 'modelUsage'
     | 'modelVariants'
@@ -40,6 +42,7 @@ export type DesktopPreferences = Record<
 > & {
   openInApp?: string | null;
   terminalPlacement?: string | null;
+  sessionCardVisible?: string | null;
   projectModels?: string | null;
   modelUsage?: string | null;
   modelVariants?: string | null;

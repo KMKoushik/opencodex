@@ -36,6 +36,55 @@ async function upstream(handler: (request: IncomingMessage, response: ServerResp
 }
 
 describe('gateway and the real OpenCode client', () => {
+  it('observes native shell commands with bounded output and delegates explicit stops', async () => {
+    const calls: string[] = [];
+    let failed = false;
+    const shell = {
+      id: 'sh_fixture',
+      status: 'running',
+      command: 'bun dev',
+      metadata: { sessionID: 'ses_fixture' },
+    };
+    const output = { output: 'Ready\n', cursor: 6, size: 6, truncated: false };
+    const url = await upstream((req, res) => {
+      const path = new URL(req.url!, 'http://localhost');
+      expect(path.searchParams.get('location[directory]')).toBe(directory);
+      calls.push(`${req.method} ${path.pathname}`);
+      if (failed) return res.writeHead(500).end();
+      res.setHeader('Content-Type', 'application/json');
+      if (req.method === 'DELETE') return res.writeHead(204).end();
+      if (path.pathname.endsWith('/output')) {
+        expect(path.searchParams.get('cursor')).toBe('0');
+        expect(path.searchParams.get('limit')).toBe('65536');
+        return res.end(JSON.stringify({ location: { directory }, data: output }));
+      }
+      res.end(
+        JSON.stringify({
+          location: { directory },
+          data: path.pathname === '/api/shell' ? [shell] : shell,
+        }),
+      );
+    });
+    const app = createApp(new OpenCodeBackend(async () => ({ url })));
+    const path = `/api/shells?${new URLSearchParams({ directory })}`;
+    expect((await app.request('http://localhost/api/shells')).status).toBe(400);
+    expect(await (await app.request(`http://localhost${path}`)).json()).toEqual([shell]);
+    const command = `http://localhost/api/shells/sh_fixture?${new URLSearchParams({ directory })}`;
+    expect(await (await app.request(command)).json()).toEqual(shell);
+    const log = `http://localhost/api/shells/sh_fixture/output?${new URLSearchParams({ directory })}`;
+    expect((await app.request(`${log}&cursor=-1`)).status).toBe(400);
+    expect((await app.request(`${log}&cursor=1.5`)).status).toBe(400);
+    expect(await (await app.request(`${log}&cursor=0&limit=9999999`)).json()).toEqual(output);
+    expect(calls).toEqual([
+      'GET /api/shell',
+      'GET /api/shell/sh_fixture',
+      'GET /api/shell/sh_fixture/output',
+    ]);
+    expect((await app.request(command, { method: 'DELETE' })).status).toBe(200);
+    expect(calls.at(-1)).toBe('DELETE /api/shell/sh_fixture');
+    failed = true;
+    expect((await app.request(`http://localhost${path}`)).status).toBe(502);
+  });
   it('acknowledges only the observed idle transition through the native view API', async () => {
     const calls: unknown[] = [];
     let failed = false;
@@ -1027,6 +1076,9 @@ describe('gateway and the real OpenCode client', () => {
     const url = await upstream((_req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       res.write(`data: ${JSON.stringify({ type: 'server.connected' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'shell.created' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'shell.exited' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'shell.deleted' })}\n\n`);
       res.end(`data: ${JSON.stringify({ type: 'session.updated' })}\n\n`);
     });
     const backend = new OpenCodeBackend(async () => {
@@ -1039,9 +1091,17 @@ describe('gateway and the real OpenCode client', () => {
     expect(body).toContain('event: ready');
     expect(body).toContain('event: opencode');
     expect(body).toContain('"type":"session.updated"');
+    for (const type of ['shell.created', 'shell.exited', 'shell.deleted'])
+      expect(body).toContain(`"type":"${type}"`);
     expect(body).toContain('event: unavailable');
     for await (const event of backend.events(AbortSignal.timeout(2_000))) {
-      expect(['server.connected', 'session.updated']).toContain(event.type);
+      expect([
+        'server.connected',
+        'session.updated',
+        'shell.created',
+        'shell.exited',
+        'shell.deleted',
+      ]).toContain(event.type);
     }
     expect(discoveries).toBe(2);
   });

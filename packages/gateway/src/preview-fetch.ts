@@ -1,14 +1,16 @@
 import { MAX_PREVIEW_BYTES } from '@opencodex/contracts';
 import { GatewayError } from './errors';
 
-/** Bound bytes before the native client buffers/decodes file and diff responses. */
+/** Bound bytes before the native client buffers/decodes previews and shell output. */
 export const previewFetch: typeof fetch = async (input, init) => {
   const path = new URL(input instanceof Request ? input.url : input.toString()).pathname;
   const limit = path.startsWith('/api/fs/read/')
     ? MAX_PREVIEW_BYTES
     : path === '/api/vcs/diff'
       ? 16 * 1024 * 1024
-      : undefined;
+      : /^\/api\/shell\/[^/]+\/output$/.test(path)
+        ? 512 * 1024
+        : undefined;
   const response = await fetch(input, init);
   if (!limit || !response.ok || !response.body) return response;
   const reader = response.body.getReader();
@@ -17,7 +19,9 @@ export const previewFetch: typeof fetch = async (input, init) => {
     new GatewayError(
       path.startsWith('/api/fs/read/')
         ? 'File exceeds the 2 MiB preview and editing limit.'
-        : 'Changes exceed the 16 MiB diff preview limit. Browse individual files instead.',
+        : path === '/api/vcs/diff'
+          ? 'Changes exceed the 16 MiB diff preview limit. Browse individual files instead.'
+          : 'Shell output exceeds the preview limit.',
       413,
     );
   if (Number(response.headers.get('content-length')) > limit) {

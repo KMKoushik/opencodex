@@ -23,7 +23,7 @@ import { Starters } from './starters';
 import { sessionUnread } from '@opencodex/contracts';
 import { ProjectSwitcher } from '../projects/project-switcher';
 import { undoDraft } from './undo-draft';
-import { SubagentTray } from '../subagents/subagent-tray';
+import { ActivityTray } from './activity-tray';
 
 export function ChatView({
   sessionID,
@@ -143,6 +143,9 @@ export function ChatView({
       return { model: input.model };
     },
     retry: false,
+    // Follow the conversation from the moment of sending, so the new message and its reply
+    // arrive in view even if the reader had scrolled up.
+    onMutate: () => timeline.current?.scrollToLatest(),
     onSuccess: (result, input) => {
       if ('model' in result && result.model)
         client.setQueryData<SessionInfo>(['chat', sessionID, 'info'], (info) =>
@@ -156,7 +159,6 @@ export function ChatView({
         client.setQueryData(['chat', result.session.id, 'info'], result.session);
         onOpenSession(result.session.id);
       }
-      timeline.current?.scrollToLatest();
       void refresh();
       void client.invalidateQueries({ queryKey: ['sessions'] });
       void client.invalidateQueries({ queryKey: ['active'] });
@@ -423,7 +425,12 @@ export function ChatView({
             {stop.error.message}
           </p>
         )}
-        <SubagentTray sessionID={sessionID} live={live} onOpen={onOpenSubagent} />
+        <ActivityTray
+          directory={chat.info.data?.location.directory}
+          sessionID={sessionID}
+          live={live}
+          onOpenSubagent={onOpenSubagent}
+        />
         {chat.forms.data?.[0] ? (
           <QuestionDock
             key={chat.forms.data[0].id}

@@ -133,6 +133,8 @@ export type {
   FileSystemEntry,
   FileDiffInfo,
   Pty,
+  ShellInfo,
+  ShellOutputOutput,
 } from '@opencode/client';
 
 export const modelInputSchema = z.object({

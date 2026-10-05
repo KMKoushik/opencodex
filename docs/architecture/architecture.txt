@@ -17,7 +17,7 @@
   │                                                                      │               │  OS edit + spelling menus│
   │             Zustand chat + editor drafts; Query API state            │               └─────────────┬────────────┘
   │            Warm session card; small screens use a popover            │               read / write  │
-  │          Lazy files, changes, subagents + dockable terminal          │                             │
+  │       Lazy workspace panels; activity tray + dockable terminal       │                             │
   └────────────────────┬─────────────────────────────────────────────────┘                             │
        HTTP /api       │                               ▲  SSE + WS                                     ▼
        + WS input      │                               │  output                         ┌── DESKTOP PREFERENCES ───┐
@@ -27,7 +27,7 @@
      │  <>   packages/gateway                                        │                   │  preferences.json        │
      │                                                               │                   │  Projects, UI + font size│
      │  Hono + V2 client; private service credentials                │                   │  Model/effort + frequency│
-     │  Bounded images/diffs; version-checked file writes            │                   └──────────────────────────┘
+     │  Bounded previews/logs; version-checked file writes           │                   └──────────────────────────┘
      │  Native APIs + origin-checked, ticketed PTY relay             │
      └─────────────────┬─────────────────────────────────────────────┘
                        │                               ▲
@@ -42,7 +42,7 @@
      │  Owns sessions, forks, commands + execution                   │                   │  Native bridge types     │
      │  Providers, tools, VCS + filesystem operations                │                   │                          │
      │  Survives OpenCodex shutdown                                  │                   └──────────────────────────┘
-     │  Durable sessions + read markers; PTY shell replay            │
+     │  Durable sessions; native agent shells + PTY replay           │
      └───────────────────────────────────────────────────────────────┘                   Code, not a service
 
 

@@ -4,9 +4,15 @@ import type { OpenCodeProject } from '@opencodex/contracts';
 export function ProjectIcon({ name, icon }: { name: string; icon?: OpenCodeProject['icon'] }) {
   const source = icon?.override || (!icon?.color ? icon?.url : undefined);
   const [failed, setFailed] = useState<string>();
+  const hasImage = Boolean(source && source !== failed);
   return (
-    <span className="project-icon" data-color={icon?.color || 'gray'} aria-hidden="true">
-      {source && source !== failed ? (
+    <span
+      className="project-icon"
+      data-color={icon?.color || 'gray'}
+      data-image={hasImage || undefined}
+      aria-hidden="true"
+    >
+      {hasImage ? (
         <img
           src={source}
           alt=""

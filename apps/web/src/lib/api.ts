@@ -31,6 +31,8 @@ import {
   type FileSystemEntry,
   type FileDiffInfo,
   type Pty,
+  type ShellInfo,
+  type ShellOutputOutput,
 } from '@opencodex/contracts';
 
 async function nativeRequest<T>(path: string, options?: RequestInit): Promise<T> {
@@ -57,6 +59,23 @@ const sessionPath = (id: string) => `/sessions/${encodeURIComponent(id)}`;
 const post = (body?: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) });
 
 export const api = {
+  shells: (directory: string, signal: AbortSignal) =>
+    nativeRequest<ShellInfo[]>(`/shells?${new URLSearchParams({ directory })}`, { signal }),
+  shell: (directory: string, id: string, signal: AbortSignal) =>
+    nativeRequest<ShellInfo>(
+      `/shells/${encodeURIComponent(id)}?${new URLSearchParams({ directory })}`,
+      { signal },
+    ),
+  shellOutput: (directory: string, id: string, cursor: number | undefined, signal: AbortSignal) =>
+    nativeRequest<ShellOutputOutput['data']>(
+      `/shells/${encodeURIComponent(id)}/output?${new URLSearchParams({ directory, ...(cursor === undefined ? {} : { cursor: String(cursor) }) })}`,
+      { signal },
+    ),
+  stopShell: (directory: string, id: string) =>
+    nativeRequest<{ ok: true }>(
+      `/shells/${encodeURIComponent(id)}?${new URLSearchParams({ directory })}`,
+      { method: 'DELETE' },
+    ),
   terminals: (directory: string, signal: AbortSignal) =>
     nativeRequest<Pty[]>(`/terminals?${new URLSearchParams({ directory })}`, { signal }),
   createTerminal: (directory: string) =>

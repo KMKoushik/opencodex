@@ -1,0 +1,101 @@
+.shell-tray-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+}
+.shell-tray-list {
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+.shell-tray-row code {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.shell-tray-row > svg,
+.shell-tray-row > .session-activity {
+  flex: none;
+}
+.shell-tray-time {
+  flex: none;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.shell-tray-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--error);
+  font-size: 12px;
+}
+.shell-output-view {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-under);
+}
+.shell-command {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 12px/1.5 var(--font-mono);
+}
+.shell-cwd {
+  overflow-wrap: anywhere;
+  font: 11px/1.5 var(--font-mono);
+  color: var(--text-tertiary);
+}
+.shell-output-note {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.shell-log {
+  height: min(40vh, 360px);
+  overflow: auto;
+  margin: 12px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 12px/1.5 var(--font-mono);
+  overscroll-behavior: contain;
+}
+.shell-stop-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.shell-tray-row:focus-visible {
+  background: var(--selected);
+  color: var(--text);
+}
+@media (hover: hover) {
+  .shell-tray-row:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+}
+@media (pointer: coarse) {
+  .shell-tray-row {
+    min-height: 44px;
+  }
+}
