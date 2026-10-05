@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { FloppyDiskIcon, Undo03Icon } from '@hugeicons/core-free-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand';
 import { Compartment, EditorState } from '@codemirror/state';
@@ -25,16 +28,17 @@ export function FileEditor({
   path,
   file,
   sessionID,
+  toolbarElement,
 }: {
   directory: string;
   path: string;
   file: Extract<WorkspaceFile, { kind: 'text' }>;
   sessionID: string;
+  toolbarElement?: HTMLElement | null;
 }) {
   const drafts = useEditorDrafts();
   const key = editorKey(directory, path);
   const dirty = useStore(drafts, (state) => Boolean(state.edits[key]));
-  const [editing, setEditing] = useState(() => Boolean(drafts.getState().edits[key]));
   const [annotation, setAnnotation] = useState<AnnotationTarget>();
   const [discard, setDiscard] = useState(false);
   const [error, setError] = useState('');
@@ -42,7 +46,7 @@ export function FileEditor({
   const view = useRef<EditorView>(null);
   const [commentView, setCommentView] = useState<EditorView | null>(null);
   const currentFile = useRef(file);
-  const [mode] = useState(() => new Compartment());
+  const syncing = useRef(false);
   const client = useQueryClient();
   const save = useMutation({
     mutationKey: ['file-save', directory, path],
@@ -108,14 +112,19 @@ export function FileEditor({
         editorHighlighting,
         language.of([]),
         EditorState.transactionFilter.of((transaction) => {
-          if (transaction.docChanged && transaction.newDoc.length > MAX_PREVIEW_BYTES) {
+          if (!transaction.docChanged || syncing.current) return transaction;
+          const edits = drafts.getState().edits;
+          if (!edits[key] && Object.keys(edits).length >= 8) {
+            setError('Save or discard an open edit before editing another file (8-file limit).');
+            return [];
+          }
+          if (transaction.newDoc.length > MAX_PREVIEW_BYTES) {
             setError('This edit would exceed the file size limit. Keep this document under 2 MiB.');
             return [];
           }
           return transaction;
         }),
         EditorState.lineSeparator.of(currentFile.current.text.includes('\r\n') ? '\r\n' : '\n'),
-        mode.of(EditorState.readOnly.of(!edit)),
         keymap.of([
           {
             key: 'Mod-Shift-m',
@@ -141,7 +150,7 @@ export function FileEditor({
           'data-shortcut-boundary': '',
         }),
         EditorView.updateListener.of((update) => {
-          if (!update.docChanged) return;
+          if (!update.docChanged || syncing.current) return;
           setError('');
           drafts.getState().set(key, {
             state: update.state,
@@ -166,80 +175,52 @@ export function FileEditor({
       editor.destroy();
       view.current = null;
     };
-  }, [directory, path, drafts, key, mode, beginComment]);
+  }, [directory, path, drafts, key, beginComment]);
   useEffect(() => {
     if (drafts.getState().edits[key]) return;
     currentFile.current = file;
     const editor = view.current;
     if (editor && editor.state.sliceDoc() !== file.text) {
-      editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: file.text } });
-      drafts.getState().discard(key);
+      syncing.current = true;
+      try {
+        editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: file.text } });
+      } finally {
+        syncing.current = false;
+      }
     }
   }, [file, drafts, key]);
   const stale = dirty && drafts.getState().edits[key]?.version !== file.version;
+  const controls = (
+    <div className="wb-actions">
+      {dirty && <span className="wb-note">Unsaved edits</span>}
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="Discard edits"
+        disabled={!dirty || save.isPending}
+        onClick={() => setDiscard(true)}
+      >
+        <HugeiconsIcon icon={Undo03Icon} size={16} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={save.isPending ? 'Saving file…' : 'Save file'}
+        title="Save file (Cmd/Ctrl+S)"
+        disabled={!dirty || save.isPending}
+        onClick={() => saveRef.current()}
+      >
+        <HugeiconsIcon icon={FloppyDiskIcon} size={16} />
+      </Button>
+    </div>
+  );
   return (
     <div className="wb-file-editor">
-      <div className="wb-subtoolbar">
-        <span className="wb-note">
-          {dirty ? 'Unsaved edits' : editing ? 'Editing' : 'Read only'}
-        </span>
-        <div className="wb-actions">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              const editor = view.current;
-              if (!editor) return;
-              const selection = editor.state.selection.main;
-              beginComment(editor, selection.from, selection.to);
-            }}
-          >
-            Comment
-          </Button>
-          {editing ? (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={!dirty || save.isPending}
-                onClick={() => setDiscard(true)}
-              >
-                Discard
-              </Button>
-              <Button
-                size="sm"
-                disabled={!dirty || save.isPending}
-                onClick={() => saveRef.current()}
-              >
-                {save.isPending ? 'Saving…' : 'Save'}
-              </Button>
-            </>
-          ) : (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                if (
-                  Object.keys(drafts.getState().edits).length >= 8 &&
-                  !drafts.getState().edits[key]
-                ) {
-                  setError(
-                    'Save or discard an open edit before editing another file (8-file limit).',
-                  );
-                  return;
-                }
-                setEditing(true);
-                view.current?.dispatch({
-                  effects: mode.reconfigure(EditorState.readOnly.of(false)),
-                });
-                view.current?.focus();
-              }}
-            >
-              Edit file
-            </Button>
-          )}
-        </div>
-      </div>
+      {toolbarElement ? (
+        createPortal(controls, toolbarElement)
+      ) : (
+        <div className="wb-subtoolbar">{controls}</div>
+      )}
       {stale && (
         <p className="wb-notice">
           The disk version changed. Your unsaved edits are kept here. Copy them or discard to load
@@ -275,11 +256,18 @@ export function FileEditor({
               onClick={() => {
                 currentFile.current = file;
                 const editor = view.current;
-                if (editor)
-                  editor.dispatch({
-                    changes: { from: 0, to: editor.state.doc.length, insert: file.text },
-                  });
+                if (editor) {
+                  syncing.current = true;
+                  try {
+                    editor.dispatch({
+                      changes: { from: 0, to: editor.state.doc.length, insert: file.text },
+                    });
+                  } finally {
+                    syncing.current = false;
+                  }
+                }
                 drafts.getState().discard(key);
+                setError('');
                 save.reset();
                 setDiscard(false);
               }}

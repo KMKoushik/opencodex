@@ -7,11 +7,13 @@ export function SegmentedControl<T extends string>({
   value,
   options,
   onChange,
+  iconOnly = false,
 }: {
   label: string;
   value: T;
   options: Option<T>[];
   onChange: (value: T) => void;
+  iconOnly?: boolean;
 }) {
   const group = useRef<HTMLDivElement>(null);
 
@@ -25,7 +27,13 @@ export function SegmentedControl<T extends string>({
   }
 
   return (
-    <div ref={group} className="segmented" role="radiogroup" aria-label={label}>
+    <div
+      ref={group}
+      className="segmented"
+      data-icon-only={iconOnly || undefined}
+      role="radiogroup"
+      aria-label={label}
+    >
       {options.map((option, index) => (
         <button
           key={option.value}
@@ -33,12 +41,14 @@ export function SegmentedControl<T extends string>({
           role="radio"
           data-value={option.value}
           aria-checked={option.value === value}
+          aria-label={iconOnly ? option.label : undefined}
+          data-tooltip={iconOnly ? option.label : undefined}
           tabIndex={option.value === value ? 0 : -1}
           onClick={() => onChange(option.value)}
           onKeyDown={(event) => move(event, index)}
         >
           {option.icon}
-          {option.label}
+          {(!iconOnly || !option.icon) && option.label}
           {option.badge !== undefined && <span className="segmented-badge">{option.badge}</span>}
         </button>
       ))}

@@ -18,7 +18,7 @@ import { useDraftStore } from '../chat/draft-context';
 import { EMPTY_COMMENTS, type ReviewComment } from '../chat/review-comments';
 import { CommentCard } from '../chat/comment-editor';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { LayoutTwoColumnIcon, Menu01Icon } from '@hugeicons/core-free-icons';
+import { LayoutTwoColumnIcon, Menu01Icon, PencilEdit01Icon } from '@hugeicons/core-free-icons';
 import { Button } from '../../components/ui/button';
 import { SegmentedControl } from '../../components/ui/segmented-control';
 import { diffComment } from './diff-comment';
@@ -68,7 +68,7 @@ export function DiffPreview({
   live: boolean;
   style: 'unified' | 'split';
   onStyleChange: (style: 'unified' | 'split') => void;
-  /** When set, the layout and comment controls render in the review toolbar instead. */
+  /** When set, the layout and edit controls render in the document toolbar instead. */
   toolbarElement?: HTMLElement | null;
 }) {
   const query = useQuery({
@@ -186,7 +186,6 @@ export function DiffPreview({
     }),
     [syntax, style, pending, beginComment],
   );
-  const range = selection?.range;
   const controls = (
     <>
       <SegmentedControl
@@ -194,19 +193,12 @@ export function DiffPreview({
         value={style}
         options={layouts}
         onChange={onStyleChange}
+        iconOnly
       />
       <div className="wb-actions">
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={!selection}
-          onClick={() => range && beginComment(range)}
-        >
-          Comment
-        </Button>
         {query.data?.status !== 'deleted' && (
-          <Button variant="ghost" size="sm" onClick={onOpenFile}>
-            Edit file
+          <Button variant="ghost" size="icon" aria-label="Edit file" onClick={onOpenFile}>
+            <HugeiconsIcon icon={PencilEdit01Icon} size={16} />
           </Button>
         )}
       </div>

@@ -17,12 +17,14 @@ export function FilePreview({
   path,
   sessionID,
   live,
+  toolbarElement,
   onOpenFile,
 }: {
   directory: string;
   path: string;
   sessionID: string;
   live: boolean;
+  toolbarElement?: HTMLElement | null;
   onOpenFile: (href: string) => boolean;
 }) {
   const [annotation, setAnnotation] = useState<AnnotationTarget>();
@@ -49,18 +51,25 @@ export function FilePreview({
               path={path}
               file={query.data}
               sessionID={sessionID}
-              onComment={() => setAnnotation({ path, directory })}
+              toolbarElement={toolbarElement}
               source={
                 <FileEditor
                   directory={directory}
                   path={path}
                   file={query.data}
                   sessionID={sessionID}
+                  toolbarElement={toolbarElement}
                 />
               }
             />
           ) : (
-            <FileEditor directory={directory} path={path} file={query.data} sessionID={sessionID} />
+            <FileEditor
+              directory={directory}
+              path={path}
+              file={query.data}
+              sessionID={sessionID}
+              toolbarElement={toolbarElement}
+            />
           )}
         </Suspense>
       )}

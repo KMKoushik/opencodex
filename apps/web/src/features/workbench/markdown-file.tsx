@@ -1,4 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { SourceCodeIcon, ViewIcon } from '@hugeicons/core-free-icons';
 import { useIsMutating } from '@tanstack/react-query';
 import { useStore } from 'zustand';
 import Markdown, { type Components } from 'react-markdown';
@@ -24,62 +27,49 @@ export function MarkdownFile({
   file,
   sessionID,
   source,
-  onComment,
+  toolbarElement,
 }: {
   directory: string;
   path: string;
   file: Extract<WorkspaceFile, { kind: 'text' }>;
   sessionID: string;
   source: ReactNode;
-  onComment: () => void;
+  toolbarElement?: HTMLElement | null;
 }) {
-  const drafts = useEditorDrafts();
-  const key = editorKey(directory, path);
-  const dirty = useStore(drafts, (state) => Boolean(state.edits[key]));
-  const [mode, setMode] = useState<'preview' | 'source'>(() =>
-    dirty || file.text.length > previewLimit ? 'source' : 'preview',
-  );
+  const [mode, setMode] = useState<'preview' | 'source'>('source');
   const saving = useIsMutating({ mutationKey: ['file-save', directory, path] }) > 0;
   const selection = useRef<TextSelectionHandle>(null);
+  const controls = (
+    <div className="wb-markdown-modes" role="group" aria-label="Markdown view">
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="Edit source"
+        aria-pressed={mode === 'source'}
+        disabled={saving}
+        onClick={() => setMode('source')}
+      >
+        <HugeiconsIcon icon={SourceCodeIcon} size={16} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="Preview Markdown"
+        aria-pressed={mode === 'preview'}
+        disabled={saving}
+        onClick={() => setMode('preview')}
+      >
+        <HugeiconsIcon icon={ViewIcon} size={16} />
+      </Button>
+    </div>
+  );
   return (
     <div className="wb-markdown-file">
-      <div className="wb-subtoolbar">
-        <div className="wb-markdown-modes" role="group" aria-label="Markdown view">
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-pressed={mode === 'preview'}
-            disabled={saving}
-            onClick={() => setMode('preview')}
-          >
-            Preview
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-pressed={mode === 'source'}
-            disabled={saving}
-            onClick={() => setMode('source')}
-          >
-            Source
-          </Button>
-        </div>
-        {mode === 'preview' && (
-          <div className="wb-actions">
-            {dirty && <span className="wb-note">Unsaved edits</span>}
-            <Button
-              variant="ghost"
-              size="sm"
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => {
-                if (!selection.current?.comment()) onComment();
-              }}
-            >
-              Comment
-            </Button>
-          </div>
-        )}
-      </div>
+      {toolbarElement ? (
+        createPortal(controls, toolbarElement)
+      ) : (
+        <div className="wb-subtoolbar">{controls}</div>
+      )}
       {mode === 'source' ? (
         source
       ) : (

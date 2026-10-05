@@ -34,9 +34,9 @@ Themes live in **Settings → Appearance**. Choose Light, Dark, or System mode, 
 
 ### Review and edit your workspace
 
-Use the **Files** and **Changes** icons on the far-right rail to open the workspace panel. Click the active icon again to close it. **Changes** shows uncommitted files (including staged and untracked files), or changes from the base branch. Select a file to review its diff; click a line number, or Shift-click a range, then **Comment** to add feedback to your chat draft. Nothing is sent automatically.
+Use the **Files** and **Changes** icons on the far-right rail to open the workspace panel. Click the active icon again to close it. **Changes** shows uncommitted files (including staged and untracked files), or changes from the base branch. Select a file to review its diff; use the gutter **+** on a line or selected range to add feedback to your chat draft. Nothing is sent automatically.
 
-**Files** keeps an expandable tree beside the editor. Single-click a file to preview it; double-click the file or its tab to keep it open. Tabs and folder expansion survive switching views and closing/reopening the panel. **Changes** uses the same tree navigation, with unified and split diffs. Select text to comment on its lines, or choose **Edit file** and **Save** (Cmd/Ctrl+S). Up to eight unsaved files survive panel and chat navigation in memory; save them before reloading. Saves reject detected disk changes and preserve your edits. Text editing and image previews support files up to 2 MiB; larger files are left untouched.
+**Files** keeps an expandable tree beside the editor. Single-click a text file to edit immediately; double-click the file or its tab to keep it open. Markdown starts in editable source, with an optional preview icon. Tabs and folder expansion survive switching views and closing/reopening the panel. **Changes** uses the same tree navigation, with unified and split diff icons; its pencil icon opens the file directly in **Files**. Save with the disk icon or Cmd/Ctrl+S. The toolbar's tree icon toggles the explorer, and the folder dropdown offers Copy Path plus Show in Finder/File Explorer/Files on desktop. Up to eight unsaved files survive panel and chat navigation in memory; save them before reloading. Saves reject detected disk changes and preserve your edits. Text editing and image previews support files up to 2 MiB; larger files are left untouched.
 
 The first control at the top of the right rail is **Open in…**, followed by Files, Changes, and Terminal underneath. Its menu copies the project path or opens it in an installed desktop app. On macOS it shows native app icons for Finder, Terminal, Ghostty, Cursor, Zed, VS Code, and iTerm when installed, and remembers the selected app. Windows/Linux desktop offers the system file manager; the browser offers Copy Path.
 
@@ -102,6 +102,8 @@ OpenCode owns sessions, tools, provider credentials, and agent execution. The ga
 The gateway forwards native OpenCode events. The UI overlays live text on server snapshots, then refreshes those snapshots at durable changes and on reconnection. A stream joined mid-response waits for saved text instead of displaying a partial suffix as the full response. Temporary stream failures also enable polling. Request failures stay errors rather than becoming empty session lists. See the [ownership decisions](docs/architecture/README.md#ownership-decisions) before adding app-owned behavior.
 
 ## Checks
+
+Before opening a pull request, run the checks and formatting validation below from the repository root.
 
 ```sh
 bun check             # Types, lint, focused tests, both builds

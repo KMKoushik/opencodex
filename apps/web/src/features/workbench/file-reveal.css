@@ -1,26 +1,16 @@
 .wb-file-reveal {
   position: relative;
   flex: none;
+  height: 32px;
 }
-.wb-file-reveal-error {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  z-index: 1;
-  width: min(280px, 70vw);
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: var(--glaze-shadow);
-}
-.wb-file-reveal-error p {
-  margin: 0 0 8px;
+.wb-file-reveal .open-app-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
 }
 @media (pointer: coarse) {
-  .wb-file-reveal button {
-    min-height: 44px;
-    min-width: 44px;
+  .wb-file-reveal {
+    height: 44px;
   }
 }

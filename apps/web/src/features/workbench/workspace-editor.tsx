@@ -4,7 +4,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand';
 import type { GitStatusEntry } from '@pierre/trees';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Cancel01Icon, File01Icon, FileEditIcon, RefreshIcon } from '@hugeicons/core-free-icons';
+import {
+  Cancel01Icon,
+  File01Icon,
+  FileEditIcon,
+  PanelRightIcon,
+  RefreshIcon,
+} from '@hugeicons/core-free-icons';
 import { api } from '../../lib/api';
 import { Button } from '../../components/ui/button';
 import { SegmentedControl } from '../../components/ui/segmented-control';
@@ -222,22 +228,15 @@ export function WorkspaceEditor({
         <div className="wb-document">
           <div className="wb-breadcrumbs" data-view={view}>
             {view === 'changes' ? (
-              // The review toolbar: what is compared, its totals, then the open diff's controls.
-              <>
-                <select
-                  aria-label="Changes comparison"
-                  value={mode}
-                  onChange={(event) => setMode(event.target.value as typeof mode)}
-                >
-                  <option value="working">Uncommitted</option>
-                  <option value="branch">Base branch</option>
-                </select>
-                <span className="wb-totals">
-                  <span className="wb-added">+{total.additions.toLocaleString()}</span>
-                  <span className="wb-removed">−{total.deletions.toLocaleString()}</span>
-                </span>
-                <div className="wb-toolbar-slot" ref={setToolbarSlot} />
-              </>
+              // Comparison controls stay separate from the active document's actions.
+              <select
+                aria-label="Changes comparison"
+                value={mode}
+                onChange={(event) => setMode(event.target.value as typeof mode)}
+              >
+                <option value="working">Uncommitted</option>
+                <option value="branch">Base branch</option>
+              </select>
             ) : (
               <nav aria-label="File breadcrumbs">
                 {parts.map((part, index) => (
@@ -248,16 +247,18 @@ export function WorkspaceEditor({
                 ))}
               </nav>
             )}
+            <div className="wb-toolbar-slot" ref={setToolbarSlot} />
             {current && (
               <FileReveal key={current.id} directory={current.directory} path={current.path} />
             )}
             <Button
               variant="ghost"
-              size="sm"
+              size="icon"
               aria-label={treeVisible ? 'Hide file tree' : 'Show file tree'}
+              aria-pressed={treeVisible}
               onClick={() => setTreeVisible((value) => !value)}
             >
-              {treeVisible ? 'Hide tree' : 'Show tree'}
+              <HugeiconsIcon icon={PanelRightIcon} size={16} />
             </Button>
           </div>
           <div
@@ -280,6 +281,7 @@ export function WorkspaceEditor({
                   path={current.path}
                   sessionID={sessionID}
                   live={live}
+                  toolbarElement={toolbarSlot}
                   onOpenFile={(href) => {
                     const target = resolveFileLink(href, directory);
                     if (!target) return false;
@@ -299,8 +301,11 @@ export function WorkspaceEditor({
                     onStyleChange={setDiffStyle}
                     sessionID={sessionID}
                     live={live}
-                    toolbarElement={view === 'changes' ? toolbarSlot : null}
-                    onOpenFile={() => open(current.path, 'file', true)}
+                    toolbarElement={toolbarSlot}
+                    onOpenFile={() => {
+                      selectView?.('files');
+                      open(current.path, 'file', true, current.directory);
+                    }}
                   />
                 </DiffPool>
               )}
