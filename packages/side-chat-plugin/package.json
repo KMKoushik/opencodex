@@ -1,0 +1,9 @@
+{
+  "name": "@opencodex/side-chat-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/plugin.ts"
+  }
+}

@@ -1,7 +1,7 @@
 import { OpenCode, type OpenCodeClient } from '@opencode/client';
 import { Service, type Endpoint } from '@opencode/client/service';
 import type { Connection, SessionPage } from '@opencodex/contracts';
-import { sessionSummary } from '@opencodex/contracts';
+import { sessionSummary, sideChatParent } from '@opencodex/contracts';
 import { GatewayError } from './errors';
 import { previewFetch } from './preview-fetch';
 
@@ -81,13 +81,18 @@ export class OpenCodeBackend {
     return client;
   }
 
-  async requireLocalFiles() {
+  /** Whether OpenCode was discovered on this machine, so its files and config are local. */
+  async localService() {
     await this.requireClient();
-    if (
-      !this.localFiles ||
-      !this.endpoint ||
-      !['127.0.0.1', 'localhost', '[::1]'].includes(new URL(this.endpoint.url).hostname)
-    )
+    return Boolean(
+      this.localFiles &&
+      this.endpoint &&
+      ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(this.endpoint.url).hostname),
+    );
+  }
+
+  async requireLocalFiles() {
+    if (!(await this.localService()))
       throw new GatewayError(
         'Video playback and revealing files require the locally discovered OpenCode service. External connections are not supported.',
         422,
@@ -137,7 +142,8 @@ export class OpenCodeBackend {
         { signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]) },
       );
       return {
-        sessions: result.data.map(sessionSummary),
+        // Side chats are root sessions natively, but belong to their main chat's panel.
+        sessions: result.data.filter((session) => !sideChatParent(session)).map(sessionSummary),
         nextCursor: result.cursor.next ?? null,
       };
     } catch {

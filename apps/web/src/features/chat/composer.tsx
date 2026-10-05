@@ -23,6 +23,8 @@ export function Composer({
   onStop,
   controls,
   directory,
+  shortcuts = true,
+  placeholder = 'Ask anything, or describe what to build',
 }: {
   sessionID: string;
   onSend: () => Promise<unknown>;
@@ -33,6 +35,9 @@ export function Composer({
   onStop: () => void;
   controls: ReactNode;
   directory?: string;
+  /** The main composer owns the app-wide focus and stop shortcuts. */
+  shortcuts?: boolean;
+  placeholder?: string;
 }) {
   const store = useDraftStore();
   const draft = useStore(store, (state) => state.drafts[sessionID]?.text ?? '');
@@ -92,8 +97,8 @@ export function Composer({
       window.removeEventListener('dragend', preventFileNavigation);
     };
   }, []);
-  useCommand('composer.focus', () => textarea.current?.focus());
-  useCommand('chat.stop', running && !stopping ? onStop : undefined);
+  useCommand('composer.focus', shortcuts ? () => textarea.current?.focus() : undefined);
+  useCommand('chat.stop', shortcuts && running && !stopping ? onStop : undefined);
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!hasContent || sending || !ready) return;
@@ -214,8 +219,8 @@ export function Composer({
           }
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          {...shortcutProps('composer.focus')}
-          placeholder="Ask anything, or describe what to build"
+          {...(shortcuts ? shortcutProps('composer.focus') : {})}
+          placeholder={placeholder}
           rows={2}
           spellCheck
           value={draft}
@@ -276,7 +281,7 @@ export function Composer({
               size="icon"
               className="composer-stop"
               aria-label="Stop"
-              {...shortcutProps('chat.stop')}
+              {...(shortcuts ? shortcutProps('chat.stop') : { title: 'Stop' })}
               disabled={stopping}
               onClick={onStop}
             >

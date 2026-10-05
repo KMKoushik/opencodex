@@ -10,24 +10,24 @@ import {
   sessionUnread,
   sessionUnreadSchema,
 } from '@opencodex/contracts';
-import type { OpenCodeClient, SessionInfo } from '@opencode/client';
+import type { JsonValue, OpenCodeClient, SessionInfo } from '@opencode/client';
 import { GatewayError } from './errors';
 import type { OpenCodeBackend } from './opencode';
 
-/** App-owned markers stored in native session metadata; OpenCode persists and broadcasts them. */
-export function sessionMetadataRoutes(backend: OpenCodeBackend) {
-  const app = new Hono();
+export type MetadataWriter = <T>(
+  sessionID: string,
+  signal: AbortSignal,
+  change: (
+    session: SessionInfo,
+    client: OpenCodeClient,
+    options: { signal: AbortSignal },
+  ) => Promise<{ metadata?: Record<string, JsonValue>; result: T }>,
+) => Promise<T>;
+
+/** Metadata updates replace the whole object, so serialize read/modify/write per session. */
+export function createMetadataWriter(backend: OpenCodeBackend): MetadataWriter {
   const writes = new Map<string, Promise<unknown>>();
-  // Metadata updates replace the whole object, so serialize read/modify/write per session.
-  async function write<T>(
-    sessionID: string,
-    signal: AbortSignal,
-    change: (
-      session: SessionInfo,
-      client: OpenCodeClient,
-      options: { signal: AbortSignal },
-    ) => Promise<{ metadata?: Record<string, string | number | null>; result: T }>,
-  ) {
+  return async function write(sessionID, signal, change) {
     const previous = writes.get(sessionID);
     const next = (async () => {
       await previous?.catch(() => undefined);
@@ -49,7 +49,12 @@ export function sessionMetadataRoutes(backend: OpenCodeBackend) {
     } finally {
       if (writes.get(sessionID) === next) writes.delete(sessionID);
     }
-  }
+  };
+}
+
+/** App-owned markers stored in native session metadata; OpenCode persists and broadcasts them. */
+export function sessionMetadataRoutes(write: MetadataWriter) {
+  const app = new Hono();
 
   app.use('/:id/unread', bodyLimit({ maxSize: 1024 }));
   app.post('/:id/unread', async (c) => {

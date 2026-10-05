@@ -166,6 +166,33 @@ export function sessionMarker(
   const value = session.metadata?.[key];
   return typeof value === 'number' && value > 0 ? value : undefined;
 }
+/** On a side chat: `{ parentID }`, the main chat it was forked from. */
+export const SIDE_CHAT_KEY = 'opencodexSideChat';
+/** On a main chat: its side chats' IDs, oldest first. */
+export const SIDE_CHATS_KEY = 'opencodexSideChats';
+export const MAX_SIDE_CHATS = 8;
+export function sideChatParent(session: {
+  metadata?: Record<string, unknown>;
+}): string | undefined {
+  const marker = session.metadata?.[SIDE_CHAT_KEY];
+  return marker && typeof marker === 'object' && 'parentID' in marker
+    ? typeof marker.parentID === 'string' && marker.parentID
+      ? marker.parentID
+      : undefined
+    : undefined;
+}
+export function sideChatIDs(session: { metadata?: Record<string, unknown> }): string[] {
+  const ids = session.metadata?.[SIDE_CHATS_KEY];
+  return Array.isArray(ids)
+    ? ids.filter((id): id is string => typeof id === 'string' && id.length > 0)
+    : [];
+}
+/** Installation and load state of the plugin that lets side chats read their main chat. */
+export type SideChatPluginStatus = {
+  state: 'unavailable' | 'missing' | 'outdated' | 'loading' | 'active' | 'failed';
+  path?: string;
+  message?: string;
+};
 export const sessionFocusSchema = z.object({ action: z.enum(['pin', 'unpin', 'done', 'undone']) });
 export type SessionFocusAction = z.infer<typeof sessionFocusSchema>['action'];
 /** Root threads waiting on an approval or a question, including requests from their subagents. */

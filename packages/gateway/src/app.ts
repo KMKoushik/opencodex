@@ -22,7 +22,8 @@ import { terminalRoutes } from './terminals';
 import { shellRoutes } from './shells';
 import { imageRoutes } from './images';
 import { videoRoutes } from './videos';
-import { sessionMetadataRoutes } from './session-metadata';
+import { createMetadataWriter, sessionMetadataRoutes } from './session-metadata';
+import { sideChatRoutes } from './side-chats';
 import { sessionAccessRoutes } from './session-access';
 import { attention } from './attention';
 
@@ -53,7 +54,9 @@ export function createApp(
   app.route('/api/shells', shellRoutes(backend));
   app.route('/api/workspace', videoRoutes(backend, shutdown));
   app.route('/api/sessions', imageRoutes(backend));
-  app.route('/api/sessions', sessionMetadataRoutes(backend));
+  const writeMetadata = createMetadataWriter(backend);
+  app.route('/api/sessions', sessionMetadataRoutes(writeMetadata));
+  app.route('/api', sideChatRoutes(backend, writeMetadata));
   app.route('/api/sessions', sessionAccessRoutes(backend));
   app.get('/api/attention', async (c) => {
     const directories = [...new Set(c.req.queries('directory') ?? [])];

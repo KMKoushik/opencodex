@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import type { OpenCodeEvent, SessionInfo, SessionListOutput } from '@opencodex/contracts';
+import {
+  sideChatIDs,
+  type OpenCodeEvent,
+  type SessionInfo,
+  type SessionListOutput,
+} from '@opencodex/contracts';
 import { api } from '../../lib/api';
 import { updateStream, type LivePart } from '../chat/stream';
 import { updateSessionViewed } from '../sessions/viewed';
@@ -110,6 +115,7 @@ export function useEvents(enabled: boolean) {
       setLive(true);
       void client.invalidateQueries({ queryKey: ['workspace'] });
       void client.invalidateQueries({ queryKey: ['subagents'] });
+      void client.invalidateQueries({ queryKey: ['side-chats'] });
       void client.invalidateQueries({ queryKey: ['session-cost'] });
       void client.invalidateQueries({ queryKey: ['attention'] });
       void client.invalidateQueries({ queryKey: ['subagent-attention'] });
@@ -160,6 +166,15 @@ export function useEvents(enabled: boolean) {
       }
       if (event.type === 'session.metadata.updated') {
         updateSessionMetadata(client, event.data.sessionID, event.data.metadata);
+        // Another client started or deleted a side chat of this main chat.
+        const key = ['side-chats', event.data.sessionID];
+        const listed = client.getQueryData<SessionInfo[]>(key);
+        if (
+          listed &&
+          listed.map((session) => session.id).join() !==
+            sideChatIDs({ metadata: event.data.metadata }).join()
+        )
+          void client.invalidateQueries({ queryKey: key, exact: true });
         return;
       }
       const directory = 'location' in event ? event.location?.directory : undefined;
@@ -208,7 +223,19 @@ export function useEvents(enabled: boolean) {
         changed.add(event.data.parentID);
         costChanged.add(event.data.parentID);
       }
-      if (event.type === 'session.deleted') costChanged.add(event.data.sessionID);
+      if (event.type === 'session.deleted') {
+        const deleted = event.data.sessionID;
+        costChanged.add(deleted);
+        void client.invalidateQueries({
+          queryKey: ['side-chats'],
+          predicate: (query) =>
+            Boolean(
+              (query.state.data as SessionInfo[] | undefined)?.some(
+                (session) => session.id === deleted,
+              ),
+            ),
+        });
+      }
       if (event.type.startsWith('permission.') || event.type.startsWith('form.'))
         requestsChanged = true;
       const data = 'data' in event ? event.data : undefined;

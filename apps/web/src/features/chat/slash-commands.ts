@@ -4,6 +4,7 @@ import { api } from '../../lib/api';
 export const localCommands = [
   { name: 'undo', description: 'Stage undo of the last turn; apply when you next send' },
   { name: 'redo', description: 'Cancel staged undo and restore the conversation' },
+  { name: 'side', description: 'Ask in a side chat without interrupting · /side question' },
   { name: 'fork', description: 'Fork this conversation into a new thread' },
   { name: 'new', description: 'Start a new thread in this project' },
   { name: 'compact', description: 'Summarize the conversation to free context' },

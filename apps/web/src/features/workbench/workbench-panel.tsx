@@ -3,7 +3,7 @@ import { useStore } from 'zustand';
 import { Cancel01Icon, MaximizeScreenIcon, MinimizeScreenIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
-import type { PanelDefinition, SubagentRequest } from './panels';
+import type { PanelDefinition, SideChatRequest, SubagentRequest } from './panels';
 import type { FileRequest } from './file-link';
 import { useWorkbenchStore, workbenchKey } from './workbench-context';
 import { defaultWorkbenchLayout } from './workbench-store';
@@ -18,6 +18,8 @@ export function WorkbenchPanel({
   panel,
   fileRequest,
   subagentRequest,
+  sideChatRequest,
+  onSideChatRequestHandled,
   onClose,
   onExpandedChange,
   onSelectPanel,
@@ -30,6 +32,8 @@ export function WorkbenchPanel({
   panel: PanelDefinition;
   fileRequest?: FileRequest;
   subagentRequest?: SubagentRequest;
+  sideChatRequest?: SideChatRequest;
+  onSideChatRequestHandled?: (request: SideChatRequest) => void;
   onClose: () => void;
   onExpandedChange: (expanded: boolean) => void;
   onSelectPanel?: (id: string) => void;
@@ -158,6 +162,8 @@ export function WorkbenchPanel({
                 selectView: onSelectPanel,
                 fileRequest,
                 subagentRequest,
+                sideChatRequest,
+                onSideChatRequestHandled,
               })}
             </Suspense>
           </div>

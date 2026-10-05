@@ -3,6 +3,7 @@ import { Button } from '../../components/ui/button';
 import { useConnection } from '../connection/use-connection';
 import { SettingsGroup, SettingsRow } from './settings-layout';
 import { UpdateSettings } from '../updates/update-settings';
+import { SideChatPluginSettings } from '../side-chat/side-chat-plugin-settings';
 
 export function GeneralSettings({
   live,
@@ -45,6 +46,7 @@ export function GeneralSettings({
           label="Live updates"
           description={connected ? (live ? 'Connected' : 'Reconnecting…') : 'Unavailable'}
         />
+        {connected && <SideChatPluginSettings directory={project?.directory} />}
       </SettingsGroup>
       <SettingsGroup title="Project">
         <SettingsRow

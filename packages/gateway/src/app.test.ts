@@ -278,6 +278,121 @@ describe('gateway and the real OpenCode client', () => {
     expect((await focus('done')).status).toBe(409);
     expect(await (await focus('undone')).json()).toEqual({ pinned: null, done: null });
   });
+  it('guards a forked side chat before returning it, and deletes the fork if setup fails', async () => {
+    const rule = { action: 'shell', resource: 'git push *', effect: 'deny' };
+    const sessions: Record<string, Record<string, unknown>> = {
+      ses_main: { id: 'ses_main', metadata: { opencodexPinned: 5, otherClient: true } },
+    };
+    const calls: string[] = [];
+    let failInstructions = true;
+    const url = await upstream((req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      const path = req.url!.split('?')[0]!;
+      calls.push(`${req.method} ${path}`);
+      const id = path.split('/')[3]!;
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        if (req.method === 'GET' && path === '/api/session')
+          return res.end(
+            JSON.stringify({
+              data: Object.values(sessions).map((session) => ({
+                ...session,
+                location: { directory },
+                time: { created: 1, updated: 1 },
+              })),
+              cursor: {},
+            }),
+          );
+        if (path.endsWith('/message'))
+          return res.end(JSON.stringify({ data: [{ id: 'msg_1' }], cursor: {} }));
+        if (path.endsWith('/fork')) {
+          sessions.ses_side = {
+            id: 'ses_side',
+            metadata: sessions.ses_main!.metadata,
+            permissions: [rule],
+          };
+          return res.end(JSON.stringify({ data: sessions.ses_side }));
+        }
+        if (path.includes('/instructions/entries/')) {
+          expect(path).toBe(
+            '/api/experimental/session/ses_side/instructions/entries/opencodex.side-chat',
+          );
+          expect(JSON.parse(body).value).toContain('reference context only');
+          return res.writeHead(failInstructions ? 500 : 204).end();
+        }
+        if (req.method === 'PATCH') sessions[id] = { ...sessions[id], ...JSON.parse(body) };
+        if (req.method === 'DELETE') delete sessions[id];
+        if (req.method !== 'GET') return res.writeHead(204).end();
+        if (!sessions[id])
+          return res
+            .writeHead(404)
+            .end(JSON.stringify({ _tag: 'SessionNotFoundError', sessionID: id, message: 'gone' }));
+        res.end(JSON.stringify({ data: sessions[id] }));
+      });
+    });
+    const app = createApp(new OpenCodeBackend(async () => ({ url })));
+    const start = () =>
+      app.request('http://localhost/api/sessions/ses_main/side-chats', { method: 'POST' });
+
+    expect((await start()).status).toBe(502);
+    expect(sessions.ses_side).toBeUndefined();
+    expect(calls).toContain('DELETE /api/session/ses_side');
+    expect(sessions.ses_main!.metadata).toEqual({ opencodexPinned: 5, otherClient: true });
+
+    failInstructions = false;
+    const created = await start();
+    expect(created.status).toBe(200);
+    expect(await created.json()).toMatchObject({ id: 'ses_side', title: 'Side chat' });
+    expect(sessions.ses_side).toMatchObject({
+      metadata: {
+        otherClient: true,
+        opencodexPinned: null,
+        opencodexSideChat: { parentID: 'ses_main' },
+      },
+      permissions: [
+        rule,
+        { action: 'edit', resource: '*', effect: 'ask' },
+        { action: 'subagent', resource: '*', effect: 'deny' },
+      ],
+    });
+    expect(sessions.ses_main!.metadata).toEqual({
+      opencodexPinned: 5,
+      otherClient: true,
+      opencodexSideChats: ['ses_side'],
+    });
+    const list = await app.request('http://localhost/api/sessions/ses_main/side-chats');
+    expect((await list.json()).map((session: { id: string }) => session.id)).toEqual(['ses_side']);
+    const sidebar = await app.request(`http://localhost/api/sessions?directory=${directory}`);
+    expect(
+      sessionPageSchema.parse(await sidebar.json()).sessions.map((session) => session.id),
+    ).toEqual(['ses_main']);
+    expect(
+      (await app.request('http://localhost/api/sessions/ses_side/side-chats', { method: 'POST' }))
+        .status,
+    ).toBe(409);
+
+    // Deleting elsewhere leaves a stale ID; listing skips it and deleting here prunes it.
+    delete sessions.ses_side;
+    expect(
+      await (await app.request('http://localhost/api/sessions/ses_main/side-chats')).json(),
+    ).toEqual([]);
+    const removed = await app.request(
+      'http://localhost/api/sessions/ses_main/side-chats/ses_side',
+      {
+        method: 'DELETE',
+      },
+    );
+    expect(removed.status).toBe(200);
+    expect(sessions.ses_main!.metadata).toMatchObject({ opencodexSideChats: [] });
+
+    // Side chats deleted by another client don't hold places toward the limit.
+    sessions.ses_main!.metadata = {
+      opencodexSideChats: Array.from({ length: 8 }, (_, index) => `ses_gone${index}`),
+    };
+    expect((await start()).status).toBe(200);
+    expect(sessions.ses_main!.metadata).toEqual({ opencodexSideChats: ['ses_side'] });
+  });
   it('lists child sessions with native pagination and reads their transcripts without mutations', async () => {
     const calls: string[] = [];
     const limits: number[] = [];

@@ -17,7 +17,10 @@ export function ModelControls({
   loading,
   failed,
   onChange,
+  shortcuts = true,
 }: {
+  /** The main composer's controls own the app-wide model and thinking shortcuts. */
+  shortcuts?: boolean;
   sessionID: string;
   models?: ModelInfo[];
   providers?: ModelProvider[];
@@ -50,7 +53,7 @@ export function ModelControls({
   const thinking = useRef<HTMLButtonElement>(null);
   useCommand(
     'thinking.choose',
-    disabled || !hasVariants ? undefined : () => thinking.current?.click(),
+    disabled || !hasVariants || !shortcuts ? undefined : () => thinking.current?.click(),
   );
   function changeVariant(variant: string) {
     if (model)
@@ -62,7 +65,7 @@ export function ModelControls({
   }
   useCommand(
     'thinking.cycle',
-    disabled || !hasVariants || !model
+    disabled || !hasVariants || !model || !shortcuts
       ? undefined
       : () => {
           const index = variants.findIndex((variant) => variant.value === selectedVariant);
@@ -75,6 +78,7 @@ export function ModelControls({
     <div className="composer-controls">
       <ContextIndicator key={sessionID} sessionID={sessionID} models={models} model={model} />
       <ModelPicker
+        shortcuts={shortcuts}
         models={options}
         providers={providers}
         model={model}
@@ -96,11 +100,15 @@ export function ModelControls({
       />
       <Select
         triggerRef={thinking}
-        triggerProps={{
-          'data-tooltip': 'Thinking level',
-          'data-shortcut': `${chooseShortcut['data-shortcut']} · ${cycleShortcut['data-shortcut']} to cycle`,
-          'aria-keyshortcuts': `${chooseShortcut['aria-keyshortcuts']} ${cycleShortcut['aria-keyshortcuts']}`,
-        }}
+        triggerProps={
+          shortcuts
+            ? {
+                'data-tooltip': 'Thinking level',
+                'data-shortcut': `${chooseShortcut['data-shortcut']} · ${cycleShortcut['data-shortcut']} to cycle`,
+                'aria-keyshortcuts': `${chooseShortcut['aria-keyshortcuts']} ${cycleShortcut['aria-keyshortcuts']}`,
+              }
+            : { 'data-tooltip': 'Thinking level' }
+        }
         label="Thinking level"
         value={selectedVariant}
         options={variants}

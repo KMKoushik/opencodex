@@ -34,6 +34,7 @@ import {
   type Pty,
   type ShellInfo,
   type ShellOutputOutput,
+  type SideChatPluginStatus,
 } from '@opencodex/contracts';
 
 async function nativeRequest<T>(path: string, options?: RequestInit): Promise<T> {
@@ -171,6 +172,25 @@ export const api = {
       `${sessionPath(id)}/subagents${cursor ? `?${new URLSearchParams({ cursor })}` : ''}`,
       { signal },
     ),
+  sideChats: (id: string, signal: AbortSignal) =>
+    nativeRequest<SessionInfo[]>(`${sessionPath(id)}/side-chats`, { signal }),
+  createSideChat: (id: string) =>
+    nativeRequest<SessionInfo>(`${sessionPath(id)}/side-chats`, {
+      ...post(),
+      signal: AbortSignal.timeout(60_000),
+    }),
+  deleteSideChat: (id: string, sideID: string) =>
+    nativeRequest<{ ok: true }>(`${sessionPath(id)}/side-chats/${encodeURIComponent(sideID)}`, {
+      method: 'DELETE',
+    }),
+  sideChatPlugin: (directory: string | undefined, signal: AbortSignal) =>
+    nativeRequest<SideChatPluginStatus>(
+      `/side-chat-plugin${directory ? `?${new URLSearchParams({ directory })}` : ''}`,
+      { signal },
+    ),
+  installSideChatPlugin: () => nativeRequest<{ ok: true }>('/side-chat-plugin', { method: 'PUT' }),
+  removeSideChatPlugin: () =>
+    nativeRequest<{ ok: true }>('/side-chat-plugin', { method: 'DELETE' }),
   active: (signal: AbortSignal) =>
     nativeRequest<Record<string, SessionActive>>('/sessions/active', { signal }),
   messages: (id: string, cursor: string | undefined, signal: AbortSignal) =>

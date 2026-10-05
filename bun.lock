@@ -104,6 +104,10 @@
         "@types/ws": "^8.18.2",
       },
     },
+    "packages/side-chat-plugin": {
+      "name": "@opencodex/side-chat-plugin",
+      "version": "0.1.0",
+    },
   },
   "trustedDependencies": [
     "electron",
@@ -335,6 +339,8 @@
     "@opencodex/desktop": ["@opencodex/desktop@workspace:apps/desktop"],
 
     "@opencodex/gateway": ["@opencodex/gateway@workspace:packages/gateway"],
+
+    "@opencodex/side-chat-plugin": ["@opencodex/side-chat-plugin@workspace:packages/side-chat-plugin"],
 
     "@opencodex/web": ["@opencodex/web@workspace:apps/web"],
 

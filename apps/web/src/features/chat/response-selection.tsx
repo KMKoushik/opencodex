@@ -1,4 +1,5 @@
-import type { RefObject } from 'react';
+import { useContext, type RefObject } from 'react';
+import { SideChatQuoteContext } from '../side-chat/side-chat-context';
 import { TextSelection } from './text-selection';
 
 function responseTarget(range: Range, quote: string) {
@@ -23,12 +24,14 @@ export function ResponseSelection({
   scope: RefObject<HTMLDivElement | null>;
   sessionID: string;
 }) {
+  const askSideChat = useContext(SideChatQuoteContext);
   return (
     <TextSelection
       scope={scope}
       sessionID={sessionID}
       getTarget={responseTarget}
       actionsLabel="Selected response actions"
+      onAskSideChat={askSideChat ?? undefined}
     />
   );
 }

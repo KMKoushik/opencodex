@@ -23,7 +23,9 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:smoke": "bun run build && playwright test",
-    "check": "bun run typecheck && bun run lint && bun run test && bun run build",
+    "check": "bun run side-chat-plugin:check && bun run typecheck && bun run lint && bun run test && bun run build",
+    "side-chat-plugin": "node scripts/side-chat-plugin.mjs",
+    "side-chat-plugin:check": "node scripts/side-chat-plugin.mjs --check",
     "package:desktop": "bun run --cwd apps/desktop package",
     "architecture": "node scripts/architecture.mjs",
     "architecture:check": "node scripts/architecture.mjs --check"

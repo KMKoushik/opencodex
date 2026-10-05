@@ -1,0 +1,77 @@
+.side-chat-panel,
+.side-chat-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.side-chat-panel .wb-empty > svg {
+  margin-bottom: 8px;
+}
+.side-chat-tabs > .button {
+  flex: none;
+}
+.side-chat-tabs .session-activity {
+  width: 8px;
+  height: 8px;
+}
+.side-chat {
+  font-size: var(--chat-font-size);
+}
+.side-chat .timeline-row,
+.side-chat .timeline-footer,
+.side-chat .composer-area {
+  padding-inline: 16px;
+}
+.side-chat .user-message-bubble {
+  max-width: 100%;
+}
+.side-chat-intro {
+  flex: 1;
+  width: min(100%, var(--thread-width));
+  margin: 0 auto;
+  padding: 24px 16px;
+  color: var(--text-secondary);
+}
+.side-chat-intro h3 {
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+}
+.side-chat-intro p + p {
+  margin-top: 8px;
+}
+.side-chat-main-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.side-chat-main-status > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+.side-chat-main-status[data-state='running'] > span {
+  background: var(--accent);
+}
+.side-chat-main-status[data-state='attention'] {
+  color: var(--warning);
+}
+.side-chat-main-status[data-state='attention'] > span {
+  background: var(--warning);
+}
+.side-chat-main-status[data-state='failed'] > span {
+  background: var(--error);
+}
+@media (max-width: 720px) {
+  .side-chat {
+    font-size: 16px;
+  }
+}

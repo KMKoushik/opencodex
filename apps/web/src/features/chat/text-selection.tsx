@@ -73,6 +73,7 @@ export function TextSelection({
   highlightName = 'response-comment',
   actionsLabel = 'Selected text actions',
   className,
+  onAskSideChat,
 }: {
   scope: RefObject<HTMLElement | null>;
   sessionID: string;
@@ -81,6 +82,7 @@ export function TextSelection({
   highlightName?: string;
   actionsLabel?: string;
   className?: string;
+  onAskSideChat?: (quote: string) => void;
 }) {
   const store = useDraftStore();
   const popup = useRef<HTMLDivElement>(null);
@@ -246,6 +248,18 @@ export function TextSelection({
           <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
             Comment
           </Button>
+          {onAskSideChat && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                onAskSideChat(selected.target.quote ?? '');
+                close();
+              }}
+            >
+              Ask in side chat
+            </Button>
+          )}
         </div>
       )}
       {error && (

@@ -7,3 +7,4 @@ coverage/
 bun.lock
 test-results/
 playwright-report/
+packages/gateway/src/side-chat-plugin.generated.ts

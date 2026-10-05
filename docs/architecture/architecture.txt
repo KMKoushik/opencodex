@@ -30,6 +30,7 @@
      │  Bounded previews/logs; version-checked file writes           │                   │  Updater download cache  │
      │  Native APIs + origin-checked, ticketed PTY relay             │                   └──────────────────────────┘
      │  Host files: read-only video ranges + reveal targets          │
+     │  Side chats: native fork + guardrails; opt-in plugin file     │
      └─────────────────┬─────────────────────────────────────────────┘
        HTTP + WS       │                               ▲  Events + WS
        official client │                               │                                 ┌──── SHARED CONTRACTS ────┐
@@ -43,7 +44,8 @@
      │  Providers, tools, VCS + filesystem operations                │                   │                          │
      │  Survives OpenCodex shutdown                                  │                   └──────────────────────────┘
      │  Durable sessions; native agent shells + PTY replay           │
-     └───────────────────────────────────────────────────────────────┘                   Code, not a service
+     │  Loads plugins; side-chat tools read the main chat            │                   Code, not a service
+     └───────────────────────────────────────────────────────────────┘
 
 
   ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ import { z } from 'zod';
 const layoutSchema = z.object({
   open: z.boolean().default(false),
   expanded: z.boolean().default(false),
-  panel: z.enum(['files', 'changes', 'terminal', 'subagents']).default('files'),
+  panel: z.enum(['files', 'changes', 'terminal', 'subagents', 'side']).default('files'),
   width: z.number().min(340).max(2400).default(820),
 });
 const tabSchema = z.object({

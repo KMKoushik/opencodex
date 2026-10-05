@@ -1,6 +1,12 @@
 import { createElement, lazy, type ComponentProps, type ReactNode } from 'react';
 import type { HugeiconsIcon } from '@hugeicons/react';
-import { FileEditIcon, Folder01Icon, CommandLineIcon, BotIcon } from '@hugeicons/core-free-icons';
+import {
+  FileEditIcon,
+  Folder01Icon,
+  CommandLineIcon,
+  BotIcon,
+  BubbleChatQuestionIcon,
+} from '@hugeicons/core-free-icons';
 import type { FileRequest } from './file-link';
 
 export type PanelContext = {
@@ -15,10 +21,21 @@ export type PanelContext = {
   selectView?: (id: string) => void;
   fileRequest?: FileRequest;
   subagentRequest?: SubagentRequest;
+  sideChatRequest?: SideChatRequest;
+  /** Clears a handled request, so remounting the panel can't apply it again. */
+  onSideChatRequestHandled?: (request: SideChatRequest) => void;
 };
 
 /** Opens one child session in the Subagents panel; each request object applies once. */
 export type SubagentRequest = { sessionID: string; childID: string };
+
+/**
+ * Shows a side chat of a main chat, or adds a quote from the main chat to a side chat's
+ * draft. Each request object applies once.
+ */
+export type SideChatRequest =
+  | { sessionID: string; kind: 'open'; sideID: string }
+  | { sessionID: string; kind: 'quote'; quote: string };
 
 export type PanelDefinition = {
   id: string;
@@ -34,6 +51,9 @@ const WorkspaceEditor = lazy(() =>
 );
 const TerminalPanel = lazy(() =>
   import('../terminal/terminal-panel').then((module) => ({ default: module.TerminalPanel })),
+);
+const SideChatPanel = lazy(() =>
+  import('../side-chat/side-chat-panel').then((module) => ({ default: module.SideChatPanel })),
 );
 const SubagentsPanel = lazy(() =>
   import('../subagents/subagents-panel').then((module) => ({ default: module.SubagentsPanel })),
@@ -59,6 +79,12 @@ export const panels: readonly PanelDefinition[] = [
     label: 'Subagents',
     icon: BotIcon,
     render: (context) => createElement(SubagentsPanel, context),
+  },
+  {
+    id: 'side',
+    label: 'Side chat',
+    icon: BubbleChatQuestionIcon,
+    render: (context) => createElement(SideChatPanel, context),
   },
   {
     id: 'terminal',

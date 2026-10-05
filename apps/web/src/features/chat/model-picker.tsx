@@ -44,7 +44,10 @@ export function ModelPicker({
   disabled,
   placeholder,
   onChange,
+  shortcuts = true,
 }: {
+  /** The main chat's picker owns the app-wide model shortcut. */
+  shortcuts?: boolean;
   models: ModelInfo[];
   providers?: ModelProvider[];
   model?: ModelRef;
@@ -100,7 +103,7 @@ export function ModelPicker({
     const above = rect.top > below;
     setPlacement({ above, height: Math.min(420, (above ? rect.top : below) - 12) });
   }
-  useCommand('model.choose', disabled ? undefined : open);
+  useCommand('model.choose', disabled || !shortcuts ? undefined : open);
   return (
     <div
       className="select model-select"
@@ -116,7 +119,7 @@ export function ModelPicker({
         className="select-trigger"
         disabled={disabled}
         aria-label="Model"
-        {...shortcutProps('model.choose')}
+        {...(shortcuts ? shortcutProps('model.choose') : { 'data-tooltip': 'Model' })}
         aria-haspopup="tree"
         aria-expanded={Boolean(placement)}
         aria-controls={placement ? id : undefined}

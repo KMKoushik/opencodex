@@ -43,7 +43,8 @@ import { SessionPanelToggle } from '../features/session-panel/session-panel-togg
 import { SessionActionsToggle } from '../features/sessions/session-actions-toggle';
 import { SessionTitle } from '../features/sessions/session-title';
 import { WorkbenchRail } from '../features/workbench/workbench-rail';
-import { panels, type SubagentRequest } from '../features/workbench/panels';
+import { panels, type SideChatRequest, type SubagentRequest } from '../features/workbench/panels';
+import { SideChatQuoteContext } from '../features/side-chat/side-chat-context';
 import { SidebarResize } from '../features/sidebar/sidebar-resize';
 import { readTerminalPlacement, type TerminalPlacement } from '../features/terminal/placement';
 import { readStorage, writeStorage } from '../lib/storage';
@@ -108,11 +109,13 @@ export function App() {
   const [workbenchLoaded, setWorkbenchLoaded] = useState(false);
   const [fileRequest, setFileRequest] = useState<FileRequest>();
   const [subagentRequest, setSubagentRequest] = useState<SubagentRequest>();
+  const [sideChatRequest, setSideChatRequest] = useState<SideChatRequest>();
   const [requestSessionID, setRequestSessionID] = useState(selectedID);
   if (requestSessionID !== selectedID) {
     setRequestSessionID(selectedID);
     setFileRequest(undefined);
     setSubagentRequest(undefined);
+    setSideChatRequest(undefined);
   }
   const workbenchToggle = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
@@ -150,6 +153,20 @@ export function App() {
       return true;
     },
     [selectedID, fileDirectory, workbench, workspaceKey],
+  );
+  const openSideChat = useCallback(
+    (request: SideChatRequest) => {
+      setSideChatRequest(request);
+      setWorkbenchLoaded(true);
+      workbench.getState().layout(workspaceKey, { panel: 'side', open: true });
+    },
+    [workbench, workspaceKey],
+  );
+  const askSideChat = useCallback(
+    (quote: string) => {
+      if (selectedID) openSideChat({ sessionID: selectedID, kind: 'quote', quote });
+    },
+    [selectedID, openSideChat],
   );
   const create = useMutation({
     mutationFn: ({ directory, model }: { directory: string; model?: ModelRef }) =>
@@ -582,35 +599,40 @@ export function App() {
                   }
                 >
                   <FileLinkContext.Provider value={openFileLink}>
-                    <ChatView
-                      key={selectedID}
-                      sessionID={selectedID}
-                      onOpenSession={setSelectedID}
-                      onOpenSubagent={(childID) => {
-                        setSubagentRequest({ sessionID: selectedID, childID });
-                        setWorkbenchLoaded(true);
-                        setWorkbenchPanel(subagentsPanel);
-                        setWorkbenchOpen(true);
-                      }}
-                      live={live}
-                      projectName={currentProject?.name}
-                      project={currentProject}
-                      projects={projects}
-                      switching={switchProject.isPending}
-                      switchError={
-                        switchProject.variables?.sourceSessionID === selectedID
-                          ? switchProject.error?.message
-                          : undefined
-                      }
-                      onSwitchProject={(next, model) => {
-                        if (create.isPending || switchProject.isPending) return;
-                        switchProject.mutate({
-                          project: next,
-                          sourceSessionID: selectedID,
-                          model,
-                        });
-                      }}
-                    />
+                    <SideChatQuoteContext.Provider value={askSideChat}>
+                      <ChatView
+                        key={selectedID}
+                        sessionID={selectedID}
+                        onOpenSession={setSelectedID}
+                        onOpenSubagent={(childID) => {
+                          setSubagentRequest({ sessionID: selectedID, childID });
+                          setWorkbenchLoaded(true);
+                          setWorkbenchPanel(subagentsPanel);
+                          setWorkbenchOpen(true);
+                        }}
+                        onOpenSideChat={(sideID) =>
+                          openSideChat({ sessionID: selectedID, kind: 'open', sideID })
+                        }
+                        live={live}
+                        projectName={currentProject?.name}
+                        project={currentProject}
+                        projects={projects}
+                        switching={switchProject.isPending}
+                        switchError={
+                          switchProject.variables?.sourceSessionID === selectedID
+                            ? switchProject.error?.message
+                            : undefined
+                        }
+                        onSwitchProject={(next, model) => {
+                          if (create.isPending || switchProject.isPending) return;
+                          switchProject.mutate({
+                            project: next,
+                            sourceSessionID: selectedID,
+                            model,
+                          });
+                        }}
+                      />
+                    </SideChatQuoteContext.Provider>
                   </FileLinkContext.Provider>
                 </Suspense>
               ) : (
@@ -655,6 +677,12 @@ export function App() {
                   fileRequest={fileRequest?.sessionID === selectedID ? fileRequest : undefined}
                   subagentRequest={
                     subagentRequest?.sessionID === selectedID ? subagentRequest : undefined
+                  }
+                  sideChatRequest={
+                    sideChatRequest?.sessionID === selectedID ? sideChatRequest : undefined
+                  }
+                  onSideChatRequestHandled={(request) =>
+                    setSideChatRequest((current) => (current === request ? undefined : current))
                   }
                   onClose={() => {
                     if (workbenchPanel.id === 'terminal') {

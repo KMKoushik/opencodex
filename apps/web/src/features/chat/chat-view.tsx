@@ -37,6 +37,7 @@ export function ChatView({
   onSwitchProject,
   onOpenSession,
   onOpenSubagent,
+  onOpenSideChat,
 }: {
   sessionID: string;
   live: boolean;
@@ -48,6 +49,8 @@ export function ChatView({
   onSwitchProject: (project: Project, model?: ModelRef) => void;
   onOpenSession: (id: string) => void;
   onOpenSubagent: (id: string) => void;
+  /** Shows a side chat of this chat in the side-chat panel. */
+  onOpenSideChat: (sideID: string) => void;
 }) {
   const client = useQueryClient();
   const chat = useChat(sessionID, live);
@@ -72,6 +75,27 @@ export function ChatView({
       const slash = parseSlash(input.draft.text);
       const local = slash && localCommands.some((item) => item.name === slash.name);
       if (slash && local) {
+        if (slash.name === 'side') {
+          if (input.draft.attachments?.length || input.draft.comments?.length)
+            throw new Error('Send or remove attached context before starting a side chat.');
+          // Start and send here, so a failure keeps this draft like any other send.
+          const side = await api.createSideChat(sessionID);
+          if (slash.text.trim()) {
+            try {
+              await api.prompt(side.id, slash.text.trim());
+            } catch (error) {
+              await api.deleteSideChat(sessionID, side.id).catch(() => undefined);
+              throw error;
+            }
+          }
+          client.setQueryData(['chat', side.id, 'info'], side);
+          client.setQueryData<SessionInfo[]>(['side-chats', sessionID], (items) =>
+            items ? [...items.filter((item) => item.id !== side.id), side] : items,
+          );
+          void client.invalidateQueries({ queryKey: ['side-chats', sessionID] });
+          onOpenSideChat(side.id);
+          return { session: null };
+        }
         if (
           slash.name !== 'undo' &&
           slash.name !== 'redo' &&
