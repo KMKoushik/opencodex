@@ -17,7 +17,14 @@ export type ResponseCommentTarget = Readonly<{
   offset?: number;
   quote: string;
 }>;
-export type CommentTarget = FileCommentTarget | ResponseCommentTarget;
+/** Marks on a browser panel page; the quote describes what was marked. */
+export type PageCommentTarget = Readonly<{
+  url: string;
+  title?: string;
+  quote: string;
+  screenshot?: boolean;
+}>;
+export type CommentTarget = FileCommentTarget | ResponseCommentTarget | PageCommentTarget;
 export type ReviewComment = Readonly<{ id: string; target: CommentTarget; text: string }>;
 export const EMPTY_COMMENTS: readonly ReviewComment[] = [];
 
@@ -27,6 +34,7 @@ export function commentQuote(target: CommentTarget) {
 
 export function commentLabel(target: CommentTarget) {
   if ('messageID' in target) return 'Assistant response';
+  if ('url' in target) return target.title || target.url;
   return `${target.path}${target.start ? `:${target.start}${target.end && target.end !== target.start ? `–${target.end}` : ''}` : ''}${target.side === 'old' ? ' (old)' : ''}`;
 }
 
@@ -39,7 +47,9 @@ export function reviewPrompt(text: string, comments: readonly ReviewComment[] = 
       const source =
         'messageID' in target
           ? `Assistant response (${target.messageID}, part ${target.ordinal + 1})`
-          : `${target.directory ? `${target.directory}/` : ''}${commentLabel(target)}${target.diffMode ? ` [${target.diffMode} diff]` : ''}`;
+          : 'url' in target
+            ? `page ${target.url}${target.title ? ` ("${target.title}")` : ''}${target.screenshot ? ', shown in the attached screenshot' : ''}`
+            : `${target.directory ? `${target.directory}/` : ''}${commentLabel(target)}${target.diffMode ? ` [${target.diffMode} diff]` : ''}`;
       return `Review comment on ${source}:\n${
         quote
           ? `${quote

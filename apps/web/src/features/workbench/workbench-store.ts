@@ -4,7 +4,7 @@ import { z } from 'zod';
 const layoutSchema = z.object({
   open: z.boolean().default(false),
   expanded: z.boolean().default(false),
-  panel: z.enum(['files', 'changes', 'terminal', 'subagents', 'side']).default('files'),
+  panel: z.enum(['files', 'changes', 'terminal', 'subagents', 'side', 'browser']).default('files'),
   width: z.number().min(340).max(2400).default(820),
 });
 const tabSchema = z.object({
@@ -23,14 +23,33 @@ const workspaceSchema = z.object({
   treeVisible: z.boolean().default(true),
   treeWidth: z.number().min(150).max(360).default(220),
 });
-const entrySchema = z.object({ layout: layoutSchema, workspace: workspaceSchema });
+export const MAX_BROWSER_TABS = 12;
+const browserSchema = z.object({
+  // An empty URL is a new tab that has not loaded a page yet.
+  tabs: z
+    .array(z.object({ id: z.string().max(64), url: z.string().max(8192) }))
+    .max(MAX_BROWSER_TABS)
+    .default([]),
+  selected: z.string().max(64).default(''),
+});
+const entrySchema = z.object({
+  layout: layoutSchema,
+  workspace: workspaceSchema,
+  browser: browserSchema.default(() => ({ tabs: [], selected: '' })),
+});
 export type WorkspaceTab = z.infer<typeof tabSchema>;
 export type WorkspaceState = z.infer<typeof workspaceSchema>;
+export type BrowserState = z.infer<typeof browserSchema>;
 type Layout = z.infer<typeof layoutSchema>;
 type Entry = z.infer<typeof entrySchema>;
 export const defaultWorkbenchLayout = layoutSchema.parse({});
 export const defaultWorkspaceState = workspaceSchema.parse({});
-const defaultEntry: Entry = { layout: defaultWorkbenchLayout, workspace: defaultWorkspaceState };
+export const defaultBrowserState = browserSchema.parse({});
+const defaultEntry: Entry = {
+  layout: defaultWorkbenchLayout,
+  workspace: defaultWorkspaceState,
+  browser: defaultBrowserState,
+};
 
 function readEntries(saved?: string | null): Record<string, Entry> {
   if (!saved || saved.length > 16_384) return {};
@@ -54,7 +73,8 @@ export function createWorkbenchStore(saved?: string | null) {
     entries: Record<string, Entry>;
     layout: (key: string, patch: Partial<Layout>) => void;
     workspace: (key: string, value: WorkspaceState) => void;
-  }>((set) => {
+    browser: (key: string, change: (state: BrowserState) => BrowserState) => void;
+  }>((set, get) => {
     const update = (key: string, change: (entry: Entry) => Entry) =>
       set((state) => {
         const entries = { ...state.entries };
@@ -83,6 +103,11 @@ export function createWorkbenchStore(saved?: string | null) {
                   ],
           },
         })),
+      browser: (key, change) => {
+        const current = get().entries[key]?.browser ?? defaultBrowserState;
+        const browser = change(current);
+        if (browser !== current) update(key, (entry) => ({ ...entry, browser }));
+      },
     };
   });
 }
@@ -102,14 +127,20 @@ export function serializeWorkbench(entries: Record<string, Entry>) {
   }
   if (saved.length && serialize().length > 16_384) {
     const [key, entry] = saved[0]!;
-    const tabs = [...entry.workspace.tabs];
-    const workspace = { ...entry.workspace, tabs };
-    saved[0] = [key, { ...entry, workspace }];
-    while (tabs.length && serialize().length > 16_384) {
-      const index = tabs.findIndex((tab) => tab.id !== workspace.selected);
-      tabs.splice(index < 0 ? 0 : index, 1);
-    }
-    if (!tabs.some((tab) => tab.id === workspace.selected)) workspace.selected = '';
+    const workspace = { ...entry.workspace, tabs: [...entry.workspace.tabs] };
+    const browser = { ...entry.browser, tabs: [...entry.browser.tabs] };
+    saved[0] = [key, { ...entry, workspace, browser }];
+    // Unselected tabs go first, browser tabs (long URLs) before documents; selected tabs last.
+    for (const keepSelected of [true, false])
+      for (const state of [browser, workspace]) {
+        const tabs: { id: string }[] = state.tabs;
+        while (tabs.length && serialize().length > 16_384) {
+          const index = tabs.findIndex((tab) => !keepSelected || tab.id !== state.selected);
+          if (index < 0) break;
+          tabs.splice(index, 1);
+        }
+        if (!tabs.some((tab) => tab.id === state.selected)) state.selected = '';
+      }
   }
   return serialize();
 }

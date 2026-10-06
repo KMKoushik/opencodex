@@ -4,6 +4,7 @@ import {
   type BrowserWindow,
   type ContextMenuParams,
   type MenuItemConstructorOptions,
+  type WebContents,
 } from 'electron';
 
 export function showTextMenu(
@@ -11,8 +12,26 @@ export function showTextMenu(
   params: ContextMenuParams,
   openLink: (url: string) => void,
 ) {
-  const contents = window.webContents;
+  const items = textMenuItems(window, window.webContents, params, openLink);
+  if (items.length) Menu.buildFromTemplate(items).popup({ window });
+}
+
+/** Spelling, lookup, and editing items for a selection or editable field in `contents`. */
+export function textMenuItems(
+  window: BrowserWindow,
+  contents: WebContents,
+  params: ContextMenuParams,
+  openLink: (url: string) => void,
+) {
   const items: MenuItemConstructorOptions[] = [];
+  // Roles act on the window's own page; an embedded browser page needs explicit targets.
+  const edit = (
+    role: 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll',
+    enabled: boolean,
+  ): MenuItemConstructorOptions =>
+    contents === window.webContents
+      ? { role, enabled }
+      : { ...guestEdits[role], enabled, click: () => contents[role]() };
   const { isEditable, editFlags, misspelledWord, dictionarySuggestions } = params;
   const selection = params.formControlType === 'input-password' ? '' : params.selectionText.trim();
   const group = (entries: MenuItemConstructorOptions[]) => {
@@ -59,18 +78,24 @@ export function showTextMenu(
     ]);
   }
   if (isEditable) {
+    group([edit('undo', editFlags.canUndo), edit('redo', editFlags.canRedo)]);
     group([
-      { role: 'undo', enabled: editFlags.canUndo },
-      { role: 'redo', enabled: editFlags.canRedo },
-    ]);
-    group([
-      { role: 'cut', enabled: editFlags.canCut },
-      { role: 'copy', enabled: editFlags.canCopy },
-      { role: 'paste', enabled: editFlags.canPaste },
-      { role: 'selectAll', enabled: editFlags.canSelectAll },
+      edit('cut', editFlags.canCut),
+      edit('copy', editFlags.canCopy),
+      edit('paste', editFlags.canPaste),
+      edit('selectAll', editFlags.canSelectAll),
     ]);
   } else if (selection) {
-    group([{ role: 'copy', enabled: editFlags.canCopy }]);
+    group([edit('copy', editFlags.canCopy)]);
   }
-  if (items.length) Menu.buildFromTemplate(items).popup({ window });
+  return items;
 }
+
+const guestEdits = {
+  undo: { label: 'Undo', accelerator: 'CmdOrCtrl+Z' },
+  redo: { label: 'Redo', accelerator: 'Shift+CmdOrCtrl+Z' },
+  cut: { label: 'Cut', accelerator: 'CmdOrCtrl+X' },
+  copy: { label: 'Copy', accelerator: 'CmdOrCtrl+C' },
+  paste: { label: 'Paste', accelerator: 'CmdOrCtrl+V' },
+  selectAll: { label: 'Select All', accelerator: 'CmdOrCtrl+A' },
+};

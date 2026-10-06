@@ -27,6 +27,16 @@ const desktop: DesktopBridge = {
   checkForUpdates: () => ipcRenderer.invoke(desktopChannels.checkForUpdates),
   downloadUpdate: () => ipcRenderer.invoke(desktopChannels.downloadUpdate),
   installUpdate: () => ipcRenderer.invoke(desktopChannels.installUpdate),
+  onBrowserOpenTab: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
+      callback(request);
+    ipcRenderer.on(desktopChannels.browserOpenTab, listener);
+    return () => ipcRenderer.removeListener(desktopChannels.browserOpenTab, listener);
+  },
+  annotateBrowserPage: (webContentsId, theme) =>
+    ipcRenderer.invoke(desktopChannels.annotateBrowserPage, { webContentsId, theme }),
+  cancelBrowserAnnotation: (webContentsId) =>
+    ipcRenderer.invoke(desktopChannels.cancelBrowserAnnotation, { webContentsId }),
 };
 
 contextBridge.exposeInMainWorld('desktop', desktop);

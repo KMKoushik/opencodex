@@ -58,6 +58,8 @@ import { FileLinkContext } from '../features/workbench/file-link-context';
 import { resolveFileLink, type FileRequest } from '../features/workbench/file-link';
 import { useWorkbenchStore, workbenchKey } from '../features/workbench/workbench-context';
 import { defaultWorkbenchLayout } from '../features/workbench/workbench-store';
+import { isLocalWebURL } from '../features/browser/browser-url';
+import { openTab } from '../features/browser/browser-runtime';
 
 const TerminalDrawer = lazy(() =>
   import('../features/terminal/terminal-drawer').then((module) => ({
@@ -70,6 +72,10 @@ const subagentsPanel = panels.find((panel) => panel.id === 'subagents')!;
 const ChatView = lazy(() =>
   import('../features/chat/chat-view').then((module) => ({ default: module.ChatView })),
 );
+const BrowserHost = lazy(() =>
+  import('../features/browser/browser-host').then((module) => ({ default: module.BrowserHost })),
+);
+const browserPanel = panels.find((panel) => panel.id === 'browser');
 const WorkbenchPanel = lazy(() =>
   import('../features/workbench/workbench-panel').then((module) => ({
     default: module.WorkbenchPanel,
@@ -101,9 +107,10 @@ export function App() {
   const rightTerminalHidden =
     workbenchLayout.panel === 'terminal' && terminalPlacement === 'bottom';
   const workbenchOpen = workbenchLayout.open && !rightTerminalHidden;
-  const workbenchPanel = panels.find(
-    (panel) => panel.id === (rightTerminalHidden ? 'files' : workbenchLayout.panel),
-  )!;
+  // A layout saved by the desktop app can name the browser, which the web app does not offer.
+  const workbenchPanel =
+    panels.find((panel) => panel.id === (rightTerminalHidden ? 'files' : workbenchLayout.panel)) ??
+    panels[0]!;
   const setWorkbenchOpen = (open: boolean) => workbench.getState().layout(workspaceKey, { open });
   const setWorkbenchPanel = (panel: (typeof panels)[number]) =>
     workbench.getState().layout(workspaceKey, { panel: panel.id as typeof workbenchLayout.panel });
@@ -144,8 +151,21 @@ export function App() {
   });
   const fileDirectory = info.data?.location.directory;
   const openFileLink = useCallback(
-    (href: string) => {
-      if (!selectedID || !fileDirectory) return false;
+    (href: string, event?: { metaKey: boolean; ctrlKey: boolean }) => {
+      if (!selectedID) return false;
+      // Like Codex, local servers open beside the chat; Cmd/Ctrl-click uses the system browser.
+      if (browserPanel && !event?.metaKey && !event?.ctrlKey && isLocalWebURL(href)) {
+        workbench.getState().browser(workspaceKey, (state) => {
+          const existing = state.tabs.find((tab) => tab.url === href);
+          return existing
+            ? { ...state, selected: existing.id }
+            : openTab(state, href, state.selected);
+        });
+        setWorkbenchLoaded(true);
+        workbench.getState().layout(workspaceKey, { panel: 'browser', open: true });
+        return true;
+      }
+      if (!fileDirectory) return false;
       const target = resolveFileLink(href, fileDirectory);
       if (!target) return false;
       setFileRequest({ ...target, sessionID: selectedID });
@@ -412,6 +432,11 @@ export function App() {
         Skip to content
       </a>
       <TooltipLayer />
+      {browserPanel && (
+        <Suspense fallback={null}>
+          <BrowserHost />
+        </Suspense>
+      )}
       <aside ref={sidebar} className="sidebar" id="sidebar" aria-label="Sidebar">
         <SidebarResize />
         <Sidebar

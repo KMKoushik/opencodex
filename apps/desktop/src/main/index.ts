@@ -5,6 +5,7 @@ import { desktopChannels } from '@opencodex/contracts/desktop';
 import { registerNativeHandlers } from './ipc';
 import { createPreferences } from './preferences';
 import { registerLinkHandlers } from './links';
+import { registerBrowser } from './browser';
 import { loadShellEnvironment } from './shell-env';
 import { createUpdates } from './updates';
 
@@ -46,9 +47,12 @@ async function createWindow() {
       // Enables Chromium's built-in PDF viewer for workspace previews.
       plugins: true,
       spellcheck: true,
+      // Browser panel pages; `registerBrowser` locks down every guest as it attaches.
+      webviewTag: true,
     },
   });
   registerLinkHandlers(window, new URL(origin).origin);
+  registerBrowser(window);
   window.webContents.on('will-prevent-unload', (event) => {
     // The update dialog explicitly warned about unsaved files and drafts.
     if (restartingForUpdate) event.preventDefault();

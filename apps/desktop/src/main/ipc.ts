@@ -3,6 +3,7 @@ import { desktopChannels } from '@opencodex/contracts/desktop';
 import { createPreferences, preferenceInputSchema } from './preferences';
 import { listOpenApps, openInApp, openAppInput, revealFile, revealFileInput } from './open-apps';
 import type { createUpdates } from './updates';
+import { annotateBrowserPage, cancelBrowserAnnotation } from './browser';
 
 export function registerNativeHandlers(
   allowedOrigin: string,
@@ -52,6 +53,12 @@ export function registerNativeHandlers(
     const { key, value } = preferenceInputSchema.parse(input);
     return preferences.set(key, value);
   });
+  ipcMain.handle(desktopChannels.annotateBrowserPage, (event, input: unknown) =>
+    annotateBrowserPage(requireWindow(event), input),
+  );
+  ipcMain.handle(desktopChannels.cancelBrowserAnnotation, (event, input: unknown) =>
+    cancelBrowserAnnotation(requireWindow(event), input),
+  );
   ipcMain.handle(desktopChannels.getUpdateState, (event) => {
     requireWindow(event);
     return updates.getState();

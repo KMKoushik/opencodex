@@ -16,6 +16,7 @@ export const ComposerComments = memo(function ComposerComments({
   if (!comments.length) return null;
   const code = comments.filter((comment) => 'path' in comment.target);
   const quotes = comments.filter((comment) => 'messageID' in comment.target);
+  const pages = comments.filter((comment) => 'url' in comment.target);
   return (
     <div className="composer-context" aria-label="Review context">
       {code.length > 0 && (
@@ -23,6 +24,9 @@ export const ComposerComments = memo(function ComposerComments({
       )}
       {quotes.length > 0 && (
         <ContextGroup label="Chat quotes" comments={quotes} sessionID={sessionID} />
+      )}
+      {pages.length > 0 && (
+        <ContextGroup label="Page comments" comments={pages} sessionID={sessionID} />
       )}
     </div>
   );

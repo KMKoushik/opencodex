@@ -13,8 +13,47 @@ export interface DesktopBridge {
   checkForUpdates(): Promise<void>;
   downloadUpdate(): Promise<void>;
   installUpdate(): Promise<void>;
+  /** A browser panel page asked for a new tab (a popup or "Open link in new tab"). */
+  onBrowserOpenTab(callback: (request: BrowserOpenTabRequest) => void): () => void;
+  /** Shows the comment overlay in a browser panel page; resolves when it is attached or closed. */
+  annotateBrowserPage(
+    webContentsId: number,
+    theme: BrowserAnnotationTheme,
+  ): Promise<BrowserAnnotation | null>;
+  cancelBrowserAnnotation(webContentsId: number): Promise<void>;
   platform: string;
 }
+
+/** Browser panel pages share one persistent profile, separate from the app's own storage. */
+export const browserPartition = 'persist:opencodex-browser';
+export type BrowserOpenTabRequest = { webContentsId: number; url: string };
+/** CSS values for the overlay drawn inside the page, so it matches the app theme. */
+export type BrowserAnnotationTheme = {
+  primary: string;
+  onPrimary: string;
+  surface: string;
+  text: string;
+  muted: string;
+  border: string;
+  font: string;
+};
+/** A page element the user picked. Page-provided text; bounded in size by the overlay. */
+export type BrowserAnnotationElement = {
+  tag: string;
+  selector: string;
+  text: string;
+  html: string;
+};
+export type BrowserAnnotation = {
+  url: string;
+  title: string;
+  comment: string;
+  elements: BrowserAnnotationElement[];
+  regions: number;
+  drawings: number;
+  /** PNG data URL of the annotated area with its marks, when the capture succeeded. */
+  screenshot?: string;
+};
 
 export type DesktopUpdateState = {
   status:
@@ -105,4 +144,7 @@ export const desktopChannels = {
   checkForUpdates: 'desktop:check-for-updates',
   downloadUpdate: 'desktop:download-update',
   installUpdate: 'desktop:install-update',
+  browserOpenTab: 'desktop:browser-open-tab',
+  annotateBrowserPage: 'desktop:annotate-browser-page',
+  cancelBrowserAnnotation: 'desktop:cancel-browser-annotation',
 } as const;

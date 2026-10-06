@@ -329,7 +329,7 @@
     {
       "x": 43,
       "y": 13,
-      "value": "Sandboxed renderer"
+      "value": "Sandboxed UI + web tabs"
     },
     {
       "x": 43,
@@ -374,7 +374,7 @@
     {
       "x": 92,
       "y": 13,
-      "value": "Window + fullscreen"
+      "value": "Window + browser guests"
     },
     {
       "x": 92,
@@ -430,7 +430,7 @@
     {
       "x": 92,
       "y": 29,
-      "value": "Updater download cache"
+      "value": "Updater; browser profile"
     },
     {
       "x": 7,

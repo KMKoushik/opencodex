@@ -6,6 +6,7 @@ import {
   CommandLineIcon,
   BotIcon,
   BubbleChatQuestionIcon,
+  Globe02Icon,
 } from '@hugeicons/core-free-icons';
 import type { FileRequest } from './file-link';
 
@@ -55,6 +56,9 @@ const TerminalPanel = lazy(() =>
 const SideChatPanel = lazy(() =>
   import('../side-chat/side-chat-panel').then((module) => ({ default: module.SideChatPanel })),
 );
+const BrowserPanel = lazy(() =>
+  import('../browser/browser-panel').then((module) => ({ default: module.BrowserPanel })),
+);
 const SubagentsPanel = lazy(() =>
   import('../subagents/subagents-panel').then((module) => ({ default: module.SubagentsPanel })),
 );
@@ -92,4 +96,15 @@ export const panels: readonly PanelDefinition[] = [
     icon: CommandLineIcon,
     render: (context) => createElement(TerminalPanel, context),
   },
+  // Pages are Electron `<webview>` guests, which only the desktop app can host.
+  ...(typeof window !== 'undefined' && window.desktop?.onBrowserOpenTab
+    ? [
+        {
+          id: 'browser',
+          label: 'Browser',
+          icon: Globe02Icon,
+          render: (context: PanelContext) => createElement(BrowserPanel, context),
+        },
+      ]
+    : []),
 ];

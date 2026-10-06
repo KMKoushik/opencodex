@@ -60,4 +60,15 @@ it('bounds remembered sessions and native preference payloads, preserving the se
   expect(restored?.selected).toBe('0');
   expect(restored?.tabs.some((tab) => tab.id === '0')).toBe(true);
   expect(store.getState().entries.latest?.workspace.tabs).toHaveLength(64);
+
+  const pages = Array.from({ length: 12 }, (_, index) => ({
+    id: `page-${index}`,
+    url: `https://example.com/?q=${'x'.repeat(4000)}`,
+  }));
+  store.getState().browser('latest', () => ({ tabs: pages, selected: 'page-5' }));
+  const withPages = serializeWorkbench(store.getState().entries);
+  expect(withPages.length).toBeLessThanOrEqual(16_384);
+  expect(createWorkbenchStore(withPages).getState().entries.latest?.browser.selected).toBe(
+    'page-5',
+  );
 });

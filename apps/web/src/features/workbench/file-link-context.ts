@@ -1,3 +1,6 @@
 import { createContext } from 'react';
 
-export const FileLinkContext = createContext<((href: string) => boolean) | null>(null);
+/** Opens a chat link inside the app and returns true, or returns false to let it open normally. */
+export const FileLinkContext = createContext<
+  ((href: string, event?: { metaKey: boolean; ctrlKey: boolean }) => boolean) | null
+>(null);

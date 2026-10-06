@@ -13,7 +13,7 @@ export function MarkdownLink({ href, children }: { href?: string; children?: Rea
       rel="noreferrer"
       className={local ? 'file-link' : undefined}
       onClick={(event) => {
-        if (href && openFile?.(href)) event.preventDefault();
+        if (href && openFile?.(href, event)) event.preventDefault();
       }}
       onAuxClick={(event) => {
         if (event.button === 1 && href && openFile?.(href)) event.preventDefault();

@@ -11,7 +11,7 @@
   │  │                            │     │                            │   │  preload IPC  │                          │
   │  │  <>   Browser app          │     │  <>   Desktop app          ├───┼──────────────▶│  <>   apps/desktop       │
   │  │                            │     │                            │◀──┼───────────────┤                          │
-  │  │  localStorage: UI + type   │     │  Sandboxed renderer        │   │  web events   │  Window + fullscreen     │
+  │  │  localStorage: UI + type   │     │  Sandboxed UI + web tabs   │   │  web events   │  Window + browser guests │
   │  │  Models + session layout   │     │  Native IPC available      ├───┼──────────────▶│  Pick/open/reveal files  │
   │  └────────────────────────────┘     └────────────────────────────┘   │               │  OS browser + clipboard  │
   │                                                                      │               │  OS edit + spelling menus│
@@ -27,7 +27,7 @@
      │  <>   packages/gateway                                        │                   │  preferences.json        │
      │                                                               │                   │  Projects, UI + font size│
      │  Hono + V2 client; private service credentials                │                   │  Models + session layout │
-     │  Bounded previews/logs; version-checked file writes           │                   │  Updater download cache  │
+     │  Bounded previews/logs; version-checked file writes           │                   │  Updater; browser profile│
      │  Native APIs + origin-checked, ticketed PTY relay             │                   └──────────────────────────┘
      │  Host files: read-only video/PDF ranges + reveal targets      │
      │  Side chats; opt-in side-chat + Claude plugin files           ├──────────┐
