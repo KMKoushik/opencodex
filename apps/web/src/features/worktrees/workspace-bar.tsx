@@ -41,65 +41,73 @@ export function WorkspaceBar({
   live: boolean;
   onChange: (choice: WorkspaceChoice) => void;
 }) {
-  const { canonical, directory, local, removed } = checkout;
+  const { canonical, directory, removed } = checkout;
   const branch = useQuery({
     queryKey: ['workspace', 'vcs', directory],
     queryFn: ({ signal }) => api.workspaceVcs(directory!, signal),
-    enabled: Boolean(canonical && directory && !removed),
+    enabled: Boolean(editable && canonical && directory && !removed),
     staleTime: 15_000,
     refetchInterval: live ? false : 15_000,
     select: (vcs) => vcs.info.branch.current,
   });
   if (!canonical || !directory) return null;
-  const worktree = editable ? choice.mode === 'worktree' : !local;
-  const name = directory.split(/[\\/]/).filter(Boolean).at(-1);
+  const status = (starting || removed) && (
+    <span className="workspace-status" role="status">
+      {starting
+        ? 'Creating worktree…'
+        : 'This worktree was removed. The conversation is read-only.'}
+    </span>
+  );
+  // Once the chat has started, the session card shows its folder and branch.
+  if (!editable)
+    return (
+      status && (
+        <div className="workspace-bar" aria-label="Workspace">
+          {status}
+        </div>
+      )
+    );
+  const worktree = choice.mode === 'worktree';
   return (
     <div className="workspace-bar" aria-label="Workspace">
-      {editable ? (
-        <Select
-          label="Where this chat works"
-          value={choice.mode}
-          disabled={starting}
-          options={[
-            { value: 'local', label: 'Local', detail: 'Work in your project folder' },
-            {
-              value: 'worktree',
-              label: 'New worktree',
-              detail: 'Isolated checkout. Local changes stay put.',
-            },
-          ]}
-          onChange={(mode) =>
-            onChange(mode === 'worktree' ? { ...choice, mode: 'worktree' } : { mode: 'local' })
-          }
-          renderValue={(option) => (
-            <>
-              <HugeiconsIcon
-                icon={option.value === 'worktree' ? FolderGit2Icon : Folder01Icon}
-                size={14}
-              />
-              <span className="truncate">{option.label}</span>
-            </>
-          )}
-          renderOption={(option) => (
-            <>
-              <HugeiconsIcon
-                icon={option.value === 'worktree' ? FolderGit2Icon : Folder01Icon}
-                size={16}
-              />
-              <span className="workspace-option">
-                <span>{option.label}</span>
-                <small>{option.detail}</small>
-              </span>
-            </>
-          )}
-        />
-      ) : (
-        <span className="workspace-label" title={directory}>
-          <HugeiconsIcon icon={worktree ? FolderGit2Icon : Folder01Icon} size={14} />
-          <span className="truncate">{worktree ? `Worktree · ${name}` : 'Local'}</span>
-        </span>
-      )}
-      {editable && worktree ? (
+      <Select
+        label="Where this chat works"
+        value={choice.mode}
+        disabled={starting}
+        options={[
+          { value: 'local', label: 'Local', detail: 'Work in your project folder' },
+          {
+            value: 'worktree',
+            label: 'New worktree',
+            detail: 'Isolated checkout. Local changes stay put.',
+          },
+        ]}
+        onChange={(mode) =>
+          onChange(mode === 'worktree' ? { ...choice, mode: 'worktree' } : { mode: 'local' })
+        }
+        renderValue={(option) => (
+          <>
+            <HugeiconsIcon
+              icon={option.value === 'worktree' ? FolderGit2Icon : Folder01Icon}
+              size={14}
+            />
+            <span className="truncate">{option.label}</span>
+          </>
+        )}
+        renderOption={(option) => (
+          <>
+            <HugeiconsIcon
+              icon={option.value === 'worktree' ? FolderGit2Icon : Folder01Icon}
+              size={16}
+            />
+            <span className="workspace-option">
+              <span>{option.label}</span>
+              <small>{option.detail}</small>
+            </span>
+          </>
+        )}
+      />
+      {worktree ? (
         <BranchPicker
           directory={canonical}
           current={branch.data}
@@ -116,16 +124,7 @@ export function WorkspaceBar({
           </span>
         )
       )}
-      {starting && (
-        <span className="workspace-status" role="status">
-          Creating worktree…
-        </span>
-      )}
-      {removed && (
-        <span className="workspace-status" role="status">
-          This worktree was removed. The conversation is read-only.
-        </span>
-      )}
+      {status}
     </div>
   );
 }
