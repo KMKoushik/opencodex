@@ -5,7 +5,8 @@ import { workspaceFileInputSchema } from '@opencodex/contracts';
 import { OpenCodeBackend } from './opencode';
 import { localFile } from './local-files';
 
-const videoTypes: Record<string, string> = {
+const mediaTypes: Record<string, string> = {
+  '.pdf': 'application/pdf',
   '.mp4': 'video/mp4',
   '.m4v': 'video/mp4',
   '.mov': 'video/quicktime',
@@ -16,17 +17,18 @@ const videoTypes: Record<string, string> = {
   '.avi': 'video/x-msvideo',
 };
 
-export function videoMime(path: string) {
-  return videoTypes[extname(path).toLowerCase()];
+/** Files previewed by streaming host bytes instead of buffering a native `file.read`. */
+export function mediaMime(path: string) {
+  return mediaTypes[extname(path).toLowerCase()];
 }
 
-export function videoRoutes(backend: OpenCodeBackend, shutdown: AbortSignal) {
+export function mediaRoutes(backend: OpenCodeBackend, shutdown: AbortSignal) {
   const app = new Hono();
-  app.on(['GET', 'HEAD'], '/video', async (c) => {
+  app.on(['GET', 'HEAD'], '/media', async (c) => {
     const input = workspaceFileInputSchema.safeParse(c.req.query());
     if (!input.success) return c.json({ message: 'Choose a file within the project.' }, 400);
-    const mime = videoMime(input.data.path);
-    if (!mime) return c.json({ message: 'Choose a video file.' }, 415);
+    const mime = mediaMime(input.data.path);
+    if (!mime) return c.json({ message: 'Choose a video or PDF file.' }, 415);
     await backend.requireLocalFiles();
     const { file, info } = await localFile(input.data.directory, input.data.path);
     let handedOff = false;

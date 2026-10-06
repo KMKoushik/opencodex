@@ -29,7 +29,7 @@
      │  Hono + V2 client; private service credentials                │                   │  Models + session layout │
      │  Bounded previews/logs; version-checked file writes           │                   │  Updater download cache  │
      │  Native APIs + origin-checked, ticketed PTY relay             │                   └──────────────────────────┘
-     │  Host files: read-only video ranges + reveal targets          │
+     │  Host files: read-only video/PDF ranges + reveal targets      │
      │  Side chats; opt-in side-chat + Claude plugin files           ├──────────┐
      └─────────────────┬─────────────────────────────────────────────┘          │
        HTTP + WS       │                               ▲  Events + WS           │

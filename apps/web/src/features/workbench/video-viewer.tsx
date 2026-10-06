@@ -27,7 +27,7 @@ export function VideoViewer({
       <div className="wb-video-viewport">
         <video
           ref={video}
-          src={api.videoURL(directory, path)}
+          src={api.mediaURL(directory, path)}
           controls
           playsInline
           preload="metadata"

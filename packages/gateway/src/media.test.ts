@@ -28,12 +28,12 @@ it('previews a large video without buffering it, and streams seek/suffix ranges 
     mime: 'video/mp4',
     bytes: size,
   });
-  const head = await app.request(url('video'), { method: 'HEAD' });
+  const head = await app.request(url('media'), { method: 'HEAD' });
   expect(head.status).toBe(200);
   expect(head.headers.get('content-length')).toBe(String(size));
   expect(await head.text()).toBe('');
   for (const range of [`bytes=${size - 4}-`, 'bytes=-4', `bytes=${size - 4}-${size + 100}`]) {
-    const response = await app.request(url('video'), { headers: { Range: range } });
+    const response = await app.request(url('media'), { headers: { Range: range } });
     expect(response.status).toBe(206);
     expect(response.headers.get('content-range')).toBe(`bytes ${size - 4}-${size - 1}/${size}`);
     expect(response.headers.get('content-length')).toBe('4');
@@ -43,17 +43,25 @@ it('previews a large video without buffering it, and streams seek/suffix ranges 
     expect(await response.text()).toBe('tail');
   }
   for (const range of [`bytes=${size}-`, 'bytes=3-2', 'bytes=-0', 'bytes=0-1,4-5', 'bytes=-']) {
-    const response = await app.request(url('video'), { headers: { Range: range } });
+    const response = await app.request(url('media'), { headers: { Range: range } });
     expect(response.status).toBe(416);
     expect(response.headers.get('content-range')).toBe(`bytes */${size}`);
   }
   await writeFile(join(directory, 'small.webm'), 'full');
-  const full = await app.request(url('video', 'small.webm'), {
+  const full = await app.request(url('media', 'small.webm'), {
     headers: { Range: 'bytes=0-1', 'If-Range': 'stale' },
   });
   expect(full.status).toBe(200);
   expect(await full.text()).toBe('full');
-  const cancelled = await app.request(url('video'));
+  await writeFile(join(directory, 'spec.pdf'), '%PDF-1.7');
+  expect(await (await app.request(url('file', 'spec.pdf'))).json()).toEqual({
+    kind: 'pdf',
+    bytes: 8,
+  });
+  const pdf = await app.request(url('media', 'spec.pdf'));
+  expect(pdf.headers.get('content-type')).toBe('application/pdf');
+  expect(await pdf.text()).toBe('%PDF-1.7');
+  const cancelled = await app.request(url('media'));
   const reader = cancelled.body!.getReader();
   expect((await reader.read()).value?.byteLength).toBeLessThanOrEqual(64 * 1024);
   await reader.cancel();
@@ -66,7 +74,7 @@ it('keeps reads and reveal targets within the canonical directory, including sym
   await symlink(join(directory, 'outside.mp4'), join(directory, 'project', 'escape.mp4'));
   await symlink(join(directory, 'project', 'clip.mp4'), join(directory, 'project', 'inside.mp4'));
   const app = createApp(backend());
-  for (const route of ['file', 'video', 'file-location']) {
+  for (const route of ['file', 'media', 'file-location']) {
     expect(
       (await app.request(url(route, '../outside.mp4', join(directory, 'project')))).status,
     ).toBe(400);
@@ -80,8 +88,8 @@ it('keeps reads and reveal targets within the canonical directory, including sym
       await app.request(url('file-location', 'inside.mp4', join(directory, 'project')))
     ).json(),
   ).toEqual({ path: join(directory, 'project', 'clip.mp4') });
-  expect((await app.request(url('video', 'project.mp4'))).status).toBe(404);
-  expect((await app.request(url('video', 'outside.txt'))).status).toBe(415);
+  expect((await app.request(url('media', 'project.mp4'))).status).toBe(404);
+  expect((await app.request(url('media', 'outside.txt'))).status).toBe(415);
 });
 
 it('never substitutes host files for external service files, and requires a connected local service', async () => {
@@ -92,7 +100,7 @@ it('never substitutes host files for external service files, and requires a conn
     new OpenCodeBackend(async () => undefined),
   ]) {
     const app = createApp(service);
-    for (const route of ['file', 'video', 'file-location']) {
+    for (const route of ['file', 'media', 'file-location']) {
       const response = await app.request(url(route));
       expect([422, 503]).toContain(response.status);
       expect(await response.json()).toHaveProperty('message');

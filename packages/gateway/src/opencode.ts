@@ -94,7 +94,7 @@ export class OpenCodeBackend {
   async requireLocalFiles() {
     if (!(await this.localService()))
       throw new GatewayError(
-        'Video playback and revealing files require the locally discovered OpenCode service. External connections are not supported.',
+        'Video and PDF previews and revealing files require the locally discovered OpenCode service. External connections are not supported.',
         422,
       );
   }

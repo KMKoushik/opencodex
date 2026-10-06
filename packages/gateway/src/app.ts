@@ -21,7 +21,7 @@ import { workspaceRoutes } from './workspace';
 import { terminalRoutes } from './terminals';
 import { shellRoutes } from './shells';
 import { imageRoutes } from './images';
-import { videoRoutes } from './videos';
+import { mediaRoutes } from './media';
 import { createMetadataWriter, sessionMetadataRoutes } from './session-metadata';
 import { sideChatRoutes } from './side-chats';
 import { sessionAccessRoutes } from './session-access';
@@ -55,7 +55,7 @@ export function createApp(
   app.post('/api/connection', async (c) => c.json(await backend.connection(true)));
   app.route('/api/terminals', terminalRoutes(backend));
   app.route('/api/shells', shellRoutes(backend));
-  app.route('/api/workspace', videoRoutes(backend, shutdown));
+  app.route('/api/workspace', mediaRoutes(backend, shutdown));
   app.route('/api/sessions', imageRoutes(backend));
   const writeMetadata = createMetadataWriter(backend);
   app.route('/api/sessions', sessionMetadataRoutes(writeMetadata));

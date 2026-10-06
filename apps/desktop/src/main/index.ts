@@ -43,6 +43,8 @@ async function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Enables Chromium's built-in PDF viewer for workspace previews.
+      plugins: true,
       spellcheck: true,
     },
   });

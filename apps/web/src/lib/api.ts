@@ -64,8 +64,8 @@ const sessionPath = (id: string) => `/sessions/${encodeURIComponent(id)}`;
 const post = (body?: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) });
 
 export const api = {
-  videoURL: (directory: string, path: string) =>
-    `/api/workspace/video?${new URLSearchParams({ directory, path })}`,
+  mediaURL: (directory: string, path: string) =>
+    `/api/workspace/media?${new URLSearchParams({ directory, path })}`,
   fileLocation: (directory: string, path: string) =>
     nativeRequest<{ path: string }>(
       `/workspace/file-location?${new URLSearchParams({ directory, path })}`,
