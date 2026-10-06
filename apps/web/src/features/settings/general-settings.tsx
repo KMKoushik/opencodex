@@ -5,6 +5,7 @@ import { SettingsGroup, SettingsRow } from './settings-layout';
 import { UpdateSettings } from '../updates/update-settings';
 import { SideChatPluginSettings } from '../side-chat/side-chat-plugin-settings';
 import { ClaudeCodeSettings } from './claude-code-settings';
+import { NotificationSettings } from '../notifications/notification-settings';
 
 export function GeneralSettings({
   live,
@@ -50,6 +51,7 @@ export function GeneralSettings({
         {connected && <SideChatPluginSettings directory={project?.directory} />}
         {connected && <ClaudeCodeSettings directory={project?.directory} />}
       </SettingsGroup>
+      <NotificationSettings />
       <SettingsGroup title="Project">
         <SettingsRow
           label={project?.name ?? 'No project open'}

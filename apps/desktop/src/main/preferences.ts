@@ -18,6 +18,7 @@ export const preferenceInputSchema = z.object({
     'pinnedThreads',
     'focusExcluded',
     'sessionWorkbench',
+    'notifications',
   ]),
   value: z.string().max(16_384).nullable(),
 });
@@ -43,6 +44,7 @@ export function createPreferences() {
       pinnedThreads: { type: ['string', 'null'] },
       focusExcluded: { type: ['string', 'null'] },
       sessionWorkbench: { type: ['string', 'null'] },
+      notifications: { type: ['string', 'null'] },
     },
     accessPropertiesByDotNotation: false,
     clearInvalidConfig: true,

@@ -19,6 +19,7 @@ import { Button } from '../components/ui/button';
 import { TooltipLayer } from '../components/ui/tooltip-layer';
 import { useConnection } from '../features/connection/use-connection';
 import { useEvents } from '../features/connection/use-events';
+import { useNotificationTarget } from '../features/notifications/notifications';
 import {
   readProject,
   readProjects,
@@ -267,6 +268,11 @@ export function App() {
     setSidebarOpen(false);
     main.current?.focus({ preventScroll: true });
   }
+
+  useNotificationTarget(settings ? undefined : selectedID, (session) => {
+    openSession(session);
+    navigate(null);
+  });
 
   function toggleSidebar() {
     const mobile = matchMedia('(max-width: 720px)').matches;

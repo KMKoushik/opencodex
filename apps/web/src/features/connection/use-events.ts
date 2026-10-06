@@ -11,6 +11,7 @@ import { updateStream, type LivePart } from '../chat/stream';
 import { updateSessionViewed } from '../sessions/viewed';
 import type { SubagentCost } from '../session-panel/session-cost';
 import { updateSessionMetadata } from '../sessions/metadata';
+import { notifySession } from '../notifications/notifications';
 
 export function useEvents(enabled: boolean) {
   const client = useQueryClient();
@@ -244,6 +245,17 @@ export function useEvents(enabled: boolean) {
       }
       if (event.type.startsWith('permission.') || event.type.startsWith('form.'))
         requestsChanged = true;
+      if (event.type === 'session.execution.succeeded' || event.type === 'session.execution.failed')
+        void notifySession(
+          client,
+          'reply',
+          event.data.sessionID,
+          event.type === 'session.execution.failed',
+        );
+      else if (event.type === 'form.created')
+        void notifySession(client, 'question', event.data.form.sessionID);
+      else if (event.type === 'permission.asked')
+        void notifySession(client, 'permission', event.data.sessionID);
       const data = 'data' in event ? event.data : undefined;
       const id =
         data && 'sessionID' in data && typeof data.sessionID === 'string'

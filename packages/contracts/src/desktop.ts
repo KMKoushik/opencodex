@@ -87,7 +87,8 @@ export type PreferenceKey =
   | 'threadView'
   | 'pinnedThreads'
   | 'focusExcluded'
-  | 'sessionWorkbench';
+  | 'sessionWorkbench'
+  | 'notifications';
 export type DesktopPreferences = Record<
   Exclude<
     PreferenceKey,
@@ -102,6 +103,7 @@ export type DesktopPreferences = Record<
     | 'pinnedThreads'
     | 'focusExcluded'
     | 'sessionWorkbench'
+    | 'notifications'
   >,
   string | null
 > & {
@@ -116,6 +118,7 @@ export type DesktopPreferences = Record<
   pinnedThreads?: string | null;
   focusExcluded?: string | null;
   sessionWorkbench?: string | null;
+  notifications?: string | null;
 };
 
 export const openAppIDs = [
