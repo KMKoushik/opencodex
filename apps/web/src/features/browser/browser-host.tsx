@@ -1,15 +1,18 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand';
-import { browserPartition } from '@opencodex/contracts/desktop';
+import { browserFileScheme, browserPartition } from '@opencodex/contracts/desktop';
 import { useWorkbenchStore } from '../workbench/workbench-context';
 import {
   browserRuntime,
   browserViews,
+  browserFileDirectories,
   openTab,
   setTabURL,
   updatePage,
   type WebviewElement,
 } from './browser-runtime';
+import { isBrowserFileURL } from './browser-url';
+import { useBrowserNavigation } from './use-browser-navigation';
 import './browser.css';
 
 // Each page is a Chromium renderer process; older pages reload from their URL when shown again.
@@ -96,15 +99,24 @@ function BrowserView({ page, slot }: { page: LivePage; slot: HTMLElement | null 
   const workbench = useWorkbenchStore();
   const box = useRef<HTMLDivElement>(null);
   const view = useRef<WebviewElement>(null);
+  const { mutate: navigate } = useBrowserNavigation();
   // Errors and crashes show the panel's own message in the slot underneath.
   const covered = useStore(browserRuntime, (state) =>
     Boolean(state.pages[id]?.error || state.pages[id]?.crashed),
   );
   useEffect(() => {
     const element = view.current!;
+    let initialized = false;
     const history = () =>
       updatePage(id, { canGoBack: element.canGoBack(), canGoForward: element.canGoForward() });
     const navigated = (url: string) => {
+      if (url === 'about:blank') return;
+      if (url.startsWith(`${browserFileScheme}:`)) {
+        const directory = browserFileDirectories.get(id);
+        if (!directory) return;
+        const local = new URL(url);
+        url = new URL(local.pathname.slice(1) + local.search + local.hash, directory).href;
+      }
       workbench.getState().browser(key, (state) => setTabURL(state, id, url));
       history();
     };
@@ -112,6 +124,10 @@ function BrowserView({ page, slot }: { page: LivePage; slot: HTMLElement | null 
       'dom-ready': () => {
         browserViews.set(id, element);
         history();
+        if (!initialized) {
+          initialized = true;
+          if (isBrowserFileURL(src)) navigate({ id, url: src });
+        }
       },
       'did-start-loading': () =>
         updatePage(id, { loading: true, error: undefined, crashed: undefined }),
@@ -143,9 +159,10 @@ function BrowserView({ page, slot }: { page: LivePage; slot: HTMLElement | null 
       for (const [name, listener] of Object.entries(listeners))
         element.removeEventListener(name, listener as EventListener);
       browserViews.delete(id);
+      browserFileDirectories.delete(id);
       updatePage(id, null);
     };
-  }, [id, key, workbench]);
+  }, [id, key, src, workbench, navigate]);
   useLayoutEffect(() => {
     const style = box.current!.style;
     const hide = () => {
@@ -177,7 +194,7 @@ function BrowserView({ page, slot }: { page: LivePage; slot: HTMLElement | null 
     <div ref={box} className="browser-view" aria-hidden={slot && !covered ? undefined : true}>
       <webview
         ref={view}
-        src={src}
+        src={isBrowserFileURL(src) ? 'about:blank' : src}
         partition={browserPartition}
         // Electron reads this attribute as the guest attaches; React drops boolean values on it.
         {...({ allowpopups: 'true' } as object)}

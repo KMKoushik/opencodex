@@ -1,13 +1,20 @@
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog, protocol } from 'electron';
 import { fileURLToPath } from 'node:url';
 import { startGateway } from '@opencodex/gateway';
-import { desktopChannels } from '@opencodex/contracts/desktop';
+import { browserFileScheme, desktopChannels } from '@opencodex/contracts/desktop';
 import { registerNativeHandlers } from './ipc';
 import { createPreferences } from './preferences';
 import { registerLinkHandlers } from './links';
 import { registerBrowser } from './browser';
 import { loadShellEnvironment } from './shell-env';
 import { createUpdates } from './updates';
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: browserFileScheme,
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
+  },
+]);
 
 // Keep existing development preferences when replacing Electron's default display name.
 const userData = app.getPath('userData');

@@ -1,6 +1,7 @@
 import {
   clipboard,
   Menu,
+  net,
   session,
   shell,
   webContents,
@@ -9,13 +10,18 @@ import {
   type WebContents,
 } from 'electron';
 import { z } from 'zod';
+import { pathToFileURL } from 'node:url';
 import {
   browserPartition,
+  browserFileScheme,
   desktopChannels,
   type BrowserAnnotation,
 } from '@opencodex/contracts/desktop';
 import { textMenuItems } from './context-menu';
 import { annotationOverlay } from './annotation-overlay';
+import { createLocalPages } from './local-pages';
+
+const localPages = createLocalPages();
 
 // `navigator.clipboard.writeText()` needs this in both the request and check handlers.
 const allowedPermissions = new Set(['clipboard-sanitized-write']);
@@ -38,6 +44,19 @@ function prepareProfile() {
     callback(allowedPermissions.has(permission)),
   );
   profile.setPermissionCheckHandler((_contents, permission) => allowedPermissions.has(permission));
+  profile.protocol.handle(browserFileScheme, async (request) => {
+    if (request.method !== 'GET' && request.method !== 'HEAD')
+      return new Response(null, { status: 405 });
+    try {
+      const path = await localPages.path(request.url);
+      return await net.fetch(pathToFileURL(path).href, {
+        method: request.method,
+        bypassCustomProtocolHandlers: true,
+      });
+    } catch {
+      return new Response('The local preview file could not be loaded.', { status: 404 });
+    }
+  });
 }
 
 /**
@@ -49,7 +68,10 @@ export function registerBrowser(window: BrowserWindow) {
   prepareProfile();
   const embedder = window.webContents;
   embedder.on('will-attach-webview', (event, preferences, params) => {
-    if (params.partition !== browserPartition || (params.src && !isWebURL(params.src))) {
+    if (
+      params.partition !== browserPartition ||
+      (params.src && params.src !== 'about:blank' && !isWebURL(params.src))
+    ) {
       event.preventDefault();
       return;
     }
@@ -73,18 +95,31 @@ export function registerBrowser(window: BrowserWindow) {
   });
   embedder.on('did-attach-webview', (_event, guest) => {
     const openTab = (url: string) => {
-      if (isWebURL(url) && !embedder.isDestroyed())
-        embedder.send(desktopChannels.browserOpenTab, { webContentsId: guest.id, url });
+      if ((isWebURL(url) || localPages.owns(guest.id, url)) && !embedder.isDestroyed())
+        embedder.send(desktopChannels.browserOpenTab, {
+          webContentsId: guest.id,
+          url: localPages.displayURL(url),
+        });
     };
     guest.setWindowOpenHandler(({ url }) => {
       openTab(url);
       return { action: 'deny' };
     });
     const restrict = (event: Electron.Event, url: string) => {
-      if (!isWebURL(url) && url !== 'about:blank') event.preventDefault();
+      if (!isWebURL(url) && url !== 'about:blank' && !localPages.owns(guest.id, url))
+        event.preventDefault();
     };
     guest.on('will-navigate', restrict);
     guest.on('will-redirect', restrict);
+    guest.on('dom-ready', () => {
+      if (!localPages.owns(guest.id, guest.getURL())) return;
+      // A browser canvas is white by default, not the dark host behind the transparent guest.
+      // Normal user-origin CSS stays below the document's own author styles in the cascade.
+      void guest
+        .insertCSS('html { background-color: #fff; }', { cssOrigin: 'user' })
+        .catch(() => undefined);
+    });
+    guest.once('destroyed', () => localPages.release(guest.id));
     guest.on('context-menu', (_event, params) => {
       const items = guestMenu(window, guest, params, openTab);
       if (items.length) Menu.buildFromTemplate(items).popup({ window });
@@ -108,11 +143,13 @@ function guestMenu(
     items.push(...entries);
   };
   const { linkURL, mediaType, hasImageContents, srcURL, x, y } = params;
-  if (linkURL && isWebURL(linkURL))
+  if (linkURL && (isWebURL(linkURL) || localPages.owns(guest.id, linkURL)))
     group([
       { label: 'Open Link in New Tab', click: () => openTab(linkURL) },
-      { label: 'Open Link in System Browser', click: () => openExternal(linkURL) },
-      { label: 'Copy Link', click: () => clipboard.writeText(linkURL) },
+      ...(isWebURL(linkURL)
+        ? [{ label: 'Open Link in System Browser', click: () => openExternal(linkURL) }]
+        : []),
+      { label: 'Copy Link', click: () => clipboard.writeText(localPages.displayURL(linkURL)) },
     ]);
   if (mediaType === 'image' && hasImageContents)
     group([
@@ -194,6 +231,21 @@ function browserGuest(window: BrowserWindow, id: number) {
   return guest;
 }
 
+const browserFileInput = z.object({
+  webContentsId: z.number().int().positive(),
+  url: z.string().max(8192),
+});
+export async function loadBrowserFile(window: BrowserWindow, input: unknown) {
+  const { webContentsId, url } = browserFileInput.parse(input);
+  const guest = browserGuest(window, webContentsId);
+  const target = await localPages.grant(guest.id, url);
+  if (guest.isDestroyed()) {
+    localPages.release(guest.id);
+    return;
+  }
+  await guest.loadURL(target);
+}
+
 /** Settles with null if the page navigates away, crashes, or closes before `task` settles. */
 function whilePageStays<T>(guest: WebContents, task: Promise<T>) {
   return new Promise<T | null>((resolve, reject) => {
@@ -251,7 +303,11 @@ export async function annotateBrowserPage(
   );
   if (!result) return null;
   try {
-    return { ...result.annotation, screenshot: await screenshot(guest, result.crop) };
+    return {
+      ...result.annotation,
+      url: localPages.displayURL(result.annotation.url),
+      screenshot: await screenshot(guest, result.crop),
+    };
   } finally {
     await closeOverlay(guest, 'close');
   }

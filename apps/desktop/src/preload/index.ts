@@ -35,6 +35,8 @@ const desktop: DesktopBridge = {
   },
   annotateBrowserPage: (webContentsId, theme) =>
     ipcRenderer.invoke(desktopChannels.annotateBrowserPage, { webContentsId, theme }),
+  loadBrowserFile: (webContentsId, url) =>
+    ipcRenderer.invoke(desktopChannels.loadBrowserFile, { webContentsId, url }),
   cancelBrowserAnnotation: (webContentsId) =>
     ipcRenderer.invoke(desktopChannels.cancelBrowserAnnotation, { webContentsId }),
 };

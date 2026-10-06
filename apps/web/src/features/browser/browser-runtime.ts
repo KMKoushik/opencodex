@@ -53,6 +53,8 @@ export function updatePage(tabID: string, patch: Partial<BrowserPage> | null) {
 
 /** Attached webviews that can take commands; a webview joins after its first `dom-ready`. */
 export const browserViews = new Map<string, WebviewElement>();
+/** Filesystem display URLs for opaque, isolated local-preview origins. */
+export const browserFileDirectories = new Map<string, string>();
 
 export function navigateView(tabID: string, url: string) {
   const view = browserViews.get(tabID);

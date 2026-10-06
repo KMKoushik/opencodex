@@ -329,7 +329,7 @@
     {
       "x": 43,
       "y": 13,
-      "value": "Sandboxed UI + web tabs"
+      "value": "Sandboxed UI + page tabs"
     },
     {
       "x": 43,
@@ -379,7 +379,7 @@
     {
       "x": 92,
       "y": 14,
-      "value": "Pick/open/reveal files"
+      "value": "Pick/reveal; local HTML"
     },
     {
       "x": 92,

@@ -59,7 +59,7 @@ import { FileLinkContext } from '../features/workbench/file-link-context';
 import { resolveFileLink, type FileRequest } from '../features/workbench/file-link';
 import { useWorkbenchStore, workbenchKey } from '../features/workbench/workbench-context';
 import { defaultWorkbenchLayout } from '../features/workbench/workbench-store';
-import { isLocalWebURL } from '../features/browser/browser-url';
+import { browserFileURL, isHTMLPath, isLocalWebURL } from '../features/browser/browser-url';
 import { openTab } from '../features/browser/browser-runtime';
 
 const TerminalDrawer = lazy(() =>
@@ -169,6 +169,18 @@ export function App() {
       if (!fileDirectory) return false;
       const target = resolveFileLink(href, fileDirectory);
       if (!target) return false;
+      if (browserPanel && isHTMLPath(target.path)) {
+        const url = browserFileURL(target.directory, target.path, href);
+        workbench.getState().browser(workspaceKey, (state) => {
+          const existing = state.tabs.find((tab) => tab.url === url);
+          return existing
+            ? { ...state, selected: existing.id }
+            : openTab(state, url, state.selected);
+        });
+        setWorkbenchLoaded(true);
+        workbench.getState().layout(workspaceKey, { panel: 'browser', open: true });
+        return true;
+      }
       setFileRequest({ ...target, sessionID: selectedID });
       setWorkbenchLoaded(true);
       workbench.getState().layout(workspaceKey, { panel: 'files', open: true });

@@ -22,12 +22,12 @@ import {
   browserViews,
   closeTab,
   emptyPage,
-  navigateView,
   openTab,
   setTabURL,
   updatePage,
 } from './browser-runtime';
-import { addressURL } from './browser-url';
+import { addressURL, isBrowserFileURL } from './browser-url';
+import { useBrowserNavigation } from './use-browser-navigation';
 import { addPageComment, annotationTheme } from './page-comment';
 import './browser.css';
 
@@ -54,6 +54,7 @@ export function BrowserPanel({
   }
   const address = useRef<HTMLInputElement>(null);
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
+  const navigation = useBrowserNavigation();
   const shownID = tab?.url ? tab.id : undefined;
   useEffect(() => {
     if (!active || !shownID || !slot) return;
@@ -75,7 +76,8 @@ export function BrowserPanel({
       return;
     }
     update((state) => setTabURL(state, tab.id, url));
-    if (navigateView(tab.id, url)) browserViews.get(tab.id)?.focus();
+    navigation.mutate({ id: tab.id, url });
+    browserViews.get(tab.id)?.focus();
   };
   const view = tab ? browserViews.get(tab.id) : undefined;
   const drafts = useDraftStore();
@@ -104,7 +106,7 @@ export function BrowserPanel({
   };
   const reload = () => {
     if (page.loading) view?.stop();
-    else if (view) view.reload();
+    else if (view && !(page.error && isBrowserFileURL(tab?.url ?? ''))) view.reload();
     else if (tab?.url) navigate(tab.url);
   };
   const label = (index: number) => {
@@ -239,7 +241,7 @@ export function BrowserPanel({
           variant="ghost"
           size="icon"
           aria-label="Open in system browser"
-          disabled={!tab?.url}
+          disabled={!tab?.url || isBrowserFileURL(tab.url)}
           onClick={() => tab?.url && window.open(tab.url, '_blank', 'noreferrer')}
         >
           <HugeiconsIcon icon={LinkSquare02Icon} size={16} />
@@ -259,7 +261,7 @@ export function BrowserPanel({
             <HugeiconsIcon icon={Globe02Icon} size={28} />
             <h3>Preview your app</h3>
             <p>Enter a local server such as localhost:3000, a web address, or a search.</p>
-            <p>Local links in chat open here too.</p>
+            <p>Local server and HTML links in chat open here too.</p>
           </div>
         ) : page.crashed || page.error ? (
           <div className="wb-empty" role="alert">
@@ -271,7 +273,7 @@ export function BrowserPanel({
               </>
             )}
             <div className="browser-error-actions">
-              <Button variant="secondary" onClick={() => view?.reload()}>
+              <Button variant="secondary" onClick={reload}>
                 Try again
               </Button>
             </div>
@@ -286,7 +288,11 @@ function TabTitle({ id, url }: { id: string; url: string }) {
   const title = useStore(browserRuntime, (runtime) => runtime.pages[id]?.title);
   let host = '';
   try {
-    host = url ? new URL(url).host : '';
+    host = url
+      ? isBrowserFileURL(url)
+        ? decodeURIComponent(new URL(url).pathname.split('/').pop() ?? '')
+        : new URL(url).host
+      : '';
   } catch {
     host = url;
   }

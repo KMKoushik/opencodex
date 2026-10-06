@@ -15,6 +15,8 @@ export interface DesktopBridge {
   installUpdate(): Promise<void>;
   /** A browser panel page asked for a new tab (a popup or "Open link in new tab"). */
   onBrowserOpenTab(callback: (request: BrowserOpenTabRequest) => void): () => void;
+  /** Loads a local HTML file in a sandboxed browser guest, not the app's origin. */
+  loadBrowserFile(webContentsId: number, url: string): Promise<void>;
   /** Shows the comment overlay in a browser panel page; resolves when it is attached or closed. */
   annotateBrowserPage(
     webContentsId: number,
@@ -26,6 +28,7 @@ export interface DesktopBridge {
 
 /** Browser panel pages share one persistent profile, separate from the app's own storage. */
 export const browserPartition = 'persist:opencodex-browser';
+export const browserFileScheme = 'opencodex-preview';
 export type BrowserOpenTabRequest = { webContentsId: number; url: string };
 /** CSS values for the overlay drawn inside the page, so it matches the app theme. */
 export type BrowserAnnotationTheme = {
@@ -148,6 +151,7 @@ export const desktopChannels = {
   downloadUpdate: 'desktop:download-update',
   installUpdate: 'desktop:install-update',
   browserOpenTab: 'desktop:browser-open-tab',
+  loadBrowserFile: 'desktop:load-browser-file',
   annotateBrowserPage: 'desktop:annotate-browser-page',
   cancelBrowserAnnotation: 'desktop:cancel-browser-annotation',
 } as const;

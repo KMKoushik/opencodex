@@ -11,8 +11,8 @@
   │  │                            │     │                            │   │  preload IPC  │                          │
   │  │  <>   Browser app          │     │  <>   Desktop app          ├───┼──────────────▶│  <>   apps/desktop       │
   │  │                            │     │                            │◀──┼───────────────┤                          │
-  │  │  localStorage: UI + type   │     │  Sandboxed UI + web tabs   │   │  web events   │  Window + browser guests │
-  │  │  Models + session layout   │     │  Native IPC available      ├───┼──────────────▶│  Pick/open/reveal files  │
+  │  │  localStorage: UI + type   │     │  Sandboxed UI + page tabs  │   │  web events   │  Window + browser guests │
+  │  │  Models + session layout   │     │  Native IPC available      ├───┼──────────────▶│  Pick/reveal; local HTML │
   │  └────────────────────────────┘     └────────────────────────────┘   │               │  OS browser + clipboard  │
   │                                                                      │               │  OS edit + spelling menus│
   │           Zustand drafts + session layout; Query API state           │               │  Updates + restart       │
