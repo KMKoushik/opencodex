@@ -384,6 +384,14 @@ svg {
   margin-top: auto;
   padding-top: 8px;
 }
+.sidebar-footer-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.sidebar-footer-row > .button {
+  color: var(--text-secondary);
+}
 
 /* Workspace */
 .empty-state {

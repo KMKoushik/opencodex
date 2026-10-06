@@ -11,6 +11,7 @@ import { ProjectIcon } from './project-icon';
 import { ProjectActions } from './project-actions';
 import { ProjectEditor } from './project-editor';
 import { projectFolder, projectFolders } from './project-metadata';
+import { WorktreesDialog } from '../worktrees/worktrees-dialog';
 
 export function ProjectsSettings({
   connected,
@@ -30,6 +31,7 @@ export function ProjectsSettings({
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<OpenCodeProject>();
+  const [worktrees, setWorktrees] = useState<{ project: OpenCodeProject; name: string }>();
   const client = useQueryClient();
   const projects = useQuery({
     queryKey: ['projects'],
@@ -154,6 +156,15 @@ export function ProjectsSettings({
                       metadata ? setEditing(metadata) : register.mutate(folder.directory),
                     disabled: !connected || register.isPending,
                   },
+                  ...(metadata?.vcs
+                    ? [
+                        {
+                          label: 'Manage worktrees',
+                          onSelect: () => setWorktrees({ project: metadata, name: folder.name }),
+                          disabled: !connected,
+                        },
+                      ]
+                    : []),
                   { label: 'Copy path', onSelect: () => copy.mutate(folder.directory) },
                   ...(opened
                     ? [{ label: 'Close project', onSelect: () => onClose(folder.directory) }]
@@ -193,6 +204,14 @@ export function ProjectsSettings({
             }}
           />
         </Dialog>
+      )}
+      {worktrees && (
+        <WorktreesDialog
+          key={worktrees.project.id}
+          project={worktrees.project}
+          name={worktrees.name}
+          onClose={() => setWorktrees(undefined)}
+        />
       )}
       {editing && (
         <ProjectEditor key={editing.id} project={editing} onClose={() => setEditing(undefined)} />

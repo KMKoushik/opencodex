@@ -114,6 +114,7 @@ export function useEvents(enabled: boolean) {
       pending.clear();
       setLive(true);
       void client.invalidateQueries({ queryKey: ['workspace'] });
+      void client.invalidateQueries({ queryKey: ['worktrees'] });
       void client.invalidateQueries({ queryKey: ['subagents'] });
       void client.invalidateQueries({ queryKey: ['side-chats'] });
       void client.invalidateQueries({ queryKey: ['session-cost'] });
@@ -178,6 +179,11 @@ export function useEvents(enabled: boolean) {
         return;
       }
       const directory = 'location' in event ? event.location?.directory : undefined;
+      if (event.type === 'worktree.updated' || event.type === 'worktree.resolved') {
+        void client.invalidateQueries({ queryKey: ['worktrees', event.data.projectID] });
+        void client.invalidateQueries({ queryKey: ['projects'] });
+        return;
+      }
       if (event.type.startsWith('pty.')) {
         refreshWorkspace(directory, ['terminals']);
         return;

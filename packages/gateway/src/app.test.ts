@@ -500,6 +500,129 @@ describe('gateway and the real OpenCode client', () => {
     expect((await create({ id: '' })).status).toBe(400);
     expect(calls).toHaveLength(2);
   });
+  it('removes only idle native Git worktrees without force and preserves actionable Git failures', async () => {
+    const tree = `${directory}/isolated`;
+    let occupied = 'chat';
+    let dirty = false;
+    const writes: unknown[] = [];
+    const url = await upstream((req, res) => {
+      const path = new URL(req.url!, 'http://localhost');
+      res.setHeader('Content-Type', 'application/json');
+      if (req.method === 'GET') {
+        if (path.pathname === '/api/worktree') {
+          expect(path.searchParams.get('projectID')).toBe('project');
+          return res.end(JSON.stringify([{ directory }, { directory: tree, strategy: 'git' }]));
+        }
+        if (path.pathname === '/api/session')
+          return res.end(JSON.stringify({ data: [{ id: 'chat' }], cursor: {} }));
+        if (path.pathname === '/api/session/active')
+          return res.end(JSON.stringify({ data: occupied === 'chat' ? { chat: {} } : {} }));
+        if (path.pathname === '/api/pty')
+          return res.end(
+            JSON.stringify({ data: occupied === 'terminal' ? [{ id: 'terminal' }] : [] }),
+          );
+        if (path.pathname === '/api/shell')
+          return res.end(
+            JSON.stringify({ data: occupied === 'shell' ? [{ status: 'running' }] : [] }),
+          );
+        throw new Error(`Unexpected request: ${req.url}`);
+      }
+      let body = '';
+      req.on('data', (chunk) => {
+        body += chunk;
+      });
+      req.on('end', () => {
+        const input = JSON.parse(body);
+        writes.push(input);
+        if (dirty)
+          return res.writeHead(400).end(
+            JSON.stringify({
+              name: 'WorktreeError',
+              data: { message: 'Worktree contains uncommitted changes', forceRequired: true },
+            }),
+          );
+        res.writeHead(204).end();
+      });
+    });
+    const app = createApp(new OpenCodeBackend(async () => ({ url })));
+    const remove = (target: string) =>
+      app.request(
+        `http://localhost/api/projects/project/worktrees?${new URLSearchParams({ directory: target, force: 'true' })}`,
+        { method: 'DELETE' },
+      );
+    expect((await remove(directory)).status).toBe(400);
+    expect((await remove('/unrelated')).status).toBe(400);
+    for (const state of ['chat', 'terminal', 'shell']) {
+      occupied = state;
+      expect((await remove(tree)).status).toBe(409);
+    }
+    expect(writes).toEqual([]);
+    occupied = '';
+    dirty = true;
+    const failed = await remove(tree);
+    expect(failed.status).toBe(409);
+    expect(await failed.json()).toEqual({ message: 'Worktree contains uncommitted changes' });
+    dirty = false;
+    expect((await remove(tree)).status).toBe(200);
+    expect(writes).toEqual(Array(2).fill({ projectID: 'project', directory: tree, force: false }));
+  });
+  it('starts an empty chat in a new native worktree, keeping its identity, and cleans up a failed move', async () => {
+    const tree = '/opencode/worktree/project/gentle-meadow';
+    let location = { directory };
+    let history: unknown[] = [{ id: 'msg' }];
+    let failMove = true;
+    const writes: Array<[string, unknown]> = [];
+    const url = await upstream((req, res) => {
+      const path = new URL(req.url!, 'http://localhost').pathname;
+      res.setHeader('Content-Type', 'application/json');
+      if (req.method === 'GET') {
+        if (path === '/api/session/chat')
+          return res.end(JSON.stringify({ data: { id: 'chat', projectID: 'project', location } }));
+        if (path === '/api/session/active') return res.end(JSON.stringify({ data: {} }));
+        if (path === '/api/session/chat/inbox') return res.end(JSON.stringify({ data: [] }));
+        if (path === '/api/session/chat/message')
+          return res.end(JSON.stringify({ data: history, cursor: {} }));
+        throw new Error(`Unexpected request: ${req.url}`);
+      }
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        const input = JSON.parse(body);
+        writes.push([path, input]);
+        if (path.endsWith('/move')) {
+          if (failMove) return res.writeHead(500).end();
+          location = { directory: input.directory };
+          return res.writeHead(204).end();
+        }
+        if (path === '/api/worktree' && req.method === 'POST')
+          return res.end(JSON.stringify({ directory: tree }));
+        res.writeHead(204).end();
+      });
+    });
+    const app = createApp(new OpenCodeBackend(async () => ({ url })));
+    const start = (branch?: string) =>
+      app.request('http://localhost/api/sessions/chat/worktree', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch }),
+      });
+    expect((await start('--force')).status).toBe(400);
+    expect((await start('main')).status).toBe(409);
+    expect(writes).toEqual([]);
+    history = [];
+    expect((await start('main')).status).toBe(502);
+    expect(writes.map(([path]) => path)).toEqual([
+      '/api/worktree',
+      '/api/session/chat/move',
+      '/api/worktree',
+    ]);
+    expect(writes[0]![1]).toEqual({ projectID: 'project', from: directory, branch: 'main' });
+    expect(writes[2]![1]).toEqual({ projectID: 'project', directory: tree, force: false });
+    failMove = false;
+    const started = await start('main');
+    expect(started.status).toBe(200);
+    expect(await started.json()).toMatchObject({ id: 'chat', location: { directory: tree } });
+  });
   it('stages undo while idle and commits a staged revert before admitting the next prompt', async () => {
     let active = true;
     const calls: string[] = [];

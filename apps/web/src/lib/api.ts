@@ -36,6 +36,8 @@ import {
   type ShellOutputOutput,
   type SideChatPluginStatus,
   type ClaudeCodeStatus,
+  type UsageLimits,
+  type WorktreeDirectory,
 } from '@opencodex/contracts';
 
 async function nativeRequest<T>(path: string, options?: RequestInit): Promise<T> {
@@ -132,6 +134,10 @@ export const api = {
     ),
   workspaceVcs: (directory: string, signal: AbortSignal) =>
     nativeRequest<WorkspaceVcs>(`/workspace/vcs?${new URLSearchParams({ directory })}`, { signal }),
+  branches: (directory: string, search: string, signal: AbortSignal) =>
+    nativeRequest<string[]>(`/workspace/branches?${new URLSearchParams({ directory, search })}`, {
+      signal,
+    }),
   workspaceMcp: (directory: string, signal: AbortSignal) =>
     nativeRequest<McpServer[]>(`/workspace/mcp?${new URLSearchParams({ directory })}`, { signal }),
   workspaceSkills: (directory: string, signal: AbortSignal) =>
@@ -152,6 +158,18 @@ export const api = {
     }),
   createSession: (directory: string, model?: ModelRef) =>
     nativeRequest<SessionInfo>('/sessions', post({ directory, model })),
+  worktrees: (projectID: string, signal: AbortSignal) =>
+    nativeRequest<WorktreeDirectory[]>(`/projects/${encodeURIComponent(projectID)}/worktrees`, {
+      signal,
+    }),
+  removeWorktree: (projectID: string, directory: string) =>
+    nativeRequest<{ ok: true }>(
+      `/projects/${encodeURIComponent(projectID)}/worktrees?${new URLSearchParams({ directory })}`,
+      { method: 'DELETE' },
+    ),
+  /** Moves an empty chat into a new detached worktree started from `branch`. */
+  startWorktree: (id: string, branch?: string) =>
+    nativeRequest<SessionInfo>(`${sessionPath(id)}/worktree`, post({ branch })),
   session: (id: string, signal: AbortSignal) =>
     nativeRequest<SessionInfo>(sessionPath(id), { signal }),
   viewSession: (id: string, idle: number) =>
@@ -192,6 +210,7 @@ export const api = {
   installSideChatPlugin: () => nativeRequest<{ ok: true }>('/side-chat-plugin', { method: 'PUT' }),
   removeSideChatPlugin: () =>
     nativeRequest<{ ok: true }>('/side-chat-plugin', { method: 'DELETE' }),
+  usageLimits: (signal: AbortSignal) => nativeRequest<UsageLimits>('/usage/limits', { signal }),
   claudeCode: (directory: string | undefined, signal: AbortSignal) =>
     nativeRequest<ClaudeCodeStatus>(
       `/claude-code${directory ? `?${new URLSearchParams({ directory })}` : ''}`,
@@ -243,8 +262,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ directory }),
     }),
-  sessions: (directory: string, cursor: string | undefined, signal: AbortSignal) => {
-    const query = new URLSearchParams({ directory });
+  sessions: (
+    scope: { directory: string } | { project: string },
+    cursor: string | undefined,
+    signal: AbortSignal,
+  ) => {
+    const query = new URLSearchParams(scope);
     if (cursor) query.set('cursor', cursor);
     return request(`/sessions?${query}`, sessionPageSchema, { signal });
   },

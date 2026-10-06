@@ -1,14 +1,22 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 
-export function useSessions(directory: string | undefined, connected: boolean, live: boolean) {
+/** Root threads in one folder, or in every checkout of a native project. */
+export function useSessions(
+  scope: { directory: string } | { project: string } | undefined,
+  connected: boolean,
+  live: boolean,
+) {
   return useInfiniteQuery({
-    queryKey: ['sessions', directory],
-    enabled: Boolean(directory && connected),
+    queryKey: [
+      'sessions',
+      ...(scope && 'project' in scope ? ['project', scope.project] : [scope?.directory]),
+    ],
+    enabled: Boolean(scope && connected),
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) => {
-      if (!directory) throw new Error('Choose a project first.');
-      return api.sessions(directory, pageParam, signal);
+      if (!scope) throw new Error('Choose a project first.');
+      return api.sessions(scope, pageParam, signal);
     },
     getNextPageParam: (page) => page.nextCursor ?? undefined,
     // Keep existing snapshots fresh while the event source is recovering.

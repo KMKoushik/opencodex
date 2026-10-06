@@ -1,4 +1,5 @@
 import {
+  DashboardSpeed01Icon,
   Folder01Icon,
   KeyboardIcon,
   PaintBoardIcon,
@@ -10,6 +11,7 @@ export const settingsSections = [
   { id: 'appearance', label: 'Appearance', icon: PaintBoardIcon },
   { id: 'shortcuts', label: 'Shortcuts', icon: KeyboardIcon },
   { id: 'projects', label: 'Projects', icon: Folder01Icon },
+  { id: 'usage', label: 'Usage', icon: DashboardSpeed01Icon },
 ] as const;
 
 export type SettingsSection = (typeof settingsSections)[number]['id'];

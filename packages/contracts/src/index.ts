@@ -47,10 +47,23 @@ export const projectUpdateSchema = z.object({
 });
 export type ProjectUpdate = z.infer<typeof projectUpdateSchema>;
 
+export const sessionWorktreeSchema = z.object({
+  /** The ref the new detached checkout starts from; omitted means the chat's current HEAD. */
+  branch: z
+    .string()
+    .trim()
+    .min(1)
+    .max(512)
+    .refine((value) => !value.includes('\0') && !value.startsWith('-'))
+    .optional(),
+});
+export const worktreeDirectorySchema = projectInputSchema;
+
 export const sessionSchema = z.object({
   id: z.string(),
   title: z.string(),
   directory: z.string(),
+  projectID: z.string().optional(),
   updatedAt: z.number(),
   time: z.object({
     created: z.number(),
@@ -88,6 +101,26 @@ export type ClaudeCodeStatus = {
   path?: string;
   message?: string;
 };
+/** One subscription rate-limit window, as reported by the plan's own usage endpoint. */
+export type UsageWindow = {
+  id: string;
+  label: string;
+  /** 0–100. */
+  usedPercent: number;
+  /** Epoch milliseconds. */
+  resetsAt?: number;
+  /** Window length in milliseconds, used to compare usage against elapsed time. */
+  durationMs?: number;
+  limited: boolean;
+};
+export type UsageProvider = {
+  id: 'codex' | 'claude' | 'opencode-go';
+  name: string;
+  windows: UsageWindow[];
+  /** Why the windows could not be read; the provider is configured but unavailable. */
+  error?: string;
+};
+export type UsageLimits = { providers: UsageProvider[] };
 export type WorkspaceFile =
   | { kind: 'text'; text: string; version: string; bytes: number }
   | { kind: 'image'; uri: string; bytes: number }
@@ -142,6 +175,8 @@ export type {
   Pty,
   ShellInfo,
   ShellOutputOutput,
+  WorktreeDirectory,
+  WorktreeInfo,
 } from '@opencode/client';
 
 export const modelInputSchema = z.object({
@@ -208,6 +243,7 @@ export function sessionSummary(session: SessionInfo): Session {
     id: session.id,
     title: session.title || 'Untitled session',
     directory: session.location.directory,
+    projectID: session.projectID,
     updatedAt: session.time.updated,
     time: { created: session.time.created, idle: session.time.idle, viewed: session.time.viewed },
     unread: sessionUnread(session),

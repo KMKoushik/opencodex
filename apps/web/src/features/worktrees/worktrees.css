@@ -1,0 +1,176 @@
+.workspace-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-height: 30px;
+  margin-top: 6px;
+  padding-inline: 6px;
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+}
+.workspace-bar .select {
+  min-width: 0;
+}
+.workspace-bar .select-trigger,
+.workspace-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  max-width: 260px;
+  height: 28px;
+  padding-inline: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.workspace-label {
+  min-width: 0;
+  color: var(--text-tertiary);
+}
+.workspace-bar .select-trigger:disabled {
+  color: var(--text-tertiary);
+  cursor: default;
+}
+.workspace-bar .select-chevron {
+  flex-shrink: 0;
+}
+.workspace-bar .select-menu {
+  left: 0;
+  right: auto;
+  width: min(300px, calc(100vw - 48px));
+}
+.workspace-bar .select-menu li {
+  height: auto;
+  min-height: 32px;
+  padding-block: 6px;
+}
+.workspace-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.workspace-option small,
+.branch-current {
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+}
+.workspace-status {
+  padding-inline: 8px;
+}
+.branch-menu {
+  display: flex;
+  flex-direction: column;
+}
+.branch-menu .select-options {
+  min-height: 0;
+}
+.branch-menu li {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.branch-current {
+  font-family: var(--font-sans);
+}
+.branch-search {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 8px;
+  min-height: 36px;
+  margin-bottom: 4px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+}
+.branch-search:focus-within {
+  border-bottom-color: var(--accent);
+}
+.branch-search input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+}
+.branch-search input::placeholder {
+  color: var(--text-tertiary);
+}
+.branch-search input:focus-visible {
+  outline: none;
+}
+.branch-note {
+  padding: 8px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+@media (hover: hover) {
+  .workspace-bar .select-trigger:hover:not(:disabled) {
+    background: var(--hover);
+    color: var(--text);
+  }
+}
+@media (pointer: coarse) {
+  .workspace-bar .select-trigger {
+    min-height: 44px;
+  }
+}
+@media (max-width: 540px), (pointer: coarse) {
+  .branch-search input {
+    font-size: 16px;
+  }
+}
+/* Anchor menus to the bar, not their trigger, so they stay on narrow screens. */
+@media (max-width: 540px) {
+  .workspace-bar {
+    position: relative;
+  }
+  .workspace-bar .select {
+    position: static;
+  }
+}
+.session-worktree {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+.worktree-rows {
+  display: grid;
+  gap: 4px;
+  max-height: min(50vh, 360px);
+  overflow-y: auto;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+}
+.worktree-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px;
+  border-radius: 8px;
+}
+.worktree-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.worktree-row strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+}
+.worktree-path {
+  display: block;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}

@@ -39,6 +39,7 @@ import { api } from '../lib/api';
 import { useCommand } from '../features/shortcuts/use-command';
 import { shortcutProps } from '../features/shortcuts/commands';
 import { ShortcutsSettings } from '../features/shortcuts/shortcuts-settings';
+import { UsageLimitsPage } from '../features/usage/usage-limits';
 import { SessionPanelToggle } from '../features/session-panel/session-panel-toggle';
 import { SessionActionsToggle } from '../features/sessions/session-actions-toggle';
 import { SessionTitle } from '../features/sessions/session-title';
@@ -228,9 +229,13 @@ export function App() {
 
   /** Open a thread from any project, adding its folder to the sidebar when needed. */
   function openSession(session: Session) {
-    const next = projects.find((item) => item.directory === session.directory) ?? {
-      directory: session.directory,
-      name: session.directory.split(/[\\/]/).filter(Boolean).at(-1) ?? session.directory,
+    const nativeProject = queryClient
+      .getQueryData<OpenCodeProject[]>(['projects'])
+      ?.find((item) => item.id === session.projectID);
+    const directory = nativeProject?.canonical ?? session.directory;
+    const next = projects.find((item) => item.directory === directory) ?? {
+      directory,
+      name: nativeProject?.name || directory.split(/[\\/]/).filter(Boolean).at(-1) || directory,
     };
     if (project?.directory !== next.directory) selectProject(next);
     setSelectedID(session.id);
@@ -575,7 +580,7 @@ export function App() {
             <main ref={main} id="main" className="main scrollbar-on-hover" tabIndex={-1}>
               {settings ? (
                 <div className="settings-page" data-section={settings}>
-                  {settings !== 'projects' && <h1>{settingsTitle}</h1>}
+                  {settings !== 'projects' && settings !== 'usage' && <h1>{settingsTitle}</h1>}
                   {settings === 'general' ? (
                     <GeneralSettings
                       live={live}
@@ -584,6 +589,8 @@ export function App() {
                     />
                   ) : settings === 'shortcuts' ? (
                     <ShortcutsSettings />
+                  ) : settings === 'usage' ? (
+                    <UsageLimitsPage connected={connected} />
                   ) : settings === 'projects' ? (
                     <ProjectsSettings
                       connected={connected}

@@ -72,6 +72,7 @@ export function ProjectList({
       {!items.length && <p className="sidebar-note">Open a project to get started.</p>}
       {items.map((project) => {
         const active = current?.directory === project.directory;
+        const metadata = projects.data?.get(project.directory);
         const expanded = expandedDirectories.has(project.directory);
         return (
           <div className="project-group" key={project.directory}>
@@ -147,6 +148,7 @@ export function ProjectList({
             {expanded && (
               <SessionList
                 directory={project.directory}
+                projectID={metadata?.vcs ? metadata.id : undefined}
                 connected={connected}
                 live={live}
                 selectedID={selectedID}

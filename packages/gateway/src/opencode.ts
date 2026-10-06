@@ -123,7 +123,7 @@ export class OpenCodeBackend {
   }
 
   async sessions(
-    directory: string | undefined,
+    filter: { directory?: string; project?: string },
     cursor: string | undefined,
     signal: AbortSignal,
     search?: string,
@@ -132,7 +132,7 @@ export class OpenCodeBackend {
     try {
       const result = await client.session.list(
         {
-          directory,
+          ...filter,
           cursor,
           search,
           limit: 50,
@@ -157,7 +157,7 @@ export class OpenCodeBackend {
       for await (const event of client.event.subscribe({ signal })) {
         if (
           event.type === 'server.connected' ||
-          /^(session|project|permission|form|model|provider|credential|config|agent|filesystem|vcs|mcp|skill|pty|shell)\./.test(
+          /^(session|project|worktree|permission|form|model|provider|credential|config|agent|filesystem|vcs|mcp|skill|pty|shell)\./.test(
             event.type,
           ) ||
           event.type === 'models-dev.refreshed'

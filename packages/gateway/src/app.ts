@@ -27,6 +27,8 @@ import { sideChatRoutes } from './side-chats';
 import { sessionAccessRoutes } from './session-access';
 import { attention } from './attention';
 import { claudeCodeRoutes } from './claude-code';
+import { usageRoutes } from './usage';
+import { worktreeRoutes } from './worktrees';
 
 export function createApp(
   backend = new OpenCodeBackend(),
@@ -59,7 +61,9 @@ export function createApp(
   app.route('/api/sessions', sessionMetadataRoutes(writeMetadata));
   app.route('/api', sideChatRoutes(backend, writeMetadata));
   app.route('/api/claude-code', claudeCodeRoutes(backend));
+  app.route('/api/usage', usageRoutes(backend));
   app.route('/api/sessions', sessionAccessRoutes(backend));
+  app.route('/api', worktreeRoutes(backend));
   app.get('/api/attention', async (c) => {
     const directories = [...new Set(c.req.queries('directory') ?? [])];
     if (directories.length > 32 || directories.some((item) => !item.trim() || item.length > 4096))
@@ -120,12 +124,11 @@ export function createApp(
   app.post('/api/sessions', async (c) => {
     const input = sessionCreateSchema.safeParse(await c.req.json().catch(() => null));
     if (!input.success) return c.json({ message: 'Choose a project first.' }, 400);
-    const project = await resolveProject(input.data.directory);
     return c.json(
       await backend.request(c.req.raw.signal, (client, options) =>
         client.session.create(
           {
-            location: { directory: project.directory },
+            location: { directory: input.data.directory },
             agent: 'build',
             model: input.data.model,
           },
@@ -209,10 +212,15 @@ export function createApp(
     const input = projectInputSchema.safeParse({ directory: c.req.query('directory') });
     if (!input.success) return c.json({ message: 'Choose a project first.' }, 400);
     const resource = c.req.param('resource');
-    if (!['vcs', 'mcp', 'skills'].includes(resource)) return c.notFound();
+    if (!['vcs', 'branches', 'mcp', 'skills'].includes(resource)) return c.notFound();
+    const search = c.req.query('search')?.trim() || undefined;
+    if (search && search.length > 256)
+      return c.json({ message: 'Search with up to 256 characters.' }, 400);
     return c.json(
       await backend.request(c.req.raw.signal, async (client, options) => {
         const location = { directory: input.data.directory };
+        if (resource === 'branches')
+          return (await client.vcs.branch.list({ location, search, limit: 100 }, options)).data;
         if (resource === 'vcs') {
           const [info, files] = await Promise.all([
             client.vcs.get({ location }, options),
@@ -415,21 +423,25 @@ export function createApp(
     const search = c.req.query('search')?.trim() ?? '';
     if (search.length > 256) return c.json({ message: 'Search with up to 256 characters.' }, 400);
     return c.json(
-      await backend.sessions(
-        undefined,
-        c.req.query('cursor'),
-        c.req.raw.signal,
-        search || undefined,
-      ),
+      await backend.sessions({}, c.req.query('cursor'), c.req.raw.signal, search || undefined),
     );
   });
 
   app.get('/api/sessions', async (c) => {
+    // A project lists threads in all of its checkouts, including worktrees.
+    const project = c.req.query('project');
+    if (project !== undefined) {
+      if (!project || project.length > 256) return c.json({ message: 'Choose a project.' }, 400);
+      return c.json(await backend.sessions({ project }, c.req.query('cursor'), c.req.raw.signal));
+    }
     const input = projectInputSchema.safeParse({ directory: c.req.query('directory') });
     if (!input.success) return c.json({ message: 'Choose a project first.' }, 400);
-    const project = await resolveProject(input.data.directory);
     return c.json(
-      await backend.sessions(project.directory, c.req.query('cursor'), c.req.raw.signal),
+      await backend.sessions(
+        { directory: input.data.directory },
+        c.req.query('cursor'),
+        c.req.raw.signal,
+      ),
     );
   });
 

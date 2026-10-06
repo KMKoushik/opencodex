@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ComponentProps, type MouseEvent } from 'react';
-import { GitForkIcon, Tick02Icon } from '@hugeicons/core-free-icons';
+import { FolderGit2Icon, GitForkIcon, Tick02Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import type { OpenCodeProject, Session } from '@opencodex/contracts';
 import { ProjectIcon } from '../projects/project-icon';
@@ -11,6 +11,7 @@ import './session-row.css';
 
 export function SessionRow({
   session,
+  worktree,
   selected,
   responding,
   attention,
@@ -22,6 +23,8 @@ export function SessionRow({
   onSelect,
 }: {
   session: Session;
+  /** The worktree name, for threads outside the project's own folder. */
+  worktree?: string;
   selected: boolean;
   responding: boolean;
   /** A pending approval or question, which outranks the other indicators. */
@@ -190,6 +193,16 @@ export function SessionRow({
             </span>
           ) : null}
           <span className="truncate-fade">{session.title}</span>
+          {worktree && (
+            <span
+              className="session-kind"
+              role="img"
+              aria-label={`Worktree ${worktree}`}
+              title={`Worktree · ${worktree}`}
+            >
+              <HugeiconsIcon icon={FolderGit2Icon} size={14} aria-hidden="true" />
+            </span>
+          )}
           {session.fork && (
             <span
               className="session-kind"

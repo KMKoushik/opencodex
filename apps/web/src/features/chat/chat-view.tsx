@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useIsMutating, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { ModelRef, Project, SessionInfo } from '@opencodex/contracts';
+import type { ModelRef, Project, SessionInfo, WorktreeDirectory } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { Dialog } from '../../components/ui/dialog';
 import { api } from '../../lib/api';
@@ -25,6 +25,8 @@ import { ProjectSwitcher } from '../projects/project-switcher';
 import { undoDraft } from './undo-draft';
 import { ActivityTray } from './activity-tray';
 import { PermissionControl } from './permission-control';
+import { useCheckout } from '../worktrees/checkout';
+import { WorkspaceBar, type WorkspaceChoice } from '../worktrees/workspace-bar';
 
 export function ChatView({
   sessionID,
@@ -61,6 +63,8 @@ export function ChatView({
   const commands = useSlashCommands(chat.info.data?.location.directory, false);
   const sendKey = ['chat', sessionID, 'send'];
   const sending = useIsMutating({ mutationKey: sendKey }) > 0;
+  const checkout = useCheckout(chat.info.data);
+  const [workspace, setWorkspace] = useState<WorkspaceChoice>({ mode: 'local' });
   const timeline = useRef<TimelineHandle>(null);
   const key = ['chat', sessionID];
   const refresh = () =>
@@ -71,7 +75,12 @@ export function ChatView({
   const send = useMutation({
     mutationKey: sendKey,
     gcTime: 0,
-    mutationFn: async (input: { draft: DraftSnapshot; model?: ModelRef; before?: string }) => {
+    mutationFn: async (input: {
+      draft: DraftSnapshot;
+      model?: ModelRef;
+      before?: string;
+      worktree?: { branch?: string };
+    }) => {
       const slash = parseSlash(input.draft.text);
       const local = slash && localCommands.some((item) => item.name === slash.name);
       if (slash && local) {
@@ -155,6 +164,18 @@ export function ChatView({
       const text = reviewPrompt(slash ? slash.text : input.draft.text, input.draft.comments);
       if (text.length > 200_000)
         throw new Error('The draft is too long. Shorten it before sending.');
+      if (input.worktree) {
+        // The same chat moves into its new checkout; a failed prompt retries there.
+        const moved = await api.startWorktree(sessionID, input.worktree.branch);
+        const directory = moved.location.directory;
+        client.setQueryData<WorktreeDirectory[]>(['worktrees', moved.projectID], (trees) =>
+          trees && !trees.some((tree) => tree.directory === directory)
+            ? [...trees, { directory, strategy: 'git' }]
+            : trees,
+        );
+        client.setQueryData(['chat', sessionID, 'info'], moved);
+        void client.invalidateQueries({ queryKey: ['worktrees', moved.projectID] });
+      }
       await api.prompt(
         input.draft.sessionID,
         text,
@@ -486,10 +507,17 @@ export function ChatView({
               const selection = draft.model ?? model;
               if (selection && chat.info.data)
                 drafts.getState().rememberModel(chat.info.data.location.directory, selection);
-              return send.mutateAsync({ draft, model: selection });
+              return send.mutateAsync({
+                draft,
+                model: selection,
+                worktree:
+                  empty && checkout.local && workspace.mode === 'worktree'
+                    ? { branch: workspace.branch }
+                    : undefined,
+              });
             }}
             sending={sending}
-            ready={chat.info.isSuccess && !switching}
+            ready={chat.info.isSuccess && !switching && !checkout.removed}
             running={running}
             stopping={stop.isPending}
             onStop={() => stop.mutate()}
@@ -514,6 +542,14 @@ export function ChatView({
             }
           />
         )}
+        <WorkspaceBar
+          checkout={checkout}
+          choice={workspace}
+          editable={empty && checkout.local}
+          starting={sending && Boolean(send.variables?.worktree)}
+          live={live}
+          onChange={setWorkspace}
+        />
       </div>
     </div>
   );

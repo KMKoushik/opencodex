@@ -3,6 +3,7 @@ import {
   ArrowLeft02Icon,
   ArrowRight02Icon,
   ArrowDown01Icon,
+  DashboardSpeed01Icon,
   FolderOpenIcon,
   PanelLeftCloseIcon,
   PencilEdit02Icon,
@@ -26,6 +27,7 @@ const menuSections = [
   { section: 'projects', label: 'Projects' },
   { section: 'appearance', label: 'Appearance' },
   { section: 'shortcuts', label: 'Shortcuts' },
+  { section: 'usage', label: 'Usage' },
 ] as const;
 
 export function Sidebar({
@@ -198,14 +200,25 @@ export function Sidebar({
         {!settings && (
           <div className="sidebar-footer">
             <UpdateControl compact />
-            <button
-              className="nav-row"
-              {...shortcutProps('settings.open')}
-              onClick={() => onSettings('general')}
-            >
-              <HugeiconsIcon icon={Settings01Icon} size={16} />
-              <span>Settings</span>
-            </button>
+            <div className="sidebar-footer-row">
+              <button
+                className="nav-row"
+                {...shortcutProps('settings.open')}
+                onClick={() => onSettings('general')}
+              >
+                <HugeiconsIcon icon={Settings01Icon} size={16} />
+                <span>Settings</span>
+              </button>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Usage limits"
+                title="Usage limits"
+                onClick={() => onSettings('usage')}
+              >
+                <HugeiconsIcon icon={DashboardSpeed01Icon} size={16} />
+              </Button>
+            </div>
           </div>
         )}
       </div>

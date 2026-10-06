@@ -93,6 +93,15 @@
       "height": 10,
       "title": "SHARED CONTRACTS",
       "color": "#9ca6b5"
+    },
+    {
+      "id": "usage",
+      "x": 89,
+      "y": 50,
+      "width": 28,
+      "height": 8,
+      "title": "PLAN USAGE APIS",
+      "color": "#f6c177"
     }
   ],
   "connectors": [
@@ -177,6 +186,15 @@
       "points": [
         [55, 38],
         [55, 34]
+      ],
+      "color": "#5eead4"
+    },
+    {
+      "points": [
+        [69, 32],
+        [80, 32],
+        [80, 53],
+        [88, 53]
       ],
       "color": "#5eead4"
     }
@@ -494,7 +512,7 @@
     {
       "x": 8,
       "y": 43,
-      "value": "Providers, tools, VCS + filesystem operations"
+      "value": "Providers, tools, worktrees, VCS + filesystem"
     },
     {
       "x": 8,
@@ -612,6 +630,32 @@
       "x": 8,
       "y": 60,
       "value": "Plugin releases idle workers after five minutes"
+    },
+    {
+      "x": 92,
+      "y": 52,
+      "value": "ChatGPT, Claude, Go"
+    },
+    {
+      "x": 92,
+      "y": 53,
+      "value": "Read-only limit checks"
+    },
+    {
+      "x": 92,
+      "y": 55,
+      "value": "Local sign-ins stay in"
+    },
+    {
+      "x": 92,
+      "y": 56,
+      "value": "the gateway"
+    },
+    {
+      "x": 82,
+      "y": 51,
+      "value": "HTTPS",
+      "color": "#5eead4"
     }
   ],
   "requiredLabels": [
@@ -633,7 +677,8 @@
     "localStorage: UI + type",
     "RUNTIME HOSTING",
     "Claude plugin files",
-    "CLAUDE CODE (OPT-IN)"
+    "CLAUDE CODE (OPT-IN)",
+    "PLAN USAGE APIS"
   ],
   "style": {
     "background": "#000000",
