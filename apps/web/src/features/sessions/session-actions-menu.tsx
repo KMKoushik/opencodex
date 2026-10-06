@@ -201,10 +201,13 @@ export function SessionActionsMenu({
             role="menuitem"
             disabled={!connected || focus.pending || (!done && running)}
             title={!done && running ? 'Available when the thread finishes' : undefined}
+            aria-keyshortcuts={
+              !done && onPick ? (isMac ? 'Meta+Enter' : 'Control+Enter') : undefined
+            }
             onClick={() => focus.mutate(done ? 'undone' : 'done', { onSuccess: dismiss })}
           >
             {done ? 'Mark as not done' : 'Mark as done'}
-            {!done && onPick && <span>{isMac ? '⌘' : 'Ctrl+'}Enter</span>}
+            {!done && onPick && <kbd aria-hidden>{isMac ? '⌘↵' : 'Ctrl+Enter'}</kbd>}
           </button>
           <button
             type="button"

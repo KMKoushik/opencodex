@@ -41,7 +41,10 @@
   font-variant-numeric: tabular-nums;
 }
 .session-actions-menu button {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
   width: 100%;
   min-height: 32px;
   padding: 6px 10px;
@@ -56,6 +59,12 @@
 }
 .session-actions-menu button:focus-visible {
   background: var(--hover);
+}
+.session-actions-menu kbd {
+  flex: none;
+  color: var(--text-tertiary);
+  font-family: inherit;
+  font-size: 12px;
 }
 .session-actions-menu button:disabled {
   color: var(--text-tertiary);
