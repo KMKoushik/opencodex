@@ -25,12 +25,14 @@
       "version": "0.1.0",
       "dependencies": {
         "electron-updater": "^6.8.3",
+        "ws": "^8.22.0",
       },
       "devDependencies": {
         "@electron/osx-sign": "^2.3.1",
         "@opencodex/contracts": "workspace:*",
         "@opencodex/gateway": "workspace:*",
         "@tailwindcss/vite": "^4.1.0",
+        "@types/ws": "^8.18.2",
         "@vitejs/plugin-react": "^5.0.0",
         "electron": "44.4.5",
         "electron-builder": "^26.0.0",
@@ -96,6 +98,14 @@
       "dependencies": {
         "@opencode/client": "2.0.19",
         "zod": "^4.1.0",
+      },
+    },
+    "packages/desktop-tools-plugin": {
+      "name": "@opencodex/desktop-tools-plugin",
+      "version": "0.1.0",
+      "dependencies": {
+        "@opencode/client": "2.0.19",
+        "@opencodex/contracts": "workspace:*",
       },
     },
     "packages/gateway": {
@@ -362,6 +372,8 @@
     "@opencodex/contracts": ["@opencodex/contracts@workspace:packages/contracts"],
 
     "@opencodex/desktop": ["@opencodex/desktop@workspace:apps/desktop"],
+
+    "@opencodex/desktop-tools-plugin": ["@opencodex/desktop-tools-plugin@workspace:packages/desktop-tools-plugin"],
 
     "@opencodex/gateway": ["@opencodex/gateway@workspace:packages/gateway"],
 

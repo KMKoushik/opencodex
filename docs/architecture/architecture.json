@@ -1,23 +1,11 @@
 {
-  "canvas": {
-    "width": 119,
-    "height": 74
-  },
+  "canvas": { "width": 154, "height": 87 },
   "boxes": [
-    {
-      "id": "releases",
-      "x": 89,
-      "y": 1,
-      "width": 28,
-      "height": 6,
-      "title": "GITHUB RELEASES",
-      "color": "#f6c177"
-    },
     {
       "id": "ui",
       "x": 2,
       "y": 5,
-      "width": 72,
+      "width": 66,
       "height": 16,
       "title": "SHARED UI / apps/web",
       "color": "#7bb8ff"
@@ -26,636 +14,393 @@
       "id": "browser",
       "x": 5,
       "y": 9,
-      "width": 30,
+      "width": 27,
       "height": 7,
       "title": "BROWSER",
       "color": "#7bb8ff"
     },
     {
       "id": "renderer",
-      "x": 40,
+      "x": 35,
       "y": 9,
-      "width": 30,
+      "width": 29,
       "height": 7,
       "title": "ELECTRON RENDERER",
       "color": "#7bb8ff"
     },
     {
-      "id": "native",
-      "x": 89,
-      "y": 9,
-      "width": 28,
-      "height": 10,
-      "title": "ELECTRON MAIN",
-      "color": "#f6c177"
-    },
-    {
-      "id": "preferences",
-      "x": 89,
-      "y": 22,
-      "width": 28,
-      "height": 9,
-      "title": "DESKTOP STORAGE",
-      "color": "#f6c177"
-    },
-    {
       "id": "gateway",
       "x": 5,
-      "y": 24,
-      "width": 65,
+      "y": 25,
+      "width": 59,
       "height": 10,
       "title": "LOCAL GATEWAY",
       "color": "#5eead4"
     },
     {
-      "id": "opencode",
+      "id": "usage",
       "x": 5,
       "y": 38,
-      "width": 65,
-      "height": 10,
+      "width": 27,
+      "height": 6,
+      "title": "PLAN USAGE APIS",
+      "color": "#5eead4"
+    },
+    {
+      "id": "opencode",
+      "x": 5,
+      "y": 47,
+      "width": 63,
+      "height": 15,
       "title": "OPENCODE 2.x SERVICE",
+      "color": "#c4a7ff"
+    },
+    {
+      "id": "plugin",
+      "x": 8,
+      "y": 56,
+      "width": 56,
+      "height": 4,
+      "title": "DESKTOP TOOLS PLUGIN",
       "color": "#c4a7ff"
     },
     {
       "id": "claude",
       "x": 5,
-      "y": 54,
-      "width": 65,
-      "height": 9,
+      "y": 68,
+      "width": 63,
+      "height": 7,
       "title": "CLAUDE CODE (OPT-IN)",
       "color": "#c4a7ff"
     },
     {
-      "id": "contracts",
-      "x": 89,
-      "y": 35,
-      "width": 28,
-      "height": 10,
-      "title": "SHARED CONTRACTS",
-      "color": "#9ca6b5"
+      "id": "releases",
+      "x": 91,
+      "y": 1,
+      "width": 60,
+      "height": 6,
+      "title": "GITHUB RELEASES",
+      "color": "#f6c177"
     },
     {
-      "id": "usage",
-      "x": 89,
-      "y": 50,
-      "width": 28,
+      "id": "native",
+      "x": 91,
+      "y": 10,
+      "width": 60,
+      "height": 53,
+      "title": "ELECTRON MAIN / apps/desktop",
+      "color": "#f6c177"
+    },
+    {
+      "id": "preferences",
+      "x": 96,
+      "y": 23,
+      "width": 50,
       "height": 8,
-      "title": "PLAN USAGE APIS",
+      "title": "DESKTOP STORAGE",
+      "color": "#f6c177"
+    },
+    {
+      "id": "guestControl",
+      "x": 96,
+      "y": 35,
+      "width": 50,
+      "height": 7,
+      "title": "BROWSER CONTROL",
+      "color": "#f6c177"
+    },
+    {
+      "id": "broker",
+      "x": 96,
+      "y": 48,
+      "width": 50,
+      "height": 12,
+      "title": "DESKTOP TOOL BROKER",
+      "color": "#f6c177"
+    },
+    {
+      "id": "helper",
+      "x": 91,
+      "y": 68,
+      "width": 28,
+      "height": 7,
+      "title": "SWIFT HELPER",
+      "color": "#f6c177"
+    },
+    {
+      "id": "extension",
+      "x": 123,
+      "y": 68,
+      "width": 28,
+      "height": 7,
+      "title": "CHROME / EDGE MV3",
       "color": "#f6c177"
     }
   ],
   "connectors": [
     {
       "points": [
-        [23, 47],
-        [23, 53]
+        [22, 20],
+        [22, 24]
+      ],
+      "color": "#7bb8ff"
+    },
+    {
+      "points": [
+        [52, 25],
+        [52, 21]
+      ],
+      "color": "#5eead4"
+    },
+    {
+      "points": [
+        [38, 34],
+        [38, 46]
+      ],
+      "color": "#7bb8ff"
+    },
+    {
+      "points": [
+        [55, 47],
+        [55, 35]
+      ],
+      "color": "#5eead4"
+    },
+    {
+      "points": [
+        [18, 34],
+        [18, 37]
+      ],
+      "color": "#5eead4"
+    },
+    {
+      "points": [
+        [22, 61],
+        [22, 67]
       ],
       "color": "#c4a7ff"
     },
     {
       "points": [
-        [55, 54],
-        [55, 48]
+        [55, 68],
+        [55, 62]
       ],
       "color": "#5eead4"
     },
     {
       "points": [
-        [103, 9],
-        [103, 7]
+        [63, 12],
+        [90, 12]
       ],
       "color": "#f6c177"
     },
     {
       "points": [
-        [115, 6],
-        [115, 8]
+        [91, 14],
+        [64, 14]
       ],
       "color": "#f6c177"
     },
     {
       "points": [
-        [69, 11],
-        [88, 11]
+        [115, 10],
+        [115, 7]
       ],
       "color": "#f6c177"
     },
     {
       "points": [
-        [89, 12],
-        [70, 12]
+        [136, 6],
+        [136, 9]
       ],
       "color": "#f6c177"
     },
     {
       "points": [
-        [69, 14],
-        [88, 14]
+        [121, 19],
+        [121, 22]
       ],
       "color": "#f6c177"
     },
     {
       "points": [
-        [103, 18],
-        [103, 21]
+        [63, 58],
+        [95, 58]
+      ],
+      "color": "#c4a7ff"
+    },
+    {
+      "points": [
+        [121, 48],
+        [121, 42]
       ],
       "color": "#f6c177"
     },
     {
       "points": [
-        [23, 20],
-        [23, 23]
+        [105, 59],
+        [105, 67]
       ],
-      "color": "#7bb8ff"
+      "color": "#f6c177"
     },
     {
       "points": [
-        [55, 24],
-        [55, 21]
+        [136, 59],
+        [136, 67]
       ],
-      "color": "#5eead4"
-    },
-    {
-      "points": [
-        [23, 33],
-        [23, 37]
-      ],
-      "color": "#7bb8ff"
-    },
-    {
-      "points": [
-        [55, 38],
-        [55, 34]
-      ],
-      "color": "#5eead4"
-    },
-    {
-      "points": [
-        [69, 32],
-        [80, 32],
-        [80, 53],
-        [88, 53]
-      ],
-      "color": "#5eead4"
+      "color": "#f6c177"
     }
   ],
   "lines": [
     {
       "points": [
-        [2, 65],
-        [114, 65]
+        [2, 79],
+        [148, 79]
       ],
       "color": "#626c7a"
     }
   ],
   "icons": [
+    { "id": "outline/browser", "x": 8, "y": 11, "width": 3, "height": 2, "color": "#7bb8ff" },
     {
-      "id": "outline/browser",
-      "x": 8,
+      "id": "outline/device-desktop",
+      "x": 38,
       "y": 11,
       "width": 3,
       "height": 2,
       "color": "#7bb8ff"
     },
+    { "id": "outline/api", "x": 8, "y": 27, "width": 3, "height": 2, "color": "#5eead4" },
+    { "id": "outline/robot", "x": 8, "y": 49, "width": 3, "height": 2, "color": "#c4a7ff" },
     {
       "id": "outline/device-desktop",
-      "x": 43,
-      "y": 11,
-      "width": 3,
-      "height": 2,
-      "color": "#7bb8ff"
-    },
-    {
-      "id": "outline/device-desktop",
-      "x": 92,
-      "y": 11,
+      "x": 96,
+      "y": 12,
       "width": 3,
       "height": 2,
       "color": "#f6c177"
     },
     {
       "id": "outline/file-settings",
-      "x": 92,
-      "y": 24,
+      "x": 99,
+      "y": 25,
       "width": 3,
       "height": 2,
       "color": "#f6c177"
     },
     {
-      "id": "outline/api",
-      "x": 8,
-      "y": 26,
-      "width": 3,
-      "height": 2,
-      "color": "#5eead4"
-    },
-    {
-      "id": "outline/robot",
-      "x": 8,
-      "y": 40,
-      "width": 3,
-      "height": 2,
-      "color": "#c4a7ff"
-    },
-    {
       "id": "outline/brackets-contain",
-      "x": 92,
-      "y": 37,
+      "x": 2,
+      "y": 77,
       "width": 3,
-      "height": 2,
+      "height": 1,
       "color": "#9ca6b5"
     }
   ],
   "texts": [
-    {
-      "x": 92,
-      "y": 2,
-      "value": "DMG + ZIP + manifest"
-    },
-    {
-      "x": 92,
-      "y": 3,
-      "value": "Same self-signed key"
-    },
-    {
-      "x": 92,
-      "y": 4,
-      "value": "Public HTTPS update feed"
-    },
-    {
-      "x": 89,
-      "y": 7,
-      "value": "HTTPS",
-      "color": "#f6c177"
-    },
-    {
-      "x": 2,
-      "y": 0,
-      "value": "OPENCODEX ARCHITECTURE",
-      "color": "#ffffff"
-    },
+    { "x": 2, "y": 0, "value": "OPENCODEX ARCHITECTURE", "color": "#ffffff" },
     {
       "x": 2,
       "y": 2,
-      "value": "Two surfaces. One shared UI. One OpenCode backend.",
+      "value": "Shared UI and API. OpenCode executes. Desktop supplies controls.",
       "color": "#aeb8c6"
     },
+    { "x": 35, "y": 7, "value": "React + TypeScript + TanStack Query", "anchor": "center" },
+    { "x": 13, "y": 11, "value": "Browser app" },
+    { "x": 8, "y": 13, "value": "localStorage prefs" },
+    { "x": 8, "y": 14, "value": "No native tool host" },
+    { "x": 43, "y": 11, "value": "Desktop app" },
+    { "x": 38, "y": 13, "value": "Bounded webview leases" },
+    { "x": 38, "y": 14, "value": "Guests: no preload" },
     {
-      "x": 38,
-      "y": 7,
-      "value": "React + TypeScript + TanStack Query",
-      "anchor": "center"
-    },
-    {
-      "x": 13,
-      "y": 11,
-      "value": "Browser app"
-    },
-    {
-      "x": 8,
-      "y": 13,
-      "value": "localStorage: UI + type"
-    },
-    {
-      "x": 8,
-      "y": 14,
-      "value": "Models + session layout"
-    },
-    {
-      "x": 48,
-      "y": 11,
-      "value": "Desktop app"
-    },
-    {
-      "x": 43,
-      "y": 13,
-      "value": "Sandboxed UI + page tabs"
-    },
-    {
-      "x": 43,
-      "y": 14,
-      "value": "Native IPC available"
-    },
-    {
-      "x": 38,
+      "x": 35,
       "y": 17,
-      "value": "Zustand drafts + session layout; Query API state",
+      "value": "Query snapshots; Zustand drafts and session layouts",
       "anchor": "center"
     },
-    {
-      "x": 38,
-      "y": 18,
-      "value": "Warm session card; small screens use a popover",
-      "anchor": "center"
-    },
-    {
-      "x": 38,
-      "y": 19,
-      "value": "Session workspace; activity tray + dockable terminal",
-      "anchor": "center"
-    },
-    {
-      "x": 76,
-      "y": 10,
-      "value": "preload IPC",
-      "color": "#f6c177"
-    },
-    {
-      "x": 76,
-      "y": 13,
-      "value": "web events",
-      "color": "#f6c177"
-    },
-    {
-      "x": 97,
-      "y": 11,
-      "value": "apps/desktop"
-    },
-    {
-      "x": 92,
-      "y": 13,
-      "value": "Window + browser guests"
-    },
-    {
-      "x": 92,
-      "y": 14,
-      "value": "Pick/reveal; local HTML"
-    },
-    {
-      "x": 92,
-      "y": 15,
-      "value": "OS browser + clipboard"
-    },
-    {
-      "x": 92,
-      "y": 16,
-      "value": "OS edit + spelling menus"
-    },
-    {
-      "x": 92,
-      "y": 17,
-      "value": "Updates + restart"
-    },
-    {
-      "x": 89,
-      "y": 19,
-      "value": "read / write",
-      "color": "#f6c177"
-    },
-    {
-      "x": 97,
-      "y": 24,
-      "value": "Local app storage"
-    },
-    {
-      "x": 97,
-      "y": 25,
-      "value": "electron-store"
-    },
-    {
-      "x": 92,
-      "y": 26,
-      "value": "preferences.json"
-    },
-    {
-      "x": 92,
-      "y": 27,
-      "value": "Projects, UI + font size"
-    },
-    {
-      "x": 92,
-      "y": 28,
-      "value": "Models + session layout"
-    },
-    {
-      "x": 92,
-      "y": 29,
-      "value": "Updater; browser profile"
-    },
+    { "x": 35, "y": 19, "value": "Shared workbench and terminal presentation", "anchor": "center" },
+    { "x": 7, "y": 22, "value": "HTTP /api", "color": "#7bb8ff" },
+    { "x": 7, "y": 23, "value": "+ WS input", "color": "#7bb8ff" },
+    { "x": 55, "y": 22, "value": "SSE + WS", "color": "#5eead4" },
+    { "x": 13, "y": 27, "value": "packages/gateway" },
+    { "x": 8, "y": 29, "value": "Official V2 client; private service credentials" },
+    { "x": 8, "y": 30, "value": "Native APIs, events and ticketed PTY relay" },
+    { "x": 8, "y": 31, "value": "Local host-file fallback: media + reveal" },
+    { "x": 8, "y": 32, "value": "Local plugin-file install fallback" },
+    { "x": 5, "y": 36, "value": "HTTPS", "color": "#5eead4" },
+    { "x": 8, "y": 40, "value": "ChatGPT, Claude, Go" },
+    { "x": 8, "y": 42, "value": "Gateway-held sign-ins" },
+    { "x": 40, "y": 38, "value": "HTTP", "color": "#7bb8ff" },
+    { "x": 40, "y": 39, "value": "+ WS", "color": "#7bb8ff" },
+    { "x": 58, "y": 38, "value": "Events", "color": "#5eead4" },
+    { "x": 58, "y": 39, "value": "+ WS", "color": "#5eead4" },
+    { "x": 13, "y": 49, "value": "Owns sessions, execution, permissions and history" },
+    { "x": 8, "y": 51, "value": "Native tools, worktrees and filesystem" },
+    { "x": 8, "y": 52, "value": "Side-chat + Claude plugins; tasks plugin durable KV" },
+    { "x": 8, "y": 54, "value": "Survives OpenCodex shutdown" },
+    { "x": 11, "y": 57, "value": "packages/desktop-tools-plugin" },
+    { "x": 11, "y": 58, "value": "Native sessionID; OpenCode permission checks" },
+    { "x": 7, "y": 64, "value": "spawn + stdin", "color": "#c4a7ff" },
+    { "x": 58, "y": 64, "value": "stdout + tools", "color": "#5eead4" },
+    { "x": 8, "y": 70, "value": "Official CLI subprocess on the OpenCode host" },
+    { "x": 8, "y": 71, "value": "Own login and Claude conversation files" },
+    { "x": 8, "y": 73, "value": "Workspace tools return to OpenCode permissions" },
+    { "x": 94, "y": 3, "value": "DMG + ZIP + manifest; stable signing identity" },
+    { "x": 94, "y": 5, "value": "Public HTTPS update feed" },
+    { "x": 94, "y": 8, "value": "check", "color": "#f6c177" },
+    { "x": 138, "y": 8, "value": "download", "color": "#f6c177" },
+    { "x": 70, "y": 11, "value": "preload IPC", "color": "#f6c177" },
+    { "x": 70, "y": 13, "value": "events + intents", "color": "#f6c177" },
+    { "x": 101, "y": 12, "value": "Native windows and OS integrations" },
+    { "x": 96, "y": 15, "value": "Updates + restart" },
+    { "x": 96, "y": 17, "value": "Built UI + gateway hosted here in production" },
+    { "x": 96, "y": 19, "value": "Preference I/O" },
+    { "x": 104, "y": 25, "value": "electron-store: preferences.json" },
+    { "x": 99, "y": 27, "value": "Projects, appearance, models, session layouts" },
+    { "x": 99, "y": 29, "value": "Updater cache; isolated browser profile" },
+    { "x": 99, "y": 37, "value": "Session-scoped registered webview guests" },
+    { "x": 99, "y": 39, "value": "Debugger/CDP snapshots, images and input" },
+    { "x": 123, "y": 44, "value": "embedded", "color": "#f6c177" },
+    { "x": 99, "y": 50, "value": "Ephemeral loopback HTTP + extension WS" },
+    { "x": 99, "y": 52, "value": "Private discovery JSON; plugin Bearer secret" },
+    { "x": 99, "y": 54, "value": "Global Pause aborts calls until Resume" },
+    { "x": 99, "y": 56, "value": "Endpoint and controls close with the app" },
+    { "x": 70, "y": 54, "value": "discovery + HTTP", "color": "#c4a7ff" },
+    { "x": 70, "y": 55, "value": "Bearer POST /call", "color": "#c4a7ff" },
+    { "x": 70, "y": 57, "value": "127.0.0.1", "color": "#c4a7ff" },
+    { "x": 91, "y": 65, "value": "stdio", "color": "#f6c177" },
+    { "x": 138, "y": 65, "value": "paired WS", "color": "#f6c177" },
+    { "x": 94, "y": 70, "value": "App-bundled subprocess" },
+    { "x": 94, "y": 71, "value": "AX + ScreenCaptureKit" },
+    { "x": 94, "y": 73, "value": "macOS 14+; OS grants" },
+    { "x": 126, "y": 70, "value": "apps/browser-extension" },
+    { "x": 126, "y": 71, "value": "chrome.debugger" },
+    { "x": 126, "y": 72, "value": "chrome.storage pairing" },
+    { "x": 126, "y": 73, "value": "Explicit tab claims" },
     {
       "x": 7,
-      "y": 21,
-      "value": "HTTP /api",
-      "color": "#7bb8ff"
-    },
-    {
-      "x": 7,
-      "y": 22,
-      "value": "+ WS input",
-      "color": "#7bb8ff"
-    },
-    {
-      "x": 58,
-      "y": 21,
-      "value": "SSE + WS",
-      "color": "#5eead4"
-    },
-    {
-      "x": 58,
-      "y": 22,
-      "value": "output",
-      "color": "#5eead4"
-    },
-    {
-      "x": 13,
-      "y": 26,
-      "value": "packages/gateway"
-    },
-    {
-      "x": 8,
-      "y": 28,
-      "value": "Hono + V2 client; private service credentials"
-    },
-    {
-      "x": 8,
-      "y": 29,
-      "value": "Bounded previews/logs; version-checked file writes"
-    },
-    {
-      "x": 8,
-      "y": 30,
-      "value": "Native APIs + origin-checked, ticketed PTY relay"
-    },
-    {
-      "x": 8,
-      "y": 31,
-      "value": "Host files: read-only video/PDF ranges + reveal targets"
-    },
-    {
-      "x": 7,
-      "y": 34,
-      "value": "HTTP + WS",
-      "color": "#7bb8ff"
-    },
-    {
-      "x": 7,
-      "y": 35,
-      "value": "official client",
-      "color": "#7bb8ff"
-    },
-    {
-      "x": 58,
-      "y": 34,
-      "value": "Events + WS",
-      "color": "#5eead4"
-    },
-    {
-      "x": 13,
-      "y": 40,
-      "value": "Shared agent backend"
-    },
-    {
-      "x": 8,
-      "y": 42,
-      "value": "Owns sessions, permission rules + execution"
-    },
-    {
-      "x": 8,
-      "y": 43,
-      "value": "Providers, tools, worktrees, VCS + filesystem"
-    },
-    {
-      "x": 8,
-      "y": 44,
-      "value": "Survives OpenCodex shutdown"
-    },
-    {
-      "x": 8,
-      "y": 45,
-      "value": "Durable sessions; native agent shells + PTY replay"
-    },
-    {
-      "x": 97,
-      "y": 37,
-      "value": "Shared types"
-    },
-    {
-      "x": 92,
-      "y": 39,
-      "value": "packages/contracts"
-    },
-    {
-      "x": 92,
-      "y": 41,
-      "value": "API types + schemas"
-    },
-    {
-      "x": 92,
-      "y": 42,
-      "value": "Native bridge types"
-    },
-    {
-      "x": 89,
-      "y": 46,
-      "value": "Code, not a service",
+      "y": 77,
+      "value": "packages/contracts: API schemas + native bridge/tool types (shared source, not a service)",
       "color": "#aeb8c6"
     },
-    {
-      "x": 2,
-      "y": 67,
-      "value": "RUNTIME HOSTING",
-      "color": "#ffffff"
-    },
-    {
-      "x": 2,
-      "y": 69,
-      "value": "DEV",
-      "color": "#7bb8ff"
-    },
+    { "x": 2, "y": 81, "value": "RUNTIME HOSTING", "color": "#ffffff" },
+    { "x": 2, "y": 83, "value": "DEV", "color": "#7bb8ff" },
     {
       "x": 15,
-      "y": 69,
-      "value": "Vite :5173 proxies /api to :4310; macOS launches cached OpenCodex.app."
+      "y": 83,
+      "value": "Vite :5173 proxies /api to :4310; desktop launches the cached macOS app."
     },
-    {
-      "x": 2,
-      "y": 70,
-      "value": "WEB BUILD",
-      "color": "#5eead4"
-    },
+    { "x": 2, "y": 84, "value": "WEB BUILD", "color": "#5eead4" },
     {
       "x": 15,
-      "y": 70,
-      "value": "Node gateway serves the UI and API on one loopback origin."
+      "y": 84,
+      "value": "Node hosts the UI and gateway on loopback; native tools require a running desktop app."
     },
-    {
-      "x": 2,
-      "y": 71,
-      "value": "DESKTOP",
-      "color": "#f6c177"
-    },
+    { "x": 2, "y": 85, "value": "DESKTOP", "color": "#f6c177" },
     {
       "x": 15,
-      "y": 71,
-      "value": "Electron main hosts the gateway and built UI on a free loopback port."
-    },
-    {
-      "x": 8,
-      "y": 32,
-      "value": "Side chats; opt-in side-chat, tasks + Claude plugin files"
-    },
-    {
-      "x": 8,
-      "y": 46,
-      "value": "Loads side-chat, tasks + Claude plugins; task plugin KV"
-    },
-    {
-      "x": 7,
-      "y": 49,
-      "value": "spawn + stdin",
-      "color": "#c4a7ff"
-    },
-    {
-      "x": 58,
-      "y": 49,
-      "value": "stdout + tools",
-      "color": "#5eead4"
-    },
-    {
-      "x": 8,
-      "y": 56,
-      "value": "Official CLI subprocess on the OpenCode host"
-    },
-    {
-      "x": 8,
-      "y": 58,
-      "value": "Own login, inference and Claude conversation files"
-    },
-    {
-      "x": 8,
-      "y": 59,
-      "value": "Workspace tools return to OpenCode permissions"
-    },
-    {
-      "x": 8,
-      "y": 60,
-      "value": "Plugin releases idle workers after five minutes"
-    },
-    {
-      "x": 92,
-      "y": 52,
-      "value": "ChatGPT, Claude, Go"
-    },
-    {
-      "x": 92,
-      "y": 53,
-      "value": "Read-only limit checks"
-    },
-    {
-      "x": 92,
-      "y": 55,
-      "value": "Local sign-ins stay in"
-    },
-    {
-      "x": 92,
-      "y": 56,
-      "value": "the gateway"
-    },
-    {
-      "x": 82,
-      "y": 51,
-      "value": "HTTPS",
-      "color": "#5eead4"
+      "y": 85,
+      "value": "Electron hosts the built UI and gateway; its separate tool endpoint also runs during development."
     }
   ],
   "requiredLabels": [
@@ -663,7 +408,7 @@
     "SHARED UI / apps/web",
     "BROWSER",
     "ELECTRON RENDERER",
-    "ELECTRON MAIN",
+    "ELECTRON MAIN / apps/desktop",
     "GITHUB RELEASES",
     "Updates + restart",
     "preload IPC",
@@ -674,11 +419,18 @@
     "Survives OpenCodex shutdown",
     "packages/contracts",
     "preferences.json",
-    "localStorage: UI + type",
+    "localStorage prefs",
     "RUNTIME HOSTING",
-    "Claude plugin files",
     "CLAUDE CODE (OPT-IN)",
-    "PLAN USAGE APIS"
+    "PLAN USAGE APIS",
+    "tasks plugin durable KV",
+    "packages/desktop-tools-plugin",
+    "DESKTOP TOOL BROKER",
+    "Bearer POST /call",
+    "SWIFT HELPER",
+    "apps/browser-extension",
+    "Global Pause aborts calls until Resume",
+    "Local plugin-file install fallback"
   ],
   "style": {
     "background": "#000000",

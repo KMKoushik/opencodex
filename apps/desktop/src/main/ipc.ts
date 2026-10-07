@@ -4,6 +4,7 @@ import { createPreferences, preferenceInputSchema } from './preferences';
 import { listOpenApps, openInApp, openAppInput, revealFile, revealFileInput } from './open-apps';
 import type { createUpdates } from './updates';
 import { annotateBrowserPage, cancelBrowserAnnotation, loadBrowserFile } from './browser';
+import { browserControl } from './browser-control';
 
 export function registerNativeHandlers(
   allowedOrigin: string,
@@ -24,6 +25,9 @@ export function registerNativeHandlers(
     return window;
   }
   ipcMain.handle(desktopChannels.getFullscreen, (event) => requireWindow(event).isFullScreen());
+  ipcMain.handle(desktopChannels.registerBrowserControl, (event, input: unknown) =>
+    browserControl.register(requireWindow(event), input),
+  );
   ipcMain.handle(desktopChannels.selectDirectory, async (event) => {
     const window = requireWindow(event);
     const result = await dialog.showOpenDialog(window, {

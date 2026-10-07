@@ -1,5 +1,8 @@
+import type { DesktopToolsBridge } from './desktop-tools';
+
 // Only native capabilities cross IPC. Agent data always uses the gateway API.
 export interface DesktopBridge {
+  tools: DesktopToolsBridge;
   getFullscreen(): Promise<boolean>;
   onFullscreenChanged(callback: (fullscreen: boolean) => void): () => void;
   selectDirectory(): Promise<string | null>;
@@ -23,6 +26,8 @@ export interface DesktopBridge {
     theme: BrowserAnnotationTheme,
   ): Promise<BrowserAnnotation | null>;
   cancelBrowserAnnotation(webContentsId: number): Promise<void>;
+  onBrowserControl(callback: (intent: BrowserControlIntent) => void): () => void;
+  registerBrowserControl(input: BrowserControlRegistration): Promise<void>;
   platform: string;
 }
 
@@ -30,6 +35,18 @@ export interface DesktopBridge {
 export const browserPartition = 'persist:opencodex-browser';
 export const browserFileScheme = 'opencodex-preview';
 export type BrowserOpenTabRequest = { webContentsId: number; url: string };
+/** Native browser runtime messages; tab presentation remains in the workbench. */
+export type BrowserControlIntent =
+  | { type: 'mount'; requestID: string; sessionID: string; tabID: string; url: string }
+  | { type: 'release'; sessionID: string; tabID: string }
+  | { type: 'close'; sessionID: string; tabID: string }
+  | { type: 'activity'; sessionID: string; tabID: string; method: string | null; paused: boolean };
+export type BrowserControlRegistration =
+  | { type: 'host' }
+  | { type: 'ready'; sessionID: string; tabID: string; webContentsId: number; requestID?: string }
+  | { type: 'ack'; requestID: string; error?: string }
+  | { type: 'sync'; sessionID: string; tabIDs: string[] }
+  | { type: 'takeover'; sessionID: string; paused: boolean };
 /** CSS values for the overlay drawn inside the page, so it matches the app theme. */
 export type BrowserAnnotationTheme = {
   primary: string;
@@ -154,4 +171,6 @@ export const desktopChannels = {
   loadBrowserFile: 'desktop:load-browser-file',
   annotateBrowserPage: 'desktop:annotate-browser-page',
   cancelBrowserAnnotation: 'desktop:cancel-browser-annotation',
+  browserControl: 'desktop:browser-control',
+  registerBrowserControl: 'desktop:register-browser-control',
 } as const;

@@ -1,72 +1,86 @@
   OPENCODEX ARCHITECTURE
-                                                                                         ┌──── GITHUB RELEASES ─────┐
-  Two surfaces. One shared UI. One OpenCode backend.                                     │  DMG + ZIP + manifest    │
-                                                                                         │  Same self-signed key    │
-                                                                                         │  Public HTTPS update feed│
-  ┌──────────────────────── SHARED UI / apps/web ────────────────────────┐               │                          │
-  │                                                                      │               └─────────────────────────┬┘
-  │                  React + TypeScript + TanStack Query                 │               HTTPS         ▲           │
-  │                                                                      │                             │           ▼
-  │  ┌───────── BROWSER ──────────┐     ┌──── ELECTRON RENDERER ─────┐   │               ┌───── ELECTRON MAIN ──────┐
-  │  │                            │     │                            │   │  preload IPC  │                          │
-  │  │  <>   Browser app          │     │  <>   Desktop app          ├───┼──────────────▶│  <>   apps/desktop       │
-  │  │                            │     │                            │◀──┼───────────────┤                          │
-  │  │  localStorage: UI + type   │     │  Sandboxed UI + page tabs  │   │  web events   │  Window + browser guests │
-  │  │  Models + session layout   │     │  Native IPC available      ├───┼──────────────▶│  Pick/reveal; local HTML │
-  │  └────────────────────────────┘     └────────────────────────────┘   │               │  OS browser + clipboard  │
-  │                                                                      │               │  OS edit + spelling menus│
-  │           Zustand drafts + session layout; Query API state           │               │  Updates + restart       │
-  │            Warm session card; small screens use a popover            │               └─────────────┬────────────┘
-  │         Session workspace; activity tray + dockable terminal         │               read / write  │
-  └────────────────────┬─────────────────────────────────────────────────┘                             │
-       HTTP /api       │                               ▲  SSE + WS                                     ▼
-       + WS input      │                               │  output                         ┌──── DESKTOP STORAGE ─────┐
-                       ▼                               │                                 │                          │
-     ┌──────────────────────── LOCAL GATEWAY ──────────┴─────────────┐                   │  <>   Local app storage  │
-     │                                                               │                   │       electron-store     │
-     │  <>   packages/gateway                                        │                   │  preferences.json        │
-     │                                                               │                   │  Projects, UI + font size│
-     │  Hono + V2 client; private service credentials                │                   │  Models + session layout │
-     │  Bounded previews/logs; version-checked file writes           │                   │  Updater; browser profile│
-     │  Native APIs + origin-checked, ticketed PTY relay             │                   └──────────────────────────┘
-     │  Host files: read-only video/PDF ranges + reveal targets      │
-     │  Side chats; opt-in side-chat, tasks + Claude plugin files    ├──────────┐
-     └─────────────────┬─────────────────────────────────────────────┘          │
-       HTTP + WS       │                               ▲  Events + WS           │
-       official client │                               │                        │        ┌──── SHARED CONTRACTS ────┐
-                       │                               │                        │        │                          │
-                       ▼                               │                        │        │  <>   Shared types       │
-     ┌──────────────────── OPENCODE 2.x SERVICE ───────┴─────────────┐          │        │                          │
-     │                                                               │          │        │  packages/contracts      │
-     │  <>   Shared agent backend                                    │          │        │                          │
-     │                                                               │          │        │  API types + schemas     │
-     │  Owns sessions, permission rules + execution                  │          │        │  Native bridge types     │
-     │  Providers, tools, worktrees, VCS + filesystem                │          │        │                          │
-     │  Survives OpenCodex shutdown                                  │          │        └──────────────────────────┘
-     │  Durable sessions; native agent shells + PTY replay           │          │
-     │  Loads side-chat, tasks + Claude plugins; task plugin KV      │          │        Code, not a service
-     └─────────────────┬─────────────────────────────────────────────┘          │
-                       │                               ▲                        │
-       spawn + stdin   │                               │  stdout + tools        │
-                       │                               │                        │        ┌──── PLAN USAGE APIS ─────┐
-                       │                               │                        │ HTTPS  │                          │
-                       │                               │                        │        │  ChatGPT, Claude, Go     │
-                       ▼                               │                        └───────▶│  Read-only limit checks  │
-     ┌──────────────────── CLAUDE CODE (OPT-IN) ───────┴─────────────┐                   │                          │
-     │                                                               │                   │  Local sign-ins stay in  │
-     │  Official CLI subprocess on the OpenCode host                 │                   │  the gateway             │
-     │                                                               │                   └──────────────────────────┘
-     │  Own login, inference and Claude conversation files           │
-     │  Workspace tools return to OpenCode permissions               │
-     │  Plugin releases idle workers after five minutes              │
-     │                                                               │
-     └───────────────────────────────────────────────────────────────┘
+                                                                                           ┌──────────────────── GITHUB RELEASES ─────────────────────┐
+  Shared UI and API. OpenCode executes. Desktop supplies controls.                         │                                                          │
+                                                                                           │  DMG + ZIP + manifest; stable signing identity           │
+                                                                                           │                                                          │
+  ┌───────────────────── SHARED UI / apps/web ─────────────────────┐                       │  Public HTTPS update feed                                │
+  │                                                                │                       └────────────────────────────────────────────┬─────────────┘
+  │               React + TypeScript + TanStack Query              │                                               ▲                    │
+  │                                                                │                          check                │                    │ download
+  │  ┌──────── BROWSER ────────┐   ┌──── ELECTRON RENDERER ────┐   │                                               │                    ▼
+  │  │                         │   │                           │   │                       ┌────────────── ELECTRON MAIN / apps/desktop ──────────────┐
+  │  │  <>   Browser app       │   │  <>   Desktop app         │   │  preload IPC          │                                                          │
+  │  │                         │   │                           ├───┼──────────────────────▶│    <>   Native windows and OS integrations               │
+  │  │  localStorage prefs     │   │  Bounded webview leases   │   │  events + intents     │                                                          │
+  │  │  No native tool host    │   │  Guests: no preload       │◀──┼───────────────────────┤                                                          │
+  │  └─────────────────────────┘   └───────────────────────────┘   │                       │    Updates + restart                                     │
+  │                                                                │                       │                                                          │
+  │       Query snapshots; Zustand drafts and session layouts      │                       │    Built UI + gateway hosted here in production          │
+  │                                                                │                       │                                                          │
+  │           Shared workbench and terminal presentation           │                       │    Preference I/O           │                            │
+  └───────────────────┬────────────────────────────────────────────┘                       │                             │                            │
+                      │                             ▲                                      │                             │                            │
+       HTTP /api      │                             │  SSE + WS                            │                             ▼                            │
+       + WS input     │                             │                                      │    ┌─────────────── DESKTOP STORAGE ────────────────┐    │
+                      ▼                             │                                      │    │                                                │    │
+     ┌───────────────────── LOCAL GATEWAY ──────────┴──────────┐                           │    │  <>   electron-store: preferences.json         │    │
+     │                                                         │                           │    │                                                │    │
+     │  <>   packages/gateway                                  │                           │    │  Projects, appearance, models, session layouts │    │
+     │                                                         │                           │    │                                                │    │
+     │  Official V2 client; private service credentials        │                           │    │  Updater cache; isolated browser profile       │    │
+     │  Native APIs, events and ticketed PTY relay             │                           │    └────────────────────────────────────────────────┘    │
+     │  Local host-file fallback: media + reveal               │                           │                                                          │
+     │  Local plugin-file install fallback                     │                           │                                                          │
+     │                                                         │                           │                                                          │
+     └────────────┬───────────────────┬────────────────────────┘                           │                                                          │
+                  │                   │                ▲                                   │    ┌─────────────── BROWSER CONTROL ────────────────┐    │
+     HTTPS        │                   │                │                                   │    │                                                │    │
+                  ▼                   │                │                                   │    │  Session-scoped registered webview guests      │    │
+     ┌──── PLAN USAGE APIS ────┐      │ HTTP           │  Events                           │    │                                                │    │
+     │                         │      │ + WS           │  + WS                             │    │  Debugger/CDP snapshots, images and input      │    │
+     │  ChatGPT, Claude, Go    │      │                │                                   │    │                                                │    │
+     │                         │      │                │                                   │    └────────────────────────────────────────────────┘    │
+     │  Gateway-held sign-ins  │      │                │                                   │                             ▲                            │
+     └─────────────────────────┘      │                │                                   │                             │                            │
+                                      │                │                                   │                             │ embedded                   │
+                                      │                │                                   │                             │                            │
+                                      ▼                │                                   │                             │                            │
+     ┌─────────────────── OPENCODE 2.x SERVICE ────────┴───────────┐                       │                             │                            │
+     │                                                             │                       │    ┌───────────── DESKTOP TOOL BROKER ──────────────┐    │
+     │  <>   Owns sessions, execution, permissions and history     │                       │    │                                                │    │
+     │                                                             │                       │    │  Ephemeral loopback HTTP + extension WS        │    │
+     │  Native tools, worktrees and filesystem                     │                       │    │                                                │    │
+     │  Side-chat + Claude plugins; tasks plugin durable KV        │                       │    │  Private discovery JSON; plugin Bearer secret  │    │
+     │                                                             │                       │    │                                                │    │
+     │  Survives OpenCodex shutdown                                │  discovery + HTTP     │    │  Global Pause aborts calls until Resume        │    │
+     │                                                             │  Bearer POST /call    │    │                                                │    │
+     │  ┌──────────────── DESKTOP TOOLS PLUGIN ────────────────┐   │                       │    │  Endpoint and controls close with the app      │    │
+     │  │  packages/desktop-tools-plugin                       │   │  127.0.0.1            │    │                                                │    │
+     │  │  Native sessionID; OpenCode permission checks        ├───┼───────────────────────┼───▶│                                                │    │
+     │  └──────────────────────────────────────────────────────┘   │                       │    └────────┬──────────────────────────────┬────────┘    │
+     │                                                             │                       │             │                              │             │
+     └────────────────┬────────────────────────────────────────────┘                       │             │                              │             │
+                      │                                ▲                                   └─────────────┼──────────────────────────────┼─────────────┘
+                      │                                │                                                 │                              │
+       spawn + stdin  │                                │  stdout + tools                                 │                              │
+                      │                                │                                   stdio         │                              │ paired WS
+                      │                                │                                                 │                              │
+                      ▼                                │                                                 ▼                              ▼
+     ┌─────────────────── CLAUDE CODE (OPT-IN) ────────┴───────────┐                       ┌────── SWIFT HELPER ──────┐    ┌─── CHROME / EDGE MV3 ────┐
+     │                                                             │                       │                          │    │                          │
+     │  Official CLI subprocess on the OpenCode host               │                       │  App-bundled subprocess  │    │  apps/browser-extension  │
+     │  Own login and Claude conversation files                    │                       │  AX + ScreenCaptureKit   │    │  chrome.debugger         │
+     │                                                             │                       │                          │    │  chrome.storage pairing  │
+     │  Workspace tools return to OpenCode permissions             │                       │  macOS 14+; OS grants    │    │  Explicit tab claims     │
+     └─────────────────────────────────────────────────────────────┘                       └──────────────────────────┘    └──────────────────────────┘
 
 
-  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <>   packages/contracts: API schemas + native bridge/tool types (shared source, not a service)
+
+  ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
   RUNTIME HOSTING
 
-  DEV          Vite :5173 proxies /api to :4310; macOS launches cached OpenCodex.app.
-  WEB BUILD    Node gateway serves the UI and API on one loopback origin.
-  DESKTOP      Electron main hosts the gateway and built UI on a free loopback port.
+  DEV          Vite :5173 proxies /api to :4310; desktop launches the cached macOS app.
+  WEB BUILD    Node hosts the UI and gateway on loopback; native tools require a running desktop app.
+  DESKTOP      Electron hosts the built UI and gateway; its separate tool endpoint also runs during development.

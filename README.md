@@ -25,6 +25,7 @@ It currently supports:
 - **Focus view** — keep threads that need you, running work, and recent conversations together; pin threads or mark them done.
 - **Annotations** — comment on responses or diff lines and send that feedback with your next message.
 - **Workspace tools** — browse and edit files, review changes, and use project terminals without leaving the app.
+- **Browser and computer use** — agents can operate the in-app browser, connect to Chrome/Edge through an extension, and control macOS apps through a native helper. [Setup](docs/readme.md#browser-and-computer-use).
 - **Themes** — light and dark palettes, customizable colors, and separate styling for code surfaces.
 
 ![OpenCodex with an open sidechat, two running subagents, and a running shell command in the main chat](docs/images/workspace.png)

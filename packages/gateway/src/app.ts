@@ -24,6 +24,7 @@ import { imageRoutes } from './images';
 import { mediaRoutes } from './media';
 import { createMetadataWriter, sessionMetadataRoutes } from './session-metadata';
 import { sideChatRoutes } from './side-chats';
+import { desktopToolsRoutes } from './desktop-tools';
 import { sessionAccessRoutes } from './session-access';
 import { attention } from './attention';
 import { claudeCodeRoutes } from './claude-code';
@@ -61,6 +62,7 @@ export function createApp(
   const writeMetadata = createMetadataWriter(backend);
   app.route('/api/sessions', sessionMetadataRoutes(writeMetadata));
   app.route('/api', sideChatRoutes(backend, writeMetadata));
+  app.route('/api', desktopToolsRoutes(backend));
   app.route('/api/claude-code', claudeCodeRoutes(backend));
   app.route('/api/usage', usageRoutes(backend));
   app.route('/api/sessions', sessionAccessRoutes(backend));

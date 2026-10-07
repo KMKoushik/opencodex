@@ -1,0 +1,13 @@
+{
+  "name": "@opencodex/desktop-tools-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/plugin.ts"
+  },
+  "dependencies": {
+    "@opencode/client": "2.0.19",
+    "@opencodex/contracts": "workspace:*"
+  }
+}

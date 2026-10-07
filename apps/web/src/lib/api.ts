@@ -35,6 +35,7 @@ import {
   type ShellInfo,
   type ShellOutputOutput,
   type SideChatPluginStatus,
+  type DesktopToolsPluginStatus,
   type ClaudeCodeStatus,
   type UsageLimits,
   type WorktreeDirectory,
@@ -214,6 +215,15 @@ export const api = {
   installSideChatPlugin: () => nativeRequest<{ ok: true }>('/side-chat-plugin', { method: 'PUT' }),
   removeSideChatPlugin: () =>
     nativeRequest<{ ok: true }>('/side-chat-plugin', { method: 'DELETE' }),
+  desktopToolsPlugin: (directory: string | undefined, signal: AbortSignal) =>
+    nativeRequest<DesktopToolsPluginStatus>(
+      `/desktop-tools-plugin${directory ? `?${new URLSearchParams({ directory })}` : ''}`,
+      { signal },
+    ),
+  installDesktopToolsPlugin: () =>
+    nativeRequest<{ ok: true }>('/desktop-tools-plugin', { method: 'PUT' }),
+  removeDesktopToolsPlugin: () =>
+    nativeRequest<{ ok: true }>('/desktop-tools-plugin', { method: 'DELETE' }),
   tasksPlugin: (signal: AbortSignal) =>
     nativeRequest<TasksPluginStatus>('/tasks/plugin', { signal }),
   installTasksPlugin: () => nativeRequest<{ ok: true }>('/tasks/plugin', { method: 'PUT' }),

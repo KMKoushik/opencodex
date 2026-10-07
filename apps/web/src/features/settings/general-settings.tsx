@@ -6,6 +6,8 @@ import { UpdateSettings } from '../updates/update-settings';
 import { SideChatPluginSettings } from '../side-chat/side-chat-plugin-settings';
 import { ClaudeCodeSettings } from './claude-code-settings';
 import { NotificationSettings } from '../notifications/notification-settings';
+import { DesktopToolsSettings } from './desktop-tools-settings';
+import { DesktopControlsSettings } from '../desktop-tools/desktop-controls-settings';
 
 export function GeneralSettings({
   live,
@@ -50,7 +52,9 @@ export function GeneralSettings({
         />
         {connected && <SideChatPluginSettings directory={project?.directory} />}
         {connected && <ClaudeCodeSettings directory={project?.directory} />}
+        {connected && <DesktopToolsSettings directory={project?.directory} />}
       </SettingsGroup>
+      <DesktopControlsSettings />
       <NotificationSettings />
       <SettingsGroup title="Project">
         <SettingsRow

@@ -31,6 +31,17 @@
 .browser-toolbar {
   gap: 2px;
 }
+.browser-control-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+  padding-inline: 12px;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
 .browser-toolbar .button[aria-pressed='true'] {
   background: var(--selected);
   color: var(--text);

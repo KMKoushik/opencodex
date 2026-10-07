@@ -28,6 +28,8 @@
     "plugins:check": "node scripts/plugins.mjs --check",
     "claude-code-plugin": "bun scripts/claude-code-plugin.mjs",
     "claude-code-plugin:check": "bun scripts/claude-code-plugin.mjs --check",
+    "computer-use:build": "node scripts/computer-use.mjs",
+    "computer-use:check": "node scripts/computer-use.mjs --check",
     "package:desktop": "bun run --cwd apps/desktop package",
     "architecture": "node scripts/architecture.mjs",
     "architecture:check": "node scripts/architecture.mjs --check"

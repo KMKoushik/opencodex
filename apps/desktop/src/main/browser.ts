@@ -218,7 +218,7 @@ const overlayResult = z
   .nullable();
 
 /** A browser panel page hosted by `window`, never another window's page or another profile. */
-function browserGuest(window: BrowserWindow, id: number) {
+export function browserGuest(window: BrowserWindow, id: number) {
   const guest = webContents.fromId(id);
   if (
     !guest ||

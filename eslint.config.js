@@ -21,6 +21,10 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   { languageOptions: { globals: globals.node } },
   {
+    files: ['apps/browser-extension/**/*.js'],
+    languageOptions: { globals: { ...globals.browser, chrome: 'readonly' } },
+  },
+  {
     files: ['apps/web/src/**/*.{ts,tsx}'],
     languageOptions: { globals: globals.browser },
     plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },

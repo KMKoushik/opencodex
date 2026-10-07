@@ -24,6 +24,9 @@ export type BrowserPage = {
   crashed?: boolean;
   /** The comment overlay is open in the page. */
   annotating?: boolean;
+  activity?: string | null;
+  agentControlled?: boolean;
+  controlPaused?: boolean;
 };
 
 /** Where the visible panel wants the selected page drawn. Pages outside it stay loaded offscreen. */
@@ -55,6 +58,8 @@ export function updatePage(tabID: string, patch: Partial<BrowserPage> | null) {
 export const browserViews = new Map<string, WebviewElement>();
 /** Filesystem display URLs for opaque, isolated local-preview origins. */
 export const browserFileDirectories = new Map<string, string>();
+/** Mount leases are granted before a native command begins and released in its finally block. */
+export const browserLeases = new Map<string, string>();
 
 export function navigateView(tabID: string, url: string) {
   const view = browserViews.get(tabID);
@@ -70,7 +75,10 @@ export function openTab(state: BrowserState, url: string, after?: string): Brows
   const index = tabs.findIndex((tab) => tab.id === after);
   tabs.splice(index < 0 ? tabs.length : index + 1, 0, { id, url });
   while (tabs.length > MAX_BROWSER_TABS) {
-    const oldest = tabs.findIndex((tab) => tab.id !== id && tab.id !== state.selected);
+    const oldest = tabs.findIndex(
+      (tab) => tab.id !== id && tab.id !== state.selected && !browserLeases.has(tab.id),
+    );
+    if (oldest < 0) return state;
     tabs.splice(oldest, 1);
   }
   return { tabs, selected: id };

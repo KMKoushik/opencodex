@@ -1,7 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { desktopChannels, type DesktopBridge } from '@opencodex/contracts/desktop';
+import { desktopTools } from './desktop-tools';
 
 const desktop: DesktopBridge = {
+  tools: desktopTools,
   platform: process.platform,
   getFullscreen: () => ipcRenderer.invoke(desktopChannels.getFullscreen),
   onFullscreenChanged: (callback) => {
@@ -39,6 +41,14 @@ const desktop: DesktopBridge = {
     ipcRenderer.invoke(desktopChannels.loadBrowserFile, { webContentsId, url }),
   cancelBrowserAnnotation: (webContentsId) =>
     ipcRenderer.invoke(desktopChannels.cancelBrowserAnnotation, { webContentsId }),
+  onBrowserControl: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, intent: Parameters<typeof callback>[0]) =>
+      callback(intent);
+    ipcRenderer.on(desktopChannels.browserControl, listener);
+    return () => ipcRenderer.removeListener(desktopChannels.browserControl, listener);
+  },
+  registerBrowserControl: (input) =>
+    ipcRenderer.invoke(desktopChannels.registerBrowserControl, input),
 };
 
 contextBridge.exposeInMainWorld('desktop', desktop);

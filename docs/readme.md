@@ -52,6 +52,22 @@ Use the **Files** and **Changes** icons on the far-right rail to open the worksp
 
 The first control at the top of the right rail is **Open in…**, followed by Files, Changes, and Terminal underneath. Its menu copies the project path or opens it in an installed desktop app. On macOS it shows native app icons for Finder, Terminal, Ghostty, Cursor, Zed, VS Code, and iTerm when installed, and remembers the selected app. Windows/Linux desktop offers the system file manager; the browser offers Copy Path.
 
+### Browser and computer use
+
+In the desktop app, install **Settings → General → Browser and computer tools** on your locally connected OpenCode service. The plugin adds browser and computer-use skills and tools to OpenCode. For example, ask “Open localhost:3000 in the in-app browser and test the form.” Agents can navigate, inspect page elements, click, type, scroll, capture screenshots, and read bounded console/network diagnostics. Browser tabs belong to the calling conversation; switching chats does not redirect an action to the newly selected tab.
+
+**Settings → General → Desktop controls** shows native availability. **Stop controls** cancels active operations and pauses subsequent desktop calls until **Resume controls**. Stopping a chat also cancels its pending tool requests. Closing the desktop app disconnects these capabilities while OpenCode and its conversations continue running.
+
+For existing Chrome or Edge tabs and sign-ins, use the bundled extension. Choose **Extension folder**, load that folder as an unpacked extension in your browser's Extensions developer mode, choose **Copy pairing**, and paste it into the extension's Connect popup. Pair again after restarting OpenCodex. See the [extension guide](browser-extension.md). The in-app browser has its own persistent profile, separate from Chrome or Edge.
+
+macOS app control uses the bundled **OpenCodex Computer Control** helper. In System Settings, grant Accessibility and Screen Recording access to the responsible application macOS identifies, restart that application, then choose **Check**. The helper’s entry alone may not be sufficient: development/test processes launched from a terminal or IDE can inherit that host’s permission identity. Tests launched from OpenCode were attributed to **OpenCode.app**; this is test-launch attribution, not an additional product dependency. Accessibility supplies app/window elements and input; Screen Recording supplies window screenshots. Element references belong to the latest app snapshot, so the agent refreshes state before targeting changed UI. Native coordinate input may activate the target app; foreground-independent operation is not guaranteed for every application.
+
+A packaged OpenCodex launched through Finder/LaunchServices was verified to use its own executable as the responsible process. Unsigned test builds can appear in macOS permission records as **Electron**; certificate-signed release identity has not yet been verified.
+
+Use **Request access** beside the missing permission in Desktop controls to let macOS identify/register the responsible application. These requests run only after that button is clicked; status checks and agent tools never open permission prompts. **Open Settings** remains available to change an existing decision. Accessibility enables app elements and input; Screen Recording is required separately for screenshots.
+
+The desktop host must run on the same machine as the plugin. With multiple running OpenCodex instances, the plugin reports ambiguity rather than selecting a window arbitrarily. For an explicitly selected instance, set `OPENCODEX_DESKTOP_ENDPOINT` on the OpenCode process to its private discovery JSON file under `$XDG_CONFIG_HOME/opencode/opencodex-desktop/` (default `~/.config/opencode/opencodex-desktop/`). These launch-scoped files contain local credentials; the UI's extension pairing uses a separate credential.
+
 ### Project terminals
 
 Choose **Terminal** on the right rail, then **New terminal** or **+** to open a shell in the project's directory. Each tab is a separate shell; tabs are shared across chats in that directory. Drag the panel's left edge to resize it. Hiding the panel, switching tabs, or closing OpenCodex keeps shells running in OpenCode; reopening restores recent output. A tab's **×** ends that shell. Terminals last until explicitly closed or the OpenCode service stops.
@@ -105,11 +121,13 @@ Optional `OPENCODE_USERNAME` (default `opencode`) and `OPENCODE_PASSWORD` suppor
 ```text
 apps/web/             Shared React UI, features, components, design tokens
 apps/desktop/         Electron lifecycle and native-only preload bridge
+apps/browser-extension/ Chrome/Edge bridge for existing browser tabs
 packages/gateway/     Local HTTP API, OpenCode adapter, event forwarding
 packages/contracts/   App input schemas, native OpenCode types, bridge types
+packages/desktop-tools-plugin/ OpenCode tools and skills for local desktop capabilities
 ```
 
-OpenCode owns sessions, tools, provider credentials, and agent execution. The gateway adapts its API and retains service credentials. React uses relative `/api` URLs through TanStack Query. Electron adds native capabilities; it does not create a second agent-data transport.
+OpenCode owns sessions, tools, provider credentials, and agent execution. The gateway adapts its API and retains service credentials. React uses relative `/api` URLs through TanStack Query. Electron adds native capabilities. The desktop-tools plugin calls an authenticated local desktop capability endpoint; tool results and durable history still belong to OpenCode.
 
 The gateway forwards native OpenCode events. The UI overlays live text on server snapshots, then refreshes those snapshots at durable changes and on reconnection. A stream joined mid-response waits for saved text instead of displaying a partial suffix as the full response. Temporary stream failures also enable polling. Request failures stay errors rather than becoming empty session lists. See the [ownership decisions](architecture/README.md#ownership-decisions) before adding app-owned behavior.
 
@@ -120,6 +138,7 @@ Before opening a pull request, run the checks and formatting validation below fr
 ```sh
 bun check             # Types, lint, focused tests, both builds
 bun format:check
+bun computer-use:check # Verify the built macOS helper and its status/list protocol
 bun test:smoke        # Built browser + Electron integration tests (requires Chrome)
 ```
 

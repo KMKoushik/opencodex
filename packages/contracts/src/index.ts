@@ -236,6 +236,7 @@ export type SideChatPluginStatus = {
   message?: string;
 };
 export type TasksPluginStatus = SideChatPluginStatus;
+export type DesktopToolsPluginStatus = SideChatPluginStatus;
 
 export const taskBuckets = ['today', 'week', 'someday', 'done'] as const;
 export type TaskBucket = (typeof taskBuckets)[number];

@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./desktop": "./src/desktop.ts"
+    "./desktop": "./src/desktop.ts",
+    "./desktop-tools": "./src/desktop-tools.ts"
   },
   "dependencies": {
     "@opencode/client": "2.0.19",

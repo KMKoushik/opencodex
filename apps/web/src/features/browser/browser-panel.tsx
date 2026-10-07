@@ -247,6 +247,32 @@ export function BrowserPanel({
           <HugeiconsIcon icon={LinkSquare02Icon} size={16} />
         </Button>
       </div>
+      {page.agentControlled && (
+        <div className="browser-control-status" role="status">
+          <span>
+            {page.controlPaused
+              ? 'Browser control paused'
+              : page.activity
+                ? `Agent: ${page.activity.replace('browser.', '')}`
+                : 'Agent browser'}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              void window.desktop
+                ?.registerBrowserControl({
+                  type: 'takeover',
+                  sessionID: key,
+                  paused: !page.controlPaused,
+                })
+                .catch(() => setNotice('Browser control could not be changed. Try again.'));
+            }}
+          >
+            {page.controlPaused ? 'Resume agent' : 'Take over / stop'}
+          </Button>
+        </div>
+      )}
       {notice && (
         <div role="alert" className="wb-notice">
           {notice}

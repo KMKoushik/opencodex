@@ -10,3 +10,4 @@ playwright-report/
 packages/gateway/src/side-chat-plugin.generated.ts
 packages/gateway/src/claude-code-plugin.generated.ts
 packages/gateway/src/tasks-plugin.generated.ts
+packages/gateway/src/desktop-tools-plugin.generated.ts

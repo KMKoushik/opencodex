@@ -1,0 +1,46 @@
+:root {
+  color-scheme: light dark;
+  background: Canvas;
+  color: CanvasText;
+  font:
+    13px/1.5 system-ui,
+    sans-serif;
+}
+body {
+  width: 330px;
+  margin: 0;
+  padding: 20px;
+}
+h1 {
+  font-size: 18px;
+  margin: 0 0 12px;
+}
+p {
+  margin: 12px 0;
+}
+label {
+  display: block;
+  margin-bottom: 6px;
+}
+input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 12px;
+}
+button {
+  background: ButtonFace;
+  color: ButtonText;
+  min-height: 36px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+}
+small {
+  display: block;
+}
+#status {
+  overflow-wrap: anywhere;
+}

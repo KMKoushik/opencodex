@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Connect OpenCodex</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>OpenCodex</h1>
+    <p>
+      Paste the pairing URL from the desktop app. Connect only the browser profile you want agents
+      to use.
+    </p>
+    <form id="pair">
+      <label for="url">Local pairing URL</label>
+      <input
+        id="url"
+        type="password"
+        autocomplete="off"
+        spellcheck="false"
+        required
+        placeholder="ws://127.0.0.1:…/browser-extension#…"
+      />
+      <button type="submit" id="connect">Connect</button>
+      <button type="button" id="disconnect">Disconnect</button>
+    </form>
+    <p id="status" role="status" aria-live="polite">Disconnected</p>
+    <small
+      >Agents must explicitly claim a tab. Disconnect releases all claims and leaves your tabs
+      open.</small
+    >
+    <script src="popup.js" type="module"></script>
+  </body>
+</html>

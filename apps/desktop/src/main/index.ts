@@ -8,6 +8,9 @@ import { registerLinkHandlers } from './links';
 import { registerBrowser } from './browser';
 import { loadShellEnvironment } from './shell-env';
 import { createUpdates } from './updates';
+import { createDesktopTools } from './desktop-tools';
+import { registerDesktopToolHandlers } from './desktop-tools-ipc';
+import { browserControl } from './browser-control';
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -27,6 +30,7 @@ app.setPath('userData', userData);
 const shellEnvironment = app.isPackaged ? loadShellEnvironment() : Promise.resolve();
 
 let gateway: Awaited<ReturnType<typeof startGateway>> | undefined;
+let desktopTools: Awaited<ReturnType<typeof createDesktopTools>> | undefined;
 let origin: string;
 let quitting = false;
 let restartingForUpdate = false;
@@ -60,6 +64,7 @@ async function createWindow() {
   });
   registerLinkHandlers(window, new URL(origin).origin);
   registerBrowser(window);
+  browserControl.attachWindow(window);
   window.webContents.on('will-prevent-unload', (event) => {
     // The update dialog explicitly warned about unsaved files and drafts.
     if (restartingForUpdate) event.preventDefault();
@@ -91,11 +96,14 @@ app
     }
     const preferences = createPreferences();
     const updates = createUpdates(async () => {
+      await desktopTools?.close();
       await gateway?.close();
       restartingForUpdate = true;
       quitting = true;
     });
     registerNativeHandlers(new URL(origin).origin, preferences, updates);
+    desktopTools = await createDesktopTools(appName);
+    registerDesktopToolHandlers(new URL(origin).origin, desktopTools.bridge);
     await createWindow();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) void createWindow();
@@ -118,5 +126,5 @@ app.on('before-quit', (event) => {
   event.preventDefault();
   quitting = true;
   // The gateway is app-owned. The shared OpenCode service is not.
-  void Promise.allSettled([gateway?.close()]).then(() => app.quit());
+  void Promise.allSettled([desktopTools?.close(), gateway?.close()]).then(() => app.quit());
 });
