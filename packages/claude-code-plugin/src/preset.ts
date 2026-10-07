@@ -15,6 +15,10 @@ const tools = [
   'websearch',
   'read_main_chat',
   'wait_main_chat',
+  'tasks_list',
+  'tasks_add',
+  'tasks_update',
+  'tasks_delete',
 ];
 
 export const CLAUDE_CODE_PRESET = {
