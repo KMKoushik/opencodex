@@ -9,6 +9,7 @@ import remarkGfm from 'remark-gfm';
 import type { WorkspaceFile } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { markdownUrl } from '../../lib/markdown-url';
+import { markdownHtmlPlugins, mayContainHtml } from '../../lib/markdown-html';
 import { MarkdownLink } from '../chat/markdown-link';
 import { MarkdownTable } from '../chat/markdown-table';
 import { MarkdownImage } from '../chat/markdown-image';
@@ -180,7 +181,11 @@ function MarkdownPreview({
       >
         <Markdown
           remarkPlugins={[remarkGfm]}
-          rehypePlugins={[markdownSourcePositions]}
+          rehypePlugins={
+            mayContainHtml(content)
+              ? [...markdownHtmlPlugins, markdownSourcePositions]
+              : [markdownSourcePositions]
+          }
           components={components}
           urlTransform={transform}
         >

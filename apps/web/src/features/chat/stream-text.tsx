@@ -10,6 +10,7 @@ import { MarkdownTable } from './markdown-table';
 import { createBlockSplitter } from './markdown-blocks';
 import { usePacedText } from './paced-text';
 import { markdownUrl } from '../../lib/markdown-url';
+import { markdownHtmlPlugins, mayContainHtml } from '../../lib/markdown-html';
 
 const noParts: LivePart[] = [];
 const remarkPlugins = [remarkGfm];
@@ -101,7 +102,12 @@ const MarkdownBlock = memo(function MarkdownBlock({
   components: Components;
 }) {
   return (
-    <Markdown remarkPlugins={remarkPlugins} components={components} urlTransform={markdownUrl}>
+    <Markdown
+      remarkPlugins={remarkPlugins}
+      rehypePlugins={mayContainHtml(source) ? markdownHtmlPlugins : undefined}
+      components={components}
+      urlTransform={markdownUrl}
+    >
       {source}
     </Markdown>
   );
