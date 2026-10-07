@@ -592,12 +592,12 @@
     {
       "x": 8,
       "y": 32,
-      "value": "Side chats; opt-in side-chat + Claude plugin files"
+      "value": "Side chats; opt-in side-chat, tasks + Claude plugin files"
     },
     {
       "x": 8,
       "y": 46,
-      "value": "Loads side-chat and optional Claude provider plugins"
+      "value": "Loads side-chat, tasks + Claude plugins; task plugin KV"
     },
     {
       "x": 7,

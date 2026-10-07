@@ -3,6 +3,7 @@ import {
   ArrowLeft02Icon,
   ArrowRight02Icon,
   ArrowDown01Icon,
+  CheckListIcon,
   DashboardSpeed01Icon,
   FolderOpenIcon,
   PanelLeftCloseIcon,
@@ -33,6 +34,7 @@ const menuSections = [
 export function Sidebar({
   children,
   settings,
+  tasks,
   connected,
   live,
   canCreate,
@@ -44,11 +46,13 @@ export function Sidebar({
   onToggle,
   onNewChat,
   onOpenProject,
+  onTasks,
   onSettings,
   onSelectSession,
 }: {
   children: ReactNode;
   settings: SettingsSection | null;
+  tasks: boolean;
   connected: boolean;
   live: boolean;
   canCreate: boolean;
@@ -60,6 +64,7 @@ export function Sidebar({
   onToggle: () => void;
   onNewChat: () => void;
   onOpenProject: () => void;
+  onTasks: () => void;
   onSettings: (section: SettingsSection) => void;
   onSelectSession: (session: Session) => void;
 }) {
@@ -193,6 +198,15 @@ export function Sidebar({
             <button className="nav-row" {...shortcutProps('project.open')} onClick={onOpenProject}>
               <HugeiconsIcon icon={FolderOpenIcon} size={16} />
               <span>Open project</span>
+            </button>
+            <button
+              className="nav-row"
+              aria-current={tasks ? 'page' : undefined}
+              {...shortcutProps('tasks.open')}
+              onClick={onTasks}
+            >
+              <HugeiconsIcon icon={CheckListIcon} size={16} />
+              <span>Tasks</span>
             </button>
           </div>
         )}

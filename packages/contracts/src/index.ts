@@ -235,6 +235,51 @@ export type SideChatPluginStatus = {
   path?: string;
   message?: string;
 };
+export type TasksPluginStatus = SideChatPluginStatus;
+
+export const taskBuckets = ['today', 'week', 'someday', 'done'] as const;
+export type TaskBucket = (typeof taskBuckets)[number];
+export const taskProjectSchema = z.object({
+  id: z.string().min(1).max(256),
+  directory: z.string().min(1).max(4096),
+});
+export type TaskProject = z.infer<typeof taskProjectSchema>;
+/** A task on the board, stored by the OpenCodex tasks plugin in OpenCode's plugin storage. */
+export type Task = {
+  id: string;
+  title: string;
+  notes?: string;
+  bucket: TaskBucket;
+  /** Ascending position within its bucket. */
+  order: number;
+  project?: TaskProject;
+  /** The chat whose agent created the task. */
+  sessionID?: string;
+  source: 'user' | 'agent';
+  /** Where the task returns when it is reopened from Done. */
+  reopen?: Exclude<TaskBucket, 'done'>;
+  time: { created: number; updated: number; moved: number; completed?: number };
+};
+/** Done tasks are deleted this long after completion. */
+export const TASK_DONE_RETENTION = 14 * 24 * 60 * 60 * 1000;
+const taskTitleSchema = z.string().trim().min(1, 'Enter a task.').max(500);
+const taskNotesSchema = z.string().max(10_000);
+export const taskCreateSchema = z.object({
+  title: taskTitleSchema,
+  notes: taskNotesSchema.optional(),
+  bucket: z.enum(taskBuckets).exclude(['done']).default('today'),
+  project: taskProjectSchema.nullish(),
+});
+export type TaskCreate = z.input<typeof taskCreateSchema>;
+export const taskUpdateSchema = z.object({
+  title: taskTitleSchema.optional(),
+  notes: taskNotesSchema.optional(),
+  bucket: z.enum(taskBuckets).optional(),
+  order: z.number().finite().optional(),
+  project: taskProjectSchema.nullable().optional(),
+});
+export type TaskUpdate = z.input<typeof taskUpdateSchema>;
+
 export const sessionFocusSchema = z.object({ action: z.enum(['pin', 'unpin', 'done', 'undone']) });
 export type SessionFocusAction = z.infer<typeof sessionFocusSchema>['action'];
 /** Root threads waiting on an approval or a question, including requests from their subagents. */

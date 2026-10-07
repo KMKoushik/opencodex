@@ -76,6 +76,15 @@ export function useEvents(enabled: boolean) {
         workspaceChanged.clear();
       }, 500);
     };
+    let tasksTimer: ReturnType<typeof setTimeout> | undefined;
+    // An agent may change several tasks in a row; refetch the board once.
+    const refreshTasks = () => {
+      if (tasksTimer) return;
+      tasksTimer = setTimeout(() => {
+        tasksTimer = undefined;
+        void client.invalidateQueries({ queryKey: ['tasks'] });
+      }, 250);
+    };
     const refresh = () => {
       if (timer) return;
       timer = setTimeout(() => {
@@ -124,6 +133,7 @@ export function useEvents(enabled: boolean) {
       // Subscriptions are live-only. Refetch after every reconnect to recover missed changes.
       void client.invalidateQueries({ queryKey: ['connection'] });
       void client.invalidateQueries({ queryKey: ['models'] });
+      void client.invalidateQueries({ queryKey: ['tasks'] });
       client.setQueriesData<LivePart[]>(
         { queryKey: ['chat'], predicate: (query) => query.queryKey[2] === 'stream' },
         [],
@@ -177,6 +187,10 @@ export function useEvents(enabled: boolean) {
             sideChatIDs({ metadata: event.data.metadata }).join()
         )
           void client.invalidateQueries({ queryKey: key, exact: true });
+        return;
+      }
+      if (event.type.startsWith('rpc.opencodex.tasks.')) {
+        refreshTasks();
         return;
       }
       const directory = 'location' in event ? event.location?.directory : undefined;
@@ -293,6 +307,7 @@ export function useEvents(enabled: boolean) {
       events.close();
       clearTimeout(timer);
       clearTimeout(workspaceTimer);
+      clearTimeout(tasksTimer);
       if (frame !== undefined) cancelAnimationFrame(frame);
       setLive(false);
     };

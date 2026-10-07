@@ -1,7 +1,3 @@
-import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
 import { Hono } from 'hono';
 import type { JsonValue, OpenCodeClient, SessionInfo } from '@opencode/client';
 import {
@@ -14,11 +10,11 @@ import {
   projectInputSchema,
   sideChatIDs,
   sideChatParent,
-  type SideChatPluginStatus,
 } from '@opencodex/contracts';
 import { GatewayError } from './errors';
 import type { OpenCodeBackend } from './opencode';
 import type { MetadataWriter } from './session-metadata';
+import { installPlugin, pluginStatus, removePlugin, type PluginFile } from './plugin-files';
 import { SIDE_CHAT_PLUGIN } from './side-chat-plugin.generated';
 
 /** Appended after inherited rules, so they win: edits need approval and subagents are off. */
@@ -27,8 +23,13 @@ export const SIDE_CHAT_RULES = [
   { action: 'subagent', resource: '*', effect: 'deny' },
 ] as const;
 const BOUNDARY_KEY = 'opencodex.side-chat';
-const PLUGIN_ID = 'opencodex.side-chat';
-const PLUGIN_HEADER = '// OpenCodex side-chat plugin';
+const PLUGIN: PluginFile = {
+  id: 'opencodex.side-chat',
+  file: 'opencodex-side-chat.js',
+  header: '// OpenCodex side-chat plugin',
+  source: SIDE_CHAT_PLUGIN.source,
+  feature: 'live context plugin',
+};
 
 export function sideChatRoutes(backend: OpenCodeBackend, write: MetadataWriter) {
   const app = new Hono();
@@ -134,83 +135,22 @@ export function sideChatRoutes(backend: OpenCodeBackend, write: MetadataWriter) 
     return c.json(
       await pluginStatus(
         backend,
+        PLUGIN,
         directory.success ? directory.data.directory : undefined,
         c.req.raw.signal,
       ),
     );
   });
   app.put('/side-chat-plugin', async (c) => {
-    if (!(await backend.localService())) throw unavailable();
-    const path = pluginPath();
-    const installed = await readInstalled(path);
-    if (installed !== undefined && !installed.startsWith(PLUGIN_HEADER)) throw foreign(path);
-    await mkdir(dirname(path), { recursive: true });
-    // Write beside the target and rename, so OpenCode never loads a partial file.
-    const temporary = `${path}.${randomUUID()}.tmp`;
-    try {
-      await writeFile(temporary, SIDE_CHAT_PLUGIN.source, { mode: 0o644, flag: 'wx' });
-      await rename(temporary, path);
-    } finally {
-      await rm(temporary, { force: true });
-    }
+    await installPlugin(backend, PLUGIN);
     return c.json({ ok: true });
   });
   app.delete('/side-chat-plugin', async (c) => {
-    if (!(await backend.localService())) throw unavailable();
-    const path = pluginPath();
-    const installed = await readInstalled(path);
-    if (installed !== undefined && !installed.startsWith(PLUGIN_HEADER)) throw foreign(path);
-    await rm(path, { force: true });
+    await removePlugin(backend, PLUGIN);
     return c.json({ ok: true });
   });
 
   return app;
-}
-
-async function pluginStatus(
-  backend: OpenCodeBackend,
-  directory: string | undefined,
-  signal: AbortSignal,
-): Promise<SideChatPluginStatus> {
-  if (!(await backend.localService()))
-    return { state: 'unavailable', message: unavailable().message };
-  const path = pluginPath();
-  const [installed, plugins] = await Promise.all([
-    readInstalled(path),
-    backend.request(signal, (client, options) =>
-      client.plugin.list(directory ? { location: { directory } } : undefined, options),
-    ),
-  ]);
-  const loaded = plugins.data.find((plugin) => plugin.id === PLUGIN_ID);
-  const loadedPath = loaded?.source.type === 'local' ? loaded.source.path : undefined;
-  if (installed === undefined)
-    return loaded ? { state: 'active', path: loadedPath } : { state: 'missing', path };
-  if (!installed.startsWith(PLUGIN_HEADER))
-    return { state: 'failed', path, message: foreign(path).message };
-  if (installed !== SIDE_CHAT_PLUGIN.source) return { state: 'outdated', path };
-  if (!loaded) return { state: 'loading', path };
-  if (loaded.state.status === 'failed')
-    return { state: 'failed', path, message: loaded.state.error };
-  return { state: 'active', path };
-}
-
-/** OpenCode discovers global plugins in its config directory's `plugins` folder. */
-function pluginPath() {
-  return join(
-    process.env.XDG_CONFIG_HOME || join(homedir(), '.config'),
-    'opencode',
-    'plugins',
-    'opencodex-side-chat.js',
-  );
-}
-
-async function readInstalled(path: string) {
-  try {
-    return await readFile(path, 'utf8');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
-    throw error;
-  }
 }
 
 /** Side chats listed on a main chat that still exist and still belong to it. */
@@ -239,20 +179,6 @@ function full() {
   return new GatewayError(
     `A chat can have up to ${MAX_SIDE_CHATS} side chats. Delete one to start another.`,
     409,
-  );
-}
-
-function foreign(path: string) {
-  return new GatewayError(
-    `${path} wasn’t installed by OpenCodex, so OpenCodex won’t replace or remove it.`,
-    409,
-  );
-}
-
-function unavailable() {
-  return new GatewayError(
-    'The live context plugin can be installed only when OpenCodex uses the OpenCode service on this machine.',
-    422,
   );
 }
 

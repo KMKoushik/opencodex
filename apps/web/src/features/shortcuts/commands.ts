@@ -55,6 +55,13 @@ export const commands = [
     inInput: true,
   },
   {
+    id: 'tasks.open',
+    label: 'Open tasks',
+    group: 'App',
+    bindings: [{ key: 'd', mod: true, shift: true }],
+    inInput: true,
+  },
+  {
     id: 'settings.open',
     label: 'Open settings',
     group: 'App',
@@ -70,7 +77,7 @@ export const commands = [
   },
   {
     id: 'view.dismiss',
-    label: 'Close sidebar overlay / leave settings',
+    label: 'Close sidebar overlay / leave settings or tasks',
     group: 'App',
     bindings: [{ key: 'Escape' }],
     inInput: false,

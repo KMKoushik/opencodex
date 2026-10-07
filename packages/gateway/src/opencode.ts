@@ -160,7 +160,8 @@ export class OpenCodeBackend {
           /^(session|project|worktree|permission|form|model|provider|credential|config|agent|filesystem|vcs|mcp|skill|pty|shell)\./.test(
             event.type,
           ) ||
-          event.type === 'models-dev.refreshed'
+          event.type === 'models-dev.refreshed' ||
+          event.type.startsWith('rpc.opencodex.tasks.')
         )
           yield event;
       }

@@ -38,6 +38,10 @@ import {
   type ClaudeCodeStatus,
   type UsageLimits,
   type WorktreeDirectory,
+  type Task,
+  type TaskCreate,
+  type TaskUpdate,
+  type TasksPluginStatus,
 } from '@opencodex/contracts';
 
 async function nativeRequest<T>(path: string, options?: RequestInit): Promise<T> {
@@ -210,6 +214,18 @@ export const api = {
   installSideChatPlugin: () => nativeRequest<{ ok: true }>('/side-chat-plugin', { method: 'PUT' }),
   removeSideChatPlugin: () =>
     nativeRequest<{ ok: true }>('/side-chat-plugin', { method: 'DELETE' }),
+  tasksPlugin: (signal: AbortSignal) =>
+    nativeRequest<TasksPluginStatus>('/tasks/plugin', { signal }),
+  installTasksPlugin: () => nativeRequest<{ ok: true }>('/tasks/plugin', { method: 'PUT' }),
+  tasks: (signal: AbortSignal) => nativeRequest<Task[]>('/tasks', { signal }),
+  createTask: (input: TaskCreate) => nativeRequest<Task>('/tasks', post(input)),
+  updateTask: (id: string, input: TaskUpdate) =>
+    nativeRequest<Task>(`/tasks/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+  deleteTask: (id: string) =>
+    nativeRequest<{ ok: true }>(`/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   usageLimits: (signal: AbortSignal) => nativeRequest<UsageLimits>('/usage/limits', { signal }),
   claudeCode: (directory: string | undefined, signal: AbortSignal) =>
     nativeRequest<ClaudeCodeStatus>(

@@ -6,10 +6,16 @@ export type SidebarLocation = {
   project: Project | null;
   sessionID?: string;
   settings: SettingsSection | null;
+  tasks: boolean;
 };
 
 const key = (location: SidebarLocation) =>
-  JSON.stringify([location.project?.directory, location.sessionID, location.settings]);
+  JSON.stringify([
+    location.project?.directory,
+    location.sessionID,
+    location.settings,
+    location.tasks,
+  ]);
 
 // Navigation only: no transcript snapshots, disk writes, or streaming subscriptions.
 export function useNavigationHistory(

@@ -2,6 +2,7 @@ import {
   useEffect,
   useId,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
@@ -26,6 +27,7 @@ export function Select<T extends Option>({
   disabled = false,
   triggerRef,
   triggerProps,
+  floating = false,
 }: {
   label: string;
   value: string;
@@ -40,16 +42,24 @@ export function Select<T extends Option>({
     'data-tooltip'?: string;
     'data-shortcut'?: string;
   };
+  /** Open the menu in the top layer, so scrolling ancestors cannot clip it. */
+  floating?: boolean;
 }) {
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLUListElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
   useImperativeHandle(triggerRef, () => trigger.current!, []);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [above, setAbove] = useState(false);
   const selected = options.find((option) => option.value === value);
+
+  // Before the focus effect below: a hidden popover can't take focus.
+  useLayoutEffect(() => {
+    if (open && floating) menu.current?.showPopover();
+  }, [open, floating]);
 
   useEffect(() => {
     if (!open) return;
@@ -112,6 +122,7 @@ export function Select<T extends Option>({
   return (
     <div
       className="select"
+      data-floating={floating || undefined}
       data-shortcut-boundary={open ? '' : undefined}
       ref={root}
       onBlur={(event) => {
@@ -141,7 +152,12 @@ export function Select<T extends Option>({
         <HugeiconsIcon icon={ArrowDown01Icon} size={14} className="select-chevron" />
       </button>
       {open && (
-        <div className="select-menu" data-placement={above ? 'top' : 'bottom'}>
+        <div
+          ref={menu}
+          className="select-menu"
+          popover={floating ? 'manual' : undefined}
+          data-placement={above ? 'top' : 'bottom'}
+        >
           <ul
             ref={list}
             id={id}

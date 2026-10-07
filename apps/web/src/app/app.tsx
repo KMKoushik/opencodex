@@ -8,6 +8,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand';
+import { sessionSummary } from '@opencodex/contracts';
 import type {
   ModelCatalog,
   ModelRef,
@@ -77,6 +78,9 @@ const BrowserHost = lazy(() =>
   import('../features/browser/browser-host').then((module) => ({ default: module.BrowserHost })),
 );
 const browserPanel = panels.find((panel) => panel.id === 'browser');
+const TaskBoard = lazy(() =>
+  import('../features/tasks/task-board').then((module) => ({ default: module.TaskBoard })),
+);
 const WorkbenchPanel = lazy(() =>
   import('../features/workbench/workbench-panel').then((module) => ({
     default: module.WorkbenchPanel,
@@ -89,6 +93,9 @@ export function App() {
   const [projects, setProjects] = useState(readProjects);
   const [selectedID, setSelectedID] = useState<string>();
   const [settings, setSettings] = useState<SettingsSection | null>(null);
+  const [tasks, setTasks] = useState(false);
+  // Settings and Tasks replace the chat column and its session tools.
+  const page = settings !== null || tasks;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sessionCardVisible, setSessionCardVisible] = useState(
@@ -249,6 +256,7 @@ export function App() {
     setProject(next);
     storeProject(next);
     setSelectedID(undefined);
+    setTasks(false);
     setSidebarOpen(false);
     create.reset();
   }
@@ -272,16 +280,33 @@ export function App() {
     };
     if (project?.directory !== next.directory) selectProject(next);
     setSelectedID(session.id);
+    setTasks(false);
     setSidebarOpen(false);
   }
 
-  function navigate(next: SettingsSection | null) {
-    setSettings(next);
+  async function openSessionByID(sessionID: string) {
+    const session = await queryClient.fetchQuery({
+      queryKey: ['chat', sessionID, 'info'],
+      queryFn: ({ signal }) => api.session(sessionID, signal),
+    });
+    openSession(sessionSummary(session));
+  }
+
+  function openTasks() {
+    setSettings(null);
+    setTasks(true);
     setSidebarOpen(false);
     main.current?.focus({ preventScroll: true });
   }
 
-  useNotificationTarget(settings ? undefined : selectedID, (session) => {
+  function navigate(next: SettingsSection | null) {
+    setSettings(next);
+    setTasks(false);
+    setSidebarOpen(false);
+    main.current?.focus({ preventScroll: true });
+  }
+
+  useNotificationTarget(page ? undefined : selectedID, (session) => {
     openSession(session);
     navigate(null);
   });
@@ -328,11 +353,15 @@ export function App() {
     selectProject(null);
   }
 
-  const history = useNavigationHistory({ project, sessionID: selectedID, settings }, (location) => {
-    if (project?.directory !== location.project?.directory) selectProject(location.project);
-    setSelectedID(location.sessionID);
-    navigate(location.settings);
-  });
+  const history = useNavigationHistory(
+    { project, sessionID: selectedID, settings, tasks },
+    (location) => {
+      if (project?.directory !== location.project?.directory) selectProject(location.project);
+      setSelectedID(location.sessionID);
+      if (location.tasks) openTasks();
+      else navigate(location.settings);
+    },
+  );
 
   const terminalDirectory = selectedID ? info.data?.location.directory : project?.directory;
   const workbenchExpanded = Boolean(
@@ -341,7 +370,7 @@ export function App() {
     connected &&
     terminalDirectory &&
     (selectedID || workbenchPanel.id === 'terminal') &&
-    !settings,
+    !page,
   );
   const terminalVisible =
     terminalPlacement === 'bottom'
@@ -378,7 +407,7 @@ export function App() {
     });
   }
   function toggleTerminal() {
-    if (!connected || !terminalDirectory || settings) return false;
+    if (!connected || !terminalDirectory || page) return false;
     if (terminalVisible) closeTerminal();
     else {
       terminalFocus.current =
@@ -397,7 +426,7 @@ export function App() {
   function toggleWorkbench() {
     if (
       !connected ||
-      settings ||
+      page ||
       !terminalDirectory ||
       (!selectedID && workbenchPanel.id !== 'terminal')
     )
@@ -430,13 +459,14 @@ export function App() {
   });
   useCommand('chat.new', newChat);
   useCommand('project.open', openProject);
+  useCommand('tasks.open', openTasks);
   useCommand('settings.open', () => navigate('general'));
   useCommand('shortcuts.open', () => navigate('shortcuts'));
   useCommand('view.dismiss', () => {
     if (sidebarOpen && matchMedia('(max-width: 720px)').matches) {
       setSidebarOpen(false);
       main.current?.focus({ preventScroll: true });
-    } else if (settings) navigate(null);
+    } else if (page) navigate(null);
     else return false;
   });
 
@@ -459,6 +489,7 @@ export function App() {
         <SidebarResize />
         <Sidebar
           settings={settings}
+          tasks={tasks}
           connected={connected}
           live={live}
           canCreate={Boolean(project && connected && !create.isPending && !switchProject.isPending)}
@@ -470,6 +501,7 @@ export function App() {
           onToggle={toggleSidebar}
           onNewChat={newChat}
           onOpenProject={openProject}
+          onTasks={openTasks}
           onSettings={navigate}
           onSelectSession={(session) => {
             openSession(session);
@@ -504,6 +536,7 @@ export function App() {
                   onSelectSession={(next, id) => {
                     if (project?.directory !== next.directory) selectProject(next);
                     setSelectedID(id);
+                    setTasks(false);
                     setSidebarOpen(false);
                   }}
                 />
@@ -551,33 +584,35 @@ export function App() {
                   <HugeiconsIcon icon={PanelLeftIcon} size={16} />
                 )}
               </Button>
-              {!settings && project && (
+              {!page && project && (
                 <span className="toolbar-project truncate" title={project.directory}>
                   <HugeiconsIcon icon={Folder01Icon} size={14} />
                   {currentProject?.name}
                 </span>
               )}
-              {!settings && project && (
+              {!page && project && (
                 <span className="toolbar-separator" aria-hidden="true">
                   /
                 </span>
               )}
-              {!settings && selectedID ? (
+              {!page && selectedID ? (
                 <SessionTitle
                   key={`title-${selectedID}`}
                   sessionID={selectedID}
                   title={info.data?.title || 'New chat'}
                   disabled={!connected || !info.isSuccess}
                 />
-              ) : !settings ? (
+              ) : tasks ? (
+                <h1 className="toolbar-title truncate">Tasks</h1>
+              ) : !page ? (
                 <h1 className="toolbar-title truncate">{project ? 'New thread' : appName}</h1>
               ) : null}
-              {connected && !live && !settings && (
+              {connected && !live && !page && (
                 <span className="toolbar-status" role="status">
                   Live updates paused
                 </span>
               )}
-              {connected && selectedID && !settings && (
+              {connected && selectedID && !page && (
                 <SessionActionsToggle
                   key={`actions-${selectedID}`}
                   sessionID={selectedID}
@@ -585,7 +620,7 @@ export function App() {
                   className="toolbar-session-actions"
                 />
               )}
-              {connected && selectedID && !settings && (
+              {connected && selectedID && !page && (
                 <SessionPanelToggle
                   key={selectedID}
                   sessionID={selectedID}
@@ -604,7 +639,7 @@ export function App() {
                   }}
                 />
               )}
-              {connected && selectedID && !settings && (
+              {connected && selectedID && !page && (
                 <Button
                   ref={workbenchToggle}
                   className="workspace-panel-toggle"
@@ -653,6 +688,19 @@ export function App() {
                     />
                   )}
                 </div>
+              ) : tasks ? (
+                <Suspense
+                  fallback={
+                    <p className="sidebar-note" role="status">
+                      Loading tasks…
+                    </p>
+                  }
+                >
+                  <TaskBoard
+                    connected={connected}
+                    onOpenSession={(sessionID) => void openSessionByID(sessionID)}
+                  />
+                </Suspense>
               ) : selectedID && connected ? (
                 <Suspense
                   fallback={
@@ -714,7 +762,7 @@ export function App() {
             connected &&
             terminalDirectory &&
             (selectedID || workbenchPanel.id === 'terminal') &&
-            !settings && (
+            !page && (
               <Suspense
                 fallback={
                   <div className="workspace-loading" role="status">
@@ -758,7 +806,7 @@ export function App() {
                 />
               </Suspense>
             )}
-          {connected && selectedID && info.data?.location.directory && !settings && (
+          {connected && selectedID && info.data?.location.directory && !page && (
             <WorkbenchRail
               directory={info.data.location.directory}
               sessionID={selectedID}
@@ -780,7 +828,7 @@ export function App() {
           terminalLoaded &&
           connected &&
           terminalDirectory &&
-          !settings && (
+          !page && (
             <Suspense fallback={null}>
               <TerminalDrawer
                 key={terminalDirectory}

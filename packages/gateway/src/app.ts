@@ -29,6 +29,7 @@ import { attention } from './attention';
 import { claudeCodeRoutes } from './claude-code';
 import { usageRoutes } from './usage';
 import { worktreeRoutes } from './worktrees';
+import { taskRoutes } from './tasks';
 
 export function createApp(
   backend = new OpenCodeBackend(),
@@ -64,6 +65,7 @@ export function createApp(
   app.route('/api/usage', usageRoutes(backend));
   app.route('/api/sessions', sessionAccessRoutes(backend));
   app.route('/api', worktreeRoutes(backend));
+  app.route('/api/tasks', taskRoutes(backend));
   app.get('/api/attention', async (c) => {
     const directories = [...new Set(c.req.queries('directory') ?? [])];
     if (directories.length > 32 || directories.some((item) => !item.trim() || item.length > 4096))

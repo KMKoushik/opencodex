@@ -1044,6 +1044,25 @@ svg {
 .select-options:focus-visible {
   outline: none;
 }
+.select[data-floating] .select-trigger[aria-expanded='true'] {
+  anchor-name: --select-floating;
+}
+.select-menu[popover] {
+  position: fixed;
+  position-anchor: --select-floating;
+  inset: auto;
+  top: anchor(bottom);
+  right: anchor(right);
+  margin: 4px 0 0;
+  overflow: visible;
+  color: var(--text);
+  position-try-fallbacks: flip-block;
+}
+.select-menu[popover][data-placement='top'] {
+  top: auto;
+  bottom: anchor(top);
+  margin: 0 0 4px;
+}
 .select-menu li {
   display: flex;
   align-items: center;
