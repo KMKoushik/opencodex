@@ -63,7 +63,12 @@ export function ShellOutput({
     if (following.current && ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [output.data]);
   return (
-    <Dialog title="Shell output" busy={stop.isPending} onClose={onClose}>
+    <Dialog
+      title="Shell output"
+      className="shell-output-dialog"
+      busy={stop.isPending}
+      onClose={onClose}
+    >
       <div className="shell-output-view ink">
         {shell.isError ? (
           <ShellError message={shell.error.message} retry={() => void shell.refetch()} />

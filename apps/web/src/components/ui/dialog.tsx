@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Cancel01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from './button';
+import { cn } from '../../lib/utils';
 
 export function Dialog({
   title,
@@ -10,12 +11,14 @@ export function Dialog({
   children,
   busy = false,
   initialFocus,
+  className,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   busy?: boolean;
   initialFocus?: RefObject<HTMLElement | null>;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const heading = useId();
@@ -29,7 +32,7 @@ export function Dialog({
   return createPortal(
     <dialog
       ref={ref}
-      className="dialog"
+      className={cn('dialog', className)}
       aria-labelledby={heading}
       onCancel={(event) => {
         if (busy) event.preventDefault();

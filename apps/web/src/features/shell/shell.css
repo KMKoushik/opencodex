@@ -43,7 +43,25 @@
   color: var(--error);
   font-size: 12px;
 }
+.dialog.shell-output-dialog {
+  width: min(1200px, calc(100vw - 32px));
+  height: min(900px, calc(100dvh - 32px));
+}
+.shell-output-dialog > .dialog-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.shell-output-dialog .dialog-header,
+.shell-output-dialog .shell-stop-actions {
+  flex: none;
+}
 .shell-output-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -66,7 +84,8 @@
   font-variant-numeric: tabular-nums;
 }
 .shell-log {
-  height: min(40vh, 360px);
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   margin: 12px 0 0;
   white-space: pre-wrap;
