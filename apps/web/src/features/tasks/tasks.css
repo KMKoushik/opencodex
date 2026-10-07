@@ -206,6 +206,54 @@
   overflow-wrap: anywhere;
   cursor: text;
 }
+.task-notes {
+  /* The first few lines; open the editor for the rest. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+.task-notes.markdown > * + * {
+  margin-top: 4px;
+}
+.task-notes.markdown h1,
+.task-notes.markdown h2,
+.task-notes.markdown h3,
+.task-notes.markdown h4 {
+  margin: 0;
+  font-size: inherit;
+}
+.task-notes.markdown ul,
+.task-notes.markdown ol {
+  padding-left: 16px;
+}
+.task-notes.markdown li + li {
+  margin-top: 2px;
+}
+.task-notes.markdown pre {
+  margin: 0;
+  padding: 4px 6px;
+  font-size: 11.5px;
+}
+.task-notes.markdown a {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+.task-notes img {
+  display: none;
+}
+.task-card[data-done] .task-notes {
+  color: var(--text-tertiary);
+}
 .task-card[data-done] .task-title {
   color: var(--text-tertiary);
   text-decoration: line-through;
@@ -304,7 +352,9 @@
   font-weight: 500;
 }
 .task-editor-notes {
+  field-sizing: content;
   min-height: 56px;
+  max-height: 320px;
   color: var(--text-secondary);
   line-height: 1.45;
   resize: vertical;

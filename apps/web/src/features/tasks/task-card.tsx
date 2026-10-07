@@ -1,18 +1,19 @@
 import { useEffect, useLayoutEffect, useRef, useState, type DragEvent } from 'react';
-import {
-  BubbleChatIcon,
-  Clock01Icon,
-  Delete02Icon,
-  Note01Icon,
-  Tick02Icon,
-} from '@hugeicons/core-free-icons';
+import { BubbleChatIcon, Clock01Icon, Delete02Icon, Tick02Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
+import Markdown, { type Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { OpenCodeProject, Task, TaskProject, TaskUpdate } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { Select } from '../../components/ui/select';
+import { markdownUrl } from '../../lib/markdown-url';
+import { MarkdownLink } from '../chat/markdown-link';
 import { ProjectIcon } from '../projects/project-icon';
 import { projectName } from '../projects/project-metadata';
 import { columns, delayedDays, shortDate } from './task-model';
+
+const remarkPlugins = [remarkGfm];
+const noteComponents: Components = { a: MarkdownLink };
 
 /** Native projects by canonical directory. */
 export type TaskProjects = Map<string, OpenCodeProject>;
@@ -102,7 +103,23 @@ export function TaskCard({
         >
           {task.title}
         </button>
-        {(projectLabel || delayed > 0 || task.notes || task.sessionID || done) && (
+        {task.notes?.trim() && (
+          <div
+            className="task-notes markdown"
+            onClick={(event) => {
+              if (!(event.target as Element).closest('a')) setEditing(true);
+            }}
+          >
+            <Markdown
+              remarkPlugins={remarkPlugins}
+              components={noteComponents}
+              urlTransform={markdownUrl}
+            >
+              {task.notes}
+            </Markdown>
+          </div>
+        )}
+        {(projectLabel || delayed > 0 || task.sessionID || done) && (
           <div className="task-meta">
             {delayed > 0 && (
               <span
@@ -121,11 +138,6 @@ export function TaskCard({
               <span className="task-chip task-project" title={task.project?.directory}>
                 <ProjectIcon name={projectLabel} icon={project?.icon} />
                 <span className="truncate">{projectLabel}</span>
-              </span>
-            )}
-            {task.notes && (
-              <span className="task-chip" role="img" aria-label="Has notes" title={task.notes}>
-                <HugeiconsIcon icon={Note01Icon} size={12} />
               </span>
             )}
             {task.sessionID && (
