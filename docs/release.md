@@ -20,6 +20,15 @@ GitHub Actions builds macOS installers and update packages for Apple silicon (`a
 
 A tag with a suffix, such as `v0.2.0-beta.1`, publishes a prerelease. Installed apps check stable releases only. Release notes are generated from merged pull requests and commits. Never publish the feed before all referenced ZIPs are uploaded, or replace assets on an existing release.
 
+## Changelog for future releases
+
+Every future GitHub Release should include a concise, user-facing changelog. Do not rely on generated release notes alone: releases made from direct commits can lack a useful summary.
+
+- Review changes since the previous release tag.
+- Summarize new features and meaningful fixes in plain language; omit empty categories and internal-only changes.
+- Call out breaking changes, migration steps, or new requirements when applicable.
+- Until the workflow supports curated changelogs, add the summary to the release body after the workflow publishes it, for example with `gh release edit <tag> --notes-file <notes-file>`. Keep any useful generated comparison or contributor links.
+
 ## Test a build without releasing
 
 Run **Release desktop** manually (Actions → Release desktop → Run workflow). It builds installers and update packages as a workflow artifact named `OpenCodex-<version>-dev.<run>-mac` and does not create a release. Every build first signs two native fixtures on one disposable Mac and tests install/relaunch on a separate fresh Mac that never imports or trusts the certificate. Only signed fixture ZIPs and the public certificate travel between these jobs; signing credentials stay on the signing runner.
