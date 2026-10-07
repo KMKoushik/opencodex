@@ -6,7 +6,7 @@
   ┌──────────────────────── SHARED UI / apps/web ────────────────────────┐               │                          │
   │                                                                      │               └─────────────────────────┬┘
   │                  React + TypeScript + TanStack Query                 │               HTTPS         ▲           │
-  │                                                                      │                             │           ▼
+  │                  Word previews in on-demand workers                  │                             │           ▼
   │  ┌───────── BROWSER ──────────┐     ┌──── ELECTRON RENDERER ─────┐   │               ┌───── ELECTRON MAIN ──────┐
   │  │                            │     │                            │   │  preload IPC  │                          │
   │  │  <>   Browser app          │     │  <>   Desktop app          ├───┼──────────────▶│  <>   apps/desktop       │
@@ -28,7 +28,7 @@
      │                                                               │                   │  Projects, UI + font size│
      │  Hono + V2 client; private service credentials                │                   │  Models + session layout │
      │  Bounded previews/logs; version-checked file writes           │                   │  Updater; browser profile│
-     │  Native APIs + origin-checked, ticketed PTY relay             │                   └──────────────────────────┘
+     │  Native APIs; binary file handoff; ticketed PTY relay         │                   └──────────────────────────┘
      │  Host files: read-only video/PDF ranges + reveal targets      │
      │  Side chats; opt-in side-chat, tasks + Claude plugin files    ├──────────┐
      └─────────────────┬─────────────────────────────────────────────┘          │
@@ -38,11 +38,11 @@
                        ▼                               │                        │        │  <>   Shared types       │
      ┌──────────────────── OPENCODE 2.x SERVICE ───────┴─────────────┐          │        │                          │
      │                                                               │          │        │  packages/contracts      │
-     │  <>   Shared agent backend                                    │          │        │                          │
+     │  <>   Shared backend; survives app shutdown                   │          │        │                          │
      │                                                               │          │        │  API types + schemas     │
      │  Owns sessions, permission rules + execution                  │          │        │  Native bridge types     │
      │  Providers, tools, worktrees, VCS + filesystem                │          │        │                          │
-     │  Survives OpenCodex shutdown                                  │          │        └──────────────────────────┘
+     │  Project copies: .opencode/opencodex-attachments              │          │        └──────────────────────────┘
      │  Durable sessions; native agent shells + PTY replay           │          │
      │  Loads side-chat, tasks + Claude plugins; task plugin KV      │          │        Code, not a service
      └─────────────────┬─────────────────────────────────────────────┘          │

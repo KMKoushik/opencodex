@@ -79,6 +79,13 @@ export function workspaceRoutes(backend: OpenCodeBackend) {
         bytes: bytes.length,
         uri: `data:${mime};base64,${Buffer.from(bytes).toString('base64')}`,
       } satisfies WorkspaceFile);
+    if (/\.docx$/i.test(path))
+      return c.json({
+        kind: 'docx',
+        data: Buffer.from(bytes).toString('base64'),
+        version: version(bytes),
+        bytes: bytes.length,
+      } satisfies WorkspaceFile);
     const text = decodeText(bytes);
     return c.json(
       text === undefined

@@ -126,6 +126,7 @@ export type WorkspaceFile =
   | { kind: 'image'; uri: string; bytes: number }
   | { kind: 'video'; mime: string; bytes: number }
   | { kind: 'pdf'; bytes: number }
+  | { kind: 'docx'; data: string; version: string; bytes: number }
   | { kind: 'binary'; bytes: number };
 export const MAX_PREVIEW_BYTES = 2 * 1024 * 1024;
 export const workspaceFileInputSchema = projectInputSchema.extend({
@@ -302,11 +303,12 @@ export function sessionSummary(session: SessionInfo): Session {
 export const sessionCreateSchema = projectInputSchema.extend({
   model: modelInputSchema.shape.model.optional(),
 });
-// Match T3 Code's composer limits; non-image files have no aggregate byte cap.
+// T3 Code's count/image budgets, bounded by native OpenCode admission per file.
 export const MAX_ATTACHMENTS = 100;
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_TOTAL_IMAGE_BYTES = 80 * 1024 * 1024;
-export const MAX_FILE_BYTES = 50 * 1024 * 1024;
+// OpenCode 2.x materializes at most 20 MiB per attachment at admission.
+export const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
 export function attachmentLimitError(
   files: readonly { name: string; size: number; image: boolean }[],
@@ -315,7 +317,7 @@ export function attachmentLimitError(
   let imageBytes = 0;
   for (const file of files) {
     if (file.size > (file.image ? MAX_IMAGE_BYTES : MAX_FILE_BYTES))
-      return `${file.name} exceeds the ${file.image ? 10 : 50} MiB ${file.image ? 'image' : 'file'} limit.`;
+      return `${file.name} exceeds the ${file.image ? 10 : 20} MiB ${file.image ? 'image' : 'file'} limit.`;
     if (file.image) imageBytes += file.size;
   }
   if (imageBytes > MAX_TOTAL_IMAGE_BYTES) return 'Images must total 80 MiB or less per message.';
@@ -326,9 +328,11 @@ const attachmentInputSchema = z.object({
     .string()
     .max(Math.ceil(MAX_FILE_BYTES / 3) * 4 + 256)
     .regex(
-      /^data:(?:image\/(?:png|jpeg|gif|webp)|application\/pdf|text\/plain);base64,[A-Za-z0-9+/]*={0,2}$/,
+      /^data:(?:image\/(?:png|jpeg|gif|webp)|application\/(?:pdf|octet-stream)|text\/plain);base64,[A-Za-z0-9+/]*={0,2}$/,
       'Unsupported attachment data.',
-    ),
+    )
+    // Avoid a repeated four-character regex group: V8 exhausts its stack on large files.
+    .refine((uri) => (uri.length - uri.indexOf(',') - 1) % 4 === 0, 'Invalid attachment encoding.'),
   name: z.string().min(1).max(1024),
 });
 export const promptInputSchema = z

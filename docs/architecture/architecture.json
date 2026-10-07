@@ -307,6 +307,12 @@
       "anchor": "center"
     },
     {
+      "x": 38,
+      "y": 8,
+      "value": "Word previews in on-demand workers",
+      "anchor": "center"
+    },
+    {
       "x": 13,
       "y": 11,
       "value": "Browser app"
@@ -474,7 +480,7 @@
     {
       "x": 8,
       "y": 30,
-      "value": "Native APIs + origin-checked, ticketed PTY relay"
+      "value": "Native APIs; binary file handoff; ticketed PTY relay"
     },
     {
       "x": 8,
@@ -502,7 +508,7 @@
     {
       "x": 13,
       "y": 40,
-      "value": "Shared agent backend"
+      "value": "Shared backend; survives app shutdown"
     },
     {
       "x": 8,
@@ -517,7 +523,7 @@
     {
       "x": 8,
       "y": 44,
-      "value": "Survives OpenCodex shutdown"
+      "value": "Project copies: .opencode/opencodex-attachments"
     },
     {
       "x": 8,
@@ -671,7 +677,9 @@
     "HTTP /api",
     "SSE + WS",
     "OPENCODE 2.x SERVICE",
-    "Survives OpenCodex shutdown",
+    "Shared backend; survives app shutdown",
+    "Project copies: .opencode/opencodex-attachments",
+    "Word previews in on-demand workers",
     "packages/contracts",
     "preferences.json",
     "localStorage: UI + type",

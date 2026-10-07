@@ -41,11 +41,17 @@ export async function encodeAttachments(
     if (!imageAttachment(file) && mime !== 'application/pdf') {
       const bytes = new Uint8Array(await file.slice(0, 8192).arrayBuffer());
       const controls = bytes.filter((byte) => byte < 9 || (byte > 13 && byte < 32)).length;
-      if (bytes.includes(0) || controls > bytes.length * 0.1)
-        throw new Error(
-          `${file.name} is not a supported file. Attach images, PDFs, or text/code files.`,
-        );
-      mime = 'text/plain';
+      let utf8 = true;
+      try {
+        // A sample may end halfway through a valid UTF-8 character.
+        new TextDecoder('utf-8', { fatal: true }).decode(bytes, { stream: true });
+      } catch {
+        utf8 = false;
+      }
+      mime =
+        !utf8 || bytes.includes(0) || controls > bytes.length * 0.1
+          ? 'application/octet-stream'
+          : 'text/plain';
     }
     const uri = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();

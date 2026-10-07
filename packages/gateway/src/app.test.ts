@@ -4,7 +4,13 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { attachmentLimitError, connectionSchema, sessionPageSchema } from '@opencodex/contracts';
+import {
+  attachmentLimitError,
+  connectionSchema,
+  MAX_FILE_BYTES,
+  promptInputSchema,
+  sessionPageSchema,
+} from '@opencodex/contracts';
 import { createApp } from './app';
 import { OpenCodeBackend } from './opencode';
 
@@ -1189,18 +1195,115 @@ describe('gateway and the real OpenCode client', () => {
     expect(calls).toEqual([{ text: '', files }]);
     expect((await send([])).status).toBe(400);
     expect((await send([{ name: 'secret', uri: 'file:///private/file' }])).status).toBe(400);
+    expect(
+      (await send([{ name: 'broken.bin', uri: 'data:application/octet-stream;base64,AAA' }]))
+        .status,
+    ).toBe(400);
     expect((await send(Array.from({ length: 100 }, () => files[0]!))).status).toBe(200);
     expect((await send(Array.from({ length: 101 }, () => files[0]!))).status).toBe(400);
     expect(calls).toHaveLength(2);
     const image = { name: 'image.png', size: 10 * 1024 * 1024, image: true };
-    const document = { name: 'document.pdf', size: 50 * 1024 * 1024, image: false };
+    const document = { name: 'document.pdf', size: 20 * 1024 * 1024, image: false };
     expect(
       attachmentLimitError([...Array.from({ length: 8 }, () => image), document]),
     ).toBeUndefined();
     expect(attachmentLimitError(Array.from({ length: 100 }, () => document))).toBeUndefined();
     expect(attachmentLimitError(Array.from({ length: 9 }, () => image))).toContain('80 MiB');
     expect(attachmentLimitError([{ ...image, size: image.size + 1 }])).toContain('10 MiB');
-    expect(attachmentLimitError([{ ...document, size: document.size + 1 }])).toContain('50 MiB');
+    expect(attachmentLimitError([{ ...document, size: document.size + 1 }])).toContain('20 MiB');
+    // Validate real maximum-size payloads: repeated regex groups can overflow V8's stack.
+    expect(
+      promptInputSchema.safeParse({
+        text: '',
+        files: [
+          {
+            name: 'large.bin',
+            uri: `data:application/octet-stream;base64,${Buffer.alloc(MAX_FILE_BYTES).toString('base64')}`,
+          },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  it('stages binary attachments with native writes before prompts and commands, preserving bytes and safe paths', async () => {
+    const writes: Array<{ path: string; data: Buffer }> = [];
+    const prompts: Array<{ text: string; files: Array<{ name: string; uri: string }> }> = [];
+    let failWrite = false;
+    const url = await upstream((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk) => chunks.push(chunk));
+      req.on('end', () => {
+        res.setHeader('Content-Type', 'application/json');
+        if (req.method === 'GET')
+          return res.end(
+            JSON.stringify({ data: { id: 'session-1', agent: 'build', location: { directory } } }),
+          );
+        if (new URL(req.url!, 'http://localhost').pathname === '/api/experimental/fs/write') {
+          if (failWrite) {
+            res.writeHead(503).end('{}');
+            return;
+          }
+          const target = new URL(req.url!, 'http://localhost');
+          expect(target.searchParams.get('location[directory]')).toBe(directory);
+          const path = target.searchParams.get('path')!;
+          writes.push({ path, data: Buffer.concat(chunks) });
+          return res.end(
+            JSON.stringify({ location: { directory }, data: { path: join(directory, path) } }),
+          );
+        }
+        prompts.push(JSON.parse(Buffer.concat(chunks).toString()));
+        if (req.url?.endsWith('/command')) {
+          res.writeHead(204).end();
+          return;
+        }
+        res.end(JSON.stringify({ data: { id: 'accepted' } }));
+      });
+    });
+    const app = createApp(new OpenCodeBackend(async () => ({ url })));
+    const bytes = Buffer.from([0x50, 0x4b, 3, 4, 0, 255, 128, 1]);
+    const image = { name: 'image.png', uri: 'data:image/png;base64,AQID' };
+    const send = (command?: string) =>
+      app.request('http://localhost/api/sessions/session-1/prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: 'Inspect these files',
+          command,
+          files: [
+            {
+              name: '../../Power of attorney.docx',
+              uri: `data:application/octet-stream;base64,${bytes.toString('base64')}`,
+            },
+            image,
+          ],
+        }),
+      });
+    expect((await send()).status).toBe(200);
+    expect(writes).toHaveLength(2);
+    expect(writes[0]!.data.toString()).toBe('*\n');
+    expect(writes[1]!.path).toMatch(
+      /^\.opencode\/opencodex-attachments\/[\da-f-]+\/1-Power of attorney\.docx$/,
+    );
+    expect(writes[1]!.data).toEqual(bytes);
+    expect(prompts[0]!.files).toEqual([
+      {
+        name: '../../Power of attorney.docx',
+        uri: pathToFileURL(join(directory, writes[1]!.path)).href,
+      },
+      image,
+    ]);
+    expect(prompts[0]!.text).toContain(
+      JSON.stringify({
+        name: '../../Power of attorney.docx',
+        path: join(directory, writes[1]!.path),
+      }),
+    );
+    expect((await send('review')).status).toBe(200);
+    expect(prompts[1]!.text).toContain(join(directory, writes[3]!.path));
+    expect(writes[3]!.path).not.toBe(writes[1]!.path);
+    failWrite = true;
+    expect((await send()).status).toBe(502);
+    expect(prompts).toHaveLength(2);
   });
 
   it('delegates prompts without retries and preserves native message pagination', async () => {

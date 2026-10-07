@@ -13,6 +13,9 @@ const MarkdownFile = lazy(() =>
 const FileEditor = lazy(() =>
   import('./file-editor').then((module) => ({ default: module.FileEditor })),
 );
+const DocxViewer = lazy(() =>
+  import('./docx-viewer').then((module) => ({ default: module.DocxViewer })),
+);
 export function FilePreview({
   directory,
   path,
@@ -93,6 +96,17 @@ export function FilePreview({
           Binary file · {new Intl.NumberFormat().format(query.data.bytes)} bytes. Text preview is
           unavailable.
         </p>
+      )}
+      {query.data?.kind === 'docx' && (
+        <Suspense
+          fallback={
+            <p className="wb-empty" role="status">
+              Loading document…
+            </p>
+          }
+        >
+          <DocxViewer key={query.data.version} source={query.data.data} name={path} />
+        </Suspense>
       )}
       {annotation && (
         <Annotation

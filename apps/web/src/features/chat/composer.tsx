@@ -286,7 +286,7 @@ export function Composer({
             variant="ghost"
             size="icon"
             aria-label="Attach files"
-            title="Attach images, PDFs, or text/code files"
+            title="Attach files"
             onClick={() => fileInput.current?.click()}
           >
             <HugeiconsIcon icon={PlusSignIcon} size={18} />

@@ -1,0 +1,125 @@
+.wb-docx-viewer {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.wb-docx-viewer > .wb-subtoolbar {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.wb-docx-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: clamp(12px, 3vw, 32px);
+  background: var(--surface-under);
+}
+.wb-docx-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.wb-docx-page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: clamp(20px, 5vw, 64px);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--card-shadow);
+  font: 15px/1.65 var(--font-sans);
+  overflow-wrap: anywhere;
+}
+.wb-docx-page p,
+.wb-docx-page ul,
+.wb-docx-page ol {
+  margin: 0 0 1em;
+}
+.wb-docx-page h1,
+.wb-docx-page h2,
+.wb-docx-page h3,
+.wb-docx-page h4,
+.wb-docx-page h5,
+.wb-docx-page h6 {
+  margin: 1.25em 0 0.5em;
+  line-height: 1.3;
+  font-weight: 600;
+}
+.wb-docx-page h1 {
+  font-size: 1.6em;
+}
+.wb-docx-page h2 {
+  font-size: 1.35em;
+}
+.wb-docx-page h3 {
+  font-size: 1.15em;
+}
+.wb-docx-page > :first-child {
+  margin-top: 0;
+}
+.wb-docx-page td > :last-child,
+.wb-docx-page th > :last-child {
+  margin-bottom: 0;
+}
+.wb-docx-page ul,
+.wb-docx-page ol {
+  padding-left: 1.5em;
+}
+.wb-docx-page ul {
+  list-style: disc;
+}
+.wb-docx-page ol {
+  list-style: decimal;
+}
+.wb-docx-page img {
+  max-width: 100%;
+  height: auto;
+}
+.wb-docx-page table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+.wb-docx-page td,
+.wb-docx-page th {
+  border: 1px solid var(--border-heavy);
+  padding: 8px;
+  vertical-align: top;
+}
+.wb-docx-page pre {
+  white-space: pre-wrap;
+}
+.docx-preview-dialog {
+  width: min(1000px, calc(100vw - 32px));
+  height: min(900px, calc(100dvh - 32px));
+  max-width: none;
+  max-height: none;
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--border-heavy);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.docx-preview-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.docx-preview-dialog::backdrop {
+  background: var(--scrim);
+}
+.docx-preview-dialog header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.docx-preview-dialog header > span {
+  flex: 1;
+}
