@@ -1,12 +1,13 @@
 import { SettingsGroup, SettingsRow } from '../settings/settings-layout';
-import { commands, shortcutLabel } from './commands';
+import { commands, isMac, shortcutLabel } from './commands';
 
 export function ShortcutsSettings() {
   return (
     <>
       <p className="shortcuts-description">
         Shortcuts work while OpenCodex is focused. Chat actions are available in an open
-        conversation. Close a menu before using app shortcuts.
+        conversation. Close a menu before using app shortcuts. Hold {isMac ? '⌘' : 'Ctrl'} to show
+        thread numbers: pinned chats first, then chats in Focus.
       </p>
       {(['App', 'Chat'] as const).map((group) => (
         <SettingsGroup key={group} title={group}>

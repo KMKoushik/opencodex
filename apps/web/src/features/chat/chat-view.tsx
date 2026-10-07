@@ -40,6 +40,8 @@ export function ChatView({
   onOpenSession,
   onOpenSubagent,
   onOpenSideChat,
+  focusRequest,
+  onFocusHandled,
 }: {
   sessionID: string;
   live: boolean;
@@ -53,6 +55,8 @@ export function ChatView({
   onOpenSubagent: (id: string) => void;
   /** Shows a side chat of this chat in the side-chat panel. */
   onOpenSideChat: (sideID: string) => void;
+  focusRequest?: number;
+  onFocusHandled?: () => void;
 }) {
   const client = useQueryClient();
   const chat = useChat(sessionID, live);
@@ -485,6 +489,8 @@ export function ChatView({
           />
         ) : (
           <Composer
+            focusRequest={focusRequest}
+            onFocusHandled={onFocusHandled}
             directory={chat.info.data?.location.directory}
             sessionID={sessionID}
             onSend={async () => {

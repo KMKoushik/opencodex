@@ -19,6 +19,7 @@ export function SessionRow({
   connected,
   checked,
   selection,
+  shortcutNumber,
   onPick,
   onSelect,
 }: {
@@ -35,6 +36,8 @@ export function SessionRow({
   /** Defined while a multi-selection is active: whether this row is in it. */
   checked?: boolean;
   selection?: ComponentProps<typeof SessionActionsMenu>['selection'];
+  /** Position in the pinned / Focus navigation shortcuts. */
+  shortcutNumber?: number;
   onPick?: () => void;
   onSelect: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
@@ -95,7 +98,12 @@ export function SessionRow({
           aria-expanded={expanded}
           aria-controls={id}
           aria-describedby={detailsID}
-          aria-keyshortcuts={isMac ? 'Meta+Enter' : 'Control+Enter'}
+          aria-keyshortcuts={[
+            isMac ? 'Meta+Enter' : 'Control+Enter',
+            shortcutNumber && `${isMac ? 'Meta' : 'Control'}+${shortcutNumber}`,
+          ]
+            .filter(Boolean)
+            .join(' ')}
           onPointerEnter={(event) => {
             if (event.pointerType === 'mouse') showDetails(400);
           }}
@@ -192,6 +200,11 @@ export function SessionRow({
               <ProjectIcon name={project.name} icon={project.icon} />
             </span>
           ) : null}
+          {shortcutNumber && (
+            <kbd className="session-shortcut" aria-hidden="true">
+              {shortcutNumber}
+            </kbd>
+          )}
           <span className="truncate-fade">{session.title}</span>
           {worktree && (
             <span

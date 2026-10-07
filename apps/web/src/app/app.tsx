@@ -92,6 +92,8 @@ export function App() {
   const [project, setProject] = useState(readProject);
   const [projects, setProjects] = useState(readProjects);
   const [selectedID, setSelectedID] = useState<string>();
+  const [composerFocus, setComposerFocus] = useState<{ sessionID: string; token: number }>();
+  const composerFocusToken = useRef(0);
   const [settings, setSettings] = useState<SettingsSection | null>(null);
   const [tasks, setTasks] = useState(false);
   // Settings and Tasks replace the chat column and its session tools.
@@ -132,6 +134,7 @@ export function App() {
     setFileRequest(undefined);
     setSubagentRequest(undefined);
     setSideChatRequest(undefined);
+    if (composerFocus && composerFocus.sessionID !== selectedID) setComposerFocus(undefined);
   }
   const workbenchToggle = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
@@ -522,6 +525,14 @@ export function App() {
                 live={live}
                 selectedID={selectedID}
                 onSelect={openSession}
+                onShortcutSelect={(session) => {
+                  openSession(session);
+                  const key = workbenchKey(session.id, session.directory);
+                  if (workbench.getState().entries[key]?.layout.expanded)
+                    workbench.getState().layout(key, { expanded: false });
+                  // Delivered by the destination composer, even after a cold lazy import.
+                  setComposerFocus({ sessionID: session.id, token: ++composerFocusToken.current });
+                }}
               >
                 <ProjectList
                   connected={connected}
@@ -714,6 +725,10 @@ export function App() {
                       <ChatView
                         key={selectedID}
                         sessionID={selectedID}
+                        focusRequest={
+                          composerFocus?.sessionID === selectedID ? composerFocus.token : undefined
+                        }
+                        onFocusHandled={() => setComposerFocus(undefined)}
                         onOpenSession={setSelectedID}
                         onOpenSubagent={(childID) => {
                           setSubagentRequest({ sessionID: selectedID, childID });

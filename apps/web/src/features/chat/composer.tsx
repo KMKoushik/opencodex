@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { useStore } from 'zustand';
 import { ArrowUp02Icon, PlusSignIcon, StopIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -24,6 +32,8 @@ export function Composer({
   controls,
   directory,
   shortcuts = true,
+  focusRequest,
+  onFocusHandled,
   placeholder = 'Ask anything, or describe what to build',
 }: {
   sessionID: string;
@@ -37,6 +47,8 @@ export function Composer({
   directory?: string;
   /** The main composer owns the app-wide focus and stop shortcuts. */
   shortcuts?: boolean;
+  focusRequest?: number;
+  onFocusHandled?: () => void;
   placeholder?: string;
 }) {
   const store = useDraftStore();
@@ -51,6 +63,11 @@ export function Composer({
   const dragDepth = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    if (focusRequest === undefined) return;
+    textarea.current?.focus({ preventScroll: true });
+    onFocusHandled?.();
+  }, [focusRequest, onFocusHandled]);
   useTypeToCompose(textarea, sessionID);
   const [commandIndex, setCommandIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);

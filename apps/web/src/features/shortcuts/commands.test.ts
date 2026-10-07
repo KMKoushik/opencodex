@@ -19,6 +19,31 @@ const key = (overrides: Partial<KeyboardEvent> = {}) => ({
 });
 
 describe('app command dispatch', () => {
+  it('opens numbered threads while typing, on both platforms, without consuming missing slots', () => {
+    const registry = new CommandRegistry();
+    const open = vi.fn();
+    registry.register('thread.open.1', open);
+    registry.register('thread.open.2', () => false);
+    const mac = key({ key: '1', code: 'Digit1' });
+    registry.dispatch(mac, { ...context, editable: true });
+    const windows = key({ key: '1', code: 'Digit1', metaKey: false, ctrlKey: true });
+    registry.dispatch(windows, { ...context, mac: false, editable: true });
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(mac.preventDefault).toHaveBeenCalledOnce();
+    expect(windows.preventDefault).toHaveBeenCalledOnce();
+    for (const event of [
+      key({ key: '2' }),
+      key({ key: '9' }),
+      key({ key: '1', shiftKey: true }),
+      key({ key: '1', altKey: true }),
+    ]) {
+      registry.dispatch(event, context);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+    }
+    registry.dispatch(key({ key: '1' }), { ...context, blocked: true });
+    expect(open).toHaveBeenCalledTimes(2);
+  });
+
   it('uses exact platform modifiers and consumes only available actions', () => {
     const registry = new CommandRegistry();
     const toggle = vi.fn();

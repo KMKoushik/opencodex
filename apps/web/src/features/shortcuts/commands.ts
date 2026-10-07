@@ -15,7 +15,16 @@ type Command = {
 };
 
 // One catalog drives dispatch, tooltips, accessibility hints, and the shortcuts page.
+export const threadCommands = ([1, 2, 3, 4, 5, 6, 7, 8, 9] as const).map((number) => ({
+  id: `thread.open.${number}` as const,
+  label: `Open pinned / Focus thread ${number}`,
+  group: 'App' as const,
+  bindings: [{ key: String(number), mod: true }],
+  inInput: true,
+}));
+
 export const commands = [
+  ...threadCommands,
   {
     id: 'workspace.toggle',
     label: 'Toggle workspace panel',

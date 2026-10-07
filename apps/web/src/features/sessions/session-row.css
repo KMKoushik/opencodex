@@ -7,6 +7,32 @@
   flex: 1;
   min-width: 0;
 }
+.session-shortcut {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border-heavy);
+  border-radius: 4px;
+  background: var(--elevated);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  visibility: hidden;
+  pointer-events: none;
+}
+:root[data-thread-shortcuts] .session-shortcut {
+  visibility: visible;
+}
+:root[data-thread-shortcuts] .session-row:has(.session-shortcut) > .session-project,
+:root[data-thread-shortcuts] .session-row:has(.session-shortcut) > .session-check {
+  visibility: hidden;
+}
 .session-entry[data-selected] .session-entry-row {
   background: var(--selected);
 }

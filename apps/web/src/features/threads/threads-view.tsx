@@ -17,6 +17,7 @@ import { ACTIVE_WINDOW, deriveFocus, threadStatus, type ThreadRow } from './focu
 import { rememberPinned, usePinnedIDs } from './pins';
 import { ProjectFilter } from './project-filter';
 import { dismissUndo, useFocusMany, useUndo } from './use-thread-focus';
+import { useThreadShortcuts } from './use-thread-shortcuts';
 import './threads.css';
 
 type View = 'focus' | 'projects';
@@ -28,12 +29,14 @@ export function ThreadsView({
   live,
   selectedID,
   onSelect,
+  onShortcutSelect,
   children,
 }: {
   connected: boolean;
   live: boolean;
   selectedID: string | undefined;
   onSelect: (session: Session) => void;
+  onShortcutSelect: (session: Session) => void;
   /** The Projects view. */
   children: ReactNode;
 }) {
@@ -133,6 +136,24 @@ export function ThreadsView({
     () => deriveFocus(loaded, running.data, requests, now, excluded),
     [loaded, running.data, requests, now, excluded],
   );
+  const shortcutSessions = useMemo(
+    () =>
+      [...pinned, ...(view === 'focus' ? focus.active.map((row) => row.session) : [])].slice(0, 9),
+    [pinned, focus.active, view],
+  );
+  const shortcutNumbers = useMemo(
+    () => new Map(shortcutSessions.map((session, index) => [session.id, index + 1])),
+    [shortcutSessions],
+  );
+  useThreadShortcuts(
+    shortcutSessions,
+    (session) => {
+      setPicked(new Set());
+      setAnchor(session.id);
+      onShortcutSelect(session);
+    },
+    connected,
+  );
   // Visual order, for Shift-click ranges. Selection ignores threads that left every list.
   const order = useMemo(
     () => [
@@ -212,6 +233,7 @@ export function ThreadsView({
       attention={status === 'permission' || status === 'question' ? status : undefined}
       project={project(session.directory)}
       connected={connected}
+      shortcutNumber={shortcutNumbers.get(session.id)}
       checked={picking ? selection.has(session.id) : undefined}
       selection={{
         count: selection.size,
