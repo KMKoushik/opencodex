@@ -16,6 +16,7 @@ import {
   Coins01Icon,
   BotIcon,
   Folder01Icon,
+  FolderGit2Icon,
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
@@ -25,6 +26,7 @@ import { messageQuery } from '../chat/message-query';
 import { latestResponse, tokenTotal } from '../chat/context-usage';
 import { loadSubagentCosts } from './session-cost';
 import { noSubagents, subagentsQuery } from '../subagents/subagents-query';
+import { useCheckout } from '../worktrees/checkout';
 
 const number = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 const money = new Intl.NumberFormat(undefined, {
@@ -85,6 +87,7 @@ export const SessionPanel = memo(function SessionPanel({
   });
   const latest = messages.data?.type === 'assistant' ? messages.data : undefined;
   const directory = session.data?.location.directory;
+  const checkout = useCheckout(session.data);
   const models = useQuery({
     queryKey: ['models', directory],
     queryFn: ({ signal }) => api.models(directory!, signal),
@@ -159,6 +162,16 @@ export const SessionPanel = memo(function SessionPanel({
             {projectName || directory?.split('/').filter(Boolean).at(-1) || 'Project'}
           </h3>
         </div>
+        {checkout.canonical && directory && (
+          <div className="session-panel-row session-project-row">
+            <HugeiconsIcon icon={FolderGit2Icon} size={16} />
+            <span className="truncate" title={directory}>
+              {checkout.local
+                ? 'Local checkout'
+                : `${directory.split(/[\\/]/).filter(Boolean).at(-1)}${checkout.removed ? ' (removed)' : ''}`}
+            </span>
+          </div>
+        )}
         {vcs.data && (
           <>
             <div className="session-panel-row session-project-row">
