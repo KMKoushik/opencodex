@@ -32,6 +32,7 @@ export function Composer({
   controls,
   directory,
   shortcuts = true,
+  hiddenCommands,
   focusRequest,
   onFocusHandled,
   placeholder = 'Ask anything, or describe what to build',
@@ -47,6 +48,8 @@ export function Composer({
   directory?: string;
   /** The main composer owns the app-wide focus and stop shortcuts. */
   shortcuts?: boolean;
+  /** Local commands this composer's chat can't run, left out of the slash menu. */
+  hiddenCommands?: ReadonlySet<string>;
   focusRequest?: number;
   onFocusHandled?: () => void;
   placeholder?: string;
@@ -74,8 +77,12 @@ export function Composer({
   const [focused, setFocused] = useState(false);
   const commandQuery = useSlashCommands(directory, focused && draft.startsWith('/'));
   const commandSearch = /^\/[^\s/]*$/.test(draft) && focused && !dismissed;
+  const available = commandQuery.data ?? localCommands;
   const commands = commandSearch
-    ? matchSlashCommands(commandQuery.data ?? localCommands, draft.slice(1))
+    ? matchSlashCommands(
+        hiddenCommands ? available.filter((item) => !hiddenCommands.has(item.name)) : available,
+        draft.slice(1),
+      )
     : [];
   const activeCommand = Math.min(commandIndex, Math.max(0, commands.length - 1));
   function chooseCommand(name: string) {

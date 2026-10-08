@@ -16,7 +16,13 @@ import { PermissionCard } from '../chat/requests';
 import { QuestionDock } from '../chat/question-dock';
 import { Composer } from '../chat/composer';
 import { ModelControls } from '../chat/model-controls';
+import { undoDraft } from '../chat/undo-draft';
 import { MainChatStatus } from './main-chat-status';
+
+const SIDE_CHAT_COMMANDS = new Set(['undo', 'redo', 'compact']);
+const SIDE_CHAT_HIDDEN_COMMANDS: ReadonlySet<string> = new Set(
+  localCommands.filter((item) => !SIDE_CHAT_COMMANDS.has(item.name)).map((item) => item.name),
+);
 
 /** One side chat. Its inherited main-chat history stays hidden; it reads as a fresh chat. */
 export function SideChatView({
@@ -49,8 +55,40 @@ export function SideChatView({
     retry: false,
     mutationFn: async (input: { draft: DraftSnapshot; model?: ModelRef }) => {
       const slash = parseSlash(input.draft.text);
-      if (slash && localCommands.some((item) => item.name === slash.name))
-        throw new Error(`/${slash.name} isn’t available in side chats. Use it in the main chat.`);
+      if (slash && localCommands.some((item) => item.name === slash.name)) {
+        if (!SIDE_CHAT_COMMANDS.has(slash.name))
+          throw new Error(`/${slash.name} isn’t available in side chats. Use it in the main chat.`);
+        if (
+          slash.name === 'compact' &&
+          (input.draft.attachments?.length || input.draft.comments?.length)
+        )
+          throw new Error('Send or remove attached context before running a thread action.');
+        if (slash.text.trim()) throw new Error(`/${slash.name} does not take arguments.`);
+        if (slash.name === 'compact') {
+          await api.sessionAction(sessionID, { action: 'compact' });
+          return {};
+        }
+        if (running) throw new Error('Stop the current response before undoing or redoing.');
+        if (slash.name === 'redo') {
+          if (!chat.info.data?.revert) throw new Error('There is nothing to redo.');
+          await api.sessionAction(sessionID, { action: 'redo' });
+          return {};
+        }
+        // Only this side chat's own turns: its inherited main-chat history stays put.
+        const message = messages.findLast((item) => item.type === 'user');
+        if (!message)
+          throw new Error(
+            reachedFork
+              ? 'There is nothing to undo in this side chat.'
+              : 'No earlier user message is loaded. Load earlier history to undo.',
+          );
+        const restored = await undoDraft(message);
+        await api.sessionAction(sessionID, { action: 'undo', messageID: message.id });
+        client.setQueryData<SessionInfo>(['chat', sessionID, 'info'], (info) =>
+          info ? { ...info, revert: { ...info.revert, messageID: message.id } } : info,
+        );
+        return { restored };
+      }
       const catalog = slash ? await commands.refetch() : undefined;
       if (catalog?.error) throw catalog.error;
       const command = slash && catalog?.data?.find((item) => item.name === slash.name);
@@ -69,14 +107,17 @@ export function SideChatView({
         command && !command.skill ? command.name : undefined,
         command ? command.skill : undefined,
       );
+      return { sent: true };
     },
     onMutate: () => timeline.current?.scrollToLatest(),
-    onSuccess: (_, input) => {
-      if (input.model)
+    onSuccess: (result, input) => {
+      if ('sent' in result && input.model)
         client.setQueryData<SessionInfo>(['chat', sessionID, 'info'], (info) =>
           info ? { ...info, model: input.model } : info,
         );
-      drafts.getState().acknowledge(input.draft);
+      if ('restored' in result && result.restored)
+        drafts.getState().restore(input.draft, result.restored);
+      else drafts.getState().acknowledge(input.draft);
       void refresh();
       void client.invalidateQueries({ queryKey: ['active'] });
       send.reset();
@@ -97,10 +138,13 @@ export function SideChatView({
   });
 
   const start = chat.info.data?.time.created;
+  const boundary = chat.info.data?.revert?.messageID;
   const { messages, seen, reachedFork } = useMemo(() => {
     const loaded = chat.messages.data?.pages.flatMap((page) => page.data).toReversed() ?? [];
     const seen = new Set<string>();
-    const messages = loaded.filter((message) => {
+    const end = boundary ? loaded.findIndex((message) => message.id === boundary) : -1;
+    const visible = boundary ? (end < 0 ? [] : loaded.slice(0, end)) : loaded;
+    const messages = visible.filter((message) => {
       // Forked history keeps its original times; this chat's own messages come later.
       if (start === undefined || message.time.created < start || seen.has(message.id)) return false;
       seen.add(message.id);
@@ -111,7 +155,7 @@ export function SideChatView({
       seen,
       reachedFork: start !== undefined && loaded.some((message) => message.time.created < start),
     };
-  }, [chat.messages.data, start]);
+  }, [chat.messages.data, start, boundary]);
   const running = Boolean(chat.active.data?.[sessionID]);
   const waiting =
     chat.inbox.data?.filter((item) => item.type === 'user' && !seen.has(item.id)) ?? [];
@@ -120,6 +164,7 @@ export function SideChatView({
   );
   const empty =
     chat.messages.isSuccess &&
+    !boundary &&
     !messages.length &&
     !waiting.length &&
     !running &&
@@ -127,6 +172,11 @@ export function SideChatView({
     !failed;
   const footer = (
     <>
+      {boundary && (
+        <p className="message-note">
+          Side chat undone. Use /redo to restore it, or send a message to continue from here.
+        </p>
+      )}
       {failed && (
         <div className="chat-error" role="alert">
           <p>{failed.error?.message}</p>
@@ -227,6 +277,7 @@ export function SideChatView({
             directory={chat.info.data?.location.directory}
             sessionID={sessionID}
             shortcuts={false}
+            hiddenCommands={SIDE_CHAT_HIDDEN_COMMANDS}
             placeholder="Ask a side question"
             onSend={async () => {
               if (client.isMutating({ mutationKey: sendKey })) return;
