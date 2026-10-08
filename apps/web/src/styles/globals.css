@@ -2143,6 +2143,7 @@ svg {
   color: var(--text-tertiary);
 }
 .composer-footer {
+  container: composer-footer / inline-size;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2161,9 +2162,14 @@ svg {
 .composer-controls .select {
   min-width: 0;
 }
+/* Tight footers truncate the model name before the thinking level. */
+.composer-controls .model-select {
+  flex-shrink: 100;
+  min-width: 96px;
+}
 .composer-controls .select-trigger {
   width: auto;
-  max-width: 240px;
+  max-width: min(240px, 100%);
   height: 30px;
   padding-inline: 8px;
   border-color: transparent;
@@ -2251,7 +2257,7 @@ svg {
     flex-wrap: wrap;
   }
   .composer-controls .select-trigger {
-    max-width: 180px;
+    max-width: min(180px, 100%);
   }
 }
 @media (pointer: coarse) {

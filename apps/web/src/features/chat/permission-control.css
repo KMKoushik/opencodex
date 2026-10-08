@@ -9,7 +9,7 @@
   color: var(--accent);
 }
 
-@media (max-width: 540px) {
+@container composer-footer (max-width: 500px) {
   .composer-footer .permission-control {
     width: 30px;
     padding: 0;
