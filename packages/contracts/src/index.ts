@@ -75,11 +75,14 @@ export const sessionSchema = z.object({
   done: z.number().optional(),
   model: z.string().optional(),
   fork: z.object({ sessionID: z.string() }).optional(),
+  /** Present only on message-content search results. */
+  match: z.object({ excerpt: z.string().max(240) }).optional(),
 });
 
 export const sessionPageSchema = z.object({
   sessions: z.array(sessionSchema),
   nextCursor: z.string().nullable(),
+  searchNotice: z.string().optional(),
 });
 
 export const apiErrorSchema = z.object({ message: z.string() });

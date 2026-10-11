@@ -1057,10 +1057,13 @@ describe('gateway and the real OpenCode client', () => {
       );
     });
     const app = createApp(
-      new OpenCodeBackend(async () => ({
-        url,
-        auth: { type: 'basic', username: 'test', password: 'private' },
-      })),
+      new OpenCodeBackend(
+        async () => ({
+          url,
+          auth: { type: 'basic', username: 'test', password: 'private' },
+        }),
+        false,
+      ),
     );
     const query = new URLSearchParams({ directory, cursor: 'page-2' });
     const response = await app.request(`http://localhost/api/sessions?${query}`);
@@ -1090,6 +1093,7 @@ describe('gateway and the real OpenCode client', () => {
       'http://localhost/api/session-search?search=Review&cursor=page-2',
     );
     expect(search.status).toBe(200);
+    expect((await search.json()).searchNotice).toContain('Searching titles only');
     expect(requested?.searchParams.get('search')).toBe('Review');
     expect(requested?.searchParams.get('cursor')).toBe('page-2');
     expect(requested?.searchParams.get('directory')).toBeNull();

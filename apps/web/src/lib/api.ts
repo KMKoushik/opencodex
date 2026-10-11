@@ -287,7 +287,7 @@ export const api = {
     if (cursor) query.set('cursor', cursor);
     return request(`/sessions?${query}`, sessionPageSchema, { signal });
   },
-  /** All projects' root threads, newest update first. An empty search lists everything. */
+  /** All projects' root threads. Search ranks titles before messages; empty lists everything. */
   searchSessions: (search: string, cursor: string | undefined, signal: AbortSignal) => {
     const query = new URLSearchParams({ search });
     if (cursor) query.set('cursor', cursor);

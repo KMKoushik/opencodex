@@ -41,7 +41,7 @@ export function ThreadSearch({
         <input
           type="search"
           aria-label="Search threads"
-          placeholder="Search all threads…"
+          placeholder="Search titles and messages…"
           autoFocus
           maxLength={256}
           value={search}
@@ -56,6 +56,11 @@ export function ThreadSearch({
       {connected && sessions.isPending && (
         <p className="sidebar-note" role="status">
           Searching…
+        </p>
+      )}
+      {sessions.data?.pages[0]?.searchNotice && (
+        <p className="sidebar-note" role="status">
+          {sessions.data.pages[0].searchNotice}
         </p>
       )}
       {sessions.isError && (
@@ -74,11 +79,14 @@ export function ThreadSearch({
           className="scrollbar-on-hover"
           data={rows}
           keyExtractor={(session) => session.id}
-          estimatedItemSize={60}
+          estimatedItemSize={80}
           style={{ height: 360 }}
           renderItem={({ item }) => (
             <button className="thread-search-row" onClick={() => onSelect(item)}>
               <span className="truncate">{item.title}</span>
+              {item.match && (
+                <span className="thread-search-excerpt truncate">{item.match.excerpt}</span>
+              )}
               <small className="truncate">
                 <HugeiconsIcon icon={Folder01Icon} size={12} />
                 {item.directory}

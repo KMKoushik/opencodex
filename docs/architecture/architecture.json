@@ -102,9 +102,28 @@
       "height": 8,
       "title": "PLAN USAGE APIS",
       "color": "#f6c177"
+    },
+    {
+      "id": "database",
+      "x": 89,
+      "y": 60,
+      "width": 28,
+      "height": 5,
+      "title": "OPENCODE SQLITE",
+      "color": "#c4a7ff"
     }
   ],
   "connectors": [
+    {
+      "points": [
+        [57, 33],
+        [57, 36],
+        [76, 36],
+        [76, 62],
+        [88, 62]
+      ],
+      "color": "#5eead4"
+    },
     {
       "points": [
         [23, 47],
@@ -267,6 +286,16 @@
     }
   ],
   "texts": [
+    {
+      "x": 92,
+      "y": 62,
+      "value": "Read-only local search"
+    },
+    {
+      "x": 92,
+      "y": 63,
+      "value": "+ active usage sign-ins"
+    },
     {
       "x": 92,
       "y": 2,

@@ -31,38 +31,38 @@
      │  Native APIs; binary file handoff; ticketed PTY relay         │                   └──────────────────────────┘
      │  Host files: read-only video/PDF ranges + reveal targets      │
      │  Side chats; opt-in side-chat, tasks + Claude plugin files    ├──────────┐
-     └─────────────────┬─────────────────────────────────────────────┘          │
-       HTTP + WS       │                               ▲  Events + WS           │
-       official client │                               │                        │        ┌──── SHARED CONTRACTS ────┐
-                       │                               │                        │        │                          │
-                       ▼                               │                        │        │  <>   Shared types       │
-     ┌──────────────────── OPENCODE 2.x SERVICE ───────┴─────────────┐          │        │                          │
-     │                                                               │          │        │  packages/contracts      │
-     │  <>   Shared backend; survives app shutdown                   │          │        │                          │
-     │                                                               │          │        │  API types + schemas     │
-     │  Owns sessions, permission rules + execution                  │          │        │  Native bridge types     │
-     │  Providers, tools, worktrees, VCS + filesystem                │          │        │                          │
-     │  Project copies: .opencode/opencodex-attachments              │          │        └──────────────────────────┘
-     │  Durable sessions; native agent shells + PTY replay           │          │
-     │  Loads side-chat, tasks + Claude plugins; task plugin KV      │          │        Code, not a service
-     └─────────────────┬─────────────────────────────────────────────┘          │
-                       │                               ▲                        │
-       spawn + stdin   │                               │  stdout + tools        │
-                       │                               │                        │        ┌──── PLAN USAGE APIS ─────┐
-                       │                               │                        │ HTTPS  │                          │
-                       │                               │                        │        │  ChatGPT, Claude, Go     │
-                       ▼                               │                        └───────▶│  Read-only limit checks  │
-     ┌──────────────────── CLAUDE CODE (OPT-IN) ───────┴─────────────┐                   │                          │
-     │                                                               │                   │  Local sign-ins stay in  │
-     │  Official CLI subprocess on the OpenCode host                 │                   │  the gateway             │
-     │                                                               │                   └──────────────────────────┘
-     │  Own login, inference and Claude conversation files           │
-     │  Workspace tools return to OpenCode permissions               │
-     │  Plugin releases idle workers after five minutes              │
-     │                                                               │
-     └───────────────────────────────────────────────────────────────┘
-
-
+     └─────────────────┬─────────────────────────────────┬───────────┘          │
+       HTTP + WS       │                               ▲ │Events + WS           │
+       official client │                               │ │                      │        ┌──── SHARED CONTRACTS ────┐
+                       │                               │ └──────────────────┐   │        │                          │
+                       ▼                               │                    │   │        │  <>   Shared types       │
+     ┌──────────────────── OPENCODE 2.x SERVICE ───────┴─────────────┐      │   │        │                          │
+     │                                                               │      │   │        │  packages/contracts      │
+     │  <>   Shared backend; survives app shutdown                   │      │   │        │                          │
+     │                                                               │      │   │        │  API types + schemas     │
+     │  Owns sessions, permission rules + execution                  │      │   │        │  Native bridge types     │
+     │  Providers, tools, worktrees, VCS + filesystem                │      │   │        │                          │
+     │  Project copies: .opencode/opencodex-attachments              │      │   │        └──────────────────────────┘
+     │  Durable sessions; native agent shells + PTY replay           │      │   │
+     │  Loads side-chat, tasks + Claude plugins; task plugin KV      │      │   │        Code, not a service
+     └─────────────────┬─────────────────────────────────────────────┘      │   │
+                       │                               ▲                    │   │
+       spawn + stdin   │                               │  stdout + tools    │   │
+                       │                               │                    │   │        ┌──── PLAN USAGE APIS ─────┐
+                       │                               │                    │   │ HTTPS  │                          │
+                       │                               │                    │   │        │  ChatGPT, Claude, Go     │
+                       ▼                               │                    │   └───────▶│  Read-only limit checks  │
+     ┌──────────────────── CLAUDE CODE (OPT-IN) ───────┴─────────────┐      │            │                          │
+     │                                                               │      │            │  Local sign-ins stay in  │
+     │  Official CLI subprocess on the OpenCode host                 │      │            │  the gateway             │
+     │                                                               │      │            └──────────────────────────┘
+     │  Own login, inference and Claude conversation files           │      │
+     │  Workspace tools return to OpenCode permissions               │      │
+     │  Plugin releases idle workers after five minutes              │      │            ┌──── OPENCODE SQLITE ─────┐
+     │                                                               │      │            │                          │
+     └───────────────────────────────────────────────────────────────┘      └───────────▶│  Read-only local search  │
+                                                                                         │  + active usage sign-ins │
+                                                                                         └──────────────────────────┘
   ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
   RUNTIME HOSTING

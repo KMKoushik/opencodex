@@ -1,14 +1,15 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { isAbsolute, join } from 'node:path';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { Hono } from 'hono';
 import type { ConnectionInfo } from '@opencode/client';
 import type { UsageLimits, UsageProvider, UsageWindow } from '@opencodex/contracts';
 import type { OpenCodeBackend } from './opencode';
 import { GatewayError } from './errors';
+import { opencodeDatabases } from './opencode-databases';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -244,7 +245,7 @@ async function storedCredential(id: string): Promise<StoredCredential | undefine
   const { DatabaseSync } = await import('node:sqlite').catch(() => {
     throw new UsageError('Reading OpenCode credentials requires Node.js 22.13 or newer.');
   });
-  for (const path of await databases()) {
+  for (const path of await opencodeDatabases()) {
     let database: InstanceType<typeof DatabaseSync> | undefined;
     try {
       database = new DatabaseSync(path, { readOnly: true, timeout: 2_000 });
@@ -268,35 +269,6 @@ async function storedCredential(id: string): Promise<StoredCredential | undefine
     }
   }
   return undefined;
-}
-
-/** OpenCode names its database per release channel; try the most recently written first. */
-async function databases() {
-  const directory = join(
-    process.env.XDG_DATA_HOME || join(homedir(), '.local', 'share'),
-    'opencode',
-  );
-  const override = process.env.OPENCODE_DB;
-  if (override && override !== ':memory:')
-    return [isAbsolute(override) ? override : join(directory, override)];
-  const names = await readdir(directory).catch(() => []);
-  const candidates = await Promise.all(
-    names
-      .filter((name) => /^opencode(-[a-zA-Z0-9._-]+)?\.db$/.test(name))
-      .map(async (name) => {
-        const path = join(directory, name);
-        const times = await Promise.all(
-          [path, `${path}-wal`].map((file) =>
-            stat(file).then(
-              (info) => info.mtimeMs,
-              () => 0,
-            ),
-          ),
-        );
-        return { path, modified: Math.max(...times) };
-      }),
-  );
-  return candidates.sort((a, b) => b.modified - a.modified).map(({ path }) => path);
 }
 
 /** Claude Code keeps its sign-in in the macOS Keychain, else in its config directory. */

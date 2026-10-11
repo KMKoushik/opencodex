@@ -31,6 +31,7 @@ import { usageRoutes } from './usage';
 import { worktreeRoutes } from './worktrees';
 import { taskRoutes } from './tasks';
 import { prepareAttachments } from './attachments';
+import { searchSessions } from './session-search';
 
 export function createApp(
   backend = new OpenCodeBackend(),
@@ -424,7 +425,12 @@ export function createApp(
     const search = c.req.query('search')?.trim() ?? '';
     if (search.length > 256) return c.json({ message: 'Search with up to 256 characters.' }, 400);
     return c.json(
-      await backend.sessions({}, c.req.query('cursor'), c.req.raw.signal, search || undefined),
+      await searchSessions(
+        backend,
+        search,
+        c.req.query('cursor'),
+        AbortSignal.any([c.req.raw.signal, shutdown]),
+      ),
     );
   });
 
