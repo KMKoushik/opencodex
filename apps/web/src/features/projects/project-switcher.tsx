@@ -7,12 +7,15 @@ import {
   Tick02Icon,
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import type { Project } from '@opencodex/contracts';
+import type { OpenCodeProject, Project } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { Dialog } from '../../components/ui/dialog';
 import { api } from '../../lib/api';
 import { ProjectForm } from './project-form';
+import { ProjectIcon } from './project-icon';
 import { projectFolder, projectFolders } from './project-metadata';
+
+type ProjectOption = { project: Project; icon?: OpenCodeProject['icon'] };
 
 export function ProjectSwitcher({
   project,
@@ -36,12 +39,19 @@ export function ProjectSwitcher({
     select: projectFolders,
   });
   const options = useMemo(() => {
-    const folders = new Map(opened.map((item) => [item.directory, item]));
-    for (const metadata of projects.data?.values() ?? []) {
-      const item = projectFolder(metadata);
-      folders.set(item.directory, item);
+    // Most recently active OpenCode projects first, then opened folders it doesn't know yet.
+    const recent = Array.from(projects.data?.values() ?? []).sort(
+      (a, b) => (b.time.active || b.time.updated) - (a.time.active || a.time.updated),
+    );
+    const folders = new Map<string, ProjectOption>(
+      recent.map((metadata) => [
+        metadata.canonical,
+        { project: projectFolder(metadata), icon: metadata.icon },
+      ]),
+    );
+    for (const item of [...opened, project]) {
+      if (!folders.has(item.directory)) folders.set(item.directory, { project: item });
     }
-    folders.set(project.directory, project);
     return Array.from(folders.values());
   }, [opened, project, projects.data]);
 
@@ -149,7 +159,7 @@ function ProjectMenu({
   onOpen,
 }: {
   id: string;
-  options: Project[];
+  options: ProjectOption[];
   project: Project;
   placement: { above: boolean; height: number };
   onClose: () => void;
@@ -164,14 +174,15 @@ function ProjectMenu({
   const resolve = useMutation({ mutationFn: api.project });
   const rows = useMemo(() => {
     const search = query.trim().toLowerCase();
-    const matching = options.filter((item) =>
+    const matching = options.filter(({ project: item }) =>
       `${item.name} ${item.directory}`.toLowerCase().includes(search),
     );
     const path = query.trim();
-    const canOpen = /[\\/]|^[~.]/.test(path) && !options.some((item) => item.directory === path);
+    const canOpen =
+      /[\\/]|^[~.]/.test(path) && !options.some((item) => item.project.directory === path);
     return [
-      ...matching.map((item) => ({ directory: item.directory, project: item })),
-      ...(canOpen ? [{ directory: path, project: undefined }] : []),
+      ...matching.map((item) => ({ directory: item.project.directory, ...item })),
+      ...(canOpen ? [{ directory: path, project: undefined, icon: undefined }] : []),
     ];
   }, [options, query]);
   const found = rows.findIndex((row) => row.directory === activeDirectory);
@@ -270,7 +281,11 @@ function ProjectMenu({
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => choose(index)}
           >
-            <HugeiconsIcon icon={FolderOpenIcon} size={16} />
+            {row.project ? (
+              <ProjectIcon name={row.project.name} icon={row.icon} />
+            ) : (
+              <HugeiconsIcon icon={FolderOpenIcon} size={16} />
+            )}
             <span className="project-switcher-option">
               <span className="truncate">
                 {row.project?.name || (resolve.isPending ? 'Opening…' : 'Open folder')}

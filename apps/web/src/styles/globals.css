@@ -1465,6 +1465,11 @@ svg {
 .project-switcher .select-menu svg {
   flex-shrink: 0;
 }
+.project-switcher .select-menu .project-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
 .project-switcher-option {
   display: flex;
   flex-direction: column;
