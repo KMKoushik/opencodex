@@ -4,6 +4,7 @@ import { useConnection } from '../connection/use-connection';
 import { SettingsGroup, SettingsRow } from './settings-layout';
 import { UpdateSettings } from '../updates/update-settings';
 import { SideChatPluginSettings } from '../side-chat/side-chat-plugin-settings';
+import { CanvasPluginSettings } from '../canvas/canvas-plugin-settings';
 import { ClaudeCodeSettings } from './claude-code-settings';
 import { NotificationSettings } from '../notifications/notification-settings';
 
@@ -49,6 +50,7 @@ export function GeneralSettings({
           description={connected ? (live ? 'Connected' : 'Reconnecting…') : 'Unavailable'}
         />
         {connected && <SideChatPluginSettings directory={project?.directory} />}
+        {connected && <CanvasPluginSettings directory={project?.directory} />}
         {connected && <ClaudeCodeSettings directory={project?.directory} />}
       </SettingsGroup>
       <NotificationSettings />

@@ -15,6 +15,8 @@ export default tseslint.config(
       '**/coverage/**',
       'test-results/**',
       'playwright-report/**',
+      'packages/gateway/src/canvas-runtime.generated.ts',
+      'packages/gateway/src/canvas-types.generated.ts',
     ],
   },
   js.configs.recommended,
@@ -28,5 +30,12 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['error', { allowConstantExport: true }],
     },
+  },
+  {
+    // The canvas SDK runs in sandboxed frames and the gateway's test render, never under HMR.
+    files: ['packages/canvas/src/**/*.{ts,tsx}'],
+    languageOptions: { globals: globals.browser },
+    plugins: { 'react-hooks': reactHooks },
+    rules: reactHooks.configs.recommended.rules,
   },
 );

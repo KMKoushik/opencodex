@@ -277,3 +277,28 @@
     min-height: 44px;
   }
 }
+.session-canvas-list > li + li {
+  margin-top: 2px;
+  padding-top: 2px;
+  border-top: 0;
+}
+.session-canvas-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+.session-canvas-link:hover {
+  background: var(--hover);
+}
+.session-canvas-link > svg {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}

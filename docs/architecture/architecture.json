@@ -386,7 +386,7 @@
     {
       "x": 38,
       "y": 19,
-      "value": "Session workspace; activity tray + dockable terminal",
+      "value": "Workspace, terminal; canvases in sandboxed frames",
       "anchor": "center"
     },
     {
@@ -514,7 +514,7 @@
     {
       "x": 8,
       "y": 31,
-      "value": "Host files: read-only video/PDF ranges + reveal targets"
+      "value": "Host files: video/PDF ranges, reveal targets, canvases"
     },
     {
       "x": 7,
@@ -531,7 +531,7 @@
     {
       "x": 58,
       "y": 34,
-      "value": "Events + WS",
+      "value": "Events + WS;",
       "color": "#5eead4"
     },
     {
@@ -627,12 +627,12 @@
     {
       "x": 8,
       "y": 32,
-      "value": "Side chats; opt-in side-chat, tasks + Claude plugin files"
+      "value": "Opt-in side-chat, tasks, canvas + Claude plugin files"
     },
     {
       "x": 8,
       "y": 46,
-      "value": "Loads side-chat, tasks + Claude plugins; task plugin KV"
+      "value": "Loads side-chat, tasks, canvas + Claude plugins; task KV"
     },
     {
       "x": 7,
@@ -690,6 +690,12 @@
       "x": 82,
       "y": 51,
       "value": "HTTPS",
+      "color": "#5eead4"
+    },
+    {
+      "x": 58,
+      "y": 35,
+      "value": "canvas tool HTTP",
       "color": "#5eead4"
     }
   ],

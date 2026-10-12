@@ -10,3 +10,6 @@ playwright-report/
 packages/gateway/src/side-chat-plugin.generated.ts
 packages/gateway/src/claude-code-plugin.generated.ts
 packages/gateway/src/tasks-plugin.generated.ts
+packages/gateway/src/canvas-plugin.generated.ts
+packages/gateway/src/canvas-runtime.generated.ts
+packages/gateway/src/canvas-types.generated.ts

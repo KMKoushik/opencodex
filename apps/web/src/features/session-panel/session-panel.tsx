@@ -17,6 +17,7 @@ import {
   BotIcon,
   Folder01Icon,
   FolderGit2Icon,
+  DashboardSquare02Icon,
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
@@ -41,11 +42,13 @@ export const SessionPanel = memo(function SessionPanel({
   projectName,
   live,
   onOpen,
+  onOpenCanvas,
 }: {
   sessionID: string;
   projectName?: string;
   live: boolean;
   onOpen: (id: string) => void;
+  onOpenCanvas: (id: string) => void;
 }) {
   const client = useQueryClient();
   const children = useInfiniteQuery(subagentsQuery(sessionID, live));
@@ -212,6 +215,7 @@ export const SessionPanel = memo(function SessionPanel({
         <QueryError query={vcs} />
       </section>
       <SubagentsSummary query={children} onOpen={() => onOpen('subagents')} />
+      <CanvasesSummary sessionID={sessionID} onOpen={onOpenCanvas} />
       {(totalCost !== 0 || children.isError || subagentCosts.isError) && (
         <PanelDetails
           label="Usage"
@@ -365,6 +369,48 @@ function SubagentsSummary({
       </button>
       <QueryError query={children} />
     </section>
+  );
+}
+
+/** This chat's canvases; hidden until it has one. */
+function CanvasesSummary({
+  sessionID,
+  onOpen,
+}: {
+  sessionID: string;
+  onOpen: (id: string) => void;
+}) {
+  const canvases = useQuery({
+    queryKey: ['canvases'],
+    queryFn: ({ signal }) => api.canvases(signal),
+    select: (list) => list.filter((canvas) => canvas.sessionID === sessionID),
+  });
+  if (canvases.isPending || canvases.data?.length === 0) return null;
+  return (
+    <PanelDetails
+      label="Canvases"
+      icon={DashboardSquare02Icon}
+      value={canvases.data ? number.format(canvases.data.length) : 'Unavailable'}
+    >
+      {canvases.data && (
+        <ul className="session-resource-list session-canvas-list" role="list">
+          {canvases.data.map((canvas) => (
+            <li key={canvas.id}>
+              <button
+                type="button"
+                className="session-canvas-link"
+                title={`Open ${canvas.title}`}
+                onClick={() => onOpen(canvas.id)}
+              >
+                <span className="truncate">{canvas.title}</span>
+                <HugeiconsIcon icon={ArrowRight01Icon} size={12} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <QueryError query={canvases} />
+    </PanelDetails>
   );
 }
 

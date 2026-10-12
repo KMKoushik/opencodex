@@ -12,6 +12,8 @@ import { updateSessionViewed } from '../sessions/viewed';
 import type { SubagentCost } from '../session-panel/session-cost';
 import { updateSessionMetadata } from '../sessions/metadata';
 import { notifySession } from '../notifications/notifications';
+import type { CanvasData, CanvasEvent } from '@opencodex/contracts/canvas';
+import { canvasDataKey, canvasSourceKey } from '../canvas/canvas-context';
 
 export function useEvents(enabled: boolean) {
   const client = useQueryClient();
@@ -118,6 +120,36 @@ export function useEvents(enabled: boolean) {
         costChanged.clear();
       }, 250);
     };
+    let canvasTimer: ReturnType<typeof setTimeout> | undefined;
+    const canvasSources = new Set<string>();
+    const canvasData = new Set<string>();
+    // The agent writes a canvas file by file; refetch each changed snapshot once.
+    const refreshCanvases = () => {
+      if (canvasTimer) return;
+      canvasTimer = setTimeout(() => {
+        canvasTimer = undefined;
+        for (const id of canvasSources)
+          void client.invalidateQueries({ queryKey: canvasSourceKey(id), exact: true });
+        for (const id of canvasData)
+          void client.invalidateQueries({ queryKey: canvasDataKey(id), exact: true });
+        canvasSources.clear();
+        canvasData.clear();
+      }, 100);
+    };
+    events.addEventListener('canvas', (message: MessageEvent<string>) => {
+      const event: CanvasEvent = JSON.parse(message.data);
+      if (event.type === 'list') {
+        void client.invalidateQueries({ queryKey: ['canvases'] });
+        return;
+      }
+      if (event.type === 'data') {
+        const values = client.getQueryData<{ values: CanvasData }>(canvasDataKey(event.id))?.values;
+        // Writes from this window already updated the snapshot.
+        if (!values || (values[event.key]?.rev ?? null) === event.rev) return;
+        canvasData.add(event.id);
+      } else canvasSources.add(event.id);
+      refreshCanvases();
+    });
     events.addEventListener('ready', () => {
       if (frame !== undefined) cancelAnimationFrame(frame);
       frame = undefined;
@@ -134,6 +166,8 @@ export function useEvents(enabled: boolean) {
       void client.invalidateQueries({ queryKey: ['connection'] });
       void client.invalidateQueries({ queryKey: ['models'] });
       void client.invalidateQueries({ queryKey: ['tasks'] });
+      void client.invalidateQueries({ queryKey: ['canvas'] });
+      void client.invalidateQueries({ queryKey: ['canvases'] });
       client.setQueriesData<LivePart[]>(
         { queryKey: ['chat'], predicate: (query) => query.queryKey[2] === 'stream' },
         [],
@@ -308,6 +342,7 @@ export function useEvents(enabled: boolean) {
       clearTimeout(timer);
       clearTimeout(workspaceTimer);
       clearTimeout(tasksTimer);
+      clearTimeout(canvasTimer);
       if (frame !== undefined) cancelAnimationFrame(frame);
       setLive(false);
     };

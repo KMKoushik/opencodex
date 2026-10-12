@@ -33,6 +33,8 @@ import { taskRoutes } from './tasks';
 import { prepareAttachments } from './attachments';
 import { searchSessions } from './session-search';
 import { createReplyFormat } from './reply-format';
+import { CANVAS_ROOT, canvasRoutes, canvasRuntimeRoutes, createCanvasWatcher } from './canvases';
+import { canvasPluginRoutes } from './canvas-plugin';
 
 export function createApp(
   backend = new OpenCodeBackend(),
@@ -46,7 +48,12 @@ export function createApp(
       return c.json({ message: 'This gateway accepts local requests only.' }, 403);
     }
     const origin = c.req.header('origin');
-    if ((origin && origin !== url.origin) || c.req.header('sec-fetch-site') === 'cross-site') {
+    // Canvas frames have an opaque origin; their only request is the public runtime script.
+    const runtime = c.req.method === 'GET' && url.pathname === '/api/canvas-runtime/runtime.js';
+    if (
+      !runtime &&
+      ((origin && origin !== url.origin) || c.req.header('sec-fetch-site') === 'cross-site')
+    ) {
       return c.json({ message: 'Cross-origin requests are not allowed.' }, 403);
     }
     c.header('X-Content-Type-Options', 'nosniff');
@@ -69,6 +76,10 @@ export function createApp(
   app.route('/api/sessions', sessionAccessRoutes(backend));
   app.route('/api', worktreeRoutes(backend));
   app.route('/api/tasks', taskRoutes(backend));
+  app.route('/api/canvases', canvasRoutes());
+  app.route('/api/canvas-runtime', canvasRuntimeRoutes());
+  app.route('/api/canvas-plugin', canvasPluginRoutes(backend));
+  const canvasWatcher = createCanvasWatcher(CANVAS_ROOT);
   app.get('/api/attention', async (c) => {
     const directories = [...new Set(c.req.queries('directory') ?? [])];
     if (directories.length > 32 || directories.some((item) => !item.trim() || item.length > 4096))
@@ -463,6 +474,11 @@ export function createApp(
       const heartbeat = setInterval(() => {
         void stream.write(': keepalive\n\n').catch(() => disconnected.abort());
       }, 15_000);
+      const stopCanvases = canvasWatcher.subscribe((event) => {
+        void stream
+          .writeSSE({ event: 'canvas', data: JSON.stringify(event) })
+          .catch(() => disconnected.abort());
+      });
       try {
         for await (const event of backend.events(signal)) {
           if (event.type === 'filesystem.changed' || event.type === 'vcs.branch.updated')
@@ -478,6 +494,7 @@ export function createApp(
         if (!signal.aborted) await stream.writeSSE({ event: 'unavailable', data: '{}' });
       } finally {
         clearInterval(heartbeat);
+        stopCanvases();
         disconnected.abort();
       }
     }),

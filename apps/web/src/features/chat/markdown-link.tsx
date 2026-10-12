@@ -2,9 +2,13 @@ import { useContext, type ReactNode } from 'react';
 import { SourceCodeIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { FileLinkContext } from '../workbench/file-link-context';
+import { CANVAS_LINK } from '@opencodex/contracts/canvas';
+import { CanvasLink } from '../canvas/canvas-card';
 
 export function MarkdownLink({ href, children }: { href?: string; children?: ReactNode }) {
   const openFile = useContext(FileLinkContext);
+  const canvas = href ? CANVAS_LINK.exec(href) : null;
+  if (canvas) return <CanvasLink id={canvas[1]!}>{children}</CanvasLink>;
   const local = Boolean(href) && !/^([a-z][a-z\d+.-]*:|#)/i.test(href!);
   return (
     <a

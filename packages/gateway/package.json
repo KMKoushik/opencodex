@@ -15,6 +15,7 @@
     "@opencode/client": "2.0.19",
     "@opencodex/contracts": "workspace:*",
     "hono": "^4.10.0",
+    "typescript": "~5.9.3",
     "ws": "^8.22.0",
     "zod": "^4.1.0"
   },

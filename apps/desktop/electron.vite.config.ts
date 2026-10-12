@@ -18,7 +18,13 @@ export default defineConfig(({ command }) => {
       build: {
         externalizeDeps: false,
         commonjsOptions: { ignore: ['bufferutil', 'utf-8-validate'] },
-        rollupOptions: { input: fileURLToPath(new URL('./src/main/index.ts', import.meta.url)) },
+        rollupOptions: {
+          input: fileURLToPath(new URL('./src/main/index.ts', import.meta.url)),
+          // Canvas checks lazy-load TypeScript. Bundled, its string literals contain import
+          // statements that electron-vite's CommonJS shim mistakes for real ones, splicing the
+          // shim into a string. Load it from node_modules at runtime instead.
+          external: ['typescript'],
+        },
       },
     },
     preload: {

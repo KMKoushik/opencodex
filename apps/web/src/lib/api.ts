@@ -43,6 +43,7 @@ import {
   type TaskUpdate,
   type TasksPluginStatus,
 } from '@opencodex/contracts';
+import type { CanvasData, CanvasInfo, CanvasSource } from '@opencodex/contracts/canvas';
 
 async function nativeRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, {
@@ -65,6 +66,30 @@ async function request<T>(path: string, schema: z.ZodType<T>, options?: RequestI
 }
 
 const sessionPath = (id: string) => `/sessions/${encodeURIComponent(id)}`;
+const canvasPath = (id: string) => `/canvases/${encodeURIComponent(id)}`;
+
+/** A compare-and-swap write; a conflict returns the current value instead of failing. */
+async function writeCanvasValue(
+  id: string,
+  key: string,
+  value: unknown,
+  rev: string | null,
+): Promise<{ ok: true; rev: string } | { ok: false; value: unknown; rev: string | null }> {
+  const response = await fetch(`/api${canvasPath(id)}/data/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value, rev }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  const body = await response.json().catch(() => null);
+  if (response.status === 409) return { ok: false, value: body.value, rev: body.rev };
+  if (!response.ok) {
+    const error = apiErrorSchema.safeParse(body);
+    throw new Error(error.success ? error.data.message : 'The canvas value couldn’t be saved.');
+  }
+  return { ok: true, rev: body.rev };
+}
+
 const post = (body?: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) });
 
 export const api = {
@@ -214,6 +239,20 @@ export const api = {
   installSideChatPlugin: () => nativeRequest<{ ok: true }>('/side-chat-plugin', { method: 'PUT' }),
   removeSideChatPlugin: () =>
     nativeRequest<{ ok: true }>('/side-chat-plugin', { method: 'DELETE' }),
+  canvasPlugin: (directory: string | undefined, signal: AbortSignal) =>
+    nativeRequest<SideChatPluginStatus>(
+      `/canvas-plugin${directory ? `?${new URLSearchParams({ directory })}` : ''}`,
+      { signal },
+    ),
+  installCanvasPlugin: () => nativeRequest<{ ok: true }>('/canvas-plugin', { method: 'PUT' }),
+  removeCanvasPlugin: () => nativeRequest<{ ok: true }>('/canvas-plugin', { method: 'DELETE' }),
+  canvases: (signal: AbortSignal) => nativeRequest<CanvasInfo[]>('/canvases', { signal }),
+  canvas: (id: string, signal: AbortSignal) =>
+    nativeRequest<CanvasSource>(canvasPath(id), { signal }),
+  canvasData: (id: string, signal: AbortSignal) =>
+    nativeRequest<{ values: CanvasData; errors: string[] }>(`${canvasPath(id)}/data`, { signal }),
+  writeCanvasValue,
+  deleteCanvas: (id: string) => nativeRequest<{ ok: true }>(canvasPath(id), { method: 'DELETE' }),
   tasksPlugin: (signal: AbortSignal) =>
     nativeRequest<TasksPluginStatus>('/tasks/plugin', { signal }),
   installTasksPlugin: () => nativeRequest<{ ok: true }>('/tasks/plugin', { method: 'PUT' }),

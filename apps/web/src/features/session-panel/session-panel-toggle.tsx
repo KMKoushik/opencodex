@@ -1,5 +1,5 @@
 import { useCallback, useId, useLayoutEffect, useRef, useState, type RefObject } from 'react';
-import { Cancel01Icon, DashboardSquare02Icon } from '@hugeicons/core-free-icons';
+import { Cancel01Icon, InformationCircleIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
 import { SessionPanel } from './session-panel';
@@ -14,6 +14,7 @@ export function SessionPanelToggle({
   cardVisible,
   onCardVisibilityChange,
   onOpen,
+  onOpenCanvas,
 }: {
   sessionID: string;
   projectName?: string;
@@ -23,6 +24,7 @@ export function SessionPanelToggle({
   cardVisible: boolean;
   onCardVisibilityChange: (visible: boolean) => void;
   onOpen: (id: string) => void;
+  onOpenCanvas: (id: string) => void;
 }) {
   const id = useId();
   const panel = useRef<HTMLDivElement>(null);
@@ -72,6 +74,13 @@ export function SessionPanelToggle({
     },
     [onOpen],
   );
+  const openCanvas = useCallback(
+    (id: string) => {
+      if (panel.current?.matches(':popover-open')) panel.current.hidePopover();
+      onOpenCanvas(id);
+    },
+    [onOpenCanvas],
+  );
   return (
     <>
       <Button
@@ -86,7 +95,7 @@ export function SessionPanelToggle({
         popoverTarget={inline ? undefined : id}
         onClick={() => onCardVisibilityChange(inline ? !cardVisible : !open)}
       >
-        <HugeiconsIcon icon={DashboardSquare02Icon} size={17} />
+        <HugeiconsIcon icon={InformationCircleIcon} size={17} />
       </Button>
       <div
         ref={panel}
@@ -130,6 +139,7 @@ export function SessionPanelToggle({
           projectName={projectName}
           live={live}
           onOpen={openWorkspace}
+          onOpenCanvas={openCanvas}
         />
       </div>
     </>

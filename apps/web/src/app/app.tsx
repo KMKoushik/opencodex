@@ -48,6 +48,7 @@ import { SessionTitle } from '../features/sessions/session-title';
 import { WorkbenchRail } from '../features/workbench/workbench-rail';
 import { panels, type SideChatRequest, type SubagentRequest } from '../features/workbench/panels';
 import { SideChatQuoteContext } from '../features/side-chat/side-chat-context';
+import { CanvasOpenContext } from '../features/canvas/canvas-context';
 import { SidebarResize } from '../features/sidebar/sidebar-resize';
 import { readTerminalPlacement, type TerminalPlacement } from '../features/terminal/placement';
 import { readStorage, writeStorage } from '../lib/storage';
@@ -211,6 +212,14 @@ export function App() {
       if (selectedID) openSideChat({ sessionID: selectedID, kind: 'quote', quote });
     },
     [selectedID, openSideChat],
+  );
+  const openCanvas = useCallback(
+    (id: string) => {
+      workbench.getState().openCanvas(workspaceKey, id);
+      setWorkbenchLoaded(true);
+      workbench.getState().layout(workspaceKey, { panel: 'canvas', open: true });
+    },
+    [workbench, workspaceKey],
   );
   const create = useMutation({
     mutationFn: ({ directory, model }: { directory: string; model?: ModelRef }) =>
@@ -648,6 +657,7 @@ export function App() {
                     setWorkbenchPanel(panel);
                     setWorkbenchOpen(true);
                   }}
+                  onOpenCanvas={openCanvas}
                 />
               )}
               {connected && selectedID && !page && (
@@ -722,42 +732,46 @@ export function App() {
                 >
                   <FileLinkContext.Provider value={openFileLink}>
                     <SideChatQuoteContext.Provider value={askSideChat}>
-                      <ChatView
-                        key={selectedID}
-                        sessionID={selectedID}
-                        focusRequest={
-                          composerFocus?.sessionID === selectedID ? composerFocus.token : undefined
-                        }
-                        onFocusHandled={() => setComposerFocus(undefined)}
-                        onOpenSession={setSelectedID}
-                        onOpenSubagent={(childID) => {
-                          setSubagentRequest({ sessionID: selectedID, childID });
-                          setWorkbenchLoaded(true);
-                          setWorkbenchPanel(subagentsPanel);
-                          setWorkbenchOpen(true);
-                        }}
-                        onOpenSideChat={(sideID) =>
-                          openSideChat({ sessionID: selectedID, kind: 'open', sideID })
-                        }
-                        live={live}
-                        projectName={currentProject?.name}
-                        project={currentProject}
-                        projects={projects}
-                        switching={switchProject.isPending}
-                        switchError={
-                          switchProject.variables?.sourceSessionID === selectedID
-                            ? switchProject.error?.message
-                            : undefined
-                        }
-                        onSwitchProject={(next, model) => {
-                          if (create.isPending || switchProject.isPending) return;
-                          switchProject.mutate({
-                            project: next,
-                            sourceSessionID: selectedID,
-                            model,
-                          });
-                        }}
-                      />
+                      <CanvasOpenContext.Provider value={openCanvas}>
+                        <ChatView
+                          key={selectedID}
+                          sessionID={selectedID}
+                          focusRequest={
+                            composerFocus?.sessionID === selectedID
+                              ? composerFocus.token
+                              : undefined
+                          }
+                          onFocusHandled={() => setComposerFocus(undefined)}
+                          onOpenSession={setSelectedID}
+                          onOpenSubagent={(childID) => {
+                            setSubagentRequest({ sessionID: selectedID, childID });
+                            setWorkbenchLoaded(true);
+                            setWorkbenchPanel(subagentsPanel);
+                            setWorkbenchOpen(true);
+                          }}
+                          onOpenSideChat={(sideID) =>
+                            openSideChat({ sessionID: selectedID, kind: 'open', sideID })
+                          }
+                          live={live}
+                          projectName={currentProject?.name}
+                          project={currentProject}
+                          projects={projects}
+                          switching={switchProject.isPending}
+                          switchError={
+                            switchProject.variables?.sourceSessionID === selectedID
+                              ? switchProject.error?.message
+                              : undefined
+                          }
+                          onSwitchProject={(next, model) => {
+                            if (create.isPending || switchProject.isPending) return;
+                            switchProject.mutate({
+                              project: next,
+                              sourceSessionID: selectedID,
+                              model,
+                            });
+                          }}
+                        />
+                      </CanvasOpenContext.Provider>
                     </SideChatQuoteContext.Provider>
                   </FileLinkContext.Provider>
                 </Suspense>

@@ -4,7 +4,9 @@ import { z } from 'zod';
 const layoutSchema = z.object({
   open: z.boolean().default(false),
   expanded: z.boolean().default(false),
-  panel: z.enum(['files', 'changes', 'terminal', 'subagents', 'side', 'browser']).default('files'),
+  panel: z
+    .enum(['files', 'changes', 'terminal', 'subagents', 'side', 'browser', 'canvas'])
+    .default('files'),
   width: z.number().min(340).max(2400).default(820),
 });
 const tabSchema = z.object({
@@ -32,23 +34,33 @@ const browserSchema = z.object({
     .default([]),
   selected: z.string().max(64).default(''),
 });
+const MAX_CANVAS_TABS = 12;
+// An empty selection shows the list of this chat's canvases.
+const canvasSchema = z.object({
+  tabs: z.array(z.string().max(128)).max(MAX_CANVAS_TABS).default([]),
+  selected: z.string().max(128).default(''),
+});
 const entrySchema = z.object({
   layout: layoutSchema,
   workspace: workspaceSchema,
   browser: browserSchema.default(() => ({ tabs: [], selected: '' })),
+  canvas: canvasSchema.default(() => ({ tabs: [], selected: '' })),
 });
 export type WorkspaceTab = z.infer<typeof tabSchema>;
 export type WorkspaceState = z.infer<typeof workspaceSchema>;
 export type BrowserState = z.infer<typeof browserSchema>;
+export type CanvasTabs = z.infer<typeof canvasSchema>;
 type Layout = z.infer<typeof layoutSchema>;
 type Entry = z.infer<typeof entrySchema>;
 export const defaultWorkbenchLayout = layoutSchema.parse({});
 export const defaultWorkspaceState = workspaceSchema.parse({});
 export const defaultBrowserState = browserSchema.parse({});
+export const defaultCanvasTabs = canvasSchema.parse({});
 const defaultEntry: Entry = {
   layout: defaultWorkbenchLayout,
   workspace: defaultWorkspaceState,
   browser: defaultBrowserState,
+  canvas: defaultCanvasTabs,
 };
 
 function readEntries(saved?: string | null): Record<string, Entry> {
@@ -74,6 +86,10 @@ export function createWorkbenchStore(saved?: string | null) {
     layout: (key: string, patch: Partial<Layout>) => void;
     workspace: (key: string, value: WorkspaceState) => void;
     browser: (key: string, change: (state: BrowserState) => BrowserState) => void;
+    /** The Canvas panel's open canvases. */
+    canvas: (key: string, change: (state: CanvasTabs) => CanvasTabs) => void;
+    /** Opens a canvas in a tab, reusing its tab when already open. */
+    openCanvas: (key: string, id: string) => void;
   }>((set, get) => {
     const update = (key: string, change: (entry: Entry) => Entry) =>
       set((state) => {
@@ -108,6 +124,16 @@ export function createWorkbenchStore(saved?: string | null) {
         const browser = change(current);
         if (browser !== current) update(key, (entry) => ({ ...entry, browser }));
       },
+      canvas: (key, change) => {
+        const current = get().entries[key]?.canvas ?? defaultEntry.canvas;
+        const canvas = change(current);
+        if (canvas !== current) update(key, (entry) => ({ ...entry, canvas }));
+      },
+      openCanvas: (key, id) =>
+        get().canvas(key, (state) => ({
+          tabs: state.tabs.includes(id) ? state.tabs : [...state.tabs, id].slice(-MAX_CANVAS_TABS),
+          selected: id,
+        })),
     };
   });
 }

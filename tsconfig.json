@@ -21,6 +21,7 @@
     "apps/**/*.ts",
     "apps/**/*.tsx",
     "packages/**/*.ts",
+    "packages/**/*.tsx",
     "tests/**/*.ts",
     "vitest.config.ts",
     "playwright.config.ts"

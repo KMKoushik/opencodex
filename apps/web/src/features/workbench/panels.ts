@@ -7,6 +7,7 @@ import {
   BotIcon,
   BubbleChatQuestionIcon,
   Globe02Icon,
+  DashboardSquare02Icon,
 } from '@hugeicons/core-free-icons';
 import type { FileRequest } from './file-link';
 
@@ -59,6 +60,9 @@ const SideChatPanel = lazy(() =>
 const BrowserPanel = lazy(() =>
   import('../browser/browser-panel').then((module) => ({ default: module.BrowserPanel })),
 );
+const CanvasPanel = lazy(() =>
+  import('../canvas/canvas-panel').then((module) => ({ default: module.CanvasPanel })),
+);
 const SubagentsPanel = lazy(() =>
   import('../subagents/subagents-panel').then((module) => ({ default: module.SubagentsPanel })),
 );
@@ -89,6 +93,12 @@ export const panels: readonly PanelDefinition[] = [
     label: 'Side chat',
     icon: BubbleChatQuestionIcon,
     render: (context) => createElement(SideChatPanel, context),
+  },
+  {
+    id: 'canvas',
+    label: 'Canvas',
+    icon: DashboardSquare02Icon,
+    render: (context) => createElement(CanvasPanel, context),
   },
   {
     id: 'terminal',

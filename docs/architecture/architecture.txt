@@ -17,7 +17,7 @@
   │                                                                      │               │  OS edit + spelling menus│
   │           Zustand drafts + session layout; Query API state           │               │  Updates + restart       │
   │            Warm session card; small screens use a popover            │               └─────────────┬────────────┘
-  │         Session workspace; activity tray + dockable terminal         │               read / write  │
+  │           Workspace, terminal; canvases in sandboxed frames          │               read / write  │
   └────────────────────┬─────────────────────────────────────────────────┘                             │
        HTTP /api       │                               ▲  SSE + WS                                     ▼
        + WS input      │                               │  output                         ┌──── DESKTOP STORAGE ─────┐
@@ -29,11 +29,11 @@
      │  Hono + V2 client; private service credentials                │                   │  Models + session layout │
      │  Bounded previews/logs; version-checked file writes           │                   │  Updater; browser profile│
      │  Native APIs; binary file handoff; ticketed PTY relay         │                   └──────────────────────────┘
-     │  Host files: read-only video/PDF ranges + reveal targets      │
-     │  Side chats; opt-in side-chat, tasks + Claude plugin files    ├──────────┐
+     │  Host files: video/PDF ranges, reveal targets, canvases       │
+     │  Opt-in side-chat, tasks, canvas + Claude plugin files        ├──────────┐
      └─────────────────┬─────────────────────────────────┬───────────┘          │
-       HTTP + WS       │                               ▲ │Events + WS           │
-       official client │                               │ │                      │        ┌──── SHARED CONTRACTS ────┐
+       HTTP + WS       │                               ▲ │Events + WS;          │
+       official client │                               │ │canvas tool HTTP      │        ┌──── SHARED CONTRACTS ────┐
                        │                               │ └──────────────────┐   │        │                          │
                        ▼                               │                    │   │        │  <>   Shared types       │
      ┌──────────────────── OPENCODE 2.x SERVICE ───────┴─────────────┐      │   │        │                          │
@@ -44,7 +44,7 @@
      │  Providers, tools, worktrees, VCS + filesystem                │      │   │        │                          │
      │  Project copies: .opencode/opencodex-attachments              │      │   │        └──────────────────────────┘
      │  Durable sessions; native agent shells + PTY replay           │      │   │
-     │  Loads side-chat, tasks + Claude plugins; task plugin KV      │      │   │        Code, not a service
+     │  Loads side-chat, tasks, canvas + Claude plugins; task KV     │      │   │        Code, not a service
      └─────────────────┬─────────────────────────────────────────────┘      │   │
                        │                               ▲                    │   │
        spawn + stdin   │                               │  stdout + tools    │   │

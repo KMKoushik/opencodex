@@ -19,6 +19,9 @@ const tools = [
   'tasks_add',
   'tasks_update',
   'tasks_delete',
+  'canvas_create',
+  'canvas_check',
+  'canvas_list',
 ];
 
 export const CLAUDE_CODE_PRESET = {

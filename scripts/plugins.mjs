@@ -7,6 +7,7 @@ import ts from 'typescript';
 const plugins = [
   { name: 'side-chat', label: 'side-chat', constant: 'SIDE_CHAT_PLUGIN' },
   { name: 'tasks', label: 'tasks', constant: 'TASKS_PLUGIN' },
+  { name: 'canvas', label: 'canvas', constant: 'CANVAS_PLUGIN' },
 ];
 const check = process.argv.includes('--check');
 let stale = false;
@@ -19,7 +20,12 @@ for (const { name, label, constant } of plugins) {
     reportDiagnostics: true,
   });
   if (diagnostics?.length) throw new Error(`The ${label} plugin did not transpile.`);
-  if (/^\s*import\s(?!type\b)/m.test(outputText) || /\brequire\(/.test(outputText))
+  const statements = ts.createSourceFile(
+    'plugin.js',
+    outputText,
+    ts.ScriptTarget.ES2022,
+  ).statements;
+  if (statements.some(ts.isImportDeclaration) || /\brequire\(/.test(outputText))
     throw new Error(`The ${label} plugin must not have runtime imports.`);
   const version = createHash('sha256').update(outputText).digest('hex').slice(0, 12);
   const source = `// OpenCodex ${label} plugin ${version}. Installed by OpenCodex; edits are replaced.\n${outputText}`;

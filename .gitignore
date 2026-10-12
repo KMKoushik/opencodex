@@ -13,3 +13,5 @@ coverage/
 test-results/
 playwright-report/
 .playwright-cli/
+packages/gateway/src/canvas-*.generated.ts
+!packages/gateway/src/canvas-plugin.generated.ts

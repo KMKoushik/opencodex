@@ -7,6 +7,7 @@ import { ResponseMarks } from './response-marks';
 import { MarkdownImage } from './markdown-image';
 import { MarkdownLink } from './markdown-link';
 import { MarkdownTable } from './markdown-table';
+import { MarkdownParagraph } from './markdown-paragraph';
 import { createBlockSplitter } from './markdown-blocks';
 import { usePacedText } from './paced-text';
 import { markdownUrl } from '../../lib/markdown-url';
@@ -36,6 +37,7 @@ export const StreamText = memo(function StreamText({
   const components = useMemo<Components>(
     () => ({
       a: MarkdownLink,
+      p: MarkdownParagraph,
       table: MarkdownTable,
       img: ({ src, alt }) => <MarkdownImage key={src} src={src} alt={alt} sessionID={sessionID} />,
     }),

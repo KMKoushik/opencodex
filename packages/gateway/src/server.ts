@@ -3,6 +3,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { createApp } from './app';
 import { OpenCodeBackend, localEndpointResolver } from './opencode';
 import { attachTerminalSockets } from './terminal-sockets';
+import { registerGateway } from './canvases';
 
 export async function startGateway(options: { port?: number; assets?: string } = {}) {
   const shutdown = new AbortController();
@@ -46,11 +47,19 @@ export async function startGateway(options: { port?: number; assets?: string } =
   });
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Gateway did not bind a TCP port.');
+  const origin = `http://127.0.0.1:${address.port}`;
+  let unregister: (() => void) | undefined;
+  try {
+    unregister = registerGateway(origin);
+  } catch {
+    // Canvases still work in the app; only the canvas plugin can't find this gateway.
+  }
   return {
-    url: `http://127.0.0.1:${address.port}`,
+    url: origin,
     close: async () => {
       shutdown.abort();
       closeTerminals();
+      unregister?.();
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
         if ('closeAllConnections' in server) server.closeAllConnections();

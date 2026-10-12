@@ -23,8 +23,8 @@ export default {
     const toolSets = new Map<string, string>();
 
     // 0.40.0 fixes Claude's tool list when it spawns a session's CLI, and reuses that
-    // process across turns. Plugin tools can appear mid-chat (the tasks skill unhides
-    // tasks_*), so rebuild the process when the forwarded set changes. The next spawn
+    // process across turns. Plugin tools can appear mid-chat (the tasks and canvas skills
+    // unhide their tools), so rebuild the process when the forwarded set changes. The next spawn
     // replays the conversation from OpenCode, as after a steer.
     async function rebuildOnNewTools(options: StreamOptions) {
       const sessionID = options.headers?.['x-session-affinity'];

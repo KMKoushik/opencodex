@@ -97,6 +97,7 @@ jobs:
 
       - name: Typecheck and test
         run: |
+          bun run canvas
           bun run typecheck
           bun run test
 
