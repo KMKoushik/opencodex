@@ -32,6 +32,7 @@ import { worktreeRoutes } from './worktrees';
 import { taskRoutes } from './tasks';
 import { prepareAttachments } from './attachments';
 import { searchSessions } from './session-search';
+import { createReplyFormat } from './reply-format';
 
 export function createApp(
   backend = new OpenCodeBackend(),
@@ -318,6 +319,7 @@ export function createApp(
       ),
     ),
   );
+  const ensureReplyFormat = createReplyFormat();
   app.use(
     '/api/sessions/:id/prompt',
     bodyLimit({
@@ -334,6 +336,7 @@ export function createApp(
       await backend.request(c.req.raw.signal, async (client, options) => {
         const sessionID = c.req.param('id');
         const session = await client.session.get({ sessionID }, options);
+        await ensureReplyFormat(client, sessionID, options);
         const prompt = await prepareAttachments(client, session, input.data, options);
         // V2 stages undo until the next explicit send; redo clears that stage.
         if (session.revert) await client.session.revert.commit({ sessionID }, options);

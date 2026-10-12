@@ -661,6 +661,7 @@ describe('gateway and the real OpenCode client', () => {
     expect((await post('prompt', { text: 'Try another approach' })).status).toBe(200);
     expect(calls).toEqual([
       '/api/session/s',
+      '/api/experimental/session/s/instructions/entries/opencodex.reply-format',
       '/api/session/s/revert/commit',
       '/api/session/s/prompt',
     ]);
@@ -1133,6 +1134,7 @@ describe('gateway and the real OpenCode client', () => {
         res.setHeader('Content-Type', 'application/json');
         if (req.method === 'GET')
           return res.end(JSON.stringify({ data: { id: 'session-1', agent: 'build', model } }));
+        if (req.method === 'PUT') return res.writeHead(204).end();
         if (req.url?.endsWith('/model')) {
           if (fail) {
             res.writeHead(503).end('{}');
@@ -1156,7 +1158,11 @@ describe('gateway and the real OpenCode client', () => {
         }),
       });
     expect((await send()).status).toBe(200);
-    expect(calls.splice(0)).toEqual(['/api/session/session-1', '/api/session/session-1/prompt']);
+    expect(calls.splice(0)).toEqual([
+      '/api/session/session-1',
+      '/api/experimental/session/session-1/instructions/entries/opencodex.reply-format',
+      '/api/session/session-1/prompt',
+    ]);
     expect((await send('high')).status).toBe(200);
     expect(model.variant).toBe('high');
     expect(calls.splice(0)).toEqual([
@@ -1180,6 +1186,7 @@ describe('gateway and the real OpenCode client', () => {
         res.setHeader('Content-Type', 'application/json');
         if (req.method === 'GET')
           return res.end(JSON.stringify({ data: { id: 'session-1', agent: 'build' } }));
+        if (req.method === 'PUT') return res.writeHead(204).end();
         calls.push(JSON.parse(body));
         res.end(JSON.stringify({ data: { id: 'accepted' } }));
       });
@@ -1242,6 +1249,7 @@ describe('gateway and the real OpenCode client', () => {
           return res.end(
             JSON.stringify({ data: { id: 'session-1', agent: 'build', location: { directory } } }),
           );
+        if (req.method === 'PUT') return res.writeHead(204).end();
         if (new URL(req.url!, 'http://localhost').pathname === '/api/experimental/fs/write') {
           if (failWrite) {
             res.writeHead(503).end('{}');
@@ -1322,7 +1330,7 @@ describe('gateway and the real OpenCode client', () => {
         res.setHeader('Content-Type', 'application/json');
         if (req.url === '/api/session/session-1') {
           res.end(JSON.stringify({ data: { id: 'session-1', agent: 'plan' } }));
-        } else if (req.url?.endsWith('/agent')) {
+        } else if (req.url?.endsWith('/agent') || req.method === 'PUT') {
           res.writeHead(204).end();
         } else if (req.method === 'POST') {
           res.statusCode = 503;
@@ -1353,12 +1361,12 @@ describe('gateway and the real OpenCode client', () => {
     const response = await send('hello');
     expect(response.status).toBe(502);
     expect(await response.text()).not.toContain('private');
-    expect(calls).toHaveLength(3);
-    expect(calls[1]).toMatchObject({
+    expect(calls).toHaveLength(4);
+    expect(calls[2]).toMatchObject({
       path: '/api/session/session-1/agent',
       body: '{"agent":"build"}',
     });
-    expect(calls[2]).toEqual({
+    expect(calls[3]).toEqual({
       path: '/api/session/session-1/prompt',
       body: '{"text":"hello"}',
       auth: `Basic ${Buffer.from('test:private').toString('base64')}`,
@@ -1370,7 +1378,7 @@ describe('gateway and the real OpenCode client', () => {
       data: [{ text: 'hello' }],
       cursor: { next: 'older-page' },
     });
-    const requested = new URL(calls[3]!.path, 'http://localhost');
+    const requested = new URL(calls[4]!.path, 'http://localhost');
     expect(requested.searchParams.get('cursor')).toBe('older-page');
     expect(requested.searchParams.has('order')).toBe(false);
   });
