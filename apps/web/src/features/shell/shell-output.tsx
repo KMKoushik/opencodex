@@ -69,7 +69,7 @@ export function ShellOutput({
       busy={stop.isPending}
       onClose={onClose}
     >
-      <div className="shell-output-view ink">
+      <div className="shell-output-view">
         {shell.isError ? (
           <ShellError message={shell.error.message} retry={() => void shell.refetch()} />
         ) : shell.data ? (

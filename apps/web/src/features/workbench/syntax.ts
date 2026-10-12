@@ -3,7 +3,7 @@ import type { Syntax } from '../theme/theme';
 
 const registered = new Set<string>();
 
-/** Pierre theme names for the review panel's code; derived ink themes register on first use. */
+/** Pierre theme names for code; derived monochrome themes register on first use. */
 export function diffThemes(syntax: Syntax) {
   const theme = syntax.theme;
   if (theme && !registered.has(syntax.name)) {

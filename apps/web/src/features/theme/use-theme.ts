@@ -57,7 +57,7 @@ export function useThemeArt() {
   return findPreset(variant, preference[variant].preset).art ?? 'calico';
 }
 
-/** Syntax theme for code on the review panel, which may stay dark in light themes. */
+/** Syntax theme for code in diffs and the editor. */
 export function useSyntaxTheme() {
   const { preference, variant } = useTheme();
   const current = preference[variant];

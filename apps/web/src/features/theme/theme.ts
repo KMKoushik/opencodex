@@ -69,14 +69,10 @@ export function applyTheme(preference: ThemePreference, systemDark: boolean) {
   const theme = deriveTheme(variant, preference[variant]);
   const root = document.documentElement;
   root.dataset.theme = variant;
-  root.dataset.panel = theme.panel ? 'ink' : 'surface';
   root.dataset.art = theme.art;
   root.style.colorScheme = variant;
   for (const [name, value] of Object.entries(theme.tokens))
     root.style.setProperty(`--${name}`, value);
-  for (const [name, value] of Object.entries(theme.ink))
-    root.style.setProperty(`--ink-${name}`, value);
-  root.style.setProperty('--ink-scheme', theme.panel ? 'dark' : variant);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme.tokens.surface);
 }
 
@@ -86,34 +82,15 @@ const white: RGB = [255, 255, 255];
 
 export type Tokens = ReturnType<typeof derive>;
 
-/**
- * Everything the UI needs from one theme: the conversation's tokens, the review panel's
- * tokens (identical unless the preset keeps code on its own ink), syntax, and artwork.
- */
+/** Everything the UI needs from one theme: its tokens, code syntax, and artwork. */
 export function deriveTheme(variant: Variant, preference: VariantPreference) {
   const preset = findPreset(variant, preference.preset);
   const tokens = deriveTokens(variant, preference);
-  const panel = preset.panel;
-  const ink = panel
-    ? derive(
-        'dark',
-        {
-          ...panel.seed,
-          accent: preference.accent ?? panel.seed.accent,
-          contrast: defaultContrast.dark,
-        },
-        panel,
-        preset.primary ?? 'ink',
-        preset.syntax === 'ink',
-      )
-    : tokens;
   const syntax: Syntax =
     preset.syntax === 'ink'
-      ? { name: inkSyntaxName(ink), type: 'dark', theme: inkSyntaxTheme(ink) }
-      : preset.syntax
-        ? { name: preset.syntax, type: panel ? 'dark' : variant }
-        : { name: panel ? 'pierre-dark' : `pierre-${variant}`, type: panel ? 'dark' : variant };
-  return { tokens, ink, panel: Boolean(panel), syntax, art: preset.art ?? 'calico' };
+      ? { name: inkSyntaxName(tokens), type: variant, theme: inkSyntaxTheme(tokens, variant) }
+      : { name: preset.syntax ?? `pierre-${variant}`, type: variant };
+  return { tokens, syntax, art: preset.art ?? 'calico' };
 }
 
 export type Syntax = { name: string; type: Variant; theme?: InkSyntaxTheme };
@@ -129,6 +106,7 @@ export function deriveTokens(variant: Variant, preference: VariantPreference) {
     seed,
     { ...preset, under: preference.surface ? undefined : preset.under },
     preset.primary ?? 'ink',
+    preset.syntax === 'ink',
   );
 }
 
@@ -138,7 +116,7 @@ function derive(
   tones: Tones,
   primarySource: 'ink' | 'accent',
   /** Monochrome code: brightness and weight instead of hue. */
-  mono = false,
+  mono: boolean,
 ) {
   const surface = rgb(seed.surface);
   const ink = rgb(seed.ink);
@@ -260,32 +238,32 @@ function primaryGlaze(color: RGB, source: 'ink' | 'accent', light: boolean) {
 export type InkSyntaxTheme = ReturnType<typeof inkSyntaxTheme>;
 
 /**
- * Monochrome syntax for the calico's ink half: brightness and weight instead of hue, so the
- * diff's green and red are the only colors in the panel.
+ * Monochrome syntax: brightness and weight instead of hue, so the diff's green and red are
+ * the only colors in code.
  */
-function inkSyntaxTheme(panel: Tokens) {
-  const surface = rgb(panel.surface);
-  const ink = rgb(panel.text);
+function inkSyntaxTheme(tokens: Tokens, variant: Variant) {
+  const surface = rgb(tokens.surface);
+  const ink = rgb(tokens.text);
   const tone = (amount: number) => css(mix(surface, ink, amount));
-  const keyword = panel['syntax-keyword'];
+  const keyword = tokens['syntax-keyword'];
   const rule = (scope: string[], foreground: string, fontStyle?: string) => ({
     scope,
     settings: fontStyle ? { foreground, fontStyle } : { foreground },
   });
   return {
-    name: inkSyntaxName(panel),
-    type: 'dark' as const,
-    colors: { 'editor.background': panel.surface, 'editor.foreground': tone(0.8) },
+    name: inkSyntaxName(tokens),
+    type: variant,
+    colors: { 'editor.background': tokens.surface, 'editor.foreground': tone(0.8) },
     tokenColors: [
       rule(['source', 'variable', 'identifier', 'meta.definition.variable'], tone(0.8)),
       rule(
         ['punctuation', 'meta.brace', 'keyword.operator', 'meta.tag.punctuation'],
-        panel['syntax-punctuation'],
+        tokens['syntax-punctuation'],
       ),
-      rule(['comment', 'punctuation.definition.comment'], panel['syntax-comment'], 'italic'),
+      rule(['comment', 'punctuation.definition.comment'], tokens['syntax-comment'], 'italic'),
       rule(
         ['string', 'constant.numeric', 'constant.language', 'constant.character'],
-        panel['syntax-string'],
+        tokens['syntax-string'],
       ),
       rule(['entity.name.function', 'support.function', 'meta.function-call'], tone(0.9)),
       rule(
@@ -312,8 +290,8 @@ function inkSyntaxTheme(panel: Tokens) {
   };
 }
 
-function inkSyntaxName(panel: Tokens) {
-  return `opencodex-ink-${panel.surface.slice(1)}${panel.text.slice(1)}`;
+function inkSyntaxName(tokens: Tokens) {
+  return `opencodex-ink-${tokens.surface.slice(1)}${tokens.text.slice(1)}`;
 }
 
 function normalizeContrast(value: number, standard: number) {

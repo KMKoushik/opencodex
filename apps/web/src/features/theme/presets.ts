@@ -14,18 +14,13 @@ export type Tones = {
   under?: string;
 };
 
-/** The review panel's own palette: prose stays on paper, code sits on ink. Always dark. */
-export type PanelPalette = Tones & { seed: Omit<Seed, 'contrast'> };
-
 export type Preset = Tones & {
   id: string;
   name: string;
   seed: Seed;
   /** Primary actions are glazed in the foreground ink (default) or the accent. */
   primary?: 'ink' | 'accent';
-  /** A dark review panel beside the conversation. When omitted the panel follows the theme. */
-  panel?: PanelPalette;
-  /** Shiki theme for code; `ink` derives a monochrome theme from the panel. */
+  /** Shiki theme for code; `ink` derives a monochrome theme from the theme's own colors. */
   syntax?: string;
   /** Which coat the calico wears in this theme. */
   art?: 'calico' | 'catppuccin';
@@ -56,14 +51,6 @@ function preset(
     ...extra,
   };
 }
-
-// The calico's ink half: one review panel shared by both OpenCodex themes.
-const calicoInk: PanelPalette = {
-  seed: { surface: '#111113', ink: '#f5f5f7', accent: '#f5f5f7' },
-  error: '#ff8f86',
-  success: '#7fdb97',
-  warning: '#e2b85a',
-};
 
 // Catppuccin's published palette (catppuccin.com/palette), the swatches this app uses.
 const catppuccin = {
@@ -118,10 +105,8 @@ const catppuccin = {
 };
 
 // One accent (mauve) for primary actions, Base for content, Mantle for sidebars and file trees.
-// Latte borrows Mocha's panel, keeping code on ink in the light flavor too.
 function catppuccinPreset(flavor: keyof typeof catppuccin, name: string, variant: Variant) {
   const c = catppuccin[flavor];
-  const ink = variant === 'light' ? catppuccin.mocha : c;
   return preset(`catppuccin-${flavor}`, name, variant, [c.base, c.text, c.mauve], {
     under: c.mantle,
     error: c.red,
@@ -129,15 +114,7 @@ function catppuccinPreset(flavor: keyof typeof catppuccin, name: string, variant
     warning: c.peach,
     link: c.blue,
     primary: 'accent',
-    panel: {
-      seed: { surface: ink.base, ink: ink.text, accent: ink.mauve },
-      under: ink.mantle,
-      error: ink.red,
-      success: ink.green,
-      warning: ink.yellow,
-      link: ink.blue,
-    },
-    syntax: `catppuccin-${variant === 'light' ? 'mocha' : flavor}`,
+    syntax: `catppuccin-${flavor}`,
     art: 'catppuccin',
   });
 }
@@ -150,7 +127,6 @@ export const presets: Record<Variant, Preset[]> = {
       error: '#c0392b',
       success: '#1e7a3a',
       warning: '#9a5b00',
-      panel: calicoInk,
       syntax: 'ink',
       art: 'calico',
     }),
@@ -194,7 +170,6 @@ export const presets: Record<Variant, Preset[]> = {
       error: '#ff7b72',
       success: '#5fd47f',
       warning: '#e2b85a',
-      panel: calicoInk,
       syntax: 'ink',
       art: 'calico',
     }),

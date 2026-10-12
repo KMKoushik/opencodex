@@ -195,7 +195,7 @@
   border-radius: 5px;
   background:
     linear-gradient(90deg, transparent 50%, var(--control) 50%, var(--surface-under) 100%),
-    var(--paper-glaze);
+    var(--glaze);
   box-shadow: var(--glaze-shadow);
 }
 .workbench[data-resizing]::after {

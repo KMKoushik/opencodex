@@ -199,7 +199,6 @@ function MarkdownPreview({
         getTarget={getTarget}
         highlightName="preview-comment"
         actionsLabel="Selected preview actions"
-        className="ink"
       />
     </div>
   );
