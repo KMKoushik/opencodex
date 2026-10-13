@@ -1,0 +1,93 @@
+.find-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: min(340px, calc(100% - 24px));
+  height: 38px;
+  padding: 0 4px 0 12px;
+  border: 1px solid var(--border-heavy);
+  border-radius: 10px;
+  background: var(--elevated);
+  box-shadow: var(--shadow);
+  /* Hosts like CodeMirror's panel set their own text color; the bar keeps the app's. */
+  color: var(--text);
+}
+/* Class-qualified so host panels' field styles (the workspace panel's input ring) never apply. */
+.find-bar .find-input {
+  flex: 1;
+  height: auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
+}
+.find-bar .find-input::placeholder {
+  color: var(--text-tertiary);
+}
+.find-bar .button-icon {
+  width: 26px;
+  height: 26px;
+}
+.find-count {
+  padding-inline: 4px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.find-count[data-empty] {
+  color: var(--error);
+}
+/* Floats over a scrolling surface without shifting its content. */
+.find-overlay {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  left: 12px;
+  z-index: 20;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+/* The same float placed as a scroller's first child, so it needs no positioned wrapper. */
+.find-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: flex-end;
+  height: 0;
+  pointer-events: none;
+}
+.find-sticky > .find-bar {
+  margin: 10px 12px 0 0;
+}
+.find-overlay > .find-bar,
+.find-sticky > .find-bar {
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+/* CodeMirror panel host: the bar floats over the code instead of pushing it down. */
+.cm-find-panel {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 5;
+  display: flex;
+  justify-content: flex-end;
+  width: calc(100% - 24px);
+  pointer-events: none;
+}
+.cm-find-panel > .find-bar {
+  pointer-events: auto;
+}
+::highlight(find-match) {
+  background: color-mix(in srgb, var(--warning) 30%, transparent);
+}
+::highlight(find-active) {
+  background: color-mix(in srgb, var(--warning) 70%, transparent);
+}

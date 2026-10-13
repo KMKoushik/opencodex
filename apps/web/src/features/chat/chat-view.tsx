@@ -9,6 +9,7 @@ import { PermissionCard } from './requests';
 import { QuestionDock } from './question-dock';
 import { Composer } from './composer';
 import { Timeline, type TimelineHandle } from './timeline';
+import { useFindScope } from '../find/find-scope';
 import { ModelControls } from './model-controls';
 import { useModelSelection } from './use-model-selection';
 import { useDraftStore } from './draft-context';
@@ -70,6 +71,9 @@ export function ChatView({
   const checkout = useCheckout(chat.info.data);
   const [workspace, setWorkspace] = useState<WorkspaceChoice>({ mode: 'local' });
   const timeline = useRef<TimelineHandle>(null);
+  const root = useRef<HTMLDivElement>(null);
+  // The composer and status lines belong to the conversation, so Mod+F there finds in it too.
+  useFindScope(root, () => timeline.current?.find(), { fallback: true });
   const key = ['chat', sessionID];
   const refresh = () =>
     client.invalidateQueries({
@@ -317,7 +321,7 @@ export function ChatView({
     </>
   );
   return (
-    <div className="chat" data-empty={empty}>
+    <div className="chat" data-empty={empty} ref={root}>
       {forkDraft && (
         <Dialog
           title="Fork conversation"

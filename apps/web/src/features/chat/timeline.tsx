@@ -22,8 +22,10 @@ import { Message } from './message';
 import { StreamText } from './stream-text';
 import { ResponseSelection } from './response-selection';
 import { ResponseCopy } from './response-copy';
+import { useTimelineFind } from './timeline-find';
+import { useFindScope } from '../find/find-scope';
 
-export type TimelineHandle = { scrollToLatest: () => void };
+export type TimelineHandle = { scrollToLatest: () => void; find: () => void };
 const followOutput = {
   animated: false,
   on: { dataChange: true, itemLayout: true, footerLayout: true, layout: true },
@@ -121,7 +123,20 @@ export function Timeline({
     if (distanceFromEnd() > FOLLOW_BAND)
       void list.current?.scrollToEnd({ animated: animated && !reducedMotion() });
   };
-  useImperativeHandle(ref, () => ({ scrollToLatest }));
+  const openTurn = useCallback((id: string) => toggleTurn(id, true), [toggleTurn]);
+  const stopFollowing = useCallback(() => setFollowing(false), [setFollowing]);
+  const find = useTimelineFind({
+    sessionID,
+    scope,
+    list,
+    rows,
+    projected,
+    ownerOf: group.ownerOf,
+    openTurn,
+    stopFollowing,
+  });
+  useFindScope(scope, find.open);
+  useImperativeHandle(ref, () => ({ scrollToLatest, find: find.open }));
   const renderItem = useCallback(
     ({ item }: { item: DisplayRow }) => (
       <Row key={item.id} row={item} sessionID={sessionID} onToggleTurn={toggleTurn} />
@@ -211,6 +226,7 @@ export function Timeline({
           ListFooterComponent={<div className="timeline-footer">{footer}</div>}
         />
         {!readOnly && <ResponseSelection key={sessionID} scope={scope} sessionID={sessionID} />}
+        {find.bar}
         {!following && (
           <div className="jump-to-latest">
             <Button variant="secondary" size="sm" onClick={() => scrollToLatest(true)}>

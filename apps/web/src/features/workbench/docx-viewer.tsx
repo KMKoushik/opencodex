@@ -1,11 +1,14 @@
-import { useId } from 'react';
+import { useId, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import DOMPurify from 'dompurify';
 import { QueryError } from './query-error';
+import { useDomFind } from '../find/use-dom-find';
 import './docx-viewer.css';
 
 export function DocxViewer({ source, name }: { source: File | string; name: string }) {
   const id = useId();
+  const scroller = useRef<HTMLDivElement>(null);
+  const find = useDomFind(scroller, 'Find in document');
   const query = useQuery({
     queryKey: ['docx-preview', id],
     queryFn: ({ signal }) => preview(source, signal),
@@ -25,7 +28,8 @@ export function DocxViewer({ source, name }: { source: File | string; name: stri
         </p>
       )}
       {query.data !== undefined && (
-        <div className="wb-docx-scroll" tabIndex={0} role="region" aria-label={name}>
+        <div ref={scroller} className="wb-docx-scroll" tabIndex={0} role="region" aria-label={name}>
+          {find.bar}
           <article className="wb-docx-page" dangerouslySetInnerHTML={{ __html: query.data }} />
         </div>
       )}

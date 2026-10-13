@@ -11,6 +11,7 @@ import { EMPTY_ATTACHMENTS, encodeAttachments } from '../chat/attachments';
 import { reviewPrompt } from '../chat/review-comments';
 import { localCommands, parseSlash, useSlashCommands } from '../chat/slash-commands';
 import { Timeline, type TimelineHandle } from '../chat/timeline';
+import { useFindScope } from '../find/find-scope';
 import { MessageAttachments } from '../chat/message-attachments';
 import { PermissionCard } from '../chat/requests';
 import { QuestionDock } from '../chat/question-dock';
@@ -42,6 +43,8 @@ export function SideChatView({
   const drafts = useDraftStore();
   const commands = useSlashCommands(chat.info.data?.location.directory, false);
   const timeline = useRef<TimelineHandle>(null);
+  const root = useRef<HTMLElement>(null);
+  useFindScope(root, () => timeline.current?.find());
   const sendKey = ['chat', sessionID, 'send'];
   const sending = useIsMutating({ mutationKey: sendKey }) > 0;
   const refresh = () =>
@@ -216,7 +219,12 @@ export function SideChatView({
     </>
   );
   return (
-    <section className="chat side-chat" data-session-id={sessionID} aria-label="Side chat">
+    <section
+      ref={root}
+      className="chat side-chat"
+      data-session-id={sessionID}
+      aria-label="Side chat"
+    >
       {empty ? (
         <div className="side-chat-intro">
           <h3>Side chat</h3>

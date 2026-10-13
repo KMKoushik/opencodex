@@ -63,6 +63,7 @@ import { useWorkbenchStore, workbenchKey } from '../features/workbench/workbench
 import { defaultWorkbenchLayout } from '../features/workbench/workbench-store';
 import { browserFileURL, isHTMLPath, isLocalWebURL } from '../features/browser/browser-url';
 import { openTab } from '../features/browser/browser-runtime';
+import { openFind } from '../features/find/find-scope';
 
 const TerminalDrawer = lazy(() =>
   import('../features/terminal/terminal-drawer').then((module) => ({
@@ -482,6 +483,7 @@ export function App() {
   useCommand('workspace.toggle', toggleWorkbench);
   useCommand('terminal.toggle', toggleTerminal);
   useCommand('sidebar.toggle', toggleSidebar);
+  useCommand('find.open', () => (openFind() ? undefined : false));
   useCommand('sidebar.focus', () => {
     if (!connected || settings) return false;
     setSidebarCollapsed(false);

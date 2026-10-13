@@ -5,6 +5,8 @@ import { EditorView, drawSelection, lineNumbers } from '@codemirror/view';
 import { api } from '../../lib/api';
 import { canvasFilesKey } from '../canvas/canvas-context';
 import { editorHighlighting, editorLanguage } from '../workbench/editor-language';
+import { useCodeFind } from '../find/code-find';
+import { useFindScope } from '../find/find-scope';
 import '../workbench/workbench.css';
 
 /** The order a reader wants: the view, the server, then shared files. */
@@ -50,6 +52,8 @@ function CodeView({ name, text }: { name: string; text: string }) {
   const container = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView>(null);
   const language = useRef(new Compartment());
+  const find = useCodeFind();
+  useFindScope(container, () => find.open(view.current));
 
   useEffect(() => {
     const editor = new EditorView({
@@ -59,6 +63,7 @@ function CodeView({ name, text }: { name: string; text: string }) {
           lineNumbers(),
           drawSelection(),
           editorHighlighting,
+          find.extension,
           language.current.of([]),
           EditorState.readOnly.of(true),
           EditorView.contentAttributes.of({ 'aria-label': 'Source code' }),
@@ -67,7 +72,7 @@ function CodeView({ name, text }: { name: string; text: string }) {
     });
     view.current = editor;
     return () => editor.destroy();
-  }, []);
+  }, [find.extension]);
 
   useEffect(() => {
     const editor = view.current!;
@@ -88,5 +93,10 @@ function CodeView({ name, text }: { name: string; text: string }) {
     };
   }, [name, text]);
 
-  return <div className="wb-editor apps-code-editor" ref={container} />;
+  return (
+    <>
+      <div className="wb-editor apps-code-editor" ref={container} />
+      {find.bar}
+    </>
+  );
 }

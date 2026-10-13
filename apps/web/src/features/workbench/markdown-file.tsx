@@ -17,6 +17,7 @@ import { editorKey, useEditorDrafts } from './editor-drafts';
 import { resolveFileLink } from './file-link';
 import { TextSelection, type TextSelectionHandle } from '../chat/text-selection';
 import { markdownSourcePositions, markdownSelectionTarget } from './markdown-selection';
+import { useDomFind } from '../find/use-dom-find';
 import './markdown-file.css';
 
 // Larger documents retain the virtualized source editor instead of an unbounded DOM.
@@ -109,6 +110,7 @@ function MarkdownPreview({
     [doc, file.text],
   );
   const scope = useRef<HTMLDivElement>(null);
+  const find = useDomFind(scope, 'Find in document');
   const lines = useMemo(() => content.split('\n'), [content]);
   const getTarget = useCallback(
     (range: Range, quote: string) =>
@@ -149,6 +151,7 @@ function MarkdownPreview({
       tabIndex={0}
       aria-label={`Markdown preview: ${path}`}
     >
+      {find.bar}
       <article
         className="markdown wb-markdown-prose"
         onClickCapture={(event) => {

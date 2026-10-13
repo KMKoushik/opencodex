@@ -85,6 +85,13 @@ export const commands = [
     inInput: true,
   },
   {
+    id: 'find.open',
+    label: 'Find in chat or file',
+    group: 'App',
+    bindings: [{ key: 'f', mod: true }],
+    inInput: true,
+  },
+  {
     id: 'view.dismiss',
     label: 'Close sidebar overlay / leave settings or tasks',
     group: 'App',

@@ -22,6 +22,8 @@ import { FileComments } from './file-comments';
 import { commentGutter, commentViewport, commentWidgets } from './comment-widgets';
 import { editorKey, useEditorDrafts } from './editor-drafts';
 import { editorLanguage, editorHighlighting } from './editor-language';
+import { useCodeFind } from '../find/code-find';
+import { useFindScope } from '../find/find-scope';
 
 export function FileEditor({
   directory,
@@ -48,6 +50,8 @@ export function FileEditor({
   const currentFile = useRef(file);
   const syncing = useRef(false);
   const client = useQueryClient();
+  const find = useCodeFind();
+  useFindScope(container, () => find.open(view.current));
   const save = useMutation({
     mutationKey: ['file-save', directory, path],
     gcTime: 0,
@@ -109,6 +113,7 @@ export function FileEditor({
         history(),
         commentWidgets,
         commentViewport,
+        find.extension,
         editorHighlighting,
         language.of([]),
         EditorState.transactionFilter.of((transaction) => {
@@ -175,7 +180,7 @@ export function FileEditor({
       editor.destroy();
       view.current = null;
     };
-  }, [directory, path, drafts, key, beginComment]);
+  }, [directory, path, drafts, key, beginComment, find.extension]);
   useEffect(() => {
     if (drafts.getState().edits[key]) return;
     currentFile.current = file;
@@ -233,6 +238,7 @@ export function FileEditor({
         </p>
       )}
       <div className="wb-editor" ref={container} />
+      {find.bar}
       <FileComments
         editor={commentView}
         directory={directory}

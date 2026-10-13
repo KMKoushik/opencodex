@@ -71,6 +71,7 @@ export const StreamText = memo(function StreamText({
       data-streaming={!completed || shown !== stream.data ? '' : undefined}
       data-response-id={kind === 'text' ? messageID : undefined}
       data-response-ordinal={kind === 'text' ? ordinal : undefined}
+      data-find-text={kind === 'text' ? '' : undefined}
     >
       {blocks ? (
         // Newlines between blocks keep textContent identical to a whole-document render.

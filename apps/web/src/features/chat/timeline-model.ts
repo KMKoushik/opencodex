@@ -167,7 +167,7 @@ export function createTurnGrouper() {
     answers.set(row, answer);
     return answer;
   }
-  return (
+  const group = (
     rows: TimelineRow[],
     messages: SessionMessageInfo[],
     running: boolean,
@@ -246,6 +246,9 @@ export function createTurnGrouper() {
     owners = nextOwners;
     return out;
   };
+  /** The turn whose header folds this row, if any; find opens it to reveal a match. */
+  const ownerOf = (id: string) => owners.get(id);
+  return Object.assign(group, { ownerOf });
 }
 
 function isUser(row: TimelineRow) {

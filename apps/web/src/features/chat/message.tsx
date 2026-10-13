@@ -9,7 +9,11 @@ export const Message = memo(function Message({ message }: { message: SessionMess
     case 'user':
       return (
         <article className="user-message" aria-label="You">
-          {message.text && <p className="user-message-bubble">{message.text}</p>}
+          {message.text && (
+            <p className="user-message-bubble" data-find-text="">
+              {message.text}
+            </p>
+          )}
           <MessageAttachments files={message.files} />
         </article>
       );

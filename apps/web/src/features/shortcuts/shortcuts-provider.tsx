@@ -40,10 +40,11 @@ export function ShortcutsProvider({ children }: { children: ReactNode }) {
         ),
       });
     };
-    // Panel toggles and thread navigation must work before editors consume keys.
+    // Panel toggles, thread navigation, and find must work before editors and
+    // shortcut boundaries (the workspace panel, terminal) consume keys.
     const panelKeydown = (event: KeyboardEvent) => {
       hints(event);
-      if (!/^[ij1-9]$/.test(event.key.toLowerCase()) || !(isMac ? event.metaKey : event.ctrlKey))
+      if (!/^[ijf1-9]$/.test(event.key.toLowerCase()) || !(isMac ? event.metaKey : event.ctrlKey))
         return;
       const target = event
         .composedPath()
