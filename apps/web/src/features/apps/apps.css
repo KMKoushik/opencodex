@@ -319,3 +319,55 @@
   border-radius: 4px;
   font-size: 9.5px;
 }
+
+.apps-model {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.apps-model .composer-controls {
+  flex: 0 1 auto;
+}
+.apps-model .model-picker {
+  right: 0;
+  left: auto;
+}
+.apps-model-source {
+  padding-right: 4px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.apps-model-error {
+  max-width: 200px;
+  color: var(--error);
+  font-size: 12px;
+}
+.apps-run-calls {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+.apps-run-calls li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.apps-run-call-kind {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+.apps-run-call-meta {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.apps-run-call-error {
+  flex-basis: 100%;
+  color: var(--error);
+}

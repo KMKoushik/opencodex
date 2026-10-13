@@ -21,7 +21,8 @@ export function ModelControls({
 }: {
   /** The main composer's controls own the app-wide model and thinking shortcuts. */
   shortcuts?: boolean;
-  sessionID: string;
+  /** Shows the session's context use; app model settings have no single session. */
+  sessionID?: string;
   models?: ModelInfo[];
   providers?: ModelProvider[];
   model?: ModelRef;
@@ -76,7 +77,9 @@ export function ModelControls({
   const cycleShortcut = shortcutProps('thinking.cycle');
   return (
     <div className="composer-controls">
-      <ContextIndicator key={sessionID} sessionID={sessionID} models={models} model={model} />
+      {sessionID && (
+        <ContextIndicator key={sessionID} sessionID={sessionID} models={models} model={model} />
+      )}
       <ModelPicker
         shortcuts={shortcuts}
         models={options}

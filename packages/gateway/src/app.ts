@@ -36,6 +36,7 @@ import { createReplyFormat } from './reply-format';
 import { CANVAS_ROOT, canvasRoutes, canvasRuntimeRoutes, createCanvasWatcher } from './canvases';
 import { canvasPluginRoutes } from './canvas-plugin';
 import { Apps } from './apps';
+import { appModelUpdateSchema } from '@opencodex/contracts/canvas';
 
 export function createApp(
   backend = new OpenCodeBackend(),
@@ -90,6 +91,14 @@ export function createApp(
   app.route('/api/canvases', canvasRoutes(apps));
   app.get('/api/apps', async (c) => c.json(await apps.list()));
   app.get('/api/apps/:id/runs', async (c) => c.json(await apps.runs(c.req.param('id'))));
+  app.get('/api/apps/:id/model', async (c) => c.json(await apps.appModel(c.req.param('id'))));
+  app.use('/api/apps/:id/model', bodyLimit({ maxSize: 4096 }));
+  app.put('/api/apps/:id/model', async (c) => {
+    const input = appModelUpdateSchema.safeParse(await c.req.json().catch(() => null));
+    if (!input.success) return c.json({ message: 'Choose a model.' }, 400);
+    await apps.setModel(c.req.param('id'), input.data.model);
+    return c.json({ ok: true });
+  });
   app.route('/api/canvas-runtime', canvasRuntimeRoutes());
   app.route('/api/canvas-plugin', canvasPluginRoutes(backend));
   app.get('/api/attention', async (c) => {

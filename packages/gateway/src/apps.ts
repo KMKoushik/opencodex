@@ -1,10 +1,20 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { OpenCodeClient } from '@opencode/client';
 import { APP_SESSION_KEY } from '@opencodex/contracts';
-import type { AppInfo, AppRun, CanvasEvent } from '@opencodex/contracts/canvas';
+import {
+  appModelRefSchema,
+  type AppCall,
+  type AppInfo,
+  type AppModel,
+  type AppModelRef,
+  type AppModelSource,
+  type AppRun,
+  type CanvasEvent,
+} from '@opencodex/contracts/canvas';
 import { GatewayError } from './errors';
 import type { OpenCodeBackend } from './opencode';
 import { folder, listCanvases, readServerSource, readValue, SERVER, writeValue } from './canvases';
@@ -18,6 +28,7 @@ type Request = { id: number; call?: string; op: string; input: Record<string, un
 const IDLE_MS = 2 * 60_000;
 const MAX_RUNS = 40;
 const MAX_LOG_LINES = 100;
+const MAX_CALLS = 50;
 const RUN_TIMEOUT = 6 * 60 * 60_000;
 const ASK_TIMEOUT = 5 * 60_000;
 const MAX_DELAY = 2 ** 31 - 1;
@@ -353,24 +364,65 @@ export class Apps {
         );
         return { ok: result.ok };
       }
-      case 'oc.ask':
-        return this.opencode(
-          worker,
-          async (client, options) =>
-            client.generate.text(
-              {
-                prompt: String(input.prompt),
-                model: await this.model(id, client, input.model, undefined, options),
-              },
-              options,
-            ),
-          ASK_TIMEOUT,
+      case 'oc.ask': {
+        const track = this.track(id, request.call, 'ask');
+        return track.settle(
+          this.opencode(
+            worker,
+            async (client, options) => {
+              const resolved = await this.model(id, client, input.model, undefined, options);
+              track.model(resolved);
+              return client.generate.text(
+                { prompt: String(input.prompt), model: resolved.model },
+                options,
+              );
+            },
+            ASK_TIMEOUT,
+          ),
         );
-      case 'oc.run':
-        return this.ocRun(id, worker, request.call, input);
+      }
+      case 'oc.run': {
+        const track = this.track(id, request.call, 'run');
+        return track.settle(this.ocRun(id, worker, request.call, input, track.model));
+      }
       default:
         throw new Error(`Unknown request ${request.op}.`);
     }
+  }
+
+  /**
+   * Records one model call on its run, so the run log shows which model answered. The run
+   * is saved when the model is known and again when the call ends.
+   */
+  private track(id: string, call: string | undefined, kind: AppCall['kind']) {
+    const run = call ? this.live.get(id)?.get(call) : undefined;
+    const entry: AppCall = { kind, started: Date.now() };
+    if (run) {
+      run.calls ??= [];
+      run.calls.push(entry);
+      if (run.calls.length > MAX_CALLS) run.calls.splice(0, run.calls.length - MAX_CALLS);
+    }
+    const save = () => {
+      if (run && this.live.get(id)?.has(run.id)) this.save(id, run);
+    };
+    return {
+      model: (resolved: { model: AppModelRef; source: AppModelSource }) => {
+        entry.model = modelName(resolved.model);
+        entry.source = resolved.source;
+        save();
+      },
+      settle: async <T>(result: Promise<T>) => {
+        try {
+          return await result;
+        } catch (error) {
+          entry.error = ((error as Error).message || 'Failed.').slice(0, 500);
+          throw error;
+        } finally {
+          entry.ended = Date.now();
+          save();
+        }
+      },
+    };
   }
 
   /** OpenCode calls keep OpenCode's own error message, which server code can act on. */
@@ -400,6 +452,7 @@ export class Apps {
     worker: Worker,
     call: string | undefined,
     input: Record<string, unknown>,
+    resolved: (model: { model: AppModelRef; source: AppModelSource }) => void,
   ) {
     const project = typeof input.project === 'string' ? input.project : '';
     if (!project) throw new Error('oc.run needs { project }: the folder the agent works in.');
@@ -419,16 +472,23 @@ export class Apps {
         let sessionID: string | undefined;
         if (thread) {
           sessionID = (await readJSON<Record<string, string>>(threadsPath, {}))[thread];
-          if (sessionID)
-            await client.session.get({ sessionID }, options).catch(() => (sessionID = undefined));
+          if (sessionID) {
+            const existing = await client.session
+              .get({ sessionID }, options)
+              .catch(() => (sessionID = undefined));
+            // A continued thread keeps the model its session started with.
+            if (existing?.model) resolved({ model: existing.model, source: 'thread' });
+          }
         }
         if (!sessionID) {
+          const model = await this.model(id, client, input.model, project, options);
+          resolved(model);
           const session = await client.session.create(
             {
               location: { directory: project },
               agent: 'build',
               title,
-              model: await this.model(id, client, input.model, project, options),
+              model: model.model,
               metadata: {
                 [APP_SESSION_KEY]: {
                   canvas: id,
@@ -525,34 +585,86 @@ export class Apps {
   }
 
   /**
-   * `providerID/modelID` when given; otherwise the model of the chat that made the app, so
-   * runs use what the user picked; otherwise the project's default.
+   * The model a call uses: `providerID/modelID` named in the code; otherwise the app's own
+   * setting; otherwise the model of the chat that made the app, read on every call so the
+   * app follows that chat; otherwise OpenCode's default for `directory`.
    */
   private async model(
     id: string,
     client: OpenCodeClient,
-    model: unknown,
+    named: unknown,
     directory: string | undefined,
     options: { signal: AbortSignal },
-  ) {
-    if (typeof model === 'string' && model.includes('/')) {
-      const index = model.indexOf('/');
-      return { providerID: model.slice(0, index), id: model.slice(index + 1) };
+  ): Promise<{ model: AppModelRef; source: AppModelSource }> {
+    if (typeof named === 'string' && named.includes('/')) {
+      const index = named.indexOf('/');
+      return {
+        model: { providerID: named.slice(0, index), id: named.slice(index + 1) },
+        source: 'code',
+      };
     }
-    const { sessionID } = await readJSON<{ sessionID?: unknown }>(
+    const fallback = await this.defaultModel(id, client, directory, options);
+    if (!fallback.model) throw new Error('No model is configured in OpenCode. Pass { model }.');
+    return { model: fallback.model, source: fallback.source as AppModelSource };
+  }
+
+  private async defaultModel(
+    id: string,
+    client: OpenCodeClient,
+    directory: string | undefined,
+    options: { signal: AbortSignal },
+  ): Promise<AppModel> {
+    const manifest = await readJSON<{ sessionID?: unknown; model?: unknown }>(
       join(folder(this.root, id), 'canvas.json'),
       {},
     );
-    if (typeof sessionID === 'string') {
-      const session = await client.session.get({ sessionID }, options).catch(() => undefined);
-      if (session?.model) return session.model;
-    }
+    const chat =
+      typeof manifest.sessionID === 'string'
+        ? await client.session
+            .get({ sessionID: manifest.sessionID }, options)
+            .catch(() => undefined)
+        : undefined;
+    const where = chat?.location.directory ?? homedir();
+    const picked = appModelRefSchema.safeParse(manifest.model);
+    if (picked.success) return { model: picked.data, source: 'app', directory: where };
+    if (chat?.model) return { model: chat.model, source: 'chat', directory: where };
     const fallback = await client.model.default(
-      directory ? { location: { directory } } : {},
+      { location: { directory: directory ?? where } },
       options,
     );
-    if (!fallback.data) throw new Error('No model is configured in OpenCode. Pass { model }.');
-    return { providerID: fallback.data.providerID, id: fallback.data.id };
+    return fallback.data
+      ? {
+          model: { providerID: fallback.data.providerID, id: fallback.data.id },
+          source: 'default',
+          directory: where,
+        }
+      : { model: null, source: 'none', directory: where };
+  }
+
+  /** The model calls use when the code names none, for the app header. */
+  appModel(id: string): Promise<AppModel> {
+    folder(this.root, id);
+    return this.backend.request(AbortSignal.timeout(10_000), (client, options) =>
+      this.defaultModel(id, client, undefined, options),
+    );
+  }
+
+  /** Saves the app's own model in canvas.json; null goes back to the chat's model. */
+  async setModel(id: string, model: AppModelRef | null) {
+    const directory = folder(this.root, id);
+    const path = join(directory, 'canvas.json');
+    let manifest: Record<string, unknown>;
+    try {
+      manifest = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+        throw new GatewayError('Canvas not found.', 404);
+      throw new GatewayError('canvas.json isn’t valid JSON.', 422);
+    }
+    if (model) manifest.model = model;
+    else delete manifest.model;
+    await writeJSON(directory, path, manifest);
+    this.publish({ type: 'app', id });
   }
 
   /** Runs each app's triggers while the gateway is up; overdue ones run once at start. */
@@ -631,6 +743,9 @@ export class Apps {
     this.workers.clear();
   }
 }
+
+const modelName = (model: AppModelRef) =>
+  `${model.providerID}/${model.id}${model.variant && model.variant !== 'default' ? `:${model.variant}` : ''}`;
 
 /** A run for the apps list, which refreshes often; the run log loads logs on its own. */
 function withoutLogs(run: AppRun): Omit<AppRun, 'logs'> {

@@ -9,6 +9,7 @@ export const CanvasSessionContext = createContext<((sessionID: string) => void) 
 export const appsKey = ['apps'] as const;
 /** Under `appsKey`, so app events refresh an open run log too. */
 export const appRunsKey = (id: string) => ['apps', id, 'runs'] as const;
+export const appModelKey = (id: string) => ['apps', id, 'model'] as const;
 export const canvasFilesKey = (id: string) => ['canvas', id, 'files'] as const;
 export const canvasSourceKey = (id: string) => ['canvas', id, 'source'] as const;
 export const canvasDataKey = (id: string) => ['canvas', id, 'data'] as const;

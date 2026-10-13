@@ -12,7 +12,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { OpenCodeProject } from '@opencodex/contracts';
-import type { AppInfo, AppRun } from '@opencodex/contracts/canvas';
+import type { AppInfo, AppModelSource, AppRun } from '@opencodex/contracts/canvas';
 import { Button } from '../../components/ui/button';
 import { SegmentedControl } from '../../components/ui/segmented-control';
 import { Dialog } from '../../components/ui/dialog';
@@ -22,6 +22,7 @@ import { appRunsKey, appsKey } from '../canvas/canvas-context';
 import { ProjectIcon } from '../projects/project-icon';
 import { projectName } from '../projects/project-metadata';
 import { AppIcon } from './app-icon';
+import { AppModelControl } from './app-model';
 import '../canvas/canvas.css';
 import './apps.css';
 
@@ -38,6 +39,14 @@ function ago(time: number) {
     if (Math.abs(seconds) >= size) return relative.format(Math.round(seconds / size), unit);
   return 'just now';
 }
+const CALL_SOURCE: Record<AppModelSource, string> = {
+  code: 'set in code',
+  app: 'app model',
+  chat: 'chat’s model',
+  default: 'default model',
+  thread: 'continued thread',
+};
+
 function duration(run: Pick<AppRun, 'started' | 'ended'>) {
   const ms = (run.ended ?? Date.now()) - run.started;
   return ms < 1000
@@ -200,6 +209,7 @@ function AppDetail({
             <AppProject projectID={app.projectID} />
           </p>
         </div>
+        <AppModelControl id={app.id} disabled={!connected} />
         <SegmentedControl
           label="Show"
           value={tab}
@@ -377,7 +387,8 @@ function DeleteApp({
 
 function RunRow({ run, onOpenSession }: { run: AppRun; onOpenSession: (id: string) => void }) {
   const [open, setOpen] = useState(run.status === 'error');
-  const detail = Boolean(run.error || run.logs.length || run.sessions.length);
+  const calls = run.calls ?? [];
+  const detail = Boolean(run.error || run.logs.length || run.sessions.length || calls.length);
   return (
     <li className="apps-run" data-status={run.status}>
       <button
@@ -405,6 +416,22 @@ function RunRow({ run, onOpenSession }: { run: AppRun; onOpenSession: (id: strin
               <span className="truncate">{session.title}</span>
             </button>
           ))}
+          {calls.length > 0 && (
+            <ul className="apps-run-calls" aria-label="Model calls">
+              {calls.map((call, index) => (
+                <li key={index} data-error={call.error ? '' : undefined}>
+                  <span className="apps-run-call-kind">oc.{call.kind}</span>
+                  <span className="truncate">{call.model ?? 'choosing model…'}</span>
+                  <span className="apps-run-call-meta">
+                    {call.source && CALL_SOURCE[call.source]}
+                    {' · '}
+                    {call.ended === undefined ? 'running' : duration(call)}
+                  </span>
+                  {call.error && <span className="apps-run-call-error">{call.error}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
           {run.error && <pre className="apps-run-error">{run.error}</pre>}
           {run.logs.length > 0 && <pre className="apps-run-logs">{run.logs.join('\n')}</pre>}
         </div>

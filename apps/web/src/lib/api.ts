@@ -45,6 +45,7 @@ import {
 } from '@opencodex/contracts';
 import type {
   AppInfo,
+  AppModel,
   AppRun,
   CanvasData,
   CanvasFiles,
@@ -263,6 +264,13 @@ export const api = {
   apps: (signal: AbortSignal) => nativeRequest<AppInfo[]>('/apps', { signal }),
   appRuns: (id: string, signal: AbortSignal) =>
     nativeRequest<AppRun[]>(`/apps/${encodeURIComponent(id)}/runs`, { signal }),
+  appModel: (id: string, signal: AbortSignal) =>
+    nativeRequest<AppModel>(`/apps/${encodeURIComponent(id)}/model`, { signal }),
+  setAppModel: (id: string, model: ModelRef | null) =>
+    nativeRequest<{ ok: true }>(`/apps/${encodeURIComponent(id)}/model`, {
+      method: 'PUT',
+      body: JSON.stringify({ model }),
+    }),
   canvasFiles: (id: string, signal: AbortSignal) =>
     nativeRequest<CanvasFiles>(`${canvasPath(id)}/files`, { signal }),
   /** Runs a server.ts function; agent sessions inside it can take a long time. */

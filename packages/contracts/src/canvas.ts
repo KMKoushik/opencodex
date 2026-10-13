@@ -90,6 +90,40 @@ export type CanvasData = Record<string, CanvasValue>;
 
 export const canvasCallSchema = z.object({ args: z.array(z.json()).max(32).default([]) });
 
+export const appModelRefSchema = z.object({
+  id: z.string().min(1).max(256),
+  providerID: z.string().min(1).max(256),
+  variant: z.string().max(64).optional(),
+});
+export type AppModelRef = z.infer<typeof appModelRefSchema>;
+/** Body of `PUT /api/apps/:id/model`; null goes back to the chat's model. */
+export const appModelUpdateSchema = z.object({ model: appModelRefSchema.nullable() });
+
+/**
+ * Where a model came from, most specific first: named in server.ts, picked for the app,
+ * the chat that made the app, OpenCode's default, or the session a `thread` continues.
+ */
+export type AppModelSource = 'code' | 'app' | 'chat' | 'default' | 'thread';
+
+/** The model `oc.ask` and `oc.run` use when the code doesn't name one. */
+export type AppModel = {
+  model: AppModelRef | null;
+  source: Exclude<AppModelSource, 'code' | 'thread'> | 'none';
+  /** The folder whose model catalog the picker shows: the chat's, or the home folder. */
+  directory: string;
+};
+
+/** One `oc.ask` or `oc.run` inside a run. */
+export type AppCall = {
+  kind: 'ask' | 'run';
+  /** `providerID/modelID`, with `:variant` when one is set. */
+  model?: string;
+  source?: AppModelSource;
+  started: number;
+  ended?: number;
+  error?: string;
+};
+
 /** One invocation of a canvas server function, kept in the canvas's `.app/runs.json`. */
 export type AppRun = {
   id: string;
@@ -102,6 +136,8 @@ export type AppRun = {
   error?: string;
   /** Last lines the function printed. */
   logs: string[];
+  /** Model calls, oldest first; absent on runs recorded before they were tracked. */
+  calls?: AppCall[];
   /** Sessions `oc.run` started or continued. */
   sessions: { id: string; title: string }[];
 };

@@ -203,7 +203,10 @@ export const s = {
   },
 };
 
-/** `providerID/modelID`, e.g. `anthropic/claude-haiku-5-5`. Defaults to OpenCode's default. */
+/**
+ * `providerID/modelID`, e.g. `anthropic/claude-haiku-5-5`. Leave it out: by default calls use
+ * the model the user picked for the app, or else the model of the chat that made it.
+ */
 export type Model = string;
 
 export type AskOptions = {

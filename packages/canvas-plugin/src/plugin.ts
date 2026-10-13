@@ -166,6 +166,9 @@ color }\`) or set \`"icon"\` in \`canvas.json\`; pick the glyph for what the app
 - \`oc.run(prompt, { project, title, thread, permissions })\`: a full agent session with tools
   in \`project\` (an absolute folder). Waits and returns \`{ text, sessionID }\`. \`thread\`
   continues the same session on later calls (e.g. \`issue-123\`).
+- Leave out \`model\` on both. The user picks the app's model in its header (until then it
+  follows this chat's model). Name one (\`model: 'providerID/modelID'\`) only when the user
+  asks for a specific model for that call; it then overrides the user's pick.
 - \`export const triggers: Triggers = { refresh: { every: '1d' } }\` runs a function on a
   schedule while OpenCodex is open. Only add one when the user asks for recurring work.
 
