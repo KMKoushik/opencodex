@@ -108,7 +108,7 @@
       "name": "@opencodex/claude-code-plugin",
       "version": "0.1.0",
       "dependencies": {
-        "@khalilgharbaoui/opencode-claude-code-plugin": "0.40.0",
+        "@khalilgharbaoui/opencode-claude-code-plugin": "0.54.2",
       },
     },
     "packages/contracts": {
@@ -152,7 +152,7 @@
     "esbuild",
   ],
   "patchedDependencies": {
-    "@khalilgharbaoui/opencode-claude-code-plugin@0.40.0": "patches/@khalilgharbaoui%2Fopencode-claude-code-plugin@0.40.0.patch",
+    "@khalilgharbaoui/opencode-claude-code-plugin@0.54.2": "patches/@khalilgharbaoui%2Fopencode-claude-code-plugin@0.54.2.patch",
   },
   "packages": {
     "@ai-sdk/provider": ["@ai-sdk/provider@3.0.18", "", { "dependencies": { "json-schema": "^0.4.0" } }, "sha512-IpefF5ssZVOZCD4Wu7zxt6PwZoGT2HLVjxpJ10Bjx6EAmRfLYJPjyrfxb0RYDlwvXnDb9nkQ7Do/oJVDuRFzew=="],
@@ -333,7 +333,7 @@
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
-    "@khalilgharbaoui/opencode-claude-code-plugin": ["@khalilgharbaoui/opencode-claude-code-plugin@0.40.0", "", { "dependencies": { "@ai-sdk/provider": "^3.0.8", "jsonc-parser": "3.3.1" } }, "sha512-Hy4gqII/GmlBD9qA9wjUXnvvlKN/krC1wgZZ83qIzOeqA0AdTzgDE1CKplRL3xRfGNhB0P5jrqaA2xhjZR34wA=="],
+    "@khalilgharbaoui/opencode-claude-code-plugin": ["@khalilgharbaoui/opencode-claude-code-plugin@0.54.2", "", { "dependencies": { "@ai-sdk/provider": "^3.0.8", "jsonc-parser": "3.3.1" } }, "sha512-1FRu/uWWHEeKKC5dGQQGdXNJsOlSzoPSDT6ZelNFCnyRjW8q/QcIIhy2pU08Ku5SBJ+uXCeS8eh/IIE67twwfA=="],
 
     "@legendapp/list": ["@legendapp/list@3.6.0", "", { "dependencies": { "use-sync-external-store": "^1.5.0" }, "peerDependencies": { "react": "*" } }, "sha512-ndGQjSYdA32LWErJYbXEm4+eta+4bo0NxQO7eA3Xcvh0rXSb1mTGPbUtUkpea5w4MYciLKaE+0hoPxlMcaMtrw=="],
 

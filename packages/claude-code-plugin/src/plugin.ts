@@ -3,11 +3,27 @@ import { CLAUDE_CODE_PRESET } from './preset';
 
 type Context = Parameters<typeof bridge.setup>[0];
 type BridgeEvent = { type?: string; data?: { sessionID?: string } & Record<string, unknown> };
-type StreamOptions = { headers?: Record<string, string | undefined>; tools?: { name?: string }[] };
-type LanguageModel = { doStream(options: StreamOptions): unknown };
+type StreamOptions = {
+  headers?: Record<string, string | undefined>;
+  tools?: { name?: string }[];
+  prompt?: unknown[];
+  abortSignal?: AbortSignal;
+};
+type LanguageModel = {
+  provider?: string;
+  modelId?: string;
+  doStream(options: StreamOptions): PromiseLike<unknown>;
+};
 
 const FORWARDED = new Set<string>(CLAUDE_CODE_PRESET.options.proxyOpencodeTools);
 const MAX_TRACKED = 256;
+// The bridge sends Claude only what follows the last assistant message, and keeps the
+// Claude conversation only when OpenCode has history before it.
+const COMPACT_PROMPT = [
+  { role: 'user', content: [{ type: 'text', text: 'Earlier conversation' }] },
+  { role: 'assistant', content: [{ type: 'text', text: 'Earlier reply' }] },
+  { role: 'user', content: [{ type: 'text', text: '/compact' }] },
+];
 const isClaude = (providerID: string) =>
   providerID === 'claude-code' || providerID.startsWith('claude-code-');
 
@@ -21,6 +37,44 @@ export default {
     const releases = new Set<(sessionID: string) => Promise<void>>();
     // Forwarded tool names per session and agent, as of the last Claude request.
     const toolSets = new Map<string, string>();
+    // Each session's last chat request, without its prompt, so compaction can reach the
+    // same Claude conversation.
+    const turns = new Map<string, { model: LanguageModel; options: StreamOptions }>();
+
+    function remember(model: LanguageModel, options: StreamOptions) {
+      const sessionID = options.headers?.['x-session-affinity'];
+      const agent = options.headers?.['x-opencode-agent'];
+      if (!sessionID || agent === 'compaction' || agent === 'title') return;
+      turns.delete(sessionID);
+      turns.set(sessionID, {
+        model,
+        options: { ...options, prompt: undefined, abortSignal: undefined },
+      });
+      if (turns.size > MAX_TRACKED) turns.delete(turns.keys().next().value!);
+    }
+
+    // OpenCode's compaction would summarize with a separate Claude process and leave the
+    // chat's own conversation full. Run Claude's /compact on that conversation instead;
+    // its summary becomes OpenCode's. The bridge declines when no idle conversation
+    // exists, and the bridge's own summarizer runs as before.
+    async function compact(model: LanguageModel, options: StreamOptions) {
+      const sessionID = options.headers?.['x-session-affinity'];
+      const turn = sessionID ? turns.get(sessionID) : undefined;
+      if (turn && turn.model.provider === model.provider && turn.model.modelId === model.modelId) {
+        try {
+          return await turn.model.doStream({
+            ...turn.options,
+            headers: { ...turn.options.headers, 'x-opencodex-native-compact': '1' },
+            prompt: COMPACT_PROMPT,
+            abortSignal: options.abortSignal,
+          });
+        } catch (error) {
+          if ((error as { code?: unknown }).code !== 'OPENCODEX_NATIVE_COMPACT_UNAVAILABLE')
+            throw error;
+        }
+      }
+      return model.doStream(options);
+    }
 
     // 0.40.0 fixes Claude's tool list when it spawns a session's CLI, and reuses that
     // process across turns. Plugin tools can appear mid-chat (the tasks and canvas skills
@@ -132,7 +186,10 @@ export default {
         get(target, property) {
           if (property === 'doStream')
             return async (options: StreamOptions) => {
+              if (options.headers?.['x-opencode-agent'] === 'compaction')
+                return compact(target, options);
               await rebuildOnNewTools(options);
+              remember(target, options);
               return target.doStream(options);
             };
           const value = Reflect.get(target, property, target);
@@ -145,6 +202,7 @@ export default {
       await requests.dispose();
       running.clear();
       toolSets.clear();
+      turns.clear();
       if (typeof cleanup === 'function') await cleanup();
     };
   },

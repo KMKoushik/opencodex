@@ -1,0 +1,201 @@
+diff --git a/dist/index.js b/dist/index.js
+index 13ce768714c046ca544b23157dc35d9fd3808ae1..fc58ffb92fac437417c7405c0e9615054e2e0461 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -14190,6 +14190,26 @@ function createLineHandler(state, ctx) {
+           ignoreAnthropicApiKey: ctx.config.ignoreAnthropicApiKey
+         });
+       }
++      // /compact runs without model progress until its summary, so any frame
++      // shows the CLI is alive.
++      if (state.nativeCompact) clearStartWatchdog(state);
++      if (state.nativeCompact && msg.type === "system" && msg.subtype === "compact_boundary") {
++        reportCompactBoundary(msg);
++        state.nativeCompactBoundary = true;
++        return;
++      }
++      // The summary Claude now holds becomes opencode's compaction summary.
++      if (state.nativeCompactBoundary && !state.nativeCompactSummary && msg.type === "user" && msg.isSynthetic) {
++        const content = msg.message?.content;
++        const summary = typeof content === "string" ? content : Array.isArray(content) ? content.filter((part) => part?.type === "text").map((part) => part.text ?? "").join("\n") : "";
++        if (summary.trim()) {
++          state.nativeCompactSummary = true;
++          state.sawVisibleText = true;
++          state.controller.enqueue({ type: "text-delta", id: state.startTextBlock(), delta: summary });
++          state.endTextBlock();
++        }
++        return;
++      }
+       if (msg.type === "system" && msg.subtype === "compact_boundary") {
+         const note = reportCompactBoundary(msg);
+         if (note) {
+@@ -15449,7 +15469,10 @@ var ClaudeCodeLanguageModel = class {
+     const affinity = this.sessionAffinity(options);
+     const cwd = await resolveSpawnCwdForSession(this.config.cwd, affinity);
+     const compactionMode = this.isCompactionCall(options);
+-    const dispatchChoice = compactionMode ? void 0 : await this.resolveDispatchChoice(options, affinity);
++    // OpenCodex sends this on a copy of the chat's last turn, so Claude Code runs its own
++    // /compact on the conversation it holds, instead of a separate summarizer.
++    const nativeCompact = !compactionMode && options.headers?.["x-opencodex-native-compact"] === "1";
++    const dispatchChoice = compactionMode || nativeCompact ? void 0 : await this.resolveDispatchChoice(options, affinity);
+     const dispatchModelId = dispatchChoice?.model ? qualifyModelName(dispatchChoice.model, this.modelId) : null;
+     const effectiveModelId = compactionMode ? this.resolveCompactionModel() : attempt?.modelOverride ?? dispatchModelId ?? resolveAgentModel(
+       this.getOpencodeAgent(options),
+@@ -15673,7 +15696,7 @@ var ClaudeCodeLanguageModel = class {
+       deleteActiveProcess(sk);
+       clearCompression(sk);
+     }
+-    const failoverAnswer = compactionMode || mode === "generate" ? null : consumeAccountFailoverAnswer(sk, options.prompt, {
++    const failoverAnswer = compactionMode || nativeCompact || mode === "generate" ? null : consumeAccountFailoverAnswer(sk, options.prompt, {
+       sourceAccount,
+       candidates: failoverCandidates(
+         this.config.failoverAccounts,
+@@ -15797,6 +15820,11 @@ var ClaudeCodeLanguageModel = class {
+     }
+     const hasExistingSession = !!getClaudeSessionId(sk);
+     const hasActiveProcess = !!getActiveProcess(sk);
++    if (nativeCompact && (useInteractive || !hasExistingSession && !hasActiveProcess || claudeSessionIsWriting(sk))) {
++      throw Object.assign(new Error("No idle Claude Code conversation to compact."), {
++        code: "OPENCODEX_NATIVE_COMPACT_UNAVAILABLE"
++      });
++    }
+     let includeHistoryContext = !hasExistingSession && !hasActiveProcess && hasPriorConversation;
+     if (failoverAnswer?.kind === "switch" && hasPriorConversation && !conversationOnTarget) {
+       includeHistoryContext = true;
+@@ -15979,7 +16007,7 @@ var ClaudeCodeLanguageModel = class {
+     const { model: spawnModelId, fast: fastMode } = parseModelId(
+       this.config.accountInProcess ? stripAccountSuffix(failover.modelId) : failover.modelId
+     );
+-    const exitPlanModeQuestionResult = compactionMode ? null : consumeExitPlanModeQuestionResult(sk, options.prompt);
++    const exitPlanModeQuestionResult = compactionMode || nativeCompact ? null : consumeExitPlanModeQuestionResult(sk, options.prompt);
+     if (exitPlanModeQuestionResult) {
+       log.info("sending plan approval decision to claude", { sk });
+     }
+@@ -16046,7 +16074,7 @@ var ClaudeCodeLanguageModel = class {
+       sourceAccount,
+       groups
+     );
+-    const failoverAskActive = failoverAccounts.length > 0 && this.config.accountFailover === "ask" && !compactionMode && // A `doGenerate` caller takes the override and reports the plain
++    const failoverAskActive = failoverAccounts.length > 0 && this.config.accountFailover === "ask" && !compactionMode && !nativeCompact && // A `doGenerate` caller takes the override and reports the plain
+     // rate-limit error, never the form. See `TurnMode`.
+     mode !== "generate" && isAccountFailoverQuestionActive({
+       configured: this.config.accountFailover,
+@@ -16058,13 +16086,13 @@ var ClaudeCodeLanguageModel = class {
+       // the operator is usually not even looking at.
+       childSession: !!await fetchSessionParentId(affinity)
+     });
+-    const usageLimitNoteActive = !compactionMode && mode !== "generate" && !failoverAskActive;
++    const usageLimitNoteActive = !compactionMode && !nativeCompact && mode !== "generate" && !failoverAskActive;
+     let staleBuild = null;
+     if (!compactionMode && mode !== "generate" && affinity !== "default") {
+       staleBuild = staleBuildWatch().check();
+       if (staleBuild && await fetchSessionParentId(affinity)) staleBuild = null;
+     }
+-    const subagentDispatchActive = !compactionMode && mode !== "generate" && this.config.subagentDispatch === "ask" && affinity !== "default" && isSubagentDispatchActive({
++    const subagentDispatchActive = !compactionMode && !nativeCompact && mode !== "generate" && this.config.subagentDispatch === "ask" && affinity !== "default" && isSubagentDispatchActive({
+       configured: this.config.subagentDispatch,
+       opencodeHasQuestion: (await loadLiveToolInfo()).hasQuestion,
+       compactionMode,
+@@ -16121,12 +16149,13 @@ var ClaudeCodeLanguageModel = class {
+           ignoreAnthropicApiKey: self.config.ignoreAnthropicApiKey,
+           userMsg,
+           autoContinueEnabled: autoContinueEnabledFor(
+-            compactionMode,
++            compactionMode || nativeCompact,
+             self.config.autoContinueIncompleteTurns
+           ),
+           toUsage: toUsage2,
+           toFinishReason: toFinishReason2
+         });
++        state.nativeCompact = nativeCompact;
+         state.activeProcess = getActiveProcess(sk);
+         state.proxyServer = state.activeProcess?.proxyServer ?? null;
+         if (subagentDispatchActive) {
+@@ -16692,7 +16721,7 @@ var ClaudeCodeLanguageModel = class {
+           state.autoContinueState.startedAt = Date.now();
+           const completeResult = (msg) => {
+             if (state.controllerClosed) return;
+-            if (self.config.resumeAfterRestart !== false && !compactionMode && msg.is_error !== true && typeof msg.session_id === "string") {
++            if (self.config.resumeAfterRestart !== false && !compactionMode && !nativeCompact && msg.is_error !== true && typeof msg.session_id === "string") {
+               recordResumePoint(sk, msg.session_id, options.prompt, cliPath, {
+                 configDir: resolveConfigDir(self.skillBridgeSpawn(failover).configDir),
+                 account: failover.target ?? sourceAccount
+@@ -16795,7 +16824,7 @@ var ClaudeCodeLanguageModel = class {
+             }
+             if (isSilentTurn({
+               enabled: state.autoContinueState.enabled,
+-              compactionMode,
++              compactionMode: compactionMode || nativeCompact,
+               sawVisibleText: state.sawVisibleText,
+               sawToolActivity: state.sawToolActivity,
+               sawProxyActivity: state.sawProxyActivity,
+@@ -16816,7 +16845,11 @@ var ClaudeCodeLanguageModel = class {
+               });
+               state.endTextBlock();
+             }
+-            if (compactionMode && state.resultFailure) {
++            if (nativeCompact && !state.resultFailure && !state.nativeCompactSummary) {
++              state.resultFailure = "no_summary";
++              if (typeof msg.result === "string" && msg.result.trim()) state.compactionFailureText ??= msg.result.trim();
++            }
++            if ((compactionMode || nativeCompact) && state.resultFailure) {
+               log.warn("claude could not compact the conversation; no summary was stored", {
+                 sessionKey: sk,
+                 cause: state.resultFailure
+@@ -16864,7 +16897,8 @@ var ClaudeCodeLanguageModel = class {
+           };
+           const lineHandler = createLineHandler(state, {
+             config: self.config,
+-            compactionMode,
++            // A native /compact fails like a compaction: no CLI error text becomes a summary.
++            compactionMode: compactionMode || nativeCompact,
+             fastMode,
+             planModeQuestionActive,
+             interactive: useInteractive,
+@@ -16998,12 +17032,19 @@ var ClaudeCodeLanguageModel = class {
+               });
+               let partialText = false;
+               {
+-                const replayId = state.startTextBlock();
+-                controller.enqueue({
+-                  type: "text-delta",
+-                  id: replayId,
+-                  delta: formatUnattendedReplayNote(unattended.dropped)
+-                });
++                // A detached stream also receives progress, usage and protocol
++                // frames. Only open a replay block for actual narration (or loss).
++                let replayId;
++                const startReplay = () => {
++                  if (replayId !== void 0) return;
++                  replayId = state.startTextBlock();
++                  controller.enqueue({
++                    type: "text-delta",
++                    id: replayId,
++                    delta: formatUnattendedReplayNote(unattended.dropped)
++                  });
++                };
++                if (unattended.dropped > 0) startReplay();
+                 for (const line of unattended.lines) {
+                   try {
+                     const outer = JSON.parse(line);
+@@ -17011,7 +17052,7 @@ var ClaudeCodeLanguageModel = class {
+                     let text = "";
+                     if (msg.type === "content_block_delta" && msg.delta?.type === "text_delta") {
+                       text = msg.delta.text ?? "";
+-                      partialText = true;
++                      partialText ||= Boolean(text);
+                     } else if (msg.type === "assistant") {
+                       if (!partialText) text = (msg.message?.content ?? []).filter((part) => part.type === "text").map((part) => part.text ?? "").join("");
+                       partialText = false;
+@@ -17023,7 +17064,10 @@ var ClaudeCodeLanguageModel = class {
+                       if (outer.session_id) setClaudeSessionId(sk, outer.session_id);
+                       if (msg.is_error && msg.result) text = msg.result;
+                     }
+-                    if (text) controller.enqueue({ type: "text-delta", id: state.currentTextId ?? state.startTextBlock(), delta: text });
++                    if (text) {
++                      startReplay();
++                      controller.enqueue({ type: "text-delta", id: replayId, delta: text });
++                    }
+                   } catch {
+                   }
+                 }

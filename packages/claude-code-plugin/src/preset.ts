@@ -25,7 +25,7 @@ const tools = [
 ];
 
 export const CLAUDE_CODE_PRESET = {
-  package: '@khalilgharbaoui/opencode-claude-code-plugin@0.40.0',
+  package: '@khalilgharbaoui/opencode-claude-code-plugin@0.54.2',
   options: {
     proxyTools: [],
     proxyOpencodeTools: tools,

@@ -40,6 +40,8 @@ The bridge runs the real Claude CLI with its existing authentication. Subscripti
 
 OpenCode supplies app-visible sessions, permissions, and forwarded tools, including Code Mode/MCP, subagents, and side-chat context tools. Claude retains its internal agent loop, context management, and conversation files. The bridge wraps the pinned [OpenCode Claude Code plugin](https://github.com/khalilgharbaoui/opencode-claude-code-plugin) with an OpenCodex preset and interruption cleanup. Arbitrary direct custom tools need explicit forwarding; Claude hooks still belong to your CLI environment. Context and cost reports are adapter-specific.
 
+`/compact` runs Claude Code's own `/compact` on the chat's live Claude conversation, so Claude's context actually shrinks; its summary becomes the chat's compaction summary. When Claude is in the middle of a tool call (as during OpenCode's automatic compaction inside a long turn), or no Claude conversation is live (after a restart), the upstream adapter's separate summarizer runs instead. Claude still compacts its own context when it fills.
+
 Forks and interrupted/steered turns rebuild Claude context from OpenCode history. The upstream adapter shortens older messages during reconstruction and flattens some role boundaries, so this is not lossless replay. For context-sensitive work, keep the experimental status in mind.
 
 The app installs one plugin under OpenCode's global `plugins/opencodex-claude-code/` folder and preserves customized files. Remove any separately configured Claude Code provider before enabling it. Loading is automatic; use **Check** if it has not appeared. Closing OpenCodex leaves ongoing work running; idle Claude workers expire after five minutes.

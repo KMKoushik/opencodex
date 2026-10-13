@@ -4,6 +4,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@khalilgharbaoui/opencode-claude-code-plugin": "0.40.0"
+    "@khalilgharbaoui/opencode-claude-code-plugin": "0.54.2"
   }
 }
