@@ -1,7 +1,7 @@
 {
   "canvas": {
     "width": 119,
-    "height": 74
+    "height": 75
   },
   "boxes": [
     {
@@ -63,14 +63,14 @@
       "x": 5,
       "y": 24,
       "width": 65,
-      "height": 10,
+      "height": 11,
       "title": "LOCAL GATEWAY",
       "color": "#5eead4"
     },
     {
       "id": "opencode",
       "x": 5,
-      "y": 38,
+      "y": 39,
       "width": 65,
       "height": 10,
       "title": "OPENCODE 2.x SERVICE",
@@ -79,7 +79,7 @@
     {
       "id": "claude",
       "x": 5,
-      "y": 54,
+      "y": 55,
       "width": 65,
       "height": 9,
       "title": "CLAUDE CODE (OPT-IN)",
@@ -88,7 +88,7 @@
     {
       "id": "contracts",
       "x": 89,
-      "y": 35,
+      "y": 36,
       "width": 28,
       "height": 10,
       "title": "SHARED CONTRACTS",
@@ -97,7 +97,7 @@
     {
       "id": "usage",
       "x": 89,
-      "y": 50,
+      "y": 51,
       "width": 28,
       "height": 8,
       "title": "PLAN USAGE APIS",
@@ -106,7 +106,7 @@
     {
       "id": "database",
       "x": 89,
-      "y": 60,
+      "y": 61,
       "width": 28,
       "height": 5,
       "title": "OPENCODE SQLITE",
@@ -116,25 +116,25 @@
   "connectors": [
     {
       "points": [
-        [57, 33],
-        [57, 36],
-        [76, 36],
-        [76, 62],
-        [88, 62]
+        [57, 34],
+        [57, 37],
+        [76, 37],
+        [76, 63],
+        [88, 63]
       ],
       "color": "#5eead4"
     },
     {
       "points": [
-        [23, 47],
-        [23, 53]
+        [23, 48],
+        [23, 54]
       ],
       "color": "#c4a7ff"
     },
     {
       "points": [
-        [55, 54],
-        [55, 48]
+        [55, 55],
+        [55, 49]
       ],
       "color": "#5eead4"
     },
@@ -196,15 +196,15 @@
     },
     {
       "points": [
-        [23, 33],
-        [23, 37]
+        [23, 34],
+        [23, 38]
       ],
       "color": "#7bb8ff"
     },
     {
       "points": [
-        [55, 38],
-        [55, 34]
+        [55, 39],
+        [55, 35]
       ],
       "color": "#5eead4"
     },
@@ -212,8 +212,8 @@
       "points": [
         [69, 32],
         [80, 32],
-        [80, 53],
-        [88, 53]
+        [80, 54],
+        [88, 54]
       ],
       "color": "#5eead4"
     }
@@ -221,8 +221,8 @@
   "lines": [
     {
       "points": [
-        [2, 65],
-        [114, 65]
+        [2, 66],
+        [114, 66]
       ],
       "color": "#626c7a"
     }
@@ -271,7 +271,7 @@
     {
       "id": "outline/robot",
       "x": 8,
-      "y": 40,
+      "y": 41,
       "width": 3,
       "height": 2,
       "color": "#c4a7ff"
@@ -279,7 +279,7 @@
     {
       "id": "outline/brackets-contain",
       "x": 92,
-      "y": 37,
+      "y": 38,
       "width": 3,
       "height": 2,
       "color": "#9ca6b5"
@@ -288,12 +288,12 @@
   "texts": [
     {
       "x": 92,
-      "y": 62,
+      "y": 63,
       "value": "Read-only local search"
     },
     {
       "x": 92,
-      "y": 63,
+      "y": 64,
       "value": "+ active usage sign-ins"
     },
     {
@@ -386,7 +386,7 @@
     {
       "x": 38,
       "y": 19,
-      "value": "Workspace, terminal; canvases in sandboxed frames",
+      "value": "Workspace, terminal; canvases + apps in sandboxed frames",
       "anchor": "center"
     },
     {
@@ -518,110 +518,110 @@
     },
     {
       "x": 7,
-      "y": 34,
+      "y": 35,
       "value": "HTTP + WS",
       "color": "#7bb8ff"
     },
     {
       "x": 7,
-      "y": 35,
+      "y": 36,
       "value": "official client",
       "color": "#7bb8ff"
     },
     {
       "x": 58,
-      "y": 34,
+      "y": 35,
       "value": "Events + WS;",
       "color": "#5eead4"
     },
     {
       "x": 13,
-      "y": 40,
+      "y": 41,
       "value": "Shared backend; survives app shutdown"
     },
     {
       "x": 8,
-      "y": 42,
+      "y": 43,
       "value": "Owns sessions, permission rules + execution"
     },
     {
       "x": 8,
-      "y": 43,
+      "y": 44,
       "value": "Providers, tools, worktrees, VCS + filesystem"
     },
     {
       "x": 8,
-      "y": 44,
+      "y": 45,
       "value": "Project copies: .opencode/opencodex-attachments"
     },
     {
       "x": 8,
-      "y": 45,
+      "y": 46,
       "value": "Durable sessions; native agent shells + PTY replay"
     },
     {
       "x": 97,
-      "y": 37,
+      "y": 38,
       "value": "Shared types"
     },
     {
       "x": 92,
-      "y": 39,
+      "y": 40,
       "value": "packages/contracts"
     },
     {
       "x": 92,
-      "y": 41,
+      "y": 42,
       "value": "API types + schemas"
     },
     {
       "x": 92,
-      "y": 42,
+      "y": 43,
       "value": "Native bridge types"
     },
     {
       "x": 89,
-      "y": 46,
+      "y": 47,
       "value": "Code, not a service",
       "color": "#aeb8c6"
     },
     {
       "x": 2,
-      "y": 67,
+      "y": 68,
       "value": "RUNTIME HOSTING",
       "color": "#ffffff"
     },
     {
       "x": 2,
-      "y": 69,
+      "y": 70,
       "value": "DEV",
       "color": "#7bb8ff"
     },
     {
       "x": 15,
-      "y": 69,
+      "y": 70,
       "value": "Vite :5173 proxies /api to :4310; macOS launches cached OpenCodex.app."
     },
     {
       "x": 2,
-      "y": 70,
+      "y": 71,
       "value": "WEB BUILD",
       "color": "#5eead4"
     },
     {
       "x": 15,
-      "y": 70,
+      "y": 71,
       "value": "Node gateway serves the UI and API on one loopback origin."
     },
     {
       "x": 2,
-      "y": 71,
+      "y": 72,
       "value": "DESKTOP",
       "color": "#f6c177"
     },
     {
       "x": 15,
-      "y": 71,
+      "y": 72,
       "value": "Electron main hosts the gateway and built UI on a free loopback port."
     },
     {
@@ -631,72 +631,77 @@
     },
     {
       "x": 8,
-      "y": 46,
+      "y": 47,
       "value": "Loads side-chat, tasks, canvas + Claude plugins; task KV"
     },
     {
       "x": 7,
-      "y": 49,
+      "y": 50,
       "value": "spawn + stdin",
       "color": "#c4a7ff"
     },
     {
       "x": 58,
-      "y": 49,
+      "y": 50,
       "value": "stdout + tools",
       "color": "#5eead4"
     },
     {
       "x": 8,
-      "y": 56,
+      "y": 57,
       "value": "Official CLI subprocess on the OpenCode host"
     },
     {
       "x": 8,
-      "y": 58,
+      "y": 59,
       "value": "Own login, inference and Claude conversation files"
     },
     {
       "x": 8,
-      "y": 59,
+      "y": 60,
       "value": "Workspace tools return to OpenCode permissions"
     },
     {
       "x": 8,
-      "y": 60,
+      "y": 61,
       "value": "Plugin releases idle workers after five minutes"
     },
     {
       "x": 92,
-      "y": 52,
+      "y": 53,
       "value": "ChatGPT, Claude, Go"
     },
     {
       "x": 92,
-      "y": 53,
+      "y": 54,
       "value": "Read-only limit checks"
     },
     {
       "x": 92,
-      "y": 55,
+      "y": 56,
       "value": "Local sign-ins stay in"
     },
     {
       "x": 92,
-      "y": 56,
+      "y": 57,
       "value": "the gateway"
     },
     {
       "x": 82,
-      "y": 51,
+      "y": 52,
       "value": "HTTPS",
       "color": "#5eead4"
     },
     {
       "x": 58,
-      "y": 35,
+      "y": 36,
       "value": "canvas tool HTTP",
       "color": "#5eead4"
+    },
+    {
+      "x": 8,
+      "y": 33,
+      "value": "Canvas app servers: child processes, runs + triggers"
     }
   ],
   "requiredLabels": [
@@ -721,7 +726,8 @@
     "RUNTIME HOSTING",
     "Claude plugin files",
     "CLAUDE CODE (OPT-IN)",
-    "PLAN USAGE APIS"
+    "PLAN USAGE APIS",
+    "Canvas app servers"
   ],
   "style": {
     "background": "#000000",

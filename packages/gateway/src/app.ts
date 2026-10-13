@@ -35,10 +35,12 @@ import { searchSessions } from './session-search';
 import { createReplyFormat } from './reply-format';
 import { CANVAS_ROOT, canvasRoutes, canvasRuntimeRoutes, createCanvasWatcher } from './canvases';
 import { canvasPluginRoutes } from './canvas-plugin';
+import { Apps } from './apps';
 
 export function createApp(
   backend = new OpenCodeBackend(),
   shutdown = new AbortController().signal,
+  options: { triggers?: boolean } = {},
 ) {
   const app = new Hono();
 
@@ -76,10 +78,20 @@ export function createApp(
   app.route('/api/sessions', sessionAccessRoutes(backend));
   app.route('/api', worktreeRoutes(backend));
   app.route('/api/tasks', taskRoutes(backend));
-  app.route('/api/canvases', canvasRoutes());
+  const canvasWatcher = createCanvasWatcher(CANVAS_ROOT);
+  const apps = new Apps(backend, CANVAS_ROOT, canvasWatcher.publish);
+  if (options.triggers) {
+    const stop = apps.schedule(canvasWatcher.subscribe);
+    shutdown.addEventListener('abort', () => {
+      stop();
+      apps.close();
+    });
+  } else shutdown.addEventListener('abort', () => apps.close());
+  app.route('/api/canvases', canvasRoutes(apps));
+  app.get('/api/apps', async (c) => c.json(await apps.list()));
+  app.get('/api/apps/:id/runs', async (c) => c.json(await apps.runs(c.req.param('id'))));
   app.route('/api/canvas-runtime', canvasRuntimeRoutes());
   app.route('/api/canvas-plugin', canvasPluginRoutes(backend));
-  const canvasWatcher = createCanvasWatcher(CANVAS_ROOT);
   app.get('/api/attention', async (c) => {
     const directories = [...new Set(c.req.queries('directory') ?? [])];
     if (directories.length > 32 || directories.some((item) => !item.trim() || item.length > 4096))

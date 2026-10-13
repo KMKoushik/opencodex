@@ -7,6 +7,7 @@ export type SidebarLocation = {
   sessionID?: string;
   settings: SettingsSection | null;
   tasks: boolean;
+  app: string | null;
 };
 
 const key = (location: SidebarLocation) =>
@@ -15,6 +16,7 @@ const key = (location: SidebarLocation) =>
     location.sessionID,
     location.settings,
     location.tasks,
+    location.app,
   ]);
 
 // Navigation only: no transcript snapshots, disk writes, or streaming subscriptions.

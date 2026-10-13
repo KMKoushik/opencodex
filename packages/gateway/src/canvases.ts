@@ -6,11 +6,14 @@ import { join } from 'node:path';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import {
+  canvasCallSchema,
   canvasCreateSchema,
   canvasDataWriteSchema,
+  canvasIconSchema,
   canvasIDSchema,
   canvasKeySchema,
   type CanvasData,
+  type CanvasIcon,
   type CanvasEvent,
   type CanvasInfo,
   type CanvasSource,
@@ -18,9 +21,11 @@ import {
 import { GatewayError } from './errors';
 import { ALLOWED_IMPORTS, loadTypeScript, testRender, transpile, typeCheck } from './canvas-build';
 import { CANVAS_RUNTIME } from './canvas-runtime.generated';
+import { parseEvery, type Apps } from './apps';
 
 const MANIFEST = 'canvas.json';
 const ENTRY = 'app.tsx';
+export const SERVER = 'server.ts';
 const SOURCE = /^[A-Za-z0-9][A-Za-z0-9_.-]*\.(tsx|ts)$/;
 const MAX_SOURCE_FILES = 40;
 const MAX_SOURCE_BYTES = 512 * 1024;
@@ -33,7 +38,7 @@ export const CANVAS_ROOT = join(homedir(), '.opencodex', 'canvases');
 const rev = (bytes: Buffer | string) =>
   createHash('sha256').update(bytes).digest('hex').slice(0, 16);
 
-function folder(root: string, id: string) {
+export function folder(root: string, id: string) {
   if (!canvasIDSchema.safeParse(id).success) throw new GatewayError('Canvas not found.', 404);
   return join(root, id);
 }
@@ -47,7 +52,7 @@ async function readManifest(directory: string, id: string): Promise<CanvasInfo> 
       throw new GatewayError('Canvas not found.', 404);
     throw error;
   }
-  let manifest: { title?: unknown; sessionID?: unknown; created?: unknown };
+  let manifest: { title?: unknown; sessionID?: unknown; created?: unknown; icon?: unknown };
   try {
     manifest = JSON.parse(text);
   } catch {
@@ -59,9 +64,25 @@ async function readManifest(directory: string, id: string): Promise<CanvasInfo> 
     title: typeof manifest.title === 'string' && manifest.title.trim() ? manifest.title.trim() : id,
     path: directory,
     ...(typeof manifest.sessionID === 'string' ? { sessionID: manifest.sessionID } : {}),
+    ...readIcon(manifest.icon),
     created: typeof manifest.created === 'number' ? manifest.created : updated,
     updated,
   };
+}
+
+/** Keeps whichever icon fields are valid, so one bad field doesn't drop the other. */
+function readIcon(value: unknown): { icon?: CanvasIcon } {
+  if (!value || typeof value !== 'object') return {};
+  const { glyph, color } = value as Record<string, unknown>;
+  const icon: CanvasIcon = {
+    ...(canvasIconSchema.shape.glyph.safeParse(glyph).success
+      ? { glyph: glyph as CanvasIcon['glyph'] }
+      : {}),
+    ...(canvasIconSchema.shape.color.safeParse(color).success
+      ? { color: color as CanvasIcon['color'] }
+      : {}),
+  };
+  return icon.glyph || icon.color ? { icon } : {};
 }
 
 async function latestChange(directory: string) {
@@ -104,7 +125,10 @@ export default function App() {
 }
 `;
 
-export async function createCanvas(root: string, input: { title: string; sessionID?: string }) {
+export async function createCanvas(
+  root: string,
+  input: { title: string; sessionID?: string; icon?: CanvasIcon },
+) {
   const slug =
     input.title
       .toLowerCase()
@@ -118,7 +142,7 @@ export async function createCanvas(root: string, input: { title: string; session
   await mkdir(join(directory, 'data'), { recursive: true });
   await writeFile(
     join(directory, MANIFEST),
-    `${JSON.stringify({ title: input.title, created: Date.now(), ...(input.sessionID ? { sessionID: input.sessionID } : {}) }, null, 2)}\n`,
+    `${JSON.stringify({ title: input.title, created: Date.now(), ...(input.sessionID ? { sessionID: input.sessionID } : {}), ...(input.icon ? { icon: input.icon } : {}) }, null, 2)}\n`,
     { flag: 'wx' },
   );
   await writeFile(join(directory, ENTRY), STARTER(input.title), { flag: 'wx' });
@@ -157,6 +181,59 @@ async function readSourceFiles(directory: string) {
   return files;
 }
 
+const SERVER_IMPORTS = new Set(['@opencodex/canvas/server']);
+
+/** Value imports of a file; `import type` is erased, so a view can type against server.ts. */
+function importsOf(ts: Awaited<ReturnType<typeof loadTypeScript>>, name: string, text: string) {
+  const file = ts.createSourceFile(name, text, ts.ScriptTarget.ES2022, false);
+  const imports: string[] = [];
+  for (const statement of file.statements) {
+    if (ts.isImportDeclaration(statement)) {
+      if (statement.importClause?.isTypeOnly) continue;
+      if (ts.isStringLiteral(statement.moduleSpecifier))
+        imports.push(statement.moduleSpecifier.text);
+    } else if (
+      ts.isExportDeclaration(statement) &&
+      !statement.isTypeOnly &&
+      statement.moduleSpecifier &&
+      ts.isStringLiteral(statement.moduleSpecifier)
+    )
+      imports.push(statement.moduleSpecifier.text);
+  }
+  return imports;
+}
+
+const localFile = (files: Record<string, string>, specifier: string) => {
+  if (!specifier.startsWith('./') || specifier.slice(2).includes('/')) return undefined;
+  const name = specifier.slice(2);
+  return [`${name}.tsx`, `${name}.ts`].find((candidate) => candidate in files);
+};
+
+/** Files reachable from an entry through value imports, stopping before `stop`. */
+function reachable(
+  files: Record<string, string>,
+  imports: Record<string, string[]>,
+  entry: string,
+  stop?: (importer: string, file: string) => void,
+) {
+  const seen = new Set<string>();
+  const visit = (name: string) => {
+    if (seen.has(name) || !(name in files)) return;
+    seen.add(name);
+    for (const specifier of imports[name] ?? []) {
+      const file = localFile(files, specifier);
+      if (file === SERVER && stop) stop(name, file);
+      else if (file) visit(file);
+    }
+  };
+  visit(entry);
+  return seen;
+}
+
+/**
+ * Transpiles every file and splits them by where they run: the view (app.tsx and its
+ * imports) in the sandboxed frame, server.ts and its imports in the gateway's child process.
+ */
 async function buildSource(directory: string) {
   const files = await readSourceFiles(directory);
   const errors: string[] = [];
@@ -169,30 +246,64 @@ async function buildSource(directory: string) {
       ),
     ),
   );
+  const imports = Object.fromEntries(
+    Object.entries(files).map(([name, text]) => [name, importsOf(ts, name, text)]),
+  );
+  const server = files[SERVER] ? reachable(files, imports, SERVER) : new Set<string>();
+  const view = new Set(Object.keys(files).filter((name) => !server.has(name)));
+  const viewEntry = reachable(files, imports, ENTRY, (importer) =>
+    errors.push(
+      `${importer}: the view can’t run server.ts. Use \`import type { name } from './server'\` and call it with useFn<typeof name>('name').`,
+    ),
+  );
+  for (const name of viewEntry) view.add(name);
   for (const [name, module] of Object.entries(modules)) {
     errors.push(...module.errors);
-    for (const { fileName } of ts.preProcessFile(files[name]!, true, true).importedFiles) {
-      const local = fileName.startsWith('./') && !fileName.slice(2).includes('/');
-      if (!ALLOWED_IMPORTS.has(fileName) && !local)
+    for (const specifier of imports[name]!) {
+      if (localFile(files, specifier)) continue;
+      if (view.has(name) && !ALLOWED_IMPORTS.has(specifier))
         errors.push(
-          `${name}: can’t import '${fileName}'. Canvases can import react, @opencodex/canvas, and their own files (./name).`,
+          SERVER_IMPORTS.has(specifier)
+            ? `${name}: the view can’t import '${specifier}'. Call server functions with useFn('name'); type them with \`import type { name } from './server'\`.`
+            : `${name}: can’t import '${specifier}'. Views can import react, @opencodex/canvas, and their own files (./name).`,
+        );
+      if (server.has(name) && !SERVER_IMPORTS.has(specifier))
+        errors.push(
+          `${name}: can’t import '${specifier}'. server.ts can import @opencodex/canvas/server and its own files (./name); run other tools with sh().`,
         );
     }
   }
-  return { files, modules, errors };
+  return { files, modules, errors, view, server };
 }
 
 export async function readSource(root: string, id: string): Promise<CanvasSource> {
   const directory = folder(root, id);
   const info = await readManifest(directory, id);
-  const { files, modules, errors } = await buildSource(directory);
+  const { files, modules, errors, view, server } = await buildSource(directory);
   const version = createHash('sha256');
-  for (const [name, text] of Object.entries(files)) version.update(name).update('\0').update(text);
+  for (const name of view) version.update(name).update('\0').update(files[name]!);
   return {
     ...info,
     entry: ENTRY,
-    modules: Object.fromEntries(Object.entries(modules).map(([name, item]) => [name, item.code])),
+    modules: Object.fromEntries([...view].map((name) => [name, modules[name]!.code])),
     errors,
+    version: version.digest('hex').slice(0, 16),
+    server: server.size > 0,
+  };
+}
+
+/** server.ts and the files it imports, transpiled, with a version that changes with them. */
+export async function readServerSource(root: string, id: string) {
+  const directory = folder(root, id);
+  const { files, modules, errors, server } = await buildSource(directory);
+  if (!server.size) return undefined;
+  const version = createHash('sha256');
+  for (const name of [...server].sort()) version.update(name).update('\0').update(files[name]!);
+  return {
+    entry: SERVER,
+    modules: Object.fromEntries([...server].map((name) => [name, modules[name]!.code])),
+    maps: Object.fromEntries([...server].map((name) => [name, modules[name]!.map])),
+    errors: errors.filter((error) => [...server].some((name) => error.startsWith(`${name}:`))),
     version: version.digest('hex').slice(0, 16),
   };
 }
@@ -225,7 +336,7 @@ export async function readData(root: string, id: string) {
   return { values, errors };
 }
 
-async function readValue(directory: string, key: string) {
+export async function readValue(directory: string, key: string) {
   try {
     const bytes = await readFile(join(directory, 'data', `${key}.json`));
     return { bytes, rev: rev(bytes) };
@@ -239,14 +350,14 @@ const writes = new Map<string, Promise<unknown>>();
 
 /**
  * Compare-and-swap write of one value. A stale `rev` returns the current value instead of
- * overwriting a change the writer hasn't seen.
+ * overwriting a change the writer hasn't seen; `undefined` overwrites whatever is stored.
  */
 export function writeValue(
   root: string,
   id: string,
   key: string,
   value: unknown,
-  base: string | null,
+  base: string | null | undefined,
 ): Promise<{ ok: true; rev: string } | { ok: false; value: unknown; rev: string | null }> {
   const directory = folder(root, id);
   if (!canvasKeySchema.safeParse(key).success)
@@ -262,7 +373,7 @@ export function writeValue(
       throw error.code === 'ENOENT' ? new GatewayError('Canvas not found.', 404) : error;
     });
     const current = await readValue(directory, key);
-    if ((current?.rev ?? null) !== base) {
+    if (base !== undefined && (current?.rev ?? null) !== base) {
       let latest: unknown;
       try {
         latest = current ? JSON.parse(current.bytes.toString('utf8')) : undefined;
@@ -290,11 +401,19 @@ export function writeValue(
 }
 
 /** Validates, type-checks, transpiles, and test-renders a canvas; a report for the agent. */
-export async function checkCanvas(root: string, id: string) {
+export async function checkCanvas(
+  root: string,
+  id: string,
+  describeServer?: (id: string) => Promise<{
+    functions: string[];
+    triggers: Record<string, { every: string }>;
+    error?: string;
+  }>,
+) {
   const directory = folder(root, id);
   const info = await readManifest(directory, id);
   const problems: string[] = [];
-  const { files, modules, errors } = await buildSource(directory);
+  const { files, modules, errors, view, server } = await buildSource(directory);
   problems.push(...errors);
   const data = await readData(root, id);
   problems.push(...data.errors);
@@ -302,7 +421,17 @@ export async function checkCanvas(root: string, id: string) {
   const values = Object.fromEntries(
     Object.entries(data.values).map(([key, item]) => [key, item.value]),
   );
-  const render = !errors.length && files[ENTRY] ? testRender(modules, ENTRY, values) : undefined;
+  const viewModules = Object.fromEntries([...view].map((name) => [name, modules[name]!]));
+  const render =
+    !errors.length && files[ENTRY] ? testRender(viewModules, ENTRY, values) : undefined;
+  const loaded =
+    server.size && !errors.length && !types.length && describeServer
+      ? await describeServer(id)
+      : undefined;
+  if (loaded?.error) problems.push(`${SERVER} failed to load: ${loaded.error}`);
+  for (const [name, trigger] of Object.entries(loaded?.triggers ?? {}))
+    if (!parseEvery(trigger.every))
+      problems.push(`triggers.${name}.every '${trigger.every}' isn’t like '30m', '6h', or '1d'.`);
   const sections: string[] = [];
   if (problems.length)
     sections.push(`Problems:\n${problems.map((line) => `- ${line}`).join('\n')}`);
@@ -313,6 +442,16 @@ export async function checkCanvas(root: string, id: string) {
     sections.push(`Render warnings:\n${render.warnings.map((line) => `- ${line}`).join('\n')}`);
   if (render?.html !== undefined && !render.html.trim())
     sections.push('The view rendered nothing. Return visible content from App.');
+  if (loaded && !loaded.error)
+    sections.push(
+      `${SERVER} loaded. Functions: ${loaded.functions.join(', ') || 'none'}.${
+        Object.keys(loaded.triggers).length
+          ? ` Triggers: ${Object.entries(loaded.triggers)
+              .map(([name, trigger]) => `${name} every ${trigger.every}`)
+              .join(', ')}.`
+          : ''
+      } Try a function with canvas_run.`,
+    );
   const ok = !problems.length && !types.length && Boolean(render?.html?.trim());
   const link = `[${info.title.replace(/[[\]]/g, '')}](canvas:${id})`;
   return {
@@ -378,6 +517,8 @@ export function createCanvasWatcher(directory: string) {
     });
   };
   return {
+    /** Events that don't come from files, like app runs starting and ending. */
+    publish: emit,
     subscribe(listener: (event: CanvasEvent) => void) {
       listeners.add(listener);
       void start().catch(() => {});
@@ -426,7 +567,7 @@ export function canvasRuntimeRoutes() {
   return app;
 }
 
-export function canvasRoutes() {
+export function canvasRoutes(apps: Apps) {
   const app = new Hono();
   app.get('/', async (c) => {
     return c.json(await listCanvases(CANVAS_ROOT));
@@ -434,15 +575,30 @@ export function canvasRoutes() {
   app.use('/', bodyLimit({ maxSize: 8192 }));
   app.post('/', async (c) => {
     const input = canvasCreateSchema.safeParse(await c.req.json().catch(() => null));
-    if (!input.success) return c.json({ message: 'Give the canvas a title.' }, 400);
+    if (!input.success)
+      return c.json(
+        {
+          message:
+            input.error.issues[0]?.path[0] === 'icon'
+              ? 'Pick an icon glyph and color from the listed options.'
+              : 'Give the canvas a title.',
+        },
+        400,
+      );
     return c.json(await createCanvas(CANVAS_ROOT, input.data));
   });
   app.get('/:id', async (c) => c.json(await readSource(CANVAS_ROOT, c.req.param('id'))));
   app.delete('/:id', async (c) => {
+    const id = c.req.param('id');
+    await readManifest(folder(CANVAS_ROOT, id), id);
+    await apps.remove(id);
+    return c.json({ ok: true });
+  });
+  app.get('/:id/files', async (c) => {
     const directory = folder(CANVAS_ROOT, c.req.param('id'));
     await readManifest(directory, c.req.param('id'));
-    await rm(directory, { recursive: true, force: true });
-    return c.json({ ok: true });
+    const files = await readSourceFiles(directory);
+    return c.json({ files: Object.entries(files).map(([name, text]) => ({ name, text })) });
   });
   app.get('/:id/data', async (c) => c.json(await readData(CANVAS_ROOT, c.req.param('id'))));
   app.get('/:id/data/:key', async (c) => {
@@ -475,7 +631,17 @@ export function canvasRoutes() {
           409,
         );
   });
-  app.post('/:id/check', async (c) => c.json(await checkCanvas(CANVAS_ROOT, c.req.param('id'))));
+  app.post('/:id/check', async (c) =>
+    c.json(await checkCanvas(CANVAS_ROOT, c.req.param('id'), (id) => apps.describe(id))),
+  );
+  app.use('/:id/functions/:name', bodyLimit({ maxSize: MAX_VALUE_BYTES + 4096 }));
+  app.post('/:id/functions/:name', async (c) => {
+    const input = canvasCallSchema.safeParse(await c.req.json().catch(() => null));
+    if (!input.success) return c.json({ message: 'Send the arguments as { args: [] }.' }, 400);
+    const source = c.req.query('source') === 'agent' ? 'agent' : 'view';
+    const value = await apps.call(c.req.param('id'), c.req.param('name'), input.data.args, source);
+    return c.json({ value: value ?? null });
+  });
   return app;
 }
 

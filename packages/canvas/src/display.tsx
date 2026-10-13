@@ -16,6 +16,14 @@ export function Badge({
   );
 }
 
+const CALLOUT_ICONS: Record<Tone, string> = {
+  neutral: 'M6 5.5V9M6 3v.01',
+  info: 'M6 5.5V9M6 3v.01',
+  success: 'M3 6.2l2 2L9 4',
+  warning: 'M6 2.8v3.7M6 9v.01',
+  danger: 'M3.8 3.8l4.4 4.4M8.2 3.8L3.8 8.2',
+};
+
 /** A highlighted message: notes, warnings, findings. */
 export function Callout({
   tone = 'info',
@@ -32,6 +40,16 @@ export function Callout({
       role={tone === 'danger' || tone === 'warning' ? 'alert' : 'note'}
       style={{ ['--cv-tone' as string]: colorOf(tone) }}
     >
+      <span className="cv-callout-icon" aria-hidden="true">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor">
+          <path
+            d={CALLOUT_ICONS[tone]}
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
       {title && <p className="cv-callout-title">{title}</p>}
       {children && <div className="cv-callout-body">{children}</div>}
     </div>
@@ -149,7 +167,7 @@ export function Progress({
       >
         <div
           className="cv-progress-fill"
-          style={{ width: `${ratio * 100}%`, background: colorOf(tone) }}
+          style={{ width: `${ratio * 100}%`, backgroundColor: colorOf(tone) }}
         />
       </div>
     </div>
@@ -254,16 +272,24 @@ export type Column<Row> =
       render?: (row: Row) => ReactNode;
       /** Color the cell's number by sign, like a delta. */
       tone?: 'delta' | 'delta-inverted';
+      /** Adds a menu above the table to show only rows with one of this column's values. */
+      filter?: boolean;
     };
 
+/** Distinct values a filter menu offers; beyond this a column is too varied to pick from. */
+const MAX_FILTER_OPTIONS = 100;
+
 /**
- * A sortable table. Columns are keys of the rows or column objects; numbers align right
- * and format automatically.
+ * A table with sorting (click a header), search (shown for more than 10 rows, or set
+ * `search`), and per-column filter menus (`filter: true` on a column). Columns are keys of the
+ * rows or column objects; numbers align right and format automatically.
  */
 export function Table<Row extends Record<string, unknown>>({
   rows,
   columns,
   sortable = true,
+  defaultSort,
+  search,
   maxHeight,
   dense,
   empty = 'No rows',
@@ -272,38 +298,81 @@ export function Table<Row extends Record<string, unknown>>({
   rows: Row[];
   columns?: Column<Row>[];
   sortable?: boolean;
+  defaultSort?: { key: keyof Row & string; descending?: boolean };
+  /** Show a search box over every column. Defaults to on for more than 10 rows. */
+  search?: boolean;
   maxHeight?: number;
   dense?: boolean;
   empty?: ReactNode;
+  /** `index` is the row's position in `rows`, whatever the sort. */
   onRowClick?: (row: Row, index: number) => void;
 }) {
-  const [sort, setSort] = useState<{ key: string; descending: boolean }>();
+  const [sort, setSort] = useState<{ key: string; descending: boolean } | undefined>(
+    defaultSort && { key: defaultSort.key, descending: Boolean(defaultSort.descending) },
+  );
+  const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const resolved = useMemo(
     () =>
-      (columns ?? (Object.keys(rows[0] ?? {}) as (keyof Row & string)[])).map((column) =>
-        typeof column === 'string' ? { key: column } : column,
+      (columns ?? (Object.keys(rows[0] ?? {}) as (keyof Row & string)[])).map(
+        (column): Exclude<Column<Row>, string> =>
+          typeof column === 'string' ? { key: column } : column,
       ),
     [columns, rows],
   );
-  const sorted = useMemo(() => {
-    if (!sort) return rows;
-    const result = [...rows].sort((a, b) => compare(a[sort.key], b[sort.key]));
+  const searchable = search ?? rows.length > 10;
+  // Search text is built once per data change, not on every keystroke.
+  const items = useMemo(
+    () =>
+      rows.map((row, index) => ({
+        row,
+        index,
+        text: searchable
+          ? resolved
+              .map((column) => display(row[column.key]))
+              .join('\u0000')
+              .toLowerCase()
+          : '',
+      })),
+    [rows, resolved, searchable],
+  );
+  const menus = useMemo(
+    () =>
+      resolved.flatMap((column) => {
+        if (!column.filter) return [];
+        const values = [...new Set(rows.map((row) => display(row[column.key])))]
+          .filter(Boolean)
+          .sort((a, b) => compare(a, b));
+        return values.length <= MAX_FILTER_OPTIONS ? [{ column, values }] : [];
+      }),
+    [resolved, rows],
+  );
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const active = Object.entries(filters).filter(([, value]) => value);
+    const result = items.filter(
+      (item) =>
+        (!needle || item.text.includes(needle)) &&
+        active.every(([key, value]) => display(item.row[key]) === value),
+    );
+    if (!sort) return result;
+    result.sort((a, b) => compare(a.row[sort.key], b.row[sort.key]));
     return sort.descending ? result.reverse() : result;
-  }, [rows, sort]);
-  return (
+  }, [items, query, filters, sort]);
+  const narrowed = visible.length !== rows.length;
+  const table = (
     <div className={cx('cv-table-wrap', dense && 'cv-table-dense')} style={{ maxHeight }}>
       <table className="cv-table">
         <thead>
           <tr>
             {resolved.map((column) => {
               const numeric = typeof rows[0]?.[column.key] === 'number';
-              const align =
-                'align' in column && column.align ? column.align : numeric ? 'right' : 'left';
+              const align = column.align ?? (numeric ? 'right' : 'left');
               const active = sort?.key === column.key;
               return (
                 <th
                   key={column.key}
-                  style={{ textAlign: align, width: 'width' in column ? column.width : undefined }}
+                  style={{ textAlign: align, width: column.width }}
                   aria-sort={active ? (sort.descending ? 'descending' : 'ascending') : undefined}
                 >
                   {sortable ? (
@@ -318,15 +387,13 @@ export function Table<Row extends Record<string, unknown>>({
                         )
                       }
                     >
-                      {'label' in column && column.label !== undefined ? column.label : column.key}
+                      {column.label ?? column.key}
                       <span className="cv-sort" aria-hidden="true">
                         {active ? (sort.descending ? '↓' : '↑') : ''}
                       </span>
                     </button>
-                  ) : 'label' in column && column.label !== undefined ? (
-                    column.label
                   ) : (
-                    column.key
+                    (column.label ?? column.key)
                   )}
                 </th>
               );
@@ -334,14 +401,14 @@ export function Table<Row extends Record<string, unknown>>({
           </tr>
         </thead>
         <tbody>
-          {sorted.length === 0 && (
+          {visible.length === 0 && (
             <tr>
               <td colSpan={resolved.length} className="cv-table-empty">
-                {empty}
+                {rows.length ? 'No matching rows' : empty}
               </td>
             </tr>
           )}
-          {sorted.map((row, index) => (
+          {visible.map(({ row, index }) => (
             <tr
               key={index}
               onClick={onRowClick ? () => onRowClick(row, index) : undefined}
@@ -350,9 +417,8 @@ export function Table<Row extends Record<string, unknown>>({
               {resolved.map((column) => {
                 const value = row[column.key];
                 const numeric = typeof value === 'number';
-                const align =
-                  'align' in column && column.align ? column.align : numeric ? 'right' : 'left';
-                const tone = 'tone' in column ? column.tone : undefined;
+                const align = column.align ?? (numeric ? 'right' : 'left');
+                const tone = column.tone;
                 const sign = numeric ? Math.sign(value) * (tone === 'delta-inverted' ? -1 : 1) : 0;
                 return (
                   <td
@@ -361,10 +427,10 @@ export function Table<Row extends Record<string, unknown>>({
                     className={cx(numeric && 'cv-num')}
                     data-delta={tone && sign ? (sign > 0 ? 'good' : 'bad') : undefined}
                   >
-                    {'render' in column && column.render
+                    {column.render
                       ? column.render(row)
                       : numeric
-                        ? `${tone && value > 0 ? '+' : ''}${formatNumber(value, 'format' in column ? column.format : undefined)}`
+                        ? `${tone && value > 0 ? '+' : ''}${formatNumber(value, column.format)}`
                         : display(value)}
                   </td>
                 );
@@ -373,6 +439,51 @@ export function Table<Row extends Record<string, unknown>>({
           ))}
         </tbody>
       </table>
+    </div>
+  );
+  if (!searchable && !menus.length) return table;
+  return (
+    <div className="cv-table-block">
+      <div className="cv-table-toolbar">
+        {searchable && (
+          <input
+            className="cv-input cv-table-search"
+            type="search"
+            placeholder="Search"
+            aria-label="Search rows"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        )}
+        {menus.map(({ column, values }) => {
+          const name = typeof column.label === 'string' ? column.label : column.key;
+          return (
+            <select
+              key={column.key}
+              className="cv-input cv-select cv-table-filter"
+              aria-label={`Filter by ${name}`}
+              data-active={filters[column.key] ? '' : undefined}
+              value={filters[column.key] ?? ''}
+              onChange={(event) =>
+                setFilters((current) => ({ ...current, [column.key]: event.target.value }))
+              }
+            >
+              <option value="">{name}: All</option>
+              {values.map((value) => (
+                <option key={value} value={value}>
+                  {name}: {value}
+                </option>
+              ))}
+            </select>
+          );
+        })}
+        {narrowed && (
+          <span className="cv-table-count cv-muted">
+            {formatNumber(visible.length)} of {formatNumber(rows.length)}
+          </span>
+        )}
+      </div>
+      {table}
     </div>
   );
 }

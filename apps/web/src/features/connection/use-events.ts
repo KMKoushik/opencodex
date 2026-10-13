@@ -13,7 +13,7 @@ import type { SubagentCost } from '../session-panel/session-cost';
 import { updateSessionMetadata } from '../sessions/metadata';
 import { notifySession } from '../notifications/notifications';
 import type { CanvasData, CanvasEvent } from '@opencodex/contracts/canvas';
-import { canvasDataKey, canvasSourceKey } from '../canvas/canvas-context';
+import { appsKey, canvasDataKey, canvasFilesKey, canvasSourceKey } from '../canvas/canvas-context';
 
 export function useEvents(enabled: boolean) {
   const client = useQueryClient();
@@ -123,23 +123,29 @@ export function useEvents(enabled: boolean) {
     let canvasTimer: ReturnType<typeof setTimeout> | undefined;
     const canvasSources = new Set<string>();
     const canvasData = new Set<string>();
+    let apps = false;
     // The agent writes a canvas file by file; refetch each changed snapshot once.
     const refreshCanvases = () => {
       if (canvasTimer) return;
       canvasTimer = setTimeout(() => {
         canvasTimer = undefined;
-        for (const id of canvasSources)
+        for (const id of canvasSources) {
           void client.invalidateQueries({ queryKey: canvasSourceKey(id), exact: true });
+          void client.invalidateQueries({ queryKey: canvasFilesKey(id), exact: true });
+        }
         for (const id of canvasData)
           void client.invalidateQueries({ queryKey: canvasDataKey(id), exact: true });
+        if (apps) void client.invalidateQueries({ queryKey: appsKey });
+        apps = false;
         canvasSources.clear();
         canvasData.clear();
       }, 100);
     };
     events.addEventListener('canvas', (message: MessageEvent<string>) => {
       const event: CanvasEvent = JSON.parse(message.data);
-      if (event.type === 'list') {
-        void client.invalidateQueries({ queryKey: ['canvases'] });
+      if (event.type === 'list' || event.type === 'app') {
+        if (event.type === 'list') void client.invalidateQueries({ queryKey: ['canvases'] });
+        void client.invalidateQueries({ queryKey: appsKey });
         return;
       }
       if (event.type === 'data') {
@@ -147,7 +153,10 @@ export function useEvents(enabled: boolean) {
         // Writes from this window already updated the snapshot.
         if (!values || (values[event.key]?.rev ?? null) === event.rev) return;
         canvasData.add(event.id);
-      } else canvasSources.add(event.id);
+      } else {
+        canvasSources.add(event.id);
+        apps = true;
+      }
       refreshCanvases();
     });
     events.addEventListener('ready', () => {
@@ -168,6 +177,7 @@ export function useEvents(enabled: boolean) {
       void client.invalidateQueries({ queryKey: ['tasks'] });
       void client.invalidateQueries({ queryKey: ['canvas'] });
       void client.invalidateQueries({ queryKey: ['canvases'] });
+      void client.invalidateQueries({ queryKey: appsKey });
       client.setQueriesData<LivePart[]>(
         { queryKey: ['chat'], predicate: (query) => query.queryKey[2] === 'stream' },
         [],

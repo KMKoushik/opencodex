@@ -158,3 +158,30 @@
     opacity: 1;
   }
 }
+
+.sidebar-apps {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.sidebar-actions .sidebar-app-row {
+  gap: 8px;
+  padding-left: 33px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.sidebar-actions .sidebar-app-row[aria-current] {
+  color: var(--text);
+}
+.sidebar-app-title {
+  flex: 1;
+  min-width: 0;
+}
+.sidebar-actions .sidebar-apps-more {
+  justify-content: space-between;
+  color: var(--text-tertiary);
+}
+.sidebar-apps-count {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}

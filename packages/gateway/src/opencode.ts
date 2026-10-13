@@ -1,7 +1,7 @@
 import { OpenCode, type OpenCodeClient } from '@opencode/client';
 import { Service, type Endpoint } from '@opencode/client/service';
 import type { Connection, SessionPage } from '@opencodex/contracts';
-import { sessionSummary, sideChatParent } from '@opencodex/contracts';
+import { isAppSession, sessionSummary, sideChatParent } from '@opencodex/contracts';
 import { GatewayError } from './errors';
 import { previewFetch } from './preview-fetch';
 
@@ -102,11 +102,12 @@ export class OpenCodeBackend {
   async request<T>(
     signal: AbortSignal,
     operation: (client: OpenCodeClient, options: { signal: AbortSignal }) => Promise<T>,
+    timeout = 30_000,
   ): Promise<T> {
     const client = await this.requireClient();
     try {
       return await operation(client, {
-        signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
+        signal: AbortSignal.any([signal, AbortSignal.timeout(timeout)]),
       });
     } catch (error) {
       // The official client wraps errors from its custom fetch in ClientError.cause.
@@ -142,8 +143,10 @@ export class OpenCodeBackend {
         { signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]) },
       );
       return {
-        // Side chats are root sessions natively, but belong to their main chat's panel.
-        sessions: result.data.filter((session) => !sideChatParent(session)).map(sessionSummary),
+        // Side chats and app runs are root sessions natively, but belong to their own views.
+        sessions: result.data
+          .filter((session) => !sideChatParent(session) && !isAppSession(session))
+          .map(sessionSummary),
         nextCursor: result.cursor.next ?? null,
       };
     } catch {

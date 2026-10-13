@@ -31,6 +31,18 @@ const root = createRoot(container);
 const builtins = { react: React, 'react/jsx-runtime': JSXRuntime, '@opencodex/canvas': SDK };
 let store: ReturnType<typeof createStore> | undefined;
 let generation = 0;
+let nextCall = 0;
+const calls = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>();
+const host = {
+  call(name: string, args: unknown[]) {
+    const call = ++nextCall;
+    post({ type: 'call', call, name, args });
+    return new Promise<unknown>((resolve, reject) => calls.set(call, { resolve, reject }));
+  },
+  open(target: string | { session: string }) {
+    post({ type: 'open', target });
+  },
+};
 
 class Boundary extends Component<{ children: ReactNode }, { error?: Error }> {
   state: { error?: Error } = {};
@@ -87,7 +99,7 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
   switch (message.type) {
     case 'init':
       document.documentElement.dataset.mode = message.mode;
-      store = createStore(message.data, (key, value) => post({ type: 'set', key, value }));
+      store = createStore(message.data, (key, value) => post({ type: 'set', key, value }), host);
       applyTheme(message.theme);
       run(message.modules, message.entry);
       if (message.mode === 'inline') {
@@ -106,6 +118,16 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
       break;
     case 'data':
       store?.receive(message.key, message.value);
+      break;
+    case 'result': {
+      const pending = calls.get(message.call);
+      calls.delete(message.call);
+      if (message.error !== undefined) pending?.reject(new Error(message.error));
+      else pending?.resolve(message.value);
+      break;
+    }
+    case 'running':
+      store?.setRunning(message.names);
       break;
   }
 });

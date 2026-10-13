@@ -22,9 +22,9 @@ export function colorOf(value: Color | Tone | (string & {}) | undefined, index =
   const name = value ?? PALETTE[index % PALETTE.length]!;
   if (name === 'neutral') return 'var(--text-tertiary)';
   if (name === 'info') return 'var(--cv-blue)';
-  if (name === 'success') return 'var(--success)';
-  if (name === 'warning') return 'var(--warning)';
-  if (name === 'danger') return 'var(--error)';
+  if (name === 'success') return 'var(--cv-success)';
+  if (name === 'warning') return 'var(--cv-yellow)';
+  if (name === 'danger') return 'var(--cv-red)';
   if ((PALETTE as readonly string[]).includes(name)) return `var(--cv-${name})`;
   return name;
 }

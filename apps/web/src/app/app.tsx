@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
   PanelLeftCloseIcon,
   PanelLeftIcon,
@@ -48,7 +48,7 @@ import { SessionTitle } from '../features/sessions/session-title';
 import { WorkbenchRail } from '../features/workbench/workbench-rail';
 import { panels, type SideChatRequest, type SubagentRequest } from '../features/workbench/panels';
 import { SideChatQuoteContext } from '../features/side-chat/side-chat-context';
-import { CanvasOpenContext } from '../features/canvas/canvas-context';
+import { CanvasOpenContext, CanvasSessionContext } from '../features/canvas/canvas-context';
 import { SidebarResize } from '../features/sidebar/sidebar-resize';
 import { readTerminalPlacement, type TerminalPlacement } from '../features/terminal/placement';
 import { readStorage, writeStorage } from '../lib/storage';
@@ -82,6 +82,9 @@ const browserPanel = panels.find((panel) => panel.id === 'browser');
 const TaskBoard = lazy(() =>
   import('../features/tasks/task-board').then((module) => ({ default: module.TaskBoard })),
 );
+const AppsPage = lazy(() =>
+  import('../features/apps/apps-page').then((module) => ({ default: module.AppsPage })),
+);
 const WorkbenchPanel = lazy(() =>
   import('../features/workbench/workbench-panel').then((module) => ({
     default: module.WorkbenchPanel,
@@ -97,8 +100,9 @@ export function App() {
   const composerFocusToken = useRef(0);
   const [settings, setSettings] = useState<SettingsSection | null>(null);
   const [tasks, setTasks] = useState(false);
-  // Settings and Tasks replace the chat column and its session tools.
-  const page = settings !== null || tasks;
+  const [app, setApp] = useState<string | null>(null);
+  // Settings, Tasks, and Apps replace the chat column and its session tools.
+  const page = settings !== null || tasks || app !== null;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sessionCardVisible, setSessionCardVisible] = useState(
@@ -269,6 +273,7 @@ export function App() {
     storeProject(next);
     setSelectedID(undefined);
     setTasks(false);
+    setApp(null);
     setSidebarOpen(false);
     create.reset();
   }
@@ -293,6 +298,7 @@ export function App() {
     if (project?.directory !== next.directory) selectProject(next);
     setSelectedID(session.id);
     setTasks(false);
+    setApp(null);
     setSidebarOpen(false);
   }
 
@@ -304,9 +310,27 @@ export function App() {
     openSession(sessionSummary(session));
   }
 
+  function openApps(id = '') {
+    setSettings(null);
+    setTasks(false);
+    setApp(id);
+    setSidebarOpen(false);
+    main.current?.focus({ preventScroll: true });
+  }
+
+  const openSessionByIDRef = useRef(openSessionByID);
+  useEffect(() => {
+    openSessionByIDRef.current = openSessionByID;
+  });
+  const openSessionFromCanvas = useCallback(
+    (sessionID: string) => void openSessionByIDRef.current(sessionID),
+    [],
+  );
+
   function openTasks() {
     setSettings(null);
     setTasks(true);
+    setApp(null);
     setSidebarOpen(false);
     main.current?.focus({ preventScroll: true });
   }
@@ -314,6 +338,7 @@ export function App() {
   function navigate(next: SettingsSection | null) {
     setSettings(next);
     setTasks(false);
+    setApp(null);
     setSidebarOpen(false);
     main.current?.focus({ preventScroll: true });
   }
@@ -366,11 +391,12 @@ export function App() {
   }
 
   const history = useNavigationHistory(
-    { project, sessionID: selectedID, settings, tasks },
+    { project, sessionID: selectedID, settings, tasks, app },
     (location) => {
       if (project?.directory !== location.project?.directory) selectProject(location.project);
       setSelectedID(location.sessionID);
-      if (location.tasks) openTasks();
+      if (location.app !== null) openApps(location.app);
+      else if (location.tasks) openTasks();
       else navigate(location.settings);
     },
   );
@@ -502,6 +528,7 @@ export function App() {
         <Sidebar
           settings={settings}
           tasks={tasks}
+          app={app}
           connected={connected}
           live={live}
           canCreate={Boolean(project && connected && !create.isPending && !switchProject.isPending)}
@@ -514,6 +541,7 @@ export function App() {
           onNewChat={newChat}
           onOpenProject={openProject}
           onTasks={openTasks}
+          onApps={openApps}
           onSettings={navigate}
           onSelectSession={(session) => {
             openSession(session);
@@ -557,6 +585,7 @@ export function App() {
                     if (project?.directory !== next.directory) selectProject(next);
                     setSelectedID(id);
                     setTasks(false);
+                    setApp(null);
                     setSidebarOpen(false);
                   }}
                 />
@@ -566,309 +595,329 @@ export function App() {
         </Sidebar>
       </aside>
 
-      <div className="main-shell">
-        <div className="workspace-body" data-workbench-expanded={workbenchExpanded}>
-          <div ref={chatColumn} className="chat-column" inert={workbenchExpanded}>
-            <header className="toolbar">
-              {sidebarCollapsed && (
-                <span className="toolbar-brand" aria-label={appName}>
-                  <BrandIcon size="small" className="sidebar-brand-icon" />
-                  <DevelopmentBadge />
-                </span>
-              )}
-              {sidebarCollapsed && (
+      <CanvasSessionContext.Provider value={openSessionFromCanvas}>
+        <div className="main-shell">
+          <div className="workspace-body" data-workbench-expanded={workbenchExpanded}>
+            <div ref={chatColumn} className="chat-column" inert={workbenchExpanded}>
+              <header className="toolbar">
+                {sidebarCollapsed && (
+                  <span className="toolbar-brand" aria-label={appName}>
+                    <BrandIcon size="small" className="sidebar-brand-icon" />
+                    <DevelopmentBadge />
+                  </span>
+                )}
+                {sidebarCollapsed && (
+                  <Button
+                    className="desktop-sidebar-toggle"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Show sidebar"
+                    {...shortcutProps('sidebar.toggle')}
+                    onClick={toggleSidebar}
+                  >
+                    <HugeiconsIcon icon={PanelLeftIcon} size={16} />
+                  </Button>
+                )}
                 <Button
-                  className="desktop-sidebar-toggle"
+                  className="sidebar-toggle"
                   variant="ghost"
                   size="icon"
-                  aria-label="Show sidebar"
+                  aria-label="Toggle sidebar"
+                  aria-expanded={sidebarOpen}
+                  aria-controls="sidebar"
                   {...shortcutProps('sidebar.toggle')}
                   onClick={toggleSidebar}
                 >
-                  <HugeiconsIcon icon={PanelLeftIcon} size={16} />
-                </Button>
-              )}
-              <Button
-                className="sidebar-toggle"
-                variant="ghost"
-                size="icon"
-                aria-label="Toggle sidebar"
-                aria-expanded={sidebarOpen}
-                aria-controls="sidebar"
-                {...shortcutProps('sidebar.toggle')}
-                onClick={toggleSidebar}
-              >
-                {sidebarOpen ? (
-                  <HugeiconsIcon icon={PanelLeftCloseIcon} size={16} />
-                ) : (
-                  <HugeiconsIcon icon={PanelLeftIcon} size={16} />
-                )}
-              </Button>
-              {!page && project && (
-                <span className="toolbar-project truncate" title={project.directory}>
-                  <HugeiconsIcon icon={Folder01Icon} size={14} />
-                  {currentProject?.name}
-                </span>
-              )}
-              {!page && project && (
-                <span className="toolbar-separator" aria-hidden="true">
-                  /
-                </span>
-              )}
-              {!page && selectedID ? (
-                <SessionTitle
-                  key={`title-${selectedID}`}
-                  sessionID={selectedID}
-                  title={info.data?.title || 'New chat'}
-                  disabled={!connected || !info.isSuccess}
-                />
-              ) : tasks ? (
-                <h1 className="toolbar-title truncate">Tasks</h1>
-              ) : !page ? (
-                <h1 className="toolbar-title truncate">{project ? 'New thread' : appName}</h1>
-              ) : null}
-              {connected && !live && !page && (
-                <span className="toolbar-status" role="status">
-                  Live updates paused
-                </span>
-              )}
-              {connected && selectedID && !page && (
-                <SessionActionsToggle
-                  key={`actions-${selectedID}`}
-                  sessionID={selectedID}
-                  title={info.data?.title || 'New chat'}
-                  className="toolbar-session-actions"
-                />
-              )}
-              {connected && selectedID && !page && (
-                <SessionPanelToggle
-                  key={selectedID}
-                  sessionID={selectedID}
-                  projectName={currentProject?.name}
-                  live={live}
-                  column={chatColumn}
-                  workspaceOpen={workbenchOpen}
-                  cardVisible={sessionCardVisible}
-                  onCardVisibilityChange={changeSessionCardVisibility}
-                  onOpen={(id) => {
-                    const panel = panels.find((panel) => panel.id === id);
-                    if (!panel) return;
-                    setWorkbenchLoaded(true);
-                    setWorkbenchPanel(panel);
-                    setWorkbenchOpen(true);
-                  }}
-                  onOpenCanvas={openCanvas}
-                />
-              )}
-              {connected && selectedID && !page && (
-                <Button
-                  ref={workbenchToggle}
-                  className="workspace-panel-toggle"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Toggle workspace panel"
-                  {...shortcutProps('workspace.toggle')}
-                  aria-expanded={workbenchOpen}
-                  aria-controls="workbench"
-                  onClick={toggleWorkbench}
-                >
-                  <HugeiconsIcon icon={PanelRightIcon} size={17} />
-                </Button>
-              )}
-            </header>
-            <main ref={main} id="main" className="main scrollbar-on-hover" tabIndex={-1}>
-              {settings ? (
-                <div className="settings-page" data-section={settings}>
-                  {settings !== 'projects' && settings !== 'usage' && <h1>{settingsTitle}</h1>}
-                  {settings === 'general' ? (
-                    <GeneralSettings
-                      live={live}
-                      project={currentProject}
-                      onCloseProject={() => project && closeProject(project.directory)}
-                    />
-                  ) : settings === 'shortcuts' ? (
-                    <ShortcutsSettings />
-                  ) : settings === 'usage' ? (
-                    <UsageLimitsPage connected={connected} />
-                  ) : settings === 'projects' ? (
-                    <ProjectsSettings
-                      connected={connected}
-                      live={live}
-                      opened={projects}
-                      onAdd={selectProject}
-                      onClose={closeProject}
-                      onOpen={(project) => {
-                        selectProject(project);
-                        navigate(null);
-                      }}
-                    />
+                  {sidebarOpen ? (
+                    <HugeiconsIcon icon={PanelLeftCloseIcon} size={16} />
                   ) : (
-                    <AppearanceSettings
-                      terminalPlacement={terminalPlacement}
-                      onTerminalPlacementChange={changeTerminalPlacement}
-                    />
+                    <HugeiconsIcon icon={PanelLeftIcon} size={16} />
                   )}
-                </div>
-              ) : tasks ? (
+                </Button>
+                {!page && project && (
+                  <span className="toolbar-project truncate" title={project.directory}>
+                    <HugeiconsIcon icon={Folder01Icon} size={14} />
+                    {currentProject?.name}
+                  </span>
+                )}
+                {!page && project && (
+                  <span className="toolbar-separator" aria-hidden="true">
+                    /
+                  </span>
+                )}
+                {!page && selectedID ? (
+                  <SessionTitle
+                    key={`title-${selectedID}`}
+                    sessionID={selectedID}
+                    title={info.data?.title || 'New chat'}
+                    disabled={!connected || !info.isSuccess}
+                  />
+                ) : tasks ? (
+                  <h1 className="toolbar-title truncate">Tasks</h1>
+                ) : app !== null ? (
+                  <h1 className="toolbar-title truncate">Apps</h1>
+                ) : !page ? (
+                  <h1 className="toolbar-title truncate">{project ? 'New thread' : appName}</h1>
+                ) : null}
+                {connected && !live && !page && (
+                  <span className="toolbar-status" role="status">
+                    Live updates paused
+                  </span>
+                )}
+                {connected && selectedID && !page && (
+                  <SessionActionsToggle
+                    key={`actions-${selectedID}`}
+                    sessionID={selectedID}
+                    title={info.data?.title || 'New chat'}
+                    className="toolbar-session-actions"
+                  />
+                )}
+                {connected && selectedID && !page && (
+                  <SessionPanelToggle
+                    key={selectedID}
+                    sessionID={selectedID}
+                    projectName={currentProject?.name}
+                    live={live}
+                    column={chatColumn}
+                    workspaceOpen={workbenchOpen}
+                    cardVisible={sessionCardVisible}
+                    onCardVisibilityChange={changeSessionCardVisibility}
+                    onOpen={(id) => {
+                      const panel = panels.find((panel) => panel.id === id);
+                      if (!panel) return;
+                      setWorkbenchLoaded(true);
+                      setWorkbenchPanel(panel);
+                      setWorkbenchOpen(true);
+                    }}
+                    onOpenCanvas={openCanvas}
+                  />
+                )}
+                {connected && selectedID && !page && (
+                  <Button
+                    ref={workbenchToggle}
+                    className="workspace-panel-toggle"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Toggle workspace panel"
+                    {...shortcutProps('workspace.toggle')}
+                    aria-expanded={workbenchOpen}
+                    aria-controls="workbench"
+                    onClick={toggleWorkbench}
+                  >
+                    <HugeiconsIcon icon={PanelRightIcon} size={17} />
+                  </Button>
+                )}
+              </header>
+              <main ref={main} id="main" className="main scrollbar-on-hover" tabIndex={-1}>
+                {settings ? (
+                  <div className="settings-page" data-section={settings}>
+                    {settings !== 'projects' && settings !== 'usage' && <h1>{settingsTitle}</h1>}
+                    {settings === 'general' ? (
+                      <GeneralSettings
+                        live={live}
+                        project={currentProject}
+                        onCloseProject={() => project && closeProject(project.directory)}
+                      />
+                    ) : settings === 'shortcuts' ? (
+                      <ShortcutsSettings />
+                    ) : settings === 'usage' ? (
+                      <UsageLimitsPage connected={connected} />
+                    ) : settings === 'projects' ? (
+                      <ProjectsSettings
+                        connected={connected}
+                        live={live}
+                        opened={projects}
+                        onAdd={selectProject}
+                        onClose={closeProject}
+                        onOpen={(project) => {
+                          selectProject(project);
+                          navigate(null);
+                        }}
+                      />
+                    ) : (
+                      <AppearanceSettings
+                        terminalPlacement={terminalPlacement}
+                        onTerminalPlacementChange={changeTerminalPlacement}
+                      />
+                    )}
+                  </div>
+                ) : tasks ? (
+                  <Suspense
+                    fallback={
+                      <p className="sidebar-note" role="status">
+                        Loading tasks…
+                      </p>
+                    }
+                  >
+                    <TaskBoard
+                      connected={connected}
+                      onOpenSession={(sessionID) => void openSessionByID(sessionID)}
+                    />
+                  </Suspense>
+                ) : app !== null ? (
+                  <Suspense
+                    fallback={
+                      <p className="sidebar-note" role="status">
+                        Loading apps…
+                      </p>
+                    }
+                  >
+                    <AppsPage
+                      connected={connected}
+                      selected={app || undefined}
+                      onSelect={openApps}
+                      onOpenSession={(sessionID) => void openSessionByID(sessionID)}
+                      onDeleted={() => openApps()}
+                    />
+                  </Suspense>
+                ) : selectedID && connected ? (
+                  <Suspense
+                    fallback={
+                      <p className="sidebar-note" role="status">
+                        Loading conversation…
+                      </p>
+                    }
+                  >
+                    <FileLinkContext.Provider value={openFileLink}>
+                      <SideChatQuoteContext.Provider value={askSideChat}>
+                        <CanvasOpenContext.Provider value={openCanvas}>
+                          <ChatView
+                            key={selectedID}
+                            sessionID={selectedID}
+                            focusRequest={
+                              composerFocus?.sessionID === selectedID
+                                ? composerFocus.token
+                                : undefined
+                            }
+                            onFocusHandled={() => setComposerFocus(undefined)}
+                            onOpenSession={setSelectedID}
+                            onOpenSubagent={(childID) => {
+                              setSubagentRequest({ sessionID: selectedID, childID });
+                              setWorkbenchLoaded(true);
+                              setWorkbenchPanel(subagentsPanel);
+                              setWorkbenchOpen(true);
+                            }}
+                            onOpenSideChat={(sideID) =>
+                              openSideChat({ sessionID: selectedID, kind: 'open', sideID })
+                            }
+                            live={live}
+                            projectName={currentProject?.name}
+                            project={currentProject}
+                            projects={projects}
+                            switching={switchProject.isPending}
+                            switchError={
+                              switchProject.variables?.sourceSessionID === selectedID
+                                ? switchProject.error?.message
+                                : undefined
+                            }
+                            onSwitchProject={(next, model) => {
+                              if (create.isPending || switchProject.isPending) return;
+                              switchProject.mutate({
+                                project: next,
+                                sourceSessionID: selectedID,
+                                model,
+                              });
+                            }}
+                          />
+                        </CanvasOpenContext.Provider>
+                      </SideChatQuoteContext.Provider>
+                    </FileLinkContext.Provider>
+                  </Suspense>
+                ) : (
+                  <WorkspaceView
+                    project={currentProject}
+                    projects={projects}
+                    onSelectProject={selectProject}
+                    onNewChat={newChat}
+                    creating={create.isPending}
+                    createError={create.error?.message}
+                  />
+                )}
+              </main>
+            </div>
+            {(workbenchLoaded || workbenchOpen) &&
+              connected &&
+              terminalDirectory &&
+              (selectedID || workbenchPanel.id === 'terminal') &&
+              !page && (
                 <Suspense
                   fallback={
-                    <p className="sidebar-note" role="status">
-                      Loading tasks…
-                    </p>
+                    <div className="workspace-loading" role="status">
+                      Loading workspace…
+                    </div>
                   }
                 >
-                  <TaskBoard
-                    connected={connected}
-                    onOpenSession={(sessionID) => void openSessionByID(sessionID)}
+                  <WorkbenchPanel
+                    key={selectedID ?? terminalDirectory}
+                    directory={terminalDirectory}
+                    sessionID={selectedID ?? ''}
+                    live={live}
+                    open={workbenchOpen}
+                    expanded={workbenchLayout.expanded}
+                    onExpandedChange={(expanded) =>
+                      workbench.getState().layout(workspaceKey, { expanded })
+                    }
+                    panel={workbenchPanel}
+                    onSelectPanel={(id) => {
+                      const next = panels.find((panel) => panel.id === id);
+                      if (next) setWorkbenchPanel(next);
+                    }}
+                    fileRequest={fileRequest?.sessionID === selectedID ? fileRequest : undefined}
+                    subagentRequest={
+                      subagentRequest?.sessionID === selectedID ? subagentRequest : undefined
+                    }
+                    sideChatRequest={
+                      sideChatRequest?.sessionID === selectedID ? sideChatRequest : undefined
+                    }
+                    onSideChatRequestHandled={(request) =>
+                      setSideChatRequest((current) => (current === request ? undefined : current))
+                    }
+                    onClose={() => {
+                      if (workbenchPanel.id === 'terminal') {
+                        closeTerminal();
+                        return;
+                      }
+                      setWorkbenchOpen(false);
+                      requestAnimationFrame(() => workbenchToggle.current?.focus());
+                    }}
                   />
                 </Suspense>
-              ) : selectedID && connected ? (
-                <Suspense
-                  fallback={
-                    <p className="sidebar-note" role="status">
-                      Loading conversation…
-                    </p>
-                  }
-                >
-                  <FileLinkContext.Provider value={openFileLink}>
-                    <SideChatQuoteContext.Provider value={askSideChat}>
-                      <CanvasOpenContext.Provider value={openCanvas}>
-                        <ChatView
-                          key={selectedID}
-                          sessionID={selectedID}
-                          focusRequest={
-                            composerFocus?.sessionID === selectedID
-                              ? composerFocus.token
-                              : undefined
-                          }
-                          onFocusHandled={() => setComposerFocus(undefined)}
-                          onOpenSession={setSelectedID}
-                          onOpenSubagent={(childID) => {
-                            setSubagentRequest({ sessionID: selectedID, childID });
-                            setWorkbenchLoaded(true);
-                            setWorkbenchPanel(subagentsPanel);
-                            setWorkbenchOpen(true);
-                          }}
-                          onOpenSideChat={(sideID) =>
-                            openSideChat({ sessionID: selectedID, kind: 'open', sideID })
-                          }
-                          live={live}
-                          projectName={currentProject?.name}
-                          project={currentProject}
-                          projects={projects}
-                          switching={switchProject.isPending}
-                          switchError={
-                            switchProject.variables?.sourceSessionID === selectedID
-                              ? switchProject.error?.message
-                              : undefined
-                          }
-                          onSwitchProject={(next, model) => {
-                            if (create.isPending || switchProject.isPending) return;
-                            switchProject.mutate({
-                              project: next,
-                              sourceSessionID: selectedID,
-                              model,
-                            });
-                          }}
-                        />
-                      </CanvasOpenContext.Provider>
-                    </SideChatQuoteContext.Provider>
-                  </FileLinkContext.Provider>
-                </Suspense>
-              ) : (
-                <WorkspaceView
-                  project={currentProject}
-                  projects={projects}
-                  onSelectProject={selectProject}
-                  onNewChat={newChat}
-                  creating={create.isPending}
-                  createError={create.error?.message}
-                />
               )}
-            </main>
+            {connected && selectedID && info.data?.location.directory && !page && (
+              <WorkbenchRail
+                directory={info.data.location.directory}
+                sessionID={selectedID}
+                panels={panels}
+                active={terminalVisible ? 'terminal' : workbenchOpen ? workbenchPanel.id : null}
+                onSelect={(panel) => {
+                  if (panel.id === 'terminal') {
+                    toggleTerminal();
+                    return;
+                  }
+                  setWorkbenchLoaded(true);
+                  setWorkbenchPanel(panel);
+                  setWorkbenchOpen(panel.id !== workbenchPanel.id || !workbenchOpen);
+                }}
+              />
+            )}
           </div>
-          {(workbenchLoaded || workbenchOpen) &&
+          {terminalPlacement === 'bottom' &&
+            terminalLoaded &&
             connected &&
             terminalDirectory &&
-            (selectedID || workbenchPanel.id === 'terminal') &&
             !page && (
-              <Suspense
-                fallback={
-                  <div className="workspace-loading" role="status">
-                    Loading workspace…
-                  </div>
-                }
-              >
-                <WorkbenchPanel
-                  key={selectedID ?? terminalDirectory}
+              <Suspense fallback={null}>
+                <TerminalDrawer
+                  key={terminalDirectory}
                   directory={terminalDirectory}
-                  sessionID={selectedID ?? ''}
                   live={live}
-                  open={workbenchOpen}
-                  expanded={workbenchLayout.expanded}
-                  onExpandedChange={(expanded) =>
-                    workbench.getState().layout(workspaceKey, { expanded })
-                  }
-                  panel={workbenchPanel}
-                  onSelectPanel={(id) => {
-                    const next = panels.find((panel) => panel.id === id);
-                    if (next) setWorkbenchPanel(next);
-                  }}
-                  fileRequest={fileRequest?.sessionID === selectedID ? fileRequest : undefined}
-                  subagentRequest={
-                    subagentRequest?.sessionID === selectedID ? subagentRequest : undefined
-                  }
-                  sideChatRequest={
-                    sideChatRequest?.sessionID === selectedID ? sideChatRequest : undefined
-                  }
-                  onSideChatRequestHandled={(request) =>
-                    setSideChatRequest((current) => (current === request ? undefined : current))
-                  }
-                  onClose={() => {
-                    if (workbenchPanel.id === 'terminal') {
-                      closeTerminal();
-                      return;
-                    }
-                    setWorkbenchOpen(false);
-                    requestAnimationFrame(() => workbenchToggle.current?.focus());
-                  }}
+                  open={terminalOpen}
+                  onClose={closeTerminal}
                 />
               </Suspense>
             )}
-          {connected && selectedID && info.data?.location.directory && !page && (
-            <WorkbenchRail
-              directory={info.data.location.directory}
-              sessionID={selectedID}
-              panels={panels}
-              active={terminalVisible ? 'terminal' : workbenchOpen ? workbenchPanel.id : null}
-              onSelect={(panel) => {
-                if (panel.id === 'terminal') {
-                  toggleTerminal();
-                  return;
-                }
-                setWorkbenchLoaded(true);
-                setWorkbenchPanel(panel);
-                setWorkbenchOpen(panel.id !== workbenchPanel.id || !workbenchOpen);
-              }}
-            />
-          )}
         </div>
-        {terminalPlacement === 'bottom' &&
-          terminalLoaded &&
-          connected &&
-          terminalDirectory &&
-          !page && (
-            <Suspense fallback={null}>
-              <TerminalDrawer
-                key={terminalDirectory}
-                directory={terminalDirectory}
-                live={live}
-                open={terminalOpen}
-                onClose={closeTerminal}
-              />
-            </Suspense>
-          )}
-      </div>
+      </CanvasSessionContext.Provider>
       <div className="sidebar-scrim" aria-hidden="true" onClick={() => setSidebarOpen(false)} />
     </div>
   );

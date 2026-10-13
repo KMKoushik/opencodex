@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CANVAS_CHANNEL,
@@ -9,7 +9,8 @@ import {
 import { api } from '../../lib/api';
 import { useTheme } from '../theme/use-theme';
 import { readCanvasTheme } from './canvas-theme';
-import { canvasDataKey, canvasSourceKey } from './canvas-context';
+import { appsKey, CanvasSessionContext, canvasDataKey, canvasSourceKey } from './canvas-context';
+import type { AppInfo } from '@opencodex/contracts/canvas';
 
 type DataSnapshot = { values: CanvasData; errors: string[] };
 type Outgoing = HostMessage extends infer M
@@ -47,6 +48,20 @@ export function CanvasFrame({
     queryKey: canvasDataKey(id),
     queryFn: ({ signal }) => api.canvasData(id, signal),
   });
+  const running = useQuery({
+    queryKey: appsKey,
+    queryFn: ({ signal }) => api.apps(signal),
+    enabled: Boolean(source.data?.server),
+    select: useCallback(
+      (apps: AppInfo[]) => apps.find((app) => app.id === id)?.running.join('\0') ?? '',
+      [id],
+    ),
+  }).data;
+  const openSession = useContext(CanvasSessionContext);
+  const openSessionRef = useRef(openSession);
+  useEffect(() => {
+    openSessionRef.current = openSession;
+  }, [openSession]);
   const { preference, systemDark } = useTheme();
   const frame = useRef<HTMLIFrameElement>(null);
   const [frameKey, setFrameKey] = useState(0);
@@ -83,6 +98,22 @@ export function CanvasFrame({
         setHeight(next);
       } else if (message.type === 'set') {
         writer.set(message.key, message.value);
+      } else if (message.type === 'call') {
+        const reply = (result: { value?: unknown; error?: string }) =>
+          frame.current?.contentWindow?.postMessage(
+            { channel: CANVAS_CHANNEL, type: 'result', call: message.call, ...result },
+            '*',
+          );
+        api.callCanvasFunction(id, message.name, message.args).then(
+          (result) => reply({ value: result.value }),
+          (error: unknown) =>
+            reply({ error: error instanceof Error ? error.message : String(error) }),
+        );
+      } else if (message.type === 'open') {
+        const target = message.target;
+        if (typeof target === 'string') {
+          if (/^https?:\/\//i.test(target)) window.open(target, '_blank', 'noopener,noreferrer');
+        } else if (typeof target?.session === 'string') openSessionRef.current?.(target.session);
       }
     };
     window.addEventListener('message', receive);
@@ -145,6 +176,11 @@ export function CanvasFrame({
     shown.current.theme = key;
     post({ type: 'theme', theme });
   }, [session, preference, systemDark, post]);
+
+  useEffect(() => {
+    if (!session || shown.current.version === undefined || running === undefined) return;
+    post({ type: 'running', names: running ? running.split('\0') : [] });
+  }, [session, running, post, source.data, data.data]);
 
   const failure = source.error ?? data.error;
   const problems = [...(source.data?.errors ?? []), ...(data.data?.errors ?? [])];

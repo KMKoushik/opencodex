@@ -4,7 +4,7 @@ import type { OpenCodeBackend } from './opencode';
 import { installPlugin, pluginStatus, removePlugin, type PluginFile } from './plugin-files';
 import { CANVAS_PLUGIN } from './canvas-plugin.generated';
 
-const PLUGIN: PluginFile = {
+export const CANVAS_PLUGIN_FILE: PluginFile = {
   id: 'opencodex.canvas',
   file: 'opencodex-canvas.js',
   header: '// OpenCodex canvas plugin',
@@ -19,18 +19,18 @@ export function canvasPluginRoutes(backend: OpenCodeBackend) {
     return c.json(
       await pluginStatus(
         backend,
-        PLUGIN,
+        CANVAS_PLUGIN_FILE,
         directory.success ? directory.data.directory : undefined,
         c.req.raw.signal,
       ),
     );
   });
   app.put('/', async (c) => {
-    await installPlugin(backend, PLUGIN);
+    await installPlugin(backend, CANVAS_PLUGIN_FILE);
     return c.json({ ok: true });
   });
   app.delete('/', async (c) => {
-    await removePlugin(backend, PLUGIN);
+    await removePlugin(backend, CANVAS_PLUGIN_FILE);
     return c.json({ ok: true });
   });
   return app;

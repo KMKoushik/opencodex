@@ -129,7 +129,7 @@ function sdkExports(types: Record<string, string>) {
 function hintFor(code: number, text: string, types: Record<string, string>) {
   if (code === 2305 || code === 2724) return `@opencodex/canvas exports: ${sdkExports(types)}.`;
   if (code === 2307 || code === 2792)
-    return 'Canvases can import react, @opencodex/canvas, and their own files (./name). Inline anything else.';
+    return 'Views can import react, @opencodex/canvas, and their own files (./name); server.ts can import @opencodex/canvas/server and its own files, and runs other tools with sh(). Inline anything else.';
   if (code === 2322 && text.includes('IntrinsicAttributes'))
     return 'A prop name or type is wrong. The component props are in the .sdk folder next to this canvas.';
   if (code === 7006 || code === 7031)
@@ -203,7 +203,7 @@ export function testRender(
 const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 /** Maps a position in transpiled output back to its source line using the source map. */
-function originalLine(map: string, generatedLine: number, generatedColumn = 0) {
+export function originalLine(map: string, generatedLine: number, generatedColumn = 0) {
   let mappings: string;
   try {
     mappings = (JSON.parse(map) as { mappings: string }).mappings;

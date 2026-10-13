@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useId, useMemo, useState, type ReactNode } from 'react';
 import {
   colorOf,
   display,
@@ -148,7 +148,7 @@ function barPath(
   height: number,
   end: 'top' | 'bottom' | 'left' | 'right' | undefined,
 ) {
-  const r = end ? Math.min(3, width / 2, height / 2) : 0;
+  const r = end ? Math.min(4, width / 2, height / 2) : 0;
   const right = x + width;
   const bottom = y + height;
   if (!r) return `M${x},${y}H${right}V${bottom}H${x}Z`;
@@ -163,6 +163,28 @@ function barPath(
     case 'left':
       return `M${right},${y}V${bottom}H${x + r}${arc(x, bottom - r)}V${y + r}${arc(x + r, y)}Z`;
   }
+}
+
+/** Space between stacked segments, taken from each segment's end nearest the baseline. */
+const STACK_GAP = 1.5;
+/** Pixel span of a segment from `a` (its baseline end) to `b`, leaving the stack gap. */
+function span(a: number, b: number, gap: boolean) {
+  if (!gap || Math.abs(b - a) <= STACK_GAP * 2) return [Math.min(a, b), Math.abs(b - a)] as const;
+  const inset = b > a ? a + STACK_GAP : a - STACK_GAP;
+  return [Math.min(inset, b), Math.abs(b - inset)] as const;
+}
+
+/** A soft highlight drawn over bars, so they read as lit from above like the app's controls. */
+function Sheen({ id }: { id: string }) {
+  return (
+    <defs>
+      <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stopColor="#fff" stopOpacity={0.22} />
+        <stop offset="0.5" stopColor="#fff" stopOpacity={0.04} />
+        <stop offset="1" stopColor="#000" stopOpacity={0.06} />
+      </linearGradient>
+    </defs>
+  );
 }
 
 /** For each row, the stacked segment at the outer end of the positive and negative stacks. */
@@ -203,6 +225,7 @@ export function BarChart<R extends Row>({
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number>();
   const resolved = useMemo(() => resolveSeries(series as Series[], data, x), [series, data, x]);
+  const sheen = `cv-sheen${useId().replace(/:/g, '')}`;
   const totals = data.map((row) =>
     stacked
       ? resolved.reduce(
@@ -257,6 +280,7 @@ export function BarChart<R extends Row>({
       >
         <div ref={ref} className="cv-chart-body" onMouseLeave={() => setHover(undefined)}>
           <svg width={width} height={chartHeight} role="img">
+            <Sheen id={sheen} />
             {axis.map((tick) => (
               <g key={tick}>
                 <line
@@ -308,24 +332,22 @@ export function BarChart<R extends Row>({
                     const b = scale(base + value);
                     const h = stacked ? inner : inner / resolved.length;
                     const y = stacked ? top : top + s * h;
+                    const [start, length] = span(a, b, Boolean(stacked) && base !== 0);
+                    const d = barPath(
+                      start,
+                      y + 1,
+                      Math.max(1, length),
+                      Math.max(1, h - 2),
+                      !stacked || s === (value < 0 ? outer.negative : outer.positive)
+                        ? value < 0
+                          ? 'left'
+                          : 'right'
+                        : undefined,
+                    );
                     return (
-                      <g key={item.key}>
-                        <path
-                          className="cv-bar"
-                          d={barPath(
-                            Math.min(a, b),
-                            y + 1,
-                            Math.max(1, Math.abs(b - a)),
-                            Math.max(1, h - 2),
-                            !stacked || s === (value < 0 ? outer.negative : outer.positive)
-                              ? value < 0
-                                ? 'left'
-                                : 'right'
-                              : undefined,
-                          )}
-                          fill={item.color}
-                          opacity={hover === undefined || hover === index ? 1 : 0.55}
-                        />
+                      <g key={item.key} opacity={hover === undefined || hover === index ? 1 : 0.55}>
+                        <path className="cv-bar" d={d} fill={item.color} />
+                        <path d={d} fill={`url(#${sheen})`} pointerEvents="none" />
                         {showValues && !stacked && (
                           <text
                             className="cv-value-label"
@@ -374,6 +396,7 @@ export function BarChart<R extends Row>({
     >
       <div ref={ref} className="cv-chart-body" onMouseLeave={() => setHover(undefined)}>
         <svg width={width} height={chartHeight} role="img">
+          <Sheen id={sheen} />
           {ticks.map((tick) => (
             <g key={tick}>
               <line
@@ -420,23 +443,22 @@ export function BarChart<R extends Row>({
                   const b = scale(base + value);
                   const w = stacked ? inner : inner / resolved.length;
                   const bx = stacked ? start : start + s * w;
+                  const [y, length] = span(a, b, Boolean(stacked) && base !== 0);
+                  const d = barPath(
+                    bx + 1,
+                    y,
+                    Math.max(1, w - 2),
+                    Math.max(1, length),
+                    !stacked || s === (value < 0 ? outer.negative : outer.positive)
+                      ? value < 0
+                        ? 'bottom'
+                        : 'top'
+                      : undefined,
+                  );
                   return (
                     <g key={item.key}>
-                      <path
-                        className="cv-bar"
-                        d={barPath(
-                          bx + 1,
-                          Math.min(a, b),
-                          Math.max(1, w - 2),
-                          Math.max(1, Math.abs(b - a)),
-                          !stacked || s === (value < 0 ? outer.negative : outer.positive)
-                            ? value < 0
-                              ? 'bottom'
-                              : 'top'
-                            : undefined,
-                        )}
-                        fill={item.color}
-                      />
+                      <path className="cv-bar" d={d} fill={item.color} />
+                      <path d={d} fill={`url(#${sheen})`} pointerEvents="none" />
                       {showValues && !stacked && w > 18 && (
                         <text
                           className="cv-value-label"
@@ -510,6 +532,7 @@ export function LineChart<R extends Row>({
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number>();
   const resolved = useMemo(() => resolveSeries(series as Series[], data, x), [series, data, x]);
+  const fade = `cv-fade${useId().replace(/:/g, '')}`;
   const values = data.flatMap((row) =>
     resolved.map((item) => row[item.key]).filter((v): v is number => typeof v === 'number'),
   );
@@ -584,7 +607,7 @@ export function LineChart<R extends Row>({
               </text>
             ) : null,
           )}
-          {resolved.map((item) => {
+          {resolved.map((item, s) => {
             const points = data
               .map((row, index) => [px[index]!, row[item.key]] as const)
               .filter((point): point is readonly [number, number] => typeof point[1] === 'number')
@@ -593,11 +616,18 @@ export function LineChart<R extends Row>({
             return (
               <g key={item.key}>
                 {area && points.length > 1 && (
-                  <path
-                    d={`${line} L${points[points.length - 1]![0]},${y(Math.max(domain[0], 0))} L${points[0]![0]},${y(Math.max(domain[0], 0))} Z`}
-                    fill={item.color}
-                    opacity={0.16}
-                  />
+                  <>
+                    <defs>
+                      <linearGradient id={`${fade}-${s}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0" stopColor={item.color} stopOpacity={0.32} />
+                        <stop offset="1" stopColor={item.color} stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <path
+                      d={`${line} L${points[points.length - 1]![0]},${y(Math.max(domain[0], 0))} L${points[0]![0]},${y(Math.max(domain[0], 0))} Z`}
+                      fill={`url(#${fade}-${s})`}
+                    />
+                  </>
                 )}
                 <path
                   d={line}

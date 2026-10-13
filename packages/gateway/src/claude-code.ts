@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, rename, rm, rmdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -7,6 +7,7 @@ import { projectInputSchema, type ClaudeCodeStatus } from '@opencodex/contracts'
 import type { OpenCodeBackend } from './opencode';
 import { GatewayError } from './errors';
 import { CLAUDE_CODE_PLUGIN } from './claude-code-plugin.generated';
+import { unedited } from './plugin-files';
 
 const PLUGIN_ID = 'opencodex.claude-code';
 const UPSTREAM_ID = '@khalilgharbaoui/opencode-claude-code-plugin';
@@ -14,9 +15,7 @@ const UPSTREAM_ID = '@khalilgharbaoui/opencode-claude-code-plugin';
 export function claudeCodeRoutes(backend: OpenCodeBackend) {
   const app = new Hono();
   let editing = Promise.resolve();
-  const directory = () =>
-    process.env.OPENCODE_CONFIG_DIR ||
-    join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'opencode');
+  const directory = opencodeConfigDirectory;
 
   app.get('/', async (c) => {
     if (!(await backend.localService()))
@@ -87,6 +86,10 @@ export function claudeCodeRoutes(backend: OpenCodeBackend) {
   return app;
 }
 
+const opencodeConfigDirectory = () =>
+  process.env.OPENCODE_CONFIG_DIR ||
+  join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'opencode');
+
 export function claudeCodePluginPath(configDirectory: string) {
   return join(configDirectory, 'plugins', 'opencodex-claude-code', 'index.js');
 }
@@ -102,13 +105,14 @@ async function readInstalled(path: string) {
 }
 
 // Recognize earlier generated versions without replacing somebody's manual edits.
-function managed(source: string) {
-  const match = /^\/\/ OpenCodex Claude Code plugin ([a-f0-9]{12})\.[^\n]*\n/.exec(source);
-  return Boolean(
-    match &&
-    createHash('sha256').update(source.slice(match[0].length)).digest('hex').slice(0, 12) ===
-      match[1],
-  );
+const managed = (source: string) =>
+  source.startsWith('// OpenCodex Claude Code plugin ') && unedited(source);
+
+/** Brings an installed, unedited bridge from an older OpenCodex up to this version. */
+export async function refreshClaudeCodePlugin(configDirectory = opencodeConfigDirectory()) {
+  const before = await readInstalled(claudeCodePluginPath(configDirectory)).catch(() => undefined);
+  if (before === undefined || before === CLAUDE_CODE_PLUGIN.source || !managed(before)) return;
+  await changeClaudeCodePlugin(configDirectory, true);
 }
 
 /** OpenCode watches and loads plugin folders; the gateway only installs the artifact. */

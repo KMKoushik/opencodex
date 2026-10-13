@@ -6,7 +6,7 @@
  * --hover, --code-bg, --font-sans, --font-mono, and the palette --cv-blue, --cv-green,
  * --cv-orange, --cv-purple, --cv-pink, --cv-yellow, --cv-red, --cv-gray.
  */
-export { useData, useColorScheme } from './store';
+export { useData, useColorScheme, useFn, useOpen, type Fn } from './store';
 export {
   Stack,
   Row,

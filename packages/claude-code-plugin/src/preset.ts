@@ -22,6 +22,7 @@ const tools = [
   'canvas_create',
   'canvas_check',
   'canvas_list',
+  'canvas_run',
 ];
 
 export const CLAUDE_CODE_PRESET = {
@@ -50,6 +51,17 @@ export const CLAUDE_CODE_PRESET = {
       'NotebookEdit',
       'REPL',
       'JavaScript',
+      // Schedulers, cloud triggers, worktrees, and orchestration act outside OpenCode's
+      // sessions and permissions; OpenCodex apps and OpenCode's own tools cover them.
+      'CronCreate',
+      'CronDelete',
+      'CronList',
+      'RemoteTrigger',
+      'ScheduleWakeup',
+      'Monitor',
+      'Workflow',
+      'EnterWorktree',
+      'ExitWorktree',
     ],
     // Headless Claude cannot display its own permission prompts. The disabled
     // built-ins above are replaced by OpenCode calls, which still ask/deny normally.

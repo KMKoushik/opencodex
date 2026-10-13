@@ -1,7 +1,12 @@
 import { Worker, type MessagePort } from 'node:worker_threads';
 import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
-import { sessionSummary, sideChatParent, type SessionPage } from '@opencodex/contracts';
+import {
+  isAppSession,
+  sessionSummary,
+  sideChatParent,
+  type SessionPage,
+} from '@opencodex/contracts';
 import type { OpenCodeBackend } from './opencode';
 import { opencodeDatabases } from './opencode-databases';
 import { GatewayError } from './errors';
@@ -70,7 +75,7 @@ export async function searchSessions(
         const info = await backend.request(signal, (client, options) =>
           client.session.get({ sessionID: match.id }, options),
         );
-        if (info.parentID || sideChatParent(info)) return [];
+        if (info.parentID || sideChatParent(info) || isAppSession(info)) return [];
         return [
           {
             ...sessionSummary(info),

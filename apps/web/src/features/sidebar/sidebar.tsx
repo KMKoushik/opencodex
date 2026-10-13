@@ -6,6 +6,7 @@ import {
   CheckListIcon,
   DashboardSpeed01Icon,
   FolderOpenIcon,
+  GridViewIcon,
   PanelLeftCloseIcon,
   PencilEdit02Icon,
   Search01Icon,
@@ -20,6 +21,7 @@ import { shortcutProps } from '../shortcuts/commands';
 import type { SettingsSection } from '../settings/sections';
 import './sidebar.css';
 import { UpdateControl } from '../updates/update-control';
+import { SidebarApps } from '../apps/sidebar-apps';
 
 const ThreadSearch = lazy(() =>
   import('./thread-search').then((module) => ({ default: module.ThreadSearch })),
@@ -35,6 +37,7 @@ export function Sidebar({
   children,
   settings,
   tasks,
+  app,
   connected,
   live,
   canCreate,
@@ -47,12 +50,15 @@ export function Sidebar({
   onNewChat,
   onOpenProject,
   onTasks,
+  onApps,
   onSettings,
   onSelectSession,
 }: {
   children: ReactNode;
   settings: SettingsSection | null;
   tasks: boolean;
+  /** The open app: an id, '' for the Apps page's default, null when elsewhere. */
+  app: string | null;
   connected: boolean;
   live: boolean;
   canCreate: boolean;
@@ -65,6 +71,7 @@ export function Sidebar({
   onNewChat: () => void;
   onOpenProject: () => void;
   onTasks: () => void;
+  onApps: (id?: string) => void;
   onSettings: (section: SettingsSection) => void;
   onSelectSession: (session: Session) => void;
 }) {
@@ -208,6 +215,15 @@ export function Sidebar({
               <HugeiconsIcon icon={CheckListIcon} size={16} />
               <span>Tasks</span>
             </button>
+            <button
+              className="nav-row"
+              aria-current={app === '' ? 'page' : undefined}
+              onClick={() => onApps()}
+            >
+              <HugeiconsIcon icon={GridViewIcon} size={16} />
+              <span>Apps</span>
+            </button>
+            <SidebarApps connected={connected} selected={app} onSelect={onApps} />
           </div>
         )}
         {children}

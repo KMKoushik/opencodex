@@ -8,7 +8,7 @@ import { installPlugin, pluginStatus, type PluginFile } from './plugin-files';
 import { TASKS_PLUGIN } from './tasks-plugin.generated';
 
 const RPC_ID = 'opencodex.tasks';
-const PLUGIN: PluginFile = {
+export const TASKS_PLUGIN_FILE: PluginFile = {
   id: RPC_ID,
   file: 'opencodex-tasks.js',
   header: '// OpenCodex tasks plugin',
@@ -29,10 +29,10 @@ export function taskRoutes(backend: OpenCodeBackend) {
     });
 
   app.get('/plugin', async (c) =>
-    c.json(await pluginStatus(backend, PLUGIN, undefined, c.req.raw.signal)),
+    c.json(await pluginStatus(backend, TASKS_PLUGIN_FILE, undefined, c.req.raw.signal)),
   );
   app.put('/plugin', async (c) => {
-    await installPlugin(backend, PLUGIN);
+    await installPlugin(backend, TASKS_PLUGIN_FILE);
     return c.json({ ok: true });
   });
   app.get('/', async (c) =>

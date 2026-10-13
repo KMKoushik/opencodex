@@ -43,7 +43,14 @@ import {
   type TaskUpdate,
   type TasksPluginStatus,
 } from '@opencodex/contracts';
-import type { CanvasData, CanvasInfo, CanvasSource } from '@opencodex/contracts/canvas';
+import type {
+  AppInfo,
+  AppRun,
+  CanvasData,
+  CanvasFiles,
+  CanvasInfo,
+  CanvasSource,
+} from '@opencodex/contracts/canvas';
 
 async function nativeRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, {
@@ -253,6 +260,17 @@ export const api = {
     nativeRequest<{ values: CanvasData; errors: string[] }>(`${canvasPath(id)}/data`, { signal }),
   writeCanvasValue,
   deleteCanvas: (id: string) => nativeRequest<{ ok: true }>(canvasPath(id), { method: 'DELETE' }),
+  apps: (signal: AbortSignal) => nativeRequest<AppInfo[]>('/apps', { signal }),
+  appRuns: (id: string, signal: AbortSignal) =>
+    nativeRequest<AppRun[]>(`/apps/${encodeURIComponent(id)}/runs`, { signal }),
+  canvasFiles: (id: string, signal: AbortSignal) =>
+    nativeRequest<CanvasFiles>(`${canvasPath(id)}/files`, { signal }),
+  /** Runs a server.ts function; agent sessions inside it can take a long time. */
+  callCanvasFunction: (id: string, name: string, args: unknown[]) =>
+    nativeRequest<{ value: unknown }>(`${canvasPath(id)}/functions/${encodeURIComponent(name)}`, {
+      ...post({ args }),
+      signal: new AbortController().signal,
+    }),
   tasksPlugin: (signal: AbortSignal) =>
     nativeRequest<TasksPluginStatus>('/tasks/plugin', { signal }),
   installTasksPlugin: () => nativeRequest<{ ok: true }>('/tasks/plugin', { method: 'PUT' }),

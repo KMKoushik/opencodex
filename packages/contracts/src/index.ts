@@ -227,6 +227,13 @@ export function sideChatParent(session: {
       : undefined
     : undefined;
 }
+/** On a session a canvas app's `oc.run` started: `{ canvas, run, thread? }`. */
+export const APP_SESSION_KEY = 'opencodexApp';
+/** App sessions belong to their app's run log, not the thread list. */
+export function isAppSession(session: { metadata?: Record<string, unknown> }) {
+  const marker = session.metadata?.[APP_SESSION_KEY];
+  return Boolean(marker && typeof marker === 'object');
+}
 export function sideChatIDs(session: { metadata?: Record<string, unknown> }): string[] {
   const ids = session.metadata?.[SIDE_CHATS_KEY];
   return Array.isArray(ids)

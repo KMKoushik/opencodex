@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -47,6 +47,10 @@ export async function pluginStatus(
 
 export async function installPlugin(backend: OpenCodeBackend, plugin: PluginFile) {
   if (!(await backend.localService())) throw unavailable(plugin);
+  await writePlugin(plugin);
+}
+
+async function writePlugin(plugin: PluginFile) {
   const path = pluginPath(plugin);
   const installed = await readInstalled(path);
   if (installed !== undefined && !installed.startsWith(plugin.header)) throw foreign(path);
@@ -67,6 +71,28 @@ export async function removePlugin(backend: OpenCodeBackend, plugin: PluginFile)
   const installed = await readInstalled(path);
   if (installed !== undefined && !installed.startsWith(plugin.header)) throw foreign(path);
   await rm(path, { force: true });
+}
+
+/**
+ * Replaces an installed copy from an older OpenCodex with this one, so its instructions
+ * and the gateway it talks to never drift apart. Leaves missing, foreign, and edited files.
+ */
+export async function refreshPlugin(plugin: PluginFile) {
+  const installed = await readInstalled(pluginPath(plugin));
+  if (installed === undefined || installed === plugin.source) return false;
+  if (!installed.startsWith(plugin.header) || !unedited(installed)) return false;
+  await writePlugin(plugin);
+  return true;
+}
+
+/** Generated files start with `// … <hash of the rest>.`; an edit breaks the match. */
+export function unedited(source: string) {
+  const match = /^\/\/ OpenCodex [^\n]* ([a-f0-9]{12})\.[^\n]*\n/.exec(source);
+  return Boolean(
+    match &&
+    createHash('sha256').update(source.slice(match[0].length)).digest('hex').slice(0, 12) ===
+      match[1],
+  );
 }
 
 /** OpenCode discovers global plugins in its config directory's `plugins` folder. */
