@@ -60,12 +60,17 @@
 .canvas-tabs .wb-document-tab > button:hover {
   background: transparent;
 }
-.canvas-add {
+.canvas-add,
+.canvas-comment {
   align-self: center;
   flex: none;
   margin-inline: 6px;
 }
-.canvas-add[aria-pressed='true'] {
+.canvas-comment {
+  margin-inline-end: 0;
+}
+.canvas-add[aria-pressed='true'],
+.canvas-comment[aria-pressed='true'] {
   background: var(--glaze);
   box-shadow: var(--glaze-shadow);
   color: var(--text);

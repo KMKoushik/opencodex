@@ -23,6 +23,8 @@ export interface DesktopBridge {
     theme: BrowserAnnotationTheme,
   ): Promise<BrowserAnnotation | null>;
   cancelBrowserAnnotation(webContentsId: number): Promise<void>;
+  /** PNG data URL of an area of this app window, in CSS pixels; undefined if capture fails. */
+  captureWindowRegion(rect: AnnotationRect): Promise<string | undefined>;
   platform: string;
 }
 
@@ -39,6 +41,12 @@ export type BrowserAnnotationTheme = {
   muted: string;
   border: string;
   font: string;
+};
+export type AnnotationRect = { x: number; y: number; width: number; height: number };
+/** What the comment overlay resolves with: the annotation, and the marked area to capture. */
+export type AnnotationOverlayResult = {
+  annotation: Omit<BrowserAnnotation, 'screenshot'>;
+  crop: AnnotationRect | null;
 };
 /** A page element the user picked. Page-provided text; bounded in size by the overlay. */
 export type BrowserAnnotationElement = {
@@ -154,4 +162,5 @@ export const desktopChannels = {
   loadBrowserFile: 'desktop:load-browser-file',
   annotateBrowserPage: 'desktop:annotate-browser-page',
   cancelBrowserAnnotation: 'desktop:cancel-browser-annotation',
+  captureWindowRegion: 'desktop:capture-window-region',
 } as const;

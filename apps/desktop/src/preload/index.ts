@@ -39,6 +39,7 @@ const desktop: DesktopBridge = {
     ipcRenderer.invoke(desktopChannels.loadBrowserFile, { webContentsId, url }),
   cancelBrowserAnnotation: (webContentsId) =>
     ipcRenderer.invoke(desktopChannels.cancelBrowserAnnotation, { webContentsId }),
+  captureWindowRegion: (rect) => ipcRenderer.invoke(desktopChannels.captureWindowRegion, rect),
 };
 
 contextBridge.exposeInMainWorld('desktop', desktop);

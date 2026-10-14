@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { AnnotationOverlayResult, BrowserAnnotationTheme } from './desktop';
 import { CANVAS_GLYPH_GROUPS } from './canvas-glyphs';
 
 export { CANVAS_GLYPH_GROUPS };
@@ -158,6 +159,10 @@ export type HostMessage = { channel: typeof CANVAS_CHANNEL } & (
   | { type: 'data'; key: string; value: unknown }
   | { type: 'result'; call: number; value?: unknown; error?: string }
   | { type: 'running'; names: string[] }
+  /** Shows the comment overlay; the frame answers with `annotation`. */
+  | { type: 'annotate'; theme: BrowserAnnotationTheme }
+  /** `cancel` drops an open overlay; `close` removes the marks left for the screenshot. */
+  | { type: 'annotate-end'; action: 'cancel' | 'close' }
 );
 export type FrameMessage = { channel: typeof CANVAS_CHANNEL } & (
   | { type: 'ready' }
@@ -165,4 +170,6 @@ export type FrameMessage = { channel: typeof CANVAS_CHANNEL } & (
   | { type: 'set'; key: string; value: unknown }
   | { type: 'call'; call: number; name: string; args: unknown[] }
   | { type: 'open'; target: string | { session: string } }
+  /** The overlay's result; null when cancelled. Marks stay drawn until `annotate-end`. */
+  | { type: 'annotation'; result: AnnotationOverlayResult | null }
 );

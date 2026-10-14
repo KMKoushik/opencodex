@@ -30,6 +30,7 @@
       },
       "devDependencies": {
         "@electron/osx-sign": "^2.3.1",
+        "@opencodex/canvas": "workspace:*",
         "@opencodex/contracts": "workspace:*",
         "@opencodex/gateway": "workspace:*",
         "@tailwindcss/vite": "^4.1.0",

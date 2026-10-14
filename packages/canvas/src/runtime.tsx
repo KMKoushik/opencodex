@@ -9,6 +9,7 @@ import { Component, type ComponentType, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { CanvasTheme, FrameMessage, HostMessage } from '@opencodex/contracts/canvas';
 import * as SDK from './index';
+import { annotationOverlay } from './annotation-overlay';
 import { loadModules } from './loader';
 import { createStore, StoreContext } from './store';
 import css from './styles.css';
@@ -43,6 +44,11 @@ const host = {
     post({ type: 'open', target });
   },
 };
+
+/** The open comment overlay, which registers itself on the frame's global scope. */
+const annotationControl = () =>
+  (globalThis as { __opencodexAnnotation?: { cancel(): void; close(): void } })
+    .__opencodexAnnotation;
 
 class Boundary extends Component<{ children: ReactNode }, { error?: Error }> {
   state: { error?: Error } = {};
@@ -128,6 +134,15 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
     }
     case 'running':
       store?.setRunning(message.names);
+      break;
+    case 'annotate':
+      void annotationOverlay(message.theme).then(
+        (result) => post({ type: 'annotation', result }),
+        () => post({ type: 'annotation', result: null }),
+      );
+      break;
+    case 'annotate-end':
+      annotationControl()?.[message.action]();
       break;
   }
 });

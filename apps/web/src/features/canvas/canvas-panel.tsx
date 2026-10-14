@@ -5,14 +5,18 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Add01Icon,
   Cancel01Icon,
+  CommentAdd01Icon,
   DashboardSquare02Icon,
   Delete02Icon,
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import type { CanvasInfo } from '@opencodex/contracts/canvas';
+import type { BrowserAnnotation } from '@opencodex/contracts/desktop';
 import { api } from '../../lib/api';
 import { Button } from '../../components/ui/button';
 import { Dialog } from '../../components/ui/dialog';
+import { addPageComment } from '../browser/page-comment';
+import { useDraftStore } from '../chat/draft-context';
 import type { PanelContext } from '../workbench/panels';
 import { useWorkbenchStore, workbenchKey } from '../workbench/workbench-context';
 import { defaultCanvasTabs, type CanvasTabs } from '../workbench/workbench-store';
@@ -40,6 +44,24 @@ export function CanvasPanel({ sessionID, directory, active, headerElement }: Pan
   });
   const titles = new Map(list.data?.map((canvas) => [canvas.id, canvas.title]));
   const selected = state.tabs.includes(state.selected) ? state.selected : '';
+  const drafts = useDraftStore();
+  // The canvas with the comment overlay open; switching or hiding the canvas cancels it.
+  const [commenting, setCommenting] = useState<string>();
+  const [notice, setNotice] = useState<string>();
+  if (commenting && (!active || commenting !== selected)) setCommenting(undefined);
+  const annotated = (annotation: BrowserAnnotation | null) => {
+    const id = commenting;
+    setCommenting(undefined);
+    if (!annotation || !id) return;
+    const path = list.data?.find((canvas) => canvas.id === id)?.path;
+    setNotice(
+      addPageComment(drafts, sessionID, annotation, {
+        context: path ? `canvas folder: ${path}` : undefined,
+        // Only the desktop app can capture the frame.
+        screenshotExpected: typeof window.desktop?.captureWindowRegion === 'function',
+      }),
+    );
+  };
   const open = (id: string) => store.getState().openCanvas(key, id);
   const close = (id: string) =>
     update((current) => {
@@ -97,6 +119,22 @@ export function CanvasPanel({ sessionID, directory, active, headerElement }: Pan
                 </div>
               ))}
             </div>
+            {selected && (
+              <Button
+                className="canvas-comment"
+                variant="ghost"
+                size="icon"
+                aria-label={commenting ? 'Cancel comment' : 'Comment on canvas'}
+                title={commenting ? 'Cancel comment (Esc)' : 'Comment on canvas'}
+                aria-pressed={Boolean(commenting)}
+                onClick={() => {
+                  setNotice(undefined);
+                  setCommenting(commenting ? undefined : selected);
+                }}
+              >
+                <HugeiconsIcon icon={CommentAdd01Icon} size={16} />
+              </Button>
+            )}
             <Button
               className="canvas-add"
               variant="ghost"
@@ -111,12 +149,21 @@ export function CanvasPanel({ sessionID, directory, active, headerElement }: Pan
           headerElement,
         )}
       {!active ? null : selected ? (
-        <CanvasFrame
-          key={selected}
-          id={selected}
-          mode="panel"
-          title={titles.get(selected) ?? 'Canvas'}
-        />
+        <>
+          {notice && (
+            <div role="alert" className="wb-notice">
+              {notice}
+            </div>
+          )}
+          <CanvasFrame
+            key={selected}
+            id={selected}
+            mode="panel"
+            title={titles.get(selected) ?? 'Canvas'}
+            annotating={commenting === selected}
+            onAnnotated={annotated}
+          />
+        </>
       ) : (
         <CanvasList
           canvases={list.data}

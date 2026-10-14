@@ -11,6 +11,9 @@ import { useTheme } from '../theme/use-theme';
 import { readCanvasTheme } from './canvas-theme';
 import { appsKey, CanvasSessionContext, canvasDataKey, canvasSourceKey } from './canvas-context';
 import type { AppInfo } from '@opencodex/contracts/canvas';
+import type { BrowserAnnotation } from '@opencodex/contracts/desktop';
+import { annotationTheme } from '../browser/page-comment';
+import { canvasAnnotation } from './canvas-comment';
 
 type DataSnapshot = { values: CanvasData; errors: string[] };
 type Outgoing = HostMessage extends infer M
@@ -34,10 +37,16 @@ export function CanvasFrame({
   id,
   mode,
   title,
+  annotating = false,
+  onAnnotated,
 }: {
   id: string;
   mode: 'inline' | 'panel';
   title: string;
+  /** Shows the comment overlay in the frame while true; turning it off cancels it. */
+  annotating?: boolean;
+  /** The finished comment, or null when it was cancelled or the frame reloaded. */
+  onAnnotated?: (annotation: BrowserAnnotation | null) => void;
 }) {
   const client = useQueryClient();
   const source = useQuery({
@@ -74,6 +83,14 @@ export function CanvasFrame({
     revs: new Map(),
   });
   const loads = useRef(0);
+  // Whether the frame has an overlay open that this host is waiting on.
+  const overlay = useRef(false);
+  const annotated = useRef(onAnnotated);
+  const canvasTitle = useRef(title);
+  useEffect(() => {
+    annotated.current = onAnnotated;
+    canvasTitle.current = title;
+  }, [onAnnotated, title]);
 
   const post = useCallback(
     (message: Outgoing) =>
@@ -88,6 +105,10 @@ export function CanvasFrame({
         return;
       const message = event.data;
       if (message.type === 'ready') {
+        if (overlay.current) {
+          overlay.current = false;
+          annotated.current?.(null);
+        }
         shown.current.version = undefined;
         shown.current.theme = undefined;
         shown.current.revs.clear();
@@ -109,6 +130,19 @@ export function CanvasFrame({
           (error: unknown) =>
             reply({ error: error instanceof Error ? error.message : String(error) }),
         );
+      } else if (message.type === 'annotation') {
+        if (!overlay.current) return;
+        overlay.current = false;
+        const element = frame.current!;
+        void canvasAnnotation(element, { id, title: canvasTitle.current }, message.result)
+          .catch(() => null)
+          .then((annotation) => {
+            element.contentWindow?.postMessage(
+              { channel: CANVAS_CHANNEL, type: 'annotate-end', action: 'close' },
+              '*',
+            );
+            annotated.current?.(annotation);
+          });
       } else if (message.type === 'open') {
         const target = message.target;
         if (typeof target === 'string') {
@@ -181,6 +215,21 @@ export function CanvasFrame({
     if (!session || shown.current.version === undefined || running === undefined) return;
     post({ type: 'running', names: running ? running.split('\0') : [] });
   }, [session, running, post, source.data, data.data]);
+
+  // The overlay opens once the view is shown; turning `annotating` off cancels an open one.
+  const ready = Boolean(session && source.data && data.data);
+  useEffect(() => {
+    if (!annotating || !ready) return;
+    overlay.current = true;
+    post({ type: 'annotate', theme: annotationTheme() });
+    // Its shortcuts (Esc, V/R/D/E) need the frame focused.
+    frame.current?.focus();
+    return () => {
+      if (!overlay.current) return;
+      overlay.current = false;
+      post({ type: 'annotate-end', action: 'cancel' });
+    };
+  }, [annotating, ready, post]);
 
   const failure = source.error ?? data.error;
   const problems = [...(source.data?.errors ?? []), ...(data.data?.errors ?? [])];

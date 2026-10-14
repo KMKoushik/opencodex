@@ -17,7 +17,7 @@ export type ResponseCommentTarget = Readonly<{
   offset?: number;
   quote: string;
 }>;
-/** Marks on a browser panel page; the quote describes what was marked. */
+/** Marks on a browser panel page or a canvas (`canvas:<id>`); the quote describes them. */
 export type PageCommentTarget = Readonly<{
   url: string;
   title?: string;
@@ -48,7 +48,7 @@ export function reviewPrompt(text: string, comments: readonly ReviewComment[] = 
         'messageID' in target
           ? `Assistant response (${target.messageID}, part ${target.ordinal + 1})`
           : 'url' in target
-            ? `page ${target.url}${target.title ? ` ("${target.title}")` : ''}${target.screenshot ? ', shown in the attached screenshot' : ''}`
+            ? `${target.url.startsWith('canvas:') ? 'canvas' : 'page'} ${target.url}${target.title ? ` ("${target.title}")` : ''}${target.screenshot ? ', shown in the attached screenshot' : ''}`
             : `${target.directory ? `${target.directory}/` : ''}${commentLabel(target)}${target.diffMode ? ` [${target.diffMode} diff]` : ''}`;
       return `Review comment on ${source}:\n${
         quote

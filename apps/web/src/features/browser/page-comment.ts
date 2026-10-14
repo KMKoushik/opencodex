@@ -16,12 +16,13 @@ export function annotationTheme(): BrowserAnnotationTheme {
   };
 }
 
-function describe(annotation: BrowserAnnotation) {
+function describe(annotation: BrowserAnnotation, context?: string) {
   const marks = [
     annotation.regions && `${annotation.regions} marked region${annotation.regions > 1 ? 's' : ''}`,
     annotation.drawings && `${annotation.drawings} drawing${annotation.drawings > 1 ? 's' : ''}`,
   ].filter(Boolean);
   return [
+    ...(context ? [context] : []),
     ...annotation.elements.flatMap((element) => [
       `<${element.tag}>${element.text ? ` "${element.text}"` : ''}`,
       `  selector: ${element.selector}`,
@@ -38,11 +39,15 @@ function pngFile(dataURL: string, name: string) {
   return new File([bytes], name, { type: 'image/png' });
 }
 
-/** Adds the screenshot and the comment to the chat draft; returns an error to show, if any. */
+/**
+ * Adds the screenshot and the comment to the chat draft; returns an error to show, if any.
+ * `context` leads the quote; without `screenshotExpected` a missing screenshot isn't an error.
+ */
 export function addPageComment(
   drafts: ReturnType<typeof createDraftStore>,
   sessionID: string,
   annotation: BrowserAnnotation,
+  { context, screenshotExpected = true }: { context?: string; screenshotExpected?: boolean } = {},
 ) {
   const id = crypto.randomUUID();
   const screenshot = annotation.screenshot?.startsWith('data:image/png;base64,')
@@ -53,14 +58,17 @@ export function addPageComment(
     target: {
       url: annotation.url,
       title: annotation.title || undefined,
-      quote: describe(annotation),
+      quote: describe(annotation, context),
       screenshot: attached,
     },
     text: annotation.comment,
   });
   const error = drafts.getState().saveComment(sessionID, comment(Boolean(screenshot)));
   if (error) return error;
-  if (!screenshot) return 'The comment was added, but its screenshot could not be captured.';
+  if (!screenshot)
+    return screenshotExpected
+      ? 'The comment was added, but its screenshot could not be captured.'
+      : undefined;
   const imageError = drafts
     .getState()
     .attach(sessionID, [pngFile(screenshot, `page-${id.slice(0, 8)}.png`)]);

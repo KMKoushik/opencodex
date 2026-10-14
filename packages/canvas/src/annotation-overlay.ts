@@ -1,16 +1,15 @@
-import type { BrowserAnnotation, BrowserAnnotationTheme } from '@opencodex/contracts/desktop';
-
-type Rect = { x: number; y: number; width: number; height: number };
-export type OverlayResult = {
-  annotation: Omit<BrowserAnnotation, 'screenshot'>;
-  crop: Rect | null;
-};
+import type {
+  AnnotationOverlayResult as OverlayResult,
+  AnnotationRect as Rect,
+  BrowserAnnotationTheme,
+} from '@opencodex/contracts/desktop';
 
 /**
- * The comment overlay drawn inside a browser panel page, after T3 Code's preview annotations.
- * It runs in an isolated world: it shares the page's DOM but not its JavaScript, so the page
- * cannot read or call it. It is serialized with `Function.prototype.toString`, so it must not
- * reference anything outside its own body.
+ * The comment overlay, after T3 Code's preview annotations. Desktop draws it inside browser
+ * panel pages in an isolated world: it shares the page's DOM but not its JavaScript, so the
+ * page cannot read or call it. There it is serialized with `Function.prototype.toString`, so
+ * it must not reference anything outside its own body. The canvas frame runtime calls it
+ * directly.
  *
  * Resolves with the annotation once the user attaches it, leaving the marks drawn for the
  * screenshot until `close()`, or with null when cancelled.

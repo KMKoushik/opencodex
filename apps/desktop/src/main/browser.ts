@@ -18,7 +18,7 @@ import {
   type BrowserAnnotation,
 } from '@opencodex/contracts/desktop';
 import { textMenuItems } from './context-menu';
-import { annotationOverlay } from './annotation-overlay';
+import { annotationOverlay } from '@opencodex/canvas/annotation-overlay';
 import { createLocalPages } from './local-pages';
 
 const localPages = createLocalPages();
@@ -311,6 +311,11 @@ export async function annotateBrowserPage(
   } finally {
     await closeOverlay(guest, 'close');
   }
+}
+
+/** An area of the app's own window, such as a canvas frame with its comment marks. */
+export function captureWindowRegion(window: BrowserWindow, input: unknown) {
+  return screenshot(window.webContents, rect.parse(input));
 }
 
 export async function cancelBrowserAnnotation(window: BrowserWindow, input: unknown) {
