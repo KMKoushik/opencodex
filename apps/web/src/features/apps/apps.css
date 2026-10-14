@@ -371,3 +371,81 @@
   flex-basis: 100%;
   color: var(--error);
 }
+
+.apps-icon-button {
+  display: grid;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  place-items: center;
+}
+.apps-icon-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (hover: hover) {
+  .apps-icon-button:hover .app-icon {
+    filter: brightness(1.12);
+  }
+}
+.apps-icon-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.apps-icon-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  font-weight: 550;
+}
+.apps-icon-search {
+  width: 100%;
+  height: 32px;
+  margin-bottom: 8px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--well);
+  box-shadow:
+    var(--well-shadow),
+    inset 0 0 0 1px var(--border);
+  color: var(--text);
+  font-size: 13px;
+}
+.apps-icon-search:focus {
+  outline: none;
+  box-shadow:
+    var(--well-shadow),
+    inset 0 0 0 1px var(--border-heavy);
+}
+.apps-icon-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.apps-icon-scroll .apps-note {
+  padding: 8px 0;
+}
+.apps-icon-group {
+  margin-bottom: 4px;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  font-weight: 550;
+}
+.apps-icon-glyphs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 36px);
+  gap: 4px;
+  color: var(--text-secondary);
+}
+.apps-icon-glyphs .project-color-option:has(input:checked) {
+  color: var(--text);
+}

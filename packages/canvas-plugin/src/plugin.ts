@@ -57,6 +57,9 @@ type Context = {
 };
 type Canvas = { id: string; title: string; path: string; updated: number };
 
+/** Icon glyph names; `bun plugins` defines this from packages/contracts/src/canvas-glyphs.ts. */
+declare const CANVAS_GLYPHS: readonly string[];
+
 // Present only in the skill body, so finding it in a session's context means the skill loaded.
 const MARKER = 'opencodex-canvas-skill';
 const TOOLS = ['canvas_create', 'canvas_check', 'canvas_list', 'canvas_run'];
@@ -400,39 +403,7 @@ export default {
               properties: {
                 glyph: {
                   type: 'string',
-                  enum: [
-                    'activity',
-                    'alert',
-                    'analytics',
-                    'book',
-                    'bug',
-                    'calendar',
-                    'chart',
-                    'chat',
-                    'check',
-                    'clock',
-                    'cloud',
-                    'code',
-                    'database',
-                    'dollar',
-                    'file',
-                    'fire',
-                    'globe',
-                    'heart',
-                    'link',
-                    'mail',
-                    'notification',
-                    'package',
-                    'pull-request',
-                    'rocket',
-                    'search',
-                    'server',
-                    'shield',
-                    'star',
-                    'terminal',
-                    'test',
-                    'users',
-                  ],
+                  enum: CANVAS_GLYPHS,
                 },
                 color: {
                   type: 'string',

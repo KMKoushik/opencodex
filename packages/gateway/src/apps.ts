@@ -10,6 +10,7 @@ import {
   type AppCall,
   type AppInfo,
   type AppModel,
+  type CanvasIcon,
   type AppModelRef,
   type AppModelSource,
   type AppRun,
@@ -650,7 +651,22 @@ export class Apps {
   }
 
   /** Saves the app's own model in canvas.json; null goes back to the chat's model. */
-  async setModel(id: string, model: AppModelRef | null) {
+  setModel(id: string, model: AppModelRef | null) {
+    return this.updateManifest(id, (manifest) => {
+      if (model) manifest.model = model;
+      else delete manifest.model;
+    });
+  }
+
+  /** Saves the app's icon in canvas.json; null goes back to its initial. */
+  setIcon(id: string, icon: CanvasIcon | null) {
+    return this.updateManifest(id, (manifest) => {
+      if (icon && (icon.glyph || icon.color)) manifest.icon = icon;
+      else delete manifest.icon;
+    });
+  }
+
+  private async updateManifest(id: string, change: (manifest: Record<string, unknown>) => void) {
     const directory = folder(this.root, id);
     const path = join(directory, 'canvas.json');
     let manifest: Record<string, unknown>;
@@ -661,8 +677,7 @@ export class Apps {
         throw new GatewayError('Canvas not found.', 404);
       throw new GatewayError('canvas.json isn’t valid JSON.', 422);
     }
-    if (model) manifest.model = model;
-    else delete manifest.model;
+    change(manifest);
     await writeJSON(directory, path, manifest);
     this.publish({ type: 'app', id });
   }

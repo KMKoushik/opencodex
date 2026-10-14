@@ -26,6 +26,9 @@ import { AppModelControl } from './app-model';
 import '../canvas/canvas.css';
 import './apps.css';
 
+const AppIconPicker = lazy(() =>
+  import('./app-icon-picker').then((module) => ({ default: module.AppIconPicker })),
+);
 const AppCode = lazy(() => import('./app-code').then((module) => ({ default: module.AppCode })));
 
 const relative = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto', style: 'short' });
@@ -187,6 +190,7 @@ function AppDetail({
 }) {
   const [runsOpen, setRunsOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [pickingIcon, setPickingIcon] = useState(false);
   const [tab, setTab] = useState<'app' | 'code'>('app');
   const runs = useQuery({
     queryKey: appRunsKey(app.id),
@@ -200,7 +204,15 @@ function AppDetail({
   return (
     <section className="apps-detail" aria-label={app.title}>
       <header className="apps-header">
-        <AppIcon id={app.id} title={app.title} icon={app.icon} size={32} />
+        <button
+          className="apps-icon-button"
+          aria-label="Change icon"
+          title="Change icon"
+          disabled={!connected}
+          onClick={() => setPickingIcon(true)}
+        >
+          <AppIcon id={app.id} title={app.title} icon={app.icon} size={32} />
+        </button>
         <div className="apps-header-text">
           <h1 className="truncate">{app.title}</h1>
           <p className="apps-header-meta truncate">
@@ -247,6 +259,11 @@ function AppDetail({
           <HugeiconsIcon icon={Delete02Icon} size={15} />
         </Button>
       </header>
+      {pickingIcon && (
+        <Suspense fallback={null}>
+          <AppIconPicker app={app} onClose={() => setPickingIcon(false)} />
+        </Suspense>
+      )}
       {deleting && <DeleteApp app={app} onClose={() => setDeleting(false)} onDeleted={onDeleted} />}
       {(app.error || run.error) && (
         <div className="canvas-frame-error" role="alert">

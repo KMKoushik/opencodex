@@ -36,7 +36,7 @@ import { createReplyFormat } from './reply-format';
 import { CANVAS_ROOT, canvasRoutes, canvasRuntimeRoutes, createCanvasWatcher } from './canvases';
 import { canvasPluginRoutes } from './canvas-plugin';
 import { Apps } from './apps';
-import { appModelUpdateSchema } from '@opencodex/contracts/canvas';
+import { appModelUpdateSchema, canvasIconUpdateSchema } from '@opencodex/contracts/canvas';
 
 export function createApp(
   backend = new OpenCodeBackend(),
@@ -97,6 +97,14 @@ export function createApp(
     const input = appModelUpdateSchema.safeParse(await c.req.json().catch(() => null));
     if (!input.success) return c.json({ message: 'Choose a model.' }, 400);
     await apps.setModel(c.req.param('id'), input.data.model);
+    return c.json({ ok: true });
+  });
+  app.use('/api/apps/:id/icon', bodyLimit({ maxSize: 4096 }));
+  app.put('/api/apps/:id/icon', async (c) => {
+    const input = canvasIconUpdateSchema.safeParse(await c.req.json().catch(() => null));
+    if (!input.success)
+      return c.json({ message: 'Pick an icon glyph and color from the listed options.' }, 400);
+    await apps.setIcon(c.req.param('id'), input.data.icon);
     return c.json({ ok: true });
   });
   app.route('/api/canvas-runtime', canvasRuntimeRoutes());

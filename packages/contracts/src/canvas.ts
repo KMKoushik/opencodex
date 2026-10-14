@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { CANVAS_GLYPH_GROUPS } from './canvas-glyphs';
+
+export { CANVAS_GLYPH_GROUPS };
 
 const ID = '[a-z0-9][a-z0-9-]{0,62}-[a-z0-9]{4}';
 /** Folder name under the canvases root, e.g. `test-results-4f2a`. */
@@ -8,41 +11,10 @@ export const CANVAS_LINK = new RegExp(`^canvas:(${ID})$`);
 /** A data value's name: `data/<key>.json`. */
 export const canvasKeySchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/);
 
-/** Glyphs an app's icon can use; the UI maps each to an icon it bundles. */
-export const CANVAS_GLYPHS = [
-  'activity',
-  'alert',
-  'analytics',
-  'book',
-  'bug',
-  'calendar',
-  'chart',
-  'chat',
-  'check',
-  'clock',
-  'cloud',
-  'code',
-  'database',
-  'dollar',
-  'file',
-  'fire',
-  'globe',
-  'heart',
-  'link',
-  'mail',
-  'notification',
-  'package',
-  'pull-request',
-  'rocket',
-  'search',
-  'server',
-  'shield',
-  'star',
-  'terminal',
-  'test',
-  'users',
-] as const;
-export type CanvasGlyph = (typeof CANVAS_GLYPHS)[number];
+export type CanvasGlyph = (typeof CANVAS_GLYPH_GROUPS)[keyof typeof CANVAS_GLYPH_GROUPS][number];
+export const CANVAS_GLYPHS = Object.values(
+  CANVAS_GLYPH_GROUPS,
+).flat() as readonly CanvasGlyph[] as [CanvasGlyph, ...CanvasGlyph[]];
 /** The project icon palette, so app and project icons sit together. */
 export const CANVAS_ICON_COLORS = ['gray', 'blue', 'green', 'orange', 'pink', 'purple'] as const;
 export const canvasIconSchema = z.object({
@@ -50,6 +22,8 @@ export const canvasIconSchema = z.object({
   color: z.enum(CANVAS_ICON_COLORS).optional(),
 });
 export type CanvasIcon = z.infer<typeof canvasIconSchema>;
+/** Body of `PUT /api/apps/:id/icon`; null goes back to the title's initial. */
+export const canvasIconUpdateSchema = z.object({ icon: canvasIconSchema.nullable() });
 
 export const canvasCreateSchema = z.object({
   title: z.string().trim().min(1).max(200),

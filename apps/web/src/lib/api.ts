@@ -49,6 +49,7 @@ import type {
   AppRun,
   CanvasData,
   CanvasFiles,
+  CanvasIcon,
   CanvasInfo,
   CanvasSource,
 } from '@opencodex/contracts/canvas';
@@ -270,6 +271,11 @@ export const api = {
     nativeRequest<{ ok: true }>(`/apps/${encodeURIComponent(id)}/model`, {
       method: 'PUT',
       body: JSON.stringify({ model }),
+    }),
+  setAppIcon: (id: string, icon: CanvasIcon | null) =>
+    nativeRequest<{ ok: true }>(`/apps/${encodeURIComponent(id)}/icon`, {
+      method: 'PUT',
+      body: JSON.stringify({ icon }),
     }),
   canvasFiles: (id: string, signal: AbortSignal) =>
     nativeRequest<CanvasFiles>(`${canvasPath(id)}/files`, { signal }),
