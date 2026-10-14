@@ -1,14 +1,24 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { MoreHorizontalIcon } from '@hugeicons/core-free-icons';
-import { HugeiconsIcon } from '@hugeicons/react';
+import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
 
 export function ProjectActions({
   name,
   actions,
+  button,
 }: {
   name: string;
-  actions: { label: string; onSelect: () => void; disabled?: boolean }[];
+  actions: {
+    label: string;
+    onSelect: () => void;
+    disabled?: boolean;
+    icon?: IconSvgElement;
+    /** Destructive: shown in the error color. */
+    danger?: boolean;
+  }[];
+  /** A labelled button instead of the ⋯ icon. */
+  button?: { content: ReactNode; label: string; disabled?: boolean };
 }) {
   const [open, setOpen] = useState(false);
   const [above, setAbove] = useState(false);
@@ -41,9 +51,10 @@ export function ProjectActions({
     >
       <Button
         ref={trigger}
-        variant="ghost"
-        size="icon"
-        aria-label={`Actions for ${name}`}
+        variant={button ? 'secondary' : 'ghost'}
+        size={button ? 'sm' : 'icon'}
+        disabled={button?.disabled}
+        aria-label={button?.label ?? `Actions for ${name}`}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? id : undefined}
@@ -55,7 +66,7 @@ export function ProjectActions({
           }
         }}
       >
-        <HugeiconsIcon icon={MoreHorizontalIcon} size={18} />
+        {button?.content ?? <HugeiconsIcon icon={MoreHorizontalIcon} size={18} />}
       </Button>
       {open && (
         <div
@@ -98,12 +109,14 @@ export function ProjectActions({
               type="button"
               role="menuitem"
               disabled={action.disabled}
+              data-danger={action.danger || undefined}
               onClick={() => {
                 setOpen(false);
                 trigger.current?.focus();
                 action.onSelect();
               }}
             >
+              {action.icon && <HugeiconsIcon icon={action.icon} size={15} />}
               {action.label}
             </button>
           ))}

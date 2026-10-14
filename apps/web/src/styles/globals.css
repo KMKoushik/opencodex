@@ -711,6 +711,9 @@ svg {
   bottom: calc(100% + 4px);
 }
 .project-actions-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   padding: 8px 10px;
   border: 0;
   border-radius: 5px;
@@ -722,6 +725,14 @@ svg {
 }
 .project-actions-menu button:focus-visible {
   background: var(--selected);
+}
+.project-actions-menu button svg {
+  flex: none;
+  color: var(--text-secondary);
+}
+.project-actions-menu button[data-danger],
+.project-actions-menu button[data-danger] svg {
+  color: var(--error);
 }
 .projects-notice,
 .projects-empty {
@@ -879,6 +890,9 @@ svg {
   .project-settings-link:hover,
   .project-actions-menu button:hover:not(:disabled) {
     background: var(--hover);
+  }
+  .project-actions-menu button[data-danger]:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--error) 12%, transparent);
   }
 }
 @media (pointer: coarse) {

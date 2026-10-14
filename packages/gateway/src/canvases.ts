@@ -12,6 +12,7 @@ import {
   canvasIconSchema,
   canvasIDSchema,
   canvasKeySchema,
+  parseEvery,
   type CanvasData,
   type CanvasIcon,
   type CanvasEvent,
@@ -21,7 +22,7 @@ import {
 import { GatewayError } from './errors';
 import { ALLOWED_IMPORTS, loadTypeScript, testRender, transpile, typeCheck } from './canvas-build';
 import { CANVAS_RUNTIME } from './canvas-runtime.generated';
-import { parseEvery, type Apps } from './apps';
+import type { Apps } from './apps';
 
 const MANIFEST = 'canvas.json';
 const ENTRY = 'app.tsx';

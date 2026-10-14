@@ -13,6 +13,7 @@ import {
   type CanvasIcon,
   type AppModelRef,
   type AppModelSource,
+  parseEvery,
   type AppRun,
   type CanvasEvent,
 } from '@opencodex/contracts/canvas';
@@ -33,14 +34,6 @@ const MAX_CALLS = 50;
 const RUN_TIMEOUT = 6 * 60 * 60_000;
 const ASK_TIMEOUT = 5 * 60_000;
 const MAX_DELAY = 2 ** 31 - 1;
-
-/** `30m`, `6h`, `1d` → milliseconds; at least a minute. */
-export function parseEvery(every: string) {
-  const match = every.trim().match(/^(\d+(?:\.\d+)?)\s*(m|h|d)$/);
-  if (!match) return undefined;
-  const ms = Number(match[1]) * { m: 60_000, h: 3_600_000, d: 86_400_000 }[match[2] as 'm'];
-  return ms >= 60_000 ? ms : undefined;
-}
 
 /** One running `server.ts`: a child process that loads the files and runs calls. */
 class Worker {

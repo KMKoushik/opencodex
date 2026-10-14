@@ -1,5 +1,6 @@
-import { lazy, Suspense, useCallback, useRef, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import {
+  AiBrain01Icon,
   Alert02Icon,
   ArrowDown01Icon,
   ArrowRight01Icon,
@@ -7,11 +8,12 @@ import {
   Delete02Icon,
   GridViewIcon,
   Loading03Icon,
+  Message01Icon,
+  PaintBoardIcon,
   PlayIcon,
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { OpenCodeProject } from '@opencodex/contracts';
 import type { AppInfo, AppModelSource, AppRun } from '@opencodex/contracts/canvas';
 import { Button } from '../../components/ui/button';
 import { SegmentedControl } from '../../components/ui/segmented-control';
@@ -19,10 +21,13 @@ import { Dialog } from '../../components/ui/dialog';
 import { api } from '../../lib/api';
 import { CanvasFrame } from '../canvas/canvas-frame';
 import { appRunsKey, appsKey } from '../canvas/canvas-context';
+import { ProjectActions } from '../projects/project-actions';
 import { ProjectIcon } from '../projects/project-icon';
 import { projectName } from '../projects/project-metadata';
 import { AppIcon } from './app-icon';
-import { AppModelControl } from './app-model';
+import { useAppProject } from './app-hooks';
+import { ago, duration, scheduleLabel } from './app-time';
+import { AppModelDialog, AppModelName } from './app-model';
 import '../canvas/canvas.css';
 import './apps.css';
 
@@ -30,18 +35,10 @@ const AppIconPicker = lazy(() =>
   import('./app-icon-picker').then((module) => ({ default: module.AppIconPicker })),
 );
 const AppCode = lazy(() => import('./app-code').then((module) => ({ default: module.AppCode })));
+const AppSettings = lazy(() =>
+  import('./app-settings').then((module) => ({ default: module.AppSettings })),
+);
 
-const relative = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto', style: 'short' });
-function ago(time: number) {
-  const seconds = Math.round((time - Date.now()) / 1000);
-  for (const [unit, size] of [
-    ['day', 86_400],
-    ['hour', 3_600],
-    ['minute', 60],
-  ] as const)
-    if (Math.abs(seconds) >= size) return relative.format(Math.round(seconds / size), unit);
-  return 'just now';
-}
 const CALL_SOURCE: Record<AppModelSource, string> = {
   code: 'set in code',
   app: 'app model',
@@ -49,15 +46,6 @@ const CALL_SOURCE: Record<AppModelSource, string> = {
   default: 'default model',
   thread: 'continued thread',
 };
-
-function duration(run: Pick<AppRun, 'started' | 'ended'>) {
-  const ms = (run.ended ?? Date.now()) - run.started;
-  return ms < 1000
-    ? `${ms} ms`
-    : ms < 60_000
-      ? `${(ms / 1000).toFixed(1)} s`
-      : `${Math.round(ms / 60_000)} min`;
-}
 
 /** Every app at a glance, or one app full-size with its code and runs. */
 export function AppsPage({
@@ -121,19 +109,6 @@ export function AppsPage({
   );
 }
 
-/** The project of the chat that made the app, from the projects list the sidebar already loads. */
-function useAppProject(projectID: string | undefined) {
-  return useQuery({
-    queryKey: ['projects'],
-    queryFn: ({ signal }) => api.projects(signal),
-    enabled: Boolean(projectID),
-    select: useCallback(
-      (projects: OpenCodeProject[]) => projects.find((project) => project.id === projectID),
-      [projectID],
-    ),
-  }).data;
-}
-
 function AppProject({ projectID }: { projectID?: string }) {
   const project = useAppProject(projectID);
   if (!project) return null;
@@ -162,11 +137,7 @@ function AppStatus({ app, schedule = true }: { app: AppInfo; schedule?: boolean 
       </>
     );
   const last = app.lastRun;
-  const every = schedule
-    ? Object.values(app.triggers)
-        .map((trigger) => `every ${trigger.every}`)
-        .join(', ')
-    : '';
+  const every = schedule ? scheduleLabel(app) : '';
   return (
     <>
       {last
@@ -191,7 +162,8 @@ function AppDetail({
   const [runsOpen, setRunsOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [pickingIcon, setPickingIcon] = useState(false);
-  const [tab, setTab] = useState<'app' | 'code'>('app');
+  const [pickingModel, setPickingModel] = useState(false);
+  const [tab, setTab] = useState<'app' | 'settings' | 'code'>('app');
   const runs = useQuery({
     queryKey: appRunsKey(app.id),
     queryFn: ({ signal }) => api.appRuns(app.id, signal),
@@ -219,50 +191,88 @@ function AppDetail({
             <AppStatus app={app} />
             {app.projectID && <span aria-hidden="true">·</span>}
             <AppProject projectID={app.projectID} />
+            <AppModelName id={app.id} onClick={() => setPickingModel(true)} />
           </p>
         </div>
-        <AppModelControl id={app.id} disabled={!connected} />
         <SegmentedControl
           label="Show"
           value={tab}
           onChange={setTab}
           options={[
             { value: 'app', label: 'App' },
+            { value: 'settings', label: 'Settings' },
             { value: 'code', label: 'Code' },
           ]}
         />
         {app.sessionID && (
           <Button variant="ghost" size="sm" onClick={() => onOpenSession(app.sessionID!)}>
+            <HugeiconsIcon icon={Message01Icon} size={13} />
             Open chat
-            <HugeiconsIcon icon={ArrowUpRight01Icon} size={13} />
           </Button>
         )}
-        {runnable.map((name) => (
+        {runnable.length === 1 ? (
           <Button
-            key={name}
             variant="secondary"
             size="sm"
-            disabled={!connected || app.running.includes(name)}
-            onClick={() => run.mutate(name)}
+            disabled={!connected || app.running.includes(runnable[0]!)}
+            onClick={() => run.mutate(runnable[0]!)}
           >
             <HugeiconsIcon icon={PlayIcon} size={12} />
-            Run {name}
+            Run {runnable[0]}
           </Button>
-        ))}
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={`Delete ${app.title}`}
-          title="Delete app"
-          onClick={() => setDeleting(true)}
-        >
-          <HugeiconsIcon icon={Delete02Icon} size={15} />
-        </Button>
+        ) : runnable.length > 1 ? (
+          <ProjectActions
+            name={app.title}
+            button={{
+              label: 'Run a function',
+              disabled: !connected,
+              content: (
+                <>
+                  <HugeiconsIcon icon={PlayIcon} size={12} />
+                  Run
+                  <HugeiconsIcon icon={ArrowDown01Icon} size={12} />
+                </>
+              ),
+            }}
+            actions={runnable.map((name) => ({
+              label: `Run ${name}`,
+              icon: PlayIcon,
+              disabled: app.running.includes(name),
+              onSelect: () => run.mutate(name),
+            }))}
+          />
+        ) : null}
+        <ProjectActions
+          name={app.title}
+          actions={[
+            {
+              label: 'Change model…',
+              icon: AiBrain01Icon,
+              disabled: !connected,
+              onSelect: () => setPickingModel(true),
+            },
+            {
+              label: 'Change icon…',
+              icon: PaintBoardIcon,
+              disabled: !connected,
+              onSelect: () => setPickingIcon(true),
+            },
+            {
+              label: 'Delete app…',
+              icon: Delete02Icon,
+              danger: true,
+              onSelect: () => setDeleting(true),
+            },
+          ]}
+        />
       </header>
       {pickingIcon && (
         <Suspense fallback={null}>
           <AppIconPicker app={app} onClose={() => setPickingIcon(false)} />
         </Suspense>
+      )}
+      {pickingModel && (
+        <AppModelDialog id={app.id} disabled={!connected} onClose={() => setPickingModel(false)} />
       )}
       {deleting && <DeleteApp app={app} onClose={() => setDeleting(false)} onDeleted={onDeleted} />}
       {(app.error || run.error) && (
@@ -276,11 +286,22 @@ function AppDetail({
         <Suspense
           fallback={
             <p className="apps-note" role="status">
-              Loading code…
+              Loading…
             </p>
           }
         >
-          <AppCode id={app.id} />
+          {tab === 'settings' ? (
+            <AppSettings
+              app={app}
+              connected={connected}
+              onRun={(name) => run.mutate(name)}
+              onOpenSession={onOpenSession}
+              onChangeIcon={() => setPickingIcon(true)}
+              onChangeModel={() => setPickingModel(true)}
+            />
+          ) : (
+            <AppCode id={app.id} />
+          )}
         </Suspense>
       )}
       <div className="apps-runs" data-open={runsOpen}>
@@ -331,7 +352,7 @@ function AppsIndex({ apps, onSelect }: { apps: AppInfo[]; onSelect: (id: string)
             : app.error || app.lastRun?.status === 'error'
               ? 'error'
               : 'idle';
-          const schedule = Object.values(app.triggers).map((trigger) => trigger.every);
+          const schedule = scheduleLabel(app);
           return (
             <li key={app.id}>
               <button className="apps-tile" data-state={state} onClick={() => onSelect(app.id)}>
@@ -343,7 +364,7 @@ function AppsIndex({ apps, onSelect }: { apps: AppInfo[]; onSelect: (id: string)
                   </span>
                   <span className="apps-tile-foot">
                     <span className="truncate">
-                      {schedule.length ? `Every ${schedule.join(', ')}` : 'On demand'}
+                      {schedule ? schedule[0]!.toUpperCase() + schedule.slice(1) : 'On demand'}
                     </span>
                     <AppProject projectID={app.projectID} />
                   </span>

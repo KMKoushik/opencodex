@@ -99,6 +99,14 @@ export type AppCall = {
   error?: string;
 };
 
+/** `30m`, `6h`, `1d` → milliseconds; at least a minute. */
+export function parseEvery(every: string) {
+  const match = every.trim().match(/^(\d+(?:\.\d+)?)\s*(m|h|d)$/);
+  if (!match) return undefined;
+  const ms = Number(match[1]) * { m: 60_000, h: 3_600_000, d: 86_400_000 }[match[2] as 'm'];
+  return ms >= 60_000 ? ms : undefined;
+}
+
 /** One invocation of a canvas server function, kept in the canvas's `.app/runs.json`. */
 export type AppRun = {
   id: string;
