@@ -24,6 +24,8 @@ const browseInput = projectInputSchema.extend({
 const diffInput = projectInputSchema.extend({
   path: workspaceFileInputSchema.shape.path.optional(),
   mode: z.enum(['working', 'branch']).default('working'),
+  // Whole-file context, fetched only when a reader expands collapsed lines.
+  full: z.literal('1').optional(),
 });
 
 export function workspaceRoutes(backend: OpenCodeBackend) {
@@ -148,15 +150,15 @@ export function workspaceRoutes(backend: OpenCodeBackend) {
     const input = diffInput.safeParse(c.req.query());
     if (!input.success)
       return c.json({ message: 'Choose a changed file and a valid comparison.' }, 400);
-    const { directory, path, mode } = input.data;
-    const key = JSON.stringify([directory, mode]);
+    const { directory, path, mode, full } = input.data;
+    const key = JSON.stringify([directory, mode, full]);
     let snapshot = snapshots.get(key);
     if (!snapshot || snapshot.expires < Date.now()) {
       // At most two repository snapshots; upstream response bytes are bounded too.
       if (snapshots.size >= 2) snapshots.delete(snapshots.keys().next().value!);
       const data = backend.request(AbortSignal.timeout(30_000), async (client, options) => {
         const result = await client.vcs.diff(
-          { location: { directory }, mode, context: 3 },
+          { location: { directory }, mode, context: full ? 2_147_483_647 : 3 },
           options,
         );
         return new Map(result.data.map((file) => [file.file, file]));

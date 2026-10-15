@@ -22,7 +22,9 @@ import { LayoutTwoColumnIcon, Menu01Icon, PencilEdit01Icon } from '@hugeicons/co
 import { Button } from '../../components/ui/button';
 import { SegmentedControl } from '../../components/ui/segmented-control';
 import { diffComment } from './diff-comment';
+import { diffFiles } from './diff-files';
 
+const expandLines = 20;
 const diffCSS = `:host { --diffs-font-family: var(--font-mono); --diffs-header-font-family: var(--font-sans);
  --diffs-font-size: 12.5px; --diffs-line-height: 20px;
  --diffs-bg: var(--surface); --diffs-fg: var(--text); --diffs-addition-color: var(--success); --diffs-deletion-color: var(--error);
@@ -33,6 +35,19 @@ const diffCSS = `:host { --diffs-font-family: var(--font-mono); --diffs-header-f
    border-bottom: 1px solid var(--border); }
  [data-diffs-header] [data-title] { font-size: 12.5px; }
  [data-metadata] { display: flex; gap: 6px; }
+ /* Collapsed context is a flat band: expand arrows in the line-number gutter and the count in
+    the code column, as on GitHub. Pierre renders the separator in both; each shows one half. */
+ [data-separator='line-info-basic'] [data-expand-button] { border-right: 0 !important; }
+ [data-gutter] [data-separator='line-info-basic'] [data-separator-content] { display: none !important; }
+ [data-content] [data-separator='line-info-basic'] [data-separator-wrapper] {
+   display: flex !important; align-items: center; height: 100%; }
+ [data-content] [data-separator='line-info-basic'] [data-expand-button] { display: none !important; }
+ [data-content] [data-separator='line-info-basic'] [data-separator-content] {
+   align-items: center; padding-inline: 12px !important; background: none !important;
+   color: var(--text-tertiary); font-size: 11.5px; }
+ /* The blank side opposite added or removed lines is a flat, darker fill instead of hatching. */
+ [data-content-buffer], [data-gutter-buffer='buffer'] { background-image: none !important;
+   background-color: var(--well) !important; }
  [data-additions-count] { order: 1; }
  [data-deletions-count] { order: 2; }
 `;
@@ -182,9 +197,19 @@ export function DiffPreview({
       unsafeCSS: diffCSS,
       tokenizeMaxLineLength: 2000,
       maxLineDiffLength: 2000,
-      hunkSeparators: 'line-info' as const,
+      hunkSeparators: 'line-info-basic' as const,
+      expansionLineCount: expandLines,
+      // One file per view: its header sits flush under the toolbar.
+      layout: { paddingTop: 0, paddingBottom: 0, gap: 0 },
+      // Matches the 40px header in diffCSS; Pierre's 44px default leaves a gap above it.
+      itemMetrics: { diffHeaderHeight: 40 },
+      loadDiffFiles: async (fileDiff: FileDiffMetadata) => {
+        const full = await api.fullDiff(directory, mode, path);
+        if (!full?.patch) throw new Error('This file is no longer changed.');
+        return diffFiles(full.patch, fileDiff);
+      },
     }),
-    [syntax, style, pending, beginComment],
+    [syntax, style, pending, beginComment, directory, mode, path],
   );
   const controls = (
     <>

@@ -1376,7 +1376,7 @@ test('workspace: combined session details, shared thread actions and native scro
     await page.setViewportSize({ width: 2800, height: 1000 });
     await panel.getByRole('button', { name: /1 file changed/ }).click();
     await expect(panel).toBeHidden();
-    await expect(page.getByRole('combobox', { name: 'Changes comparison' })).toBeVisible();
+    await expect(page.getByRole('radiogroup', { name: 'Compare changes against' })).toBeVisible();
     expect(
       await page.locator('.chat-column').evaluate((element) => element.clientWidth),
     ).toBeGreaterThan(1408);

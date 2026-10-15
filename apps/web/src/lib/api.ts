@@ -172,6 +172,10 @@ export const api = {
       `/workspace/diff?${new URLSearchParams({ directory, mode, path })}`,
       { signal },
     ),
+  fullDiff: (directory: string, mode: 'working' | 'branch', path: string) =>
+    nativeRequest<FileDiffInfo | null>(
+      `/workspace/diff?${new URLSearchParams({ directory, mode, path, full: '1' })}`,
+    ),
   workspaceVcs: (directory: string, signal: AbortSignal) =>
     nativeRequest<WorkspaceVcs>(`/workspace/vcs?${new URLSearchParams({ directory })}`, { signal }),
   branches: (directory: string, search: string, signal: AbortSignal) =>

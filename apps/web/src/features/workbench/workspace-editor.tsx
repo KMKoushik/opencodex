@@ -229,14 +229,15 @@ export function WorkspaceEditor({
           <div className="wb-breadcrumbs" data-view={view}>
             {view === 'changes' ? (
               // Comparison controls stay separate from the active document's actions.
-              <select
-                aria-label="Changes comparison"
+              <SegmentedControl
+                label="Compare changes against"
                 value={mode}
-                onChange={(event) => setMode(event.target.value as typeof mode)}
-              >
-                <option value="working">Uncommitted</option>
-                <option value="branch">Base branch</option>
-              </select>
+                options={[
+                  { value: 'working', label: 'Uncommitted' },
+                  { value: 'branch', label: 'Base branch' },
+                ]}
+                onChange={setMode}
+              />
             ) : (
               <nav aria-label="File breadcrumbs">
                 {parts.map((part, index) => (
