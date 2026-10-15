@@ -30,7 +30,8 @@ export function TooltipLayer() {
       shortcut.current!.hidden = !anchor.dataset.shortcut;
       if (!open()) element.showPopover();
       const rect = anchor.getBoundingClientRect();
-      const { width, height } = element.getBoundingClientRect();
+      // Layout size, not the rect: the opening animation scales the tooltip.
+      const { offsetWidth: width, offsetHeight: height } = element;
       const below = rect.bottom + 6;
       const top = below + height > innerHeight - 8 ? rect.top - height - 6 : below;
       const left = rect.left + rect.width / 2 - width / 2;

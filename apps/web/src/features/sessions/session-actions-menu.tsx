@@ -103,7 +103,8 @@ export function SessionActionsMenu({
       menu.current.showPopover();
       listen();
     }
-    const { width, height } = menu.current.getBoundingClientRect();
+    // Layout size, not the rect: the opening animation scales the menu.
+    const { offsetWidth: width, offsetHeight: height } = menu.current;
     menu.current.style.top = `${Math.max(8, Math.min(point?.top ?? rect.bottom + 4, innerHeight - height - 8))}px`;
     menu.current.style.left = `${Math.max(8, Math.min(point?.left ?? (align === 'end' ? rect.right - width : rect.left), innerWidth - width - 8))}px`;
   }

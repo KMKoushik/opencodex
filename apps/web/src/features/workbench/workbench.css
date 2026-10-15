@@ -301,8 +301,8 @@
   font-size: 11px;
 }
 /* One document toolbar; totals live in the tree footer and individual diff headers. */
-.wb-breadcrumbs[data-view='changes'] select {
-  flex: 0 1 auto;
+.wb-breadcrumbs[data-view='changes'] .segmented {
+  flex: none;
 }
 .wb-toolbar-slot {
   display: flex;

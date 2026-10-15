@@ -3,6 +3,7 @@ import {
   apiErrorSchema,
   connectionSchema,
   projectSchema,
+  folderListSchema,
   sessionPageSchema,
   type OpenCodeProject,
   type ProjectUpdate,
@@ -171,6 +172,10 @@ export const api = {
     nativeRequest<FileDiffInfo | null>(
       `/workspace/diff?${new URLSearchParams({ directory, mode, path })}`,
       { signal },
+    ),
+  fullDiff: (directory: string, mode: 'working' | 'branch', path: string) =>
+    nativeRequest<FileDiffInfo | null>(
+      `/workspace/diff?${new URLSearchParams({ directory, mode, path, full: '1' })}`,
     ),
   workspaceVcs: (directory: string, signal: AbortSignal) =>
     nativeRequest<WorkspaceVcs>(`/workspace/vcs?${new URLSearchParams({ directory })}`, { signal }),
@@ -351,6 +356,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ directory }),
     }),
+  folders: (path: string, signal: AbortSignal) =>
+    request(`/folders?${new URLSearchParams({ path })}`, folderListSchema, { signal }),
   sessions: (
     scope: { directory: string } | { project: string },
     cursor: string | undefined,

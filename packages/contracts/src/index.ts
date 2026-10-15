@@ -23,6 +23,8 @@ export const terminalUpdateSchema = z.object({
   }),
 });
 export const projectSchema = z.object({ directory: z.string(), name: z.string() });
+/** One folder's subfolders, for completing a typed project path. */
+export const folderListSchema = z.object({ folders: z.array(z.string()) });
 export const projectUpdateSchema = z.object({
   name: z.string().trim().max(256),
   icon: z
@@ -89,6 +91,7 @@ export const apiErrorSchema = z.object({ message: z.string() });
 
 export type Connection = z.infer<typeof connectionSchema>;
 export type Project = z.infer<typeof projectSchema>;
+export type FolderList = z.infer<typeof folderListSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type SessionPage = z.infer<typeof sessionPageSchema>;
 export type ModelProvider = Pick<ProviderInfo, 'id' | 'name' | 'canonical'>;

@@ -17,7 +17,7 @@ import {
 } from '@opencodex/contracts';
 import { OpenCodeBackend } from './opencode';
 import { GatewayError } from './errors';
-import { resolveProject } from './project';
+import { listFolders, resolveProject } from './project';
 import { workspaceRoutes } from './workspace';
 import { terminalRoutes } from './terminals';
 import { shellRoutes } from './shells';
@@ -126,6 +126,11 @@ export function createApp(
     const input = projectInputSchema.safeParse(await c.req.json().catch(() => null));
     if (!input.success) return c.json({ message: 'Enter a project directory.' }, 400);
     return c.json(await resolveProject(input.data.directory));
+  });
+  app.get('/api/folders', async (c) => {
+    const input = projectInputSchema.safeParse({ directory: c.req.query('path') });
+    if (!input.success) return c.json({ message: 'Enter a folder path.' }, 400);
+    return c.json(await listFolders(input.data.directory));
   });
 
   app.get('/api/projects', async (c) =>

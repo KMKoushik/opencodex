@@ -85,6 +85,11 @@
   --toolbar-height: 40px;
   --row-height: 36px;
   --thread-width: 768px;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --duration-fast: 120ms;
+  --duration-medium: 200ms;
+  --duration-slow: 240ms;
 }
 
 :root[data-platform] {
