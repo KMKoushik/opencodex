@@ -612,7 +612,7 @@ test('projects: native metadata, icons, search, add and sidebar persistence', as
     await mkdir(added, { recursive: true });
     await page.getByRole('button', { name: 'Add project', exact: true }).click();
     const add = page.getByRole('dialog', { name: 'Add project', exact: true });
-    await add.getByRole('textbox', { name: 'Project directory' }).fill(added);
+    await add.getByRole('combobox', { name: 'Project directory' }).fill(added);
     await add.getByRole('button', { name: 'Open', exact: true }).click();
     await expect(add).toHaveCount(0);
     await expect(list.getByRole('button', { name: 'new-project', exact: true })).toBeVisible();

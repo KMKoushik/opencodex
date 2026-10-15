@@ -3,6 +3,7 @@ import {
   apiErrorSchema,
   connectionSchema,
   projectSchema,
+  folderListSchema,
   sessionPageSchema,
   type OpenCodeProject,
   type ProjectUpdate,
@@ -355,6 +356,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ directory }),
     }),
+  folders: (path: string, signal: AbortSignal) =>
+    request(`/folders?${new URLSearchParams({ path })}`, folderListSchema, { signal }),
   sessions: (
     scope: { directory: string } | { project: string },
     cursor: string | undefined,

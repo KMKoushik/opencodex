@@ -461,6 +461,68 @@ svg {
 .project-form .button-primary {
   height: 36px;
 }
+/* Floats under the path field in the top layer, so it covers content instead of moving it. */
+.project-input[data-suggesting] {
+  anchor-name: --project-folders;
+}
+.project-folders {
+  position: fixed;
+  position-anchor: --project-folders;
+  inset: auto;
+  top: anchor(bottom);
+  left: anchor(left);
+  width: anchor-size(width);
+  height: calc(var(--rows) * 30px + 10px);
+  margin: 4px 0 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  border: 1px solid var(--border-heavy);
+  border-radius: 10px;
+  background: var(--elevated);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  text-align: left;
+  position-try-fallbacks: flip-block;
+}
+.project-folders[data-stale] [role='option'] {
+  opacity: 0.5;
+}
+.project-folders [role='option'] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.project-folders [role='option'] > svg {
+  flex: none;
+  color: var(--text-tertiary);
+}
+.project-folders [role='option'] > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.project-folders [aria-selected='true'] {
+  background: var(--hover);
+  color: var(--text);
+}
+.project-folders mark {
+  background: transparent;
+  color: var(--text);
+  font-weight: 600;
+}
+.project-folders p {
+  padding: 6px 8px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
 .field-error {
   flex-basis: 100%;
   color: var(--error);
