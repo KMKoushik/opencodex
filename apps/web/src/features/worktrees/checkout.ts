@@ -3,7 +3,9 @@ import type { SessionInfo } from '@opencodex/contracts';
 import { api } from '../../lib/api';
 
 /** The chat's native checkout: its project's local folder or one of its Git worktrees. */
-export function useCheckout(session: SessionInfo | undefined) {
+export function useCheckout(
+  session: (Pick<SessionInfo, 'projectID'> & { location: { directory: string } }) | undefined,
+) {
   const project = useQuery({
     queryKey: ['projects'],
     queryFn: ({ signal }) => api.projects(signal),

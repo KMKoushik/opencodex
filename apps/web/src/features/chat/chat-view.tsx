@@ -39,6 +39,7 @@ export function ChatView({
   switchError,
   onSwitchProject,
   onOpenSession,
+  onNewChat,
   onOpenSubagent,
   onOpenSideChat,
   focusRequest,
@@ -53,6 +54,7 @@ export function ChatView({
   switchError?: string;
   onSwitchProject: (project: Project, model?: ModelRef) => void;
   onOpenSession: (id: string) => void;
+  onNewChat: () => void;
   onOpenSubagent: (id: string) => void;
   /** Shows a side chat of this chat in the side-chat panel. */
   onOpenSideChat: (sideID: string) => void;
@@ -125,10 +127,7 @@ export function ChatView({
           return {
             session: await api.sessionAction(sessionID, { action: 'fork', before: input.before }),
           };
-        if (slash.name === 'new')
-          return {
-            session: await api.createSession(chat.info.data!.location.directory, input.model),
-          };
+        if (slash.name === 'new') return { session: null, newChat: true };
         if (slash.name === 'compact') await api.sessionAction(sessionID, { action: 'compact' });
         if (slash.name === 'undo' || slash.name === 'redo') {
           if (running) throw new Error('Stop the current response before undoing or redoing.');
@@ -201,6 +200,8 @@ export function ChatView({
     // arrive in view even if the reader had scrolled up.
     onMutate: () => timeline.current?.scrollToLatest(),
     onSuccess: (result, input) => {
+      // Before acknowledging, so the new thread inherits this draft's model.
+      if ('newChat' in result) onNewChat();
       if ('model' in result && result.model)
         client.setQueryData<SessionInfo>(['chat', sessionID, 'info'], (info) =>
           info ? { ...info, model: input.model } : info,

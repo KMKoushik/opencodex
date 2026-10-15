@@ -3,24 +3,13 @@ import type { Project } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { useConnection } from '../connection/use-connection';
 import { ProjectForm } from '../projects/project-form';
-import { ProjectSwitcher } from '../projects/project-switcher';
-import { shortcutProps } from '../shortcuts/commands';
 import { BrandIcon } from '../brand/brand';
 
+/** Connection and project setup; a chosen project shows the new-thread composer instead. */
 export function WorkspaceView({
-  project,
-  projects,
   onSelectProject,
-  onNewChat,
-  creating,
-  createError,
 }: {
-  project: Project | null;
-  projects: Project[];
   onSelectProject: (project: Project) => void;
-  onNewChat: () => void;
-  creating: boolean;
-  createError?: string;
 }) {
   const { connection, connect, connected } = useConnection();
 
@@ -57,36 +46,12 @@ export function WorkspaceView({
     );
   }
 
-  if (!project) {
-    return (
-      <EmptyState
-        title="Open a project"
-        description="Choose a folder on the machine running OpenCodex."
-      >
-        <ProjectForm onSelect={onSelectProject} />
-      </EmptyState>
-    );
-  }
-
   return (
     <EmptyState
-      title="What should we build?"
-      description="Any model, any provider. Your repo stays on your machine."
+      title="Open a project"
+      description="Choose a folder on the machine running OpenCodex."
     >
-      <ProjectSwitcher
-        project={project}
-        opened={projects}
-        disabled={creating}
-        onSelect={onSelectProject}
-      />
-      <Button {...shortcutProps('chat.new')} onClick={onNewChat} disabled={creating}>
-        {creating ? 'Creating…' : 'New chat'}
-      </Button>
-      {createError && (
-        <p className="text-error" role="alert">
-          {createError}
-        </p>
-      )}
+      <ProjectForm onSelect={onSelectProject} />
     </EmptyState>
   );
 }

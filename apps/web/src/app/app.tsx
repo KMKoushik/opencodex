@@ -15,6 +15,7 @@ import type {
   OpenCodeProject,
   Project,
   Session,
+  SessionInfo,
 } from '@opencodex/contracts';
 import { Button } from '../components/ui/button';
 import { TooltipLayer } from '../components/ui/tooltip-layer';
@@ -53,6 +54,7 @@ import { SidebarResize } from '../features/sidebar/sidebar-resize';
 import { readTerminalPlacement, type TerminalPlacement } from '../features/terminal/placement';
 import { readStorage, writeStorage } from '../lib/storage';
 import { useDraftStore } from '../features/chat/draft-context';
+import { NEW_CHAT_DRAFT } from '../features/chat/draft-store';
 import { BrandIcon, DevelopmentBadge } from '../features/brand/brand';
 import { appName } from '../features/brand/identity';
 import { Sidebar } from '../features/sidebar/sidebar';
@@ -75,6 +77,9 @@ const subagentsPanel = panels.find((panel) => panel.id === 'subagents')!;
 
 const ChatView = lazy(() =>
   import('../features/chat/chat-view').then((module) => ({ default: module.ChatView })),
+);
+const NewChatView = lazy(() =>
+  import('../features/chat/new-chat-view').then((module) => ({ default: module.NewChatView })),
 );
 const BrowserHost = lazy(() =>
   import('../features/browser/browser-host').then((module) => ({ default: module.BrowserHost })),
@@ -140,7 +145,8 @@ export function App() {
     setFileRequest(undefined);
     setSubagentRequest(undefined);
     setSideChatRequest(undefined);
-    if (composerFocus && composerFocus.sessionID !== selectedID) setComposerFocus(undefined);
+    if (composerFocus && composerFocus.sessionID !== (selectedID ?? NEW_CHAT_DRAFT))
+      setComposerFocus(undefined);
   }
   const workbenchToggle = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
@@ -226,19 +232,6 @@ export function App() {
     },
     [workbench, workspaceKey],
   );
-  const create = useMutation({
-    mutationFn: ({ directory, model }: { directory: string; model?: ModelRef }) =>
-      api.createSession(directory, model),
-    onSuccess: (session, { directory }) => {
-      queryClient.setQueryData(['chat', session.id, 'info'], session);
-      if (project?.directory === directory) {
-        setSelectedID(session.id);
-        setSidebarOpen(false);
-      }
-      void queryClient.invalidateQueries({ queryKey: ['sessions'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
-    },
-  });
   const switchProject = useMutation({
     mutationFn: ({
       project,
@@ -276,7 +269,6 @@ export function App() {
     setTasks(false);
     setApp(null);
     setSidebarOpen(false);
-    create.reset();
   }
 
   function closeProject(directory: string) {
@@ -367,10 +359,11 @@ export function App() {
     return newProjectChat(project);
   }
 
+  /** Opens the unsent thread; OpenCode creates its session when the first message is sent. */
   function newProjectChat(next: Project) {
-    if (!connected || create.isPending || switchProject.isPending) return false;
+    if (!connected || switchProject.isPending) return false;
     const current = project?.directory === next.directory;
-    // Capture the visible selection before creation; unsent choices win over session state.
+    // Carry the visible selection into the new thread; unsent choices win over session state.
     const model =
       (current && selectedID ? drafts.getState().drafts[selectedID]?.model : undefined) ??
       (current ? info.data?.model : undefined) ??
@@ -382,8 +375,22 @@ export function App() {
       undefined;
     if (model) drafts.getState().rememberModel(next.directory, model);
     navigate(null);
-    if (!current) selectProject(next);
-    create.mutate({ directory: next.directory, model });
+    if (current) setSelectedID(undefined);
+    else selectProject(next);
+    setComposerFocus({ sessionID: NEW_CHAT_DRAFT, token: ++composerFocusToken.current });
+  }
+
+  // A thread started from the draft opens only if its project's draft is still showing.
+  const draftLocation = useRef({ project, selectedID, page });
+  useEffect(() => {
+    draftLocation.current = { project, selectedID, page };
+  });
+  function startedChat(session: SessionInfo, directory: string) {
+    const location = draftLocation.current;
+    if (location.selectedID || location.page || location.project?.directory !== directory) return;
+    setSelectedID(session.id);
+    setSidebarOpen(false);
+    setComposerFocus({ sessionID: session.id, token: ++composerFocusToken.current });
   }
 
   function openProject() {
@@ -533,8 +540,7 @@ export function App() {
           app={app}
           connected={connected}
           live={live}
-          canCreate={Boolean(project && connected && !create.isPending && !switchProject.isPending)}
-          creating={create.isPending}
+          canCreate={Boolean(project && connected && !switchProject.isPending)}
           canBack={history.canBack}
           canForward={history.canForward}
           onBack={history.back}
@@ -554,11 +560,6 @@ export function App() {
             <SettingsNav section={settings} onSelect={navigate} onBack={() => navigate(null)} />
           ) : (
             <>
-              {create.isError && selectedID && (
-                <p className="sidebar-note text-error" role="alert">
-                  {create.error.message}
-                </p>
-              )}
               <ThreadsView
                 connected={connected}
                 live={live}
@@ -581,7 +582,6 @@ export function App() {
                   onSelect={selectProject}
                   onClose={closeProject}
                   onNewChat={newProjectChat}
-                  creatingDirectory={create.isPending ? create.variables.directory : undefined}
                   selectedID={selectedID}
                   onSelectSession={(next, id) => {
                     if (project?.directory !== next.directory) selectProject(next);
@@ -793,6 +793,7 @@ export function App() {
                             }
                             onFocusHandled={() => setComposerFocus(undefined)}
                             onOpenSession={setSelectedID}
+                            onNewChat={newChat}
                             onOpenSubagent={(childID) => {
                               setSubagentRequest({ sessionID: selectedID, childID });
                               setWorkbenchLoaded(true);
@@ -813,7 +814,7 @@ export function App() {
                                 : undefined
                             }
                             onSwitchProject={(next, model) => {
-                              if (create.isPending || switchProject.isPending) return;
+                              if (switchProject.isPending) return;
                               switchProject.mutate({
                                 project: next,
                                 sourceSessionID: selectedID,
@@ -825,15 +826,25 @@ export function App() {
                       </SideChatQuoteContext.Provider>
                     </FileLinkContext.Provider>
                   </Suspense>
+                ) : connected && currentProject ? (
+                  <Suspense fallback={null}>
+                    <NewChatView
+                      key={currentProject.directory}
+                      project={currentProject}
+                      projects={projects}
+                      live={live}
+                      onSelectProject={selectProject}
+                      onStarted={startedChat}
+                      focusRequest={
+                        composerFocus?.sessionID === NEW_CHAT_DRAFT
+                          ? composerFocus.token
+                          : undefined
+                      }
+                      onFocusHandled={() => setComposerFocus(undefined)}
+                    />
+                  </Suspense>
                 ) : (
-                  <WorkspaceView
-                    project={currentProject}
-                    projects={projects}
-                    onSelectProject={selectProject}
-                    onNewChat={newChat}
-                    creating={create.isPending}
-                    createError={create.error?.message}
-                  />
+                  <WorkspaceView onSelectProject={selectProject} />
                 )}
               </main>
             </div>

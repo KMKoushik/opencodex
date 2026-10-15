@@ -5,7 +5,10 @@ import { api } from '../../lib/api';
 import { useDraftStore } from './draft-context';
 import { modelKey } from './model-usage';
 
-export function useModelSelection(sessionID: string, session?: SessionInfo) {
+export function useModelSelection(
+  sessionID: string,
+  session?: Pick<SessionInfo, 'model'> & { location: { directory: string } },
+) {
   const store = useDraftStore();
   const draft = useStore(store, (state) => state.drafts[sessionID]?.model);
   const directory = session?.location.directory;

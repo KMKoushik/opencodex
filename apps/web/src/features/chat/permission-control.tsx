@@ -13,18 +13,21 @@ export function PermissionControl({
   session,
   disabled = false,
   request = false,
+  draft,
 }: {
   sessionID: string;
   session?: SessionInfo;
   disabled?: boolean;
   request?: boolean;
+  /** An unsent thread's choice, applied when its session is created. */
+  draft?: { full: boolean; onChange: (full: boolean) => void };
 }) {
   const client = useQueryClient();
   const [confirm, setConfirm] = useState(false);
   const cancel = useRef<HTMLButtonElement>(null);
   const mutationKey = ['chat', sessionID, 'access'];
   const pending = useIsMutating({ mutationKey }) > 0;
-  const full = session ? sessionFullAccess(session) : false;
+  const full = draft ? draft.full : session ? sessionFullAccess(session) : false;
   const access = useMutation({
     mutationKey,
     mutationFn: (mode: 'default' | 'full') => api.sessionAccess(sessionID, mode),
@@ -44,7 +47,7 @@ export function PermissionControl({
         variant="ghost"
         className={request ? undefined : 'permission-control'}
         data-full-access={full}
-        disabled={disabled || !session || pending}
+        disabled={disabled || (!session && !draft) || pending}
         aria-label={
           request
             ? 'Enable full access for this thread'
@@ -60,8 +63,10 @@ export function PermissionControl({
         }
         onClick={() => {
           access.reset();
-          if (full && !request) access.mutate('default');
-          else setConfirm(true);
+          if (full && !request) {
+            if (draft) draft.onChange(false);
+            else access.mutate('default');
+          } else setConfirm(true);
         }}
       >
         {!request && <HugeiconsIcon icon={full ? ShieldEnergyIcon : Shield01Icon} size={16} />}
@@ -103,7 +108,14 @@ export function PermissionControl({
             >
               Cancel
             </Button>
-            <Button disabled={pending} onClick={() => access.mutate('full')}>
+            <Button
+              disabled={pending}
+              onClick={() => {
+                if (!draft) return access.mutate('full');
+                draft.onChange(true);
+                setConfirm(false);
+              }}
+            >
               {pending ? 'Enabling…' : 'Enable full access'}
             </Button>
           </div>

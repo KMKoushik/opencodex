@@ -12,6 +12,8 @@ type Draft = Readonly<{
   revision: number;
 }>;
 export type DraftSnapshot = Draft & { readonly sessionID: string };
+/** Draft key for the unsent thread; OpenCode creates its session only on the first send. */
+export const NEW_CHAT_DRAFT = 'new';
 type DraftState = {
   drafts: Readonly<Record<string, Draft | undefined>>;
   projectModels: Readonly<Record<string, ModelRef>>;

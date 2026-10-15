@@ -23,7 +23,6 @@ export function ProjectList({
   onSelect,
   onClose,
   onNewChat,
-  creatingDirectory,
   selectedID,
   onSelectSession,
 }: {
@@ -34,7 +33,6 @@ export function ProjectList({
   onSelect: (project: Project) => void;
   onClose: (directory: string) => void;
   onNewChat: (project: Project) => void;
-  creatingDirectory: string | undefined;
   selectedID: string | undefined;
   onSelectSession: (project: Project, id: string) => void;
 }) {
@@ -114,8 +112,6 @@ export function ProjectList({
                 size="icon"
                 aria-label={`New chat in ${project.name}`}
                 title={`New chat in ${project.name}`}
-                disabled={Boolean(creatingDirectory)}
-                aria-busy={creatingDirectory === project.directory}
                 onClick={() => {
                   setExpandedDirectories((previous) =>
                     previous.has(project.directory)

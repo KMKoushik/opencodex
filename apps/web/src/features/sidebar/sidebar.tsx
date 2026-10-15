@@ -41,7 +41,6 @@ export function Sidebar({
   connected,
   live,
   canCreate,
-  creating,
   canBack,
   canForward,
   onBack,
@@ -62,7 +61,6 @@ export function Sidebar({
   connected: boolean;
   live: boolean;
   canCreate: boolean;
-  creating: boolean;
   canBack: boolean;
   canForward: boolean;
   onBack: () => void;
@@ -200,7 +198,7 @@ export function Sidebar({
               onClick={onNewChat}
             >
               <HugeiconsIcon icon={PencilEdit02Icon} size={16} />
-              <span>{creating ? 'Creating…' : 'New thread'}</span>
+              <span>New thread</span>
             </button>
             <button className="nav-row" {...shortcutProps('project.open')} onClick={onOpenProject}>
               <HugeiconsIcon icon={FolderOpenIcon} size={16} />
