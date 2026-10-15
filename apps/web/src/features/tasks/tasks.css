@@ -79,7 +79,7 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface-under);
-  transition: border-color 120ms ease;
+  transition: border-color var(--duration-fast) var(--ease-out);
 }
 .task-column[data-bucket='today'] {
   --task-tint: var(--warning);
@@ -157,8 +157,8 @@
   background: var(--elevated);
   font-size: 13px;
   transition:
-    border-color 120ms ease,
-    opacity 120ms ease;
+    border-color var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
 }
 .task-card[draggable='true'] {
   cursor: grab;
@@ -180,9 +180,9 @@
   color: transparent;
   cursor: pointer;
   transition:
-    background-color 120ms ease,
-    border-color 120ms ease,
-    color 120ms ease;
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
 }
 .task-check[aria-checked='true'] {
   border-color: var(--success);

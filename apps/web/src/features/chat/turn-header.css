@@ -21,7 +21,7 @@
 }
 .turn-work-chevron {
   flex: none;
-  transition: transform 120ms ease;
+  transition: transform var(--duration-medium) var(--ease-out);
 }
 .turn-work-chevron[data-open='true'] {
   transform: rotate(90deg);

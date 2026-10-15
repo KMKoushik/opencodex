@@ -939,8 +939,9 @@ svg {
   font-weight: 500;
   white-space: nowrap;
   transition:
-    background-color 120ms ease,
-    color 120ms ease;
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    scale var(--duration-fast) var(--ease-out);
 }
 /* Anything you press is glazed ceramic; surfaces stay flat. */
 .button-primary {
@@ -972,12 +973,30 @@ svg {
   border-radius: 7px;
 }
 .segmented {
+  position: relative;
+  isolation: isolate;
   display: inline-flex;
   gap: 2px;
   padding: 2px;
   border-radius: 9px;
   background: var(--well);
   box-shadow: var(--well-shadow);
+}
+.segmented-thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  z-index: -1;
+  width: var(--thumb-width);
+  border-radius: 7px;
+  background: var(--glaze);
+  box-shadow: var(--glaze-shadow);
+  transform: translateX(var(--thumb-x));
+  pointer-events: none;
+}
+.segmented:not([data-placed]) .segmented-thumb {
+  display: none;
 }
 .segmented button {
   display: flex;
@@ -991,11 +1010,14 @@ svg {
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 500;
+  transition: color var(--duration-fast) var(--ease-out);
 }
-.segmented button[aria-checked='true'] {
-  background: var(--glaze);
-  box-shadow: var(--glaze-shadow);
+.segmented button[aria-checked='true'],
+.segmented button:focus-visible {
   color: var(--text);
+}
+.segmented button:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--border-heavy);
 }
 .segmented-badge {
   padding: 0 5px;
@@ -1028,6 +1050,16 @@ svg {
 .select-chevron {
   margin-left: auto;
   color: var(--text-tertiary);
+  transition: rotate var(--duration-medium) var(--ease-out);
+}
+.select-trigger[aria-expanded='true'] .select-chevron {
+  rotate: 180deg;
+}
+.select-menu {
+  transform-origin: top right;
+}
+.select-menu[data-placement='top'] {
+  transform-origin: bottom right;
 }
 .select-menu {
   position: absolute;
@@ -1281,7 +1313,9 @@ svg {
 
 @media (prefers-reduced-motion: reduce) {
   .sidebar,
-  .button {
+  .button,
+  .segmented button,
+  .select-chevron {
     transition: none;
   }
   .toolbar-status,
@@ -1303,6 +1337,46 @@ svg {
 
 @keyframes appear {
   from {
+    opacity: 0;
+  }
+}
+
+/* Motion: only opacity and transforms, so nothing here triggers layout. */
+@media (prefers-reduced-motion: no-preference) {
+  .button:not(:disabled):active,
+  .segmented button:active {
+    scale: 0.97;
+  }
+  .disclosure-chevron,
+  .activity-tray-chevron,
+  .session-details-chevron {
+    transition: transform var(--duration-medium) var(--ease-out);
+  }
+  /* Menus and popovers settle in from their trigger; closing stays instant. */
+  [popover]:popover-open,
+  .select-menu {
+    transition:
+      opacity var(--duration-fast) var(--ease-out),
+      scale var(--duration-fast) var(--ease-out);
+  }
+  dialog[open],
+  dialog[open]::backdrop {
+    transition:
+      opacity var(--duration-slow) var(--ease-out),
+      scale var(--duration-slow) var(--ease-out);
+  }
+}
+@starting-style {
+  [popover]:popover-open,
+  .select-menu {
+    opacity: 0;
+    scale: 0.97;
+  }
+  dialog[open] {
+    opacity: 0;
+    scale: 0.96;
+  }
+  dialog[open]::backdrop {
     opacity: 0;
   }
 }

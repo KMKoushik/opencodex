@@ -67,7 +67,8 @@ export function SessionRow({
       if (!popup || !row) return;
       const rect = row.getBoundingClientRect();
       popup.showPopover();
-      const { width, height } = popup.getBoundingClientRect();
+      // Layout size, not the rect: the opening animation scales the popup.
+      const { offsetWidth: width, offsetHeight: height } = popup;
       popup.style.left = `${Math.max(8, Math.min(rect.right + 8, innerWidth - width - 8))}px`;
       popup.style.top = `${Math.max(8, Math.min(rect.top, innerHeight - height - 8))}px`;
     }, delay);
