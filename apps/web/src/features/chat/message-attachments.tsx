@@ -6,12 +6,14 @@ import { FileDownload } from './file-download';
 export const MessageAttachments = memo(function MessageAttachments({
   files,
 }: {
-  files?: PromptFileAttachment[];
+  files?: readonly PromptFileAttachment[];
 }) {
-  if (!files?.length) return null;
+  // Mentioned files and chats show as pills in the message text instead.
+  const attached = files?.filter((file) => !file.mention);
+  if (!attached?.length) return null;
   return (
     <ul className="message-attachments" aria-label="Attached files">
-      {files.map((file, index) => (
+      {attached.map((file, index) => (
         <li key={index}>
           {/^image\/(png|jpeg|gif|webp)$/.test(file.mime) ? (
             <ImageAttachment

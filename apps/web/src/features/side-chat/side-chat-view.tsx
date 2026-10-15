@@ -8,11 +8,12 @@ import { useModelSelection } from '../chat/use-model-selection';
 import { useDraftStore } from '../chat/draft-context';
 import type { DraftSnapshot } from '../chat/draft-store';
 import { EMPTY_ATTACHMENTS, encodeAttachments } from '../chat/attachments';
-import { reviewPrompt } from '../chat/review-comments';
+import { annotatedPrompt } from '../chat/review-comments';
 import { localCommands, parseSlash, useSlashCommands } from '../chat/slash-commands';
 import { Timeline, type TimelineHandle } from '../chat/timeline';
 import { useFindScope } from '../find/find-scope';
-import { MessageAttachments } from '../chat/message-attachments';
+import { UserPrompt } from '../chat/user-prompt';
+import { promptMentions } from '../chat/mentions';
 import { PermissionCard } from '../chat/requests';
 import { QuestionDock } from '../chat/question-dock';
 import { Composer } from '../chat/composer';
@@ -97,19 +98,23 @@ export function SideChatView({
       const command = slash && catalog?.data?.find((item) => item.name === slash.name);
       if (slash && !command)
         throw new Error(`Unknown command /${slash.name}. Type / to see available commands.`);
-      const text = reviewPrompt(slash ? slash.text : input.draft.text, input.draft.comments);
+      const { text, annotations } = annotatedPrompt(
+        slash ? slash.text : input.draft.text,
+        input.draft.comments,
+      );
       if (text.length > 200_000)
         throw new Error('The draft is too long. Shorten it before sending.');
-      await api.prompt(
-        input.draft.sessionID,
+      await api.prompt(input.draft.sessionID, {
         text,
-        input.model,
-        input.draft.attachments?.length
+        model: input.model,
+        files: input.draft.attachments?.length
           ? await encodeAttachments(input.draft.attachments)
           : undefined,
-        command && !command.skill ? command.name : undefined,
-        command ? command.skill : undefined,
-      );
+        command: command && !command.skill ? command.name : undefined,
+        skill: command ? command.skill : undefined,
+        mentions: promptMentions(text, input.draft.mentions),
+        annotations,
+      });
       return { sent: true };
     },
     onMutate: () => timeline.current?.scrollToLatest(),
@@ -192,8 +197,12 @@ export function SideChatView({
         <article className="user-message" key={item.id}>
           {item.type === 'user' && (
             <>
-              {item.payload.text && <p className="user-message-bubble">{item.payload.text}</p>}
-              <MessageAttachments files={item.payload.files} />
+              <UserPrompt
+                text={item.payload.text}
+                files={item.payload.files}
+                skills={item.payload.skills}
+                metadata={item.payload.metadata}
+              />
             </>
           )}
           <span className="message-note">Pending in OpenCode</span>

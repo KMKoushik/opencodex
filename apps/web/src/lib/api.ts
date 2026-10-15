@@ -25,6 +25,8 @@ import {
   type ModelCatalog,
   type ModelRef,
   type PromptFiles,
+  type PromptMention,
+  type MessageAnnotations,
   type WorkspaceVcs,
   type WorkspaceSkills,
   type McpServer,
@@ -316,16 +318,16 @@ export const api = {
     nativeRequest<SessionInboxInfo[]>(`${sessionPath(id)}/inbox`, { signal }),
   prompt: (
     id: string,
-    text: string,
-    model?: ModelRef,
-    files?: PromptFiles,
-    command?: string,
-    skill?: string,
-  ) =>
-    nativeRequest<SessionInboxUser | null>(
-      `${sessionPath(id)}/prompt`,
-      post({ text, model, files, command, skill }),
-    ),
+    input: {
+      text: string;
+      model?: ModelRef;
+      files?: PromptFiles;
+      command?: string;
+      skill?: string;
+      mentions?: PromptMention[];
+      annotations?: MessageAnnotations;
+    },
+  ) => nativeRequest<SessionInboxUser | null>(`${sessionPath(id)}/prompt`, post(input)),
   interrupt: (id: string) => nativeRequest(`${sessionPath(id)}/interrupt`, post()),
   permissions: (id: string, signal: AbortSignal) =>
     nativeRequest<PermissionRequest[]>(`${sessionPath(id)}/permissions`, { signal }),

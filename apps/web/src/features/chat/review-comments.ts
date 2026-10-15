@@ -1,3 +1,5 @@
+import type { MessageAnnotations } from '@opencodex/contracts';
+
 export type FileCommentTarget = Readonly<{
   path: string;
   directory?: string;
@@ -40,26 +42,40 @@ export function commentLabel(target: CommentTarget) {
 
 /** Context stays structured locally; OpenCode receives ordinary prompt text on explicit send. */
 export function reviewPrompt(text: string, comments: readonly ReviewComment[] = EMPTY_COMMENTS) {
-  return [
-    text,
-    ...comments.map(({ target, text: comment }) => {
-      const quote = commentQuote(target);
-      const source =
-        'messageID' in target
-          ? `Assistant response (${target.messageID}, part ${target.ordinal + 1})`
-          : 'url' in target
-            ? `${target.url.startsWith('canvas:') ? 'canvas' : 'page'} ${target.url}${target.title ? ` ("${target.title}")` : ''}${target.screenshot ? ', shown in the attached screenshot' : ''}`
-            : `${target.directory ? `${target.directory}/` : ''}${commentLabel(target)}${target.diffMode ? ` [${target.diffMode} diff]` : ''}`;
-      return `Review comment on ${source}:\n${
-        quote
-          ? `${quote
-              .split('\n')
-              .map((line) => `> ${line}`)
-              .join('\n')}\n\n`
-          : ''
-      }${comment}`;
-    }),
-  ]
-    .filter(Boolean)
-    .join('\n\n');
+  return annotatedPrompt(text, comments).text;
+}
+
+/** The prompt text, and where the user's text and each comment sit in it for the sent bubble. */
+export function annotatedPrompt(
+  text: string,
+  comments: readonly ReviewComment[] = EMPTY_COMMENTS,
+): { text: string; annotations?: MessageAnnotations } {
+  if (!comments.length) return { text };
+  let prompt = text;
+  const counts = { annotation: 0, comment: 0 };
+  const items = comments.map(({ target, text: comment }): MessageAnnotations['items'][number] => {
+    const kind = 'path' in target ? 'comment' : 'annotation';
+    const quote = commentQuote(target);
+    const source =
+      'messageID' in target
+        ? `Assistant response (${target.messageID}, part ${target.ordinal + 1})`
+        : 'url' in target
+          ? `${target.url.startsWith('canvas:') ? 'canvas' : 'page'} ${target.url}${target.title ? ` ("${target.title}")` : ''}${target.screenshot ? ', shown in the attached screenshot' : ''}`
+          : `${target.directory ? `${target.directory}/` : ''}${commentLabel(target)}${target.diffMode ? ` [${target.diffMode} diff]` : ''}`;
+    if (prompt) prompt += '\n\n';
+    prompt += `${kind === 'comment' ? 'Comment' : 'Annotation'} ${++counts[kind]} on ${source}:\n`;
+    const quoted = quote
+      ? ([prompt.length, (prompt += quote.replace(/^/gm, '> ')).length] as [number, number])
+      : undefined;
+    if (quote && comment) prompt += '\n\n';
+    const start = prompt.length;
+    prompt += comment;
+    return {
+      kind,
+      label: commentLabel(target),
+      quote: quoted,
+      comment: comment ? [start, prompt.length] : undefined,
+    };
+  });
+  return { text: prompt, annotations: { end: text.length, items } };
 }

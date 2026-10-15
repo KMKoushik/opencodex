@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import type { SessionMessageInfo } from '@opencodex/contracts';
 import { Disclosure } from './disclosure';
-import { MessageAttachments } from './message-attachments';
+import { UserPrompt } from './user-prompt';
 import { SkillUsage } from './skill';
 
 export const Message = memo(function Message({ message }: { message: SessionMessageInfo }) {
@@ -9,12 +9,13 @@ export const Message = memo(function Message({ message }: { message: SessionMess
     case 'user':
       return (
         <article className="user-message" aria-label="You">
-          {message.text && (
-            <p className="user-message-bubble" data-find-text="">
-              {message.text}
-            </p>
-          )}
-          <MessageAttachments files={message.files} />
+          <UserPrompt
+            text={message.text}
+            files={message.files}
+            skills={message.skills}
+            metadata={message.metadata}
+            findable
+          />
         </article>
       );
     case 'assistant':

@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -19,6 +20,9 @@ import { ComposerAttachments } from './composer-attachments';
 import { ComposerComments } from './composer-comments';
 import { localCommands, matchSlashCommands, useSlashCommands } from './slash-commands';
 import { useTypeToCompose } from './use-type-to-compose';
+import { EMPTY_MENTIONS, mentionQuery } from './mentions';
+import { MentionHighlight, MentionMenu } from './mention-menu';
+import { useMentionOptions, type MentionOption } from './mention-options';
 import './slash-commands.css';
 
 export function Composer({
@@ -62,10 +66,13 @@ export function Composer({
   );
   const [attachmentError, setAttachmentError] = useState<string>();
   const commentCount = useStore(store, (state) => state.drafts[sessionID]?.comments?.length ?? 0);
+  const mentions = useStore(store, (state) => state.drafts[sessionID]?.mentions ?? EMPTY_MENTIONS);
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const highlight = useRef<HTMLDivElement>(null);
+  const pendingCaret = useRef<number>(undefined);
   useLayoutEffect(() => {
     if (focusRequest === undefined) return;
     textarea.current?.focus({ preventScroll: true });
@@ -84,12 +91,46 @@ export function Composer({
         draft.slice(1),
       )
     : [];
-  const activeCommand = Math.min(commandIndex, Math.max(0, commands.length - 1));
+  // A collapsed caret only; -1 while text is selected.
+  const [caret, setCaret] = useState(0);
+  const mention =
+    focused && !dismissed && !commandSearch
+      ? mentionQuery(draft, Math.min(caret, draft.length))
+      : undefined;
+  const mentionMenu = useMentionOptions(directory, sessionID, mention?.query);
+  const mentionList = useId();
+  const menuLength = commandSearch ? commands.length : mention ? mentionMenu.options.length : 0;
+  const activeCommand = Math.min(commandIndex, Math.max(0, menuLength - 1));
+  const activeOption = commandSearch
+    ? `slash-command-${activeCommand}`
+    : `${mentionList}-${activeCommand}`;
   function chooseCommand(name: string) {
     store.getState().editText(sessionID, `/${name} `);
     setDismissed(true);
     textarea.current?.focus();
   }
+  function chooseMention(option: MentionOption) {
+    if (!mention) return;
+    const after = draft.slice(caret);
+    const inserted = `${option.mention.token} `;
+    store
+      .getState()
+      .mention(
+        sessionID,
+        draft.slice(0, mention.start) + inserted + (after.startsWith(' ') ? after.slice(1) : after),
+        option.mention,
+      );
+    pendingCaret.current = mention.start + inserted.length;
+    setCommandIndex(0);
+    textarea.current?.focus();
+  }
+  useLayoutEffect(() => {
+    const position = pendingCaret.current;
+    if (position === undefined || !textarea.current) return;
+    pendingCaret.current = undefined;
+    textarea.current.setSelectionRange(position, position);
+    setCaret(position);
+  }, [draft]);
   const hasContent = Boolean(draft.trim() || attachments.length || commentCount);
   const removeAttachment = useCallback(
     (id: string) => {
@@ -216,6 +257,18 @@ export function Composer({
             {!commands.length && !commandQuery.isPending && <p>No matching commands</p>}
           </div>
         )}
+        {mention && (
+          <MentionMenu
+            id={mentionList}
+            options={mentionMenu.options}
+            active={activeCommand}
+            loading={mentionMenu.loading}
+            failed={mentionMenu.failed}
+            onRetry={mentionMenu.retry}
+            onHover={setCommandIndex}
+            onChoose={chooseMention}
+          />
+        )}
         {dragging && <div className="composer-drop-overlay">Drop files to attach</div>}
         <ComposerAttachments attachments={attachments} onRemove={removeAttachment} />
         {attachmentError && (
@@ -234,60 +287,74 @@ export function Composer({
             event.target.value = '';
           }}
         />
-        <textarea
-          ref={textarea}
-          aria-label="Message"
-          aria-controls={commandSearch ? 'slash-commands' : undefined}
-          aria-activedescendant={
-            commandSearch && commands.length ? `slash-command-${activeCommand}` : undefined
-          }
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          {...(shortcuts ? shortcutProps('composer.focus') : {})}
-          placeholder={placeholder}
-          rows={2}
-          spellCheck
-          value={draft}
-          onChange={(event) => {
-            setCommandIndex(0);
-            setDismissed(false);
-            store.getState().editText(sessionID, event.target.value);
-          }}
-          onKeyDown={(event) => {
-            if (event.nativeEvent.isComposing) return;
-            if (commandSearch) {
-              if (event.key === 'Escape') {
-                event.preventDefault();
-                event.stopPropagation();
-                setDismissed(true);
-                return;
-              }
-              if (
-                commands.length &&
-                ['ArrowDown', 'ArrowUp', 'Enter', 'Tab'].includes(event.key) &&
-                !event.shiftKey
-              ) {
-                event.preventDefault();
-                if (event.key === 'Enter' || event.key === 'Tab')
-                  chooseCommand(commands[activeCommand]!.name);
-                else {
-                  const next =
-                    (activeCommand + (event.key === 'ArrowDown' ? 1 : -1) + commands.length) %
-                    commands.length;
-                  setCommandIndex(next);
-                  document
-                    .getElementById(`slash-command-${next}`)
-                    ?.scrollIntoView({ block: 'nearest' });
+        <div className="composer-input">
+          {mentions.length > 0 && (
+            <MentionHighlight text={draft} mentions={mentions} ref={highlight} />
+          )}
+          <textarea
+            ref={textarea}
+            aria-label="Message"
+            aria-controls={commandSearch ? 'slash-commands' : mention ? mentionList : undefined}
+            aria-activedescendant={menuLength ? activeOption : undefined}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onSelect={(event) => {
+              const input = event.currentTarget;
+              setCaret(input.selectionStart === input.selectionEnd ? input.selectionStart : -1);
+            }}
+            onScroll={(event) => {
+              if (highlight.current) highlight.current.scrollTop = event.currentTarget.scrollTop;
+            }}
+            {...(shortcuts ? shortcutProps('composer.focus') : {})}
+            placeholder={placeholder}
+            rows={2}
+            spellCheck
+            value={draft}
+            onChange={(event) => {
+              setCommandIndex(0);
+              setDismissed(false);
+              setCaret(event.target.selectionStart);
+              store.getState().editText(sessionID, event.target.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return;
+              if (commandSearch || mention) {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setDismissed(true);
+                  return;
                 }
-                return;
+                if (
+                  menuLength &&
+                  ['ArrowDown', 'ArrowUp', 'Enter', 'Tab'].includes(event.key) &&
+                  !event.shiftKey
+                ) {
+                  event.preventDefault();
+                  if (event.key === 'Enter' || event.key === 'Tab') {
+                    if (commandSearch) chooseCommand(commands[activeCommand]!.name);
+                    else chooseMention(mentionMenu.options[activeCommand]!);
+                  } else {
+                    const next =
+                      (activeCommand + (event.key === 'ArrowDown' ? 1 : -1) + menuLength) %
+                      menuLength;
+                    setCommandIndex(next);
+                    document
+                      .getElementById(
+                        commandSearch ? `slash-command-${next}` : `${mentionList}-${next}`,
+                      )
+                      ?.scrollIntoView({ block: 'nearest' });
+                  }
+                  return;
+                }
               }
-            }
-            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
-            }
-          }}
-        />
+              if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
+          />
+        </div>
         <div className="composer-footer">
           <Button
             variant="ghost"

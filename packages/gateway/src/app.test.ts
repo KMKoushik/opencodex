@@ -1318,6 +1318,97 @@ describe('gateway and the real OpenCode client', () => {
     expect(prompts).toHaveLength(2);
   });
 
+  it('sends file and skill mentions natively and attaches a mentioned chat as a transcript', async () => {
+    const prompts: Array<Record<string, unknown>> = [];
+    const url = await upstream((req, res) => {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        res.setHeader('Content-Type', 'application/json');
+        const path = new URL(req.url!, 'http://localhost').pathname;
+        if (req.method === 'PUT') return res.writeHead(204).end();
+        if (path === '/api/session/session-1')
+          return res.end(
+            JSON.stringify({ data: { id: 'session-1', agent: 'build', location: { directory } } }),
+          );
+        if (path === '/api/session/chat-2')
+          return res.end(
+            JSON.stringify({
+              data: {
+                id: 'chat-2',
+                title: 'Fix login',
+                location: { directory: '/repo' },
+                revert: { messageID: 'undone' },
+              },
+            }),
+          );
+        if (path === '/api/session/chat-2/message')
+          return res.end(
+            JSON.stringify({
+              data: [
+                { type: 'user', id: 'undone', time: { created: 3 }, text: 'Undone request' },
+                {
+                  type: 'assistant',
+                  id: 'reply',
+                  time: { created: 2 },
+                  agent: 'build',
+                  model: { id: 'm', providerID: 'p' },
+                  content: [{ type: 'text', text: 'Patched the session check.' }],
+                },
+                { type: 'user', id: 'ask', time: { created: 1 }, text: 'Why does login fail?' },
+              ],
+              cursor: {},
+            }),
+          );
+        prompts.push(JSON.parse(body));
+        res.end(JSON.stringify({ data: { id: 'accepted' } }));
+      });
+    });
+    const app = createApp(new OpenCodeBackend(async () => ({ url })));
+    const text = 'Use @Ascii Video on @src/a.ts like @Fix login';
+    const at = (token: string) => ({
+      start: text.indexOf(token),
+      end: text.indexOf(token) + token.length,
+      text: token,
+    });
+    const response = await app.request('http://localhost/api/sessions/session-1/prompt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        mentions: [
+          { type: 'skill', id: 'ascii-video', mention: at('@Ascii Video') },
+          { type: 'file', path: 'src/a.ts', mention: at('@src/a.ts') },
+          { type: 'chat', id: 'chat-2', mention: at('@Fix login') },
+        ],
+      }),
+    });
+    expect(response.status).toBe(200);
+    const [prompt] = prompts as [
+      { files: Array<{ uri: string; mention: unknown }>; skills: unknown },
+    ];
+    expect(prompt.skills).toEqual([{ id: 'ascii-video', mention: at('@Ascii Video') }]);
+    expect(prompt.files[0]).toEqual({
+      uri: pathToFileURL(join(directory, 'src/a.ts')).href,
+      name: 'a.ts',
+      mention: at('@src/a.ts'),
+    });
+    expect(prompt.files[1]).toMatchObject({ name: 'Fix login.md', mention: at('@Fix login') });
+    const transcript = Buffer.from(prompt.files[1]!.uri.split(',')[1]!, 'base64').toString();
+    expect(transcript).toContain('# Chat: Fix login');
+    // Chronological, without the message the chat has undone.
+    expect(transcript.indexOf('Why does login fail?')).toBeLessThan(
+      transcript.indexOf('Patched the session check.'),
+    );
+    expect(transcript).not.toContain('Undone request');
+    expect(
+      promptInputSchema.safeParse({
+        text,
+        mentions: [{ type: 'file', path: 'src/a.ts', mention: { ...at('@src/a.ts'), start: 0 } }],
+      }).success,
+    ).toBe(false);
+  });
+
   it('delegates prompts without retries and preserves native message pagination', async () => {
     const calls: Array<{ path: string; body: string; auth?: string }> = [];
     const url = await upstream((req, res) => {

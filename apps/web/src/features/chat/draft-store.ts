@@ -3,12 +3,14 @@ import { attachmentLimitError, type ModelRef } from '@opencodex/contracts';
 import { EMPTY_ATTACHMENTS, imageAttachment, type DraftAttachment } from './attachments';
 import { EMPTY_COMMENTS, reviewPrompt, type ReviewComment } from './review-comments';
 import { modelKey } from './model-usage';
+import { findMention, type DraftMention } from './mentions';
 
 type Draft = Readonly<{
   text: string;
   model?: ModelRef;
   attachments?: readonly DraftAttachment[];
   comments?: readonly ReviewComment[];
+  mentions?: readonly DraftMention[];
   revision: number;
 }>;
 export type DraftSnapshot = Draft & { readonly sessionID: string };
@@ -21,6 +23,8 @@ type DraftState = {
   rememberVariant: (model: ModelRef) => void;
   rememberModel: (directory: string, model: ModelRef) => void;
   editText: (sessionID: string, text: string) => void;
+  /** Replaces the text and links the mention whose token it now contains, as one edit. */
+  mention: (sessionID: string, text: string, mention: DraftMention) => void;
   selectModel: (sessionID: string, model: ModelRef) => void;
   attach: (sessionID: string, files: readonly File[]) => string | undefined;
   removeAttachment: (sessionID: string, id: string) => void;
@@ -28,7 +32,10 @@ type DraftState = {
   removeComment: (sessionID: string, id: string) => void;
   capture: (sessionID: string) => DraftSnapshot;
   move: (from: string, to: string) => void;
-  restore: (snapshot: DraftSnapshot, content: Pick<Draft, 'text' | 'attachments'>) => boolean;
+  restore: (
+    snapshot: DraftSnapshot,
+    content: Pick<Draft, 'text' | 'attachments' | 'mentions'>,
+  ) => boolean;
   acknowledge: (snapshot: DraftSnapshot) => void;
 };
 
@@ -89,8 +96,31 @@ export function createDraftStore(
         const drafts = { ...state.drafts };
         if (!text && !current?.model && !current?.attachments?.length && !current?.comments?.length)
           delete drafts[sessionID];
-        else drafts[sessionID] = { ...current, text, revision: ++revision };
+        else
+          drafts[sessionID] = {
+            ...current,
+            text,
+            mentions: liveMentions(text, current?.mentions),
+            revision: ++revision,
+          };
         return { drafts };
+      });
+    },
+    mention(sessionID, text, mention) {
+      set((state) => {
+        const current = state.drafts[sessionID];
+        const mentions = [
+          ...(current?.mentions ?? []).filter(
+            (item) => item.token !== mention.token && findMention(text, item.token) >= 0,
+          ),
+          mention,
+        ];
+        return {
+          drafts: {
+            ...state.drafts,
+            [sessionID]: { ...current, text, mentions, revision: ++revision },
+          },
+        };
       });
     },
     selectModel(sessionID, model) {
@@ -207,4 +237,11 @@ export function createDraftStore(
       });
     },
   }));
+}
+
+/** Edits drop mentions whose token was deleted; retyping the token doesn't relink it. */
+function liveMentions(text: string, mentions: readonly DraftMention[] | undefined) {
+  if (!mentions?.length) return mentions;
+  const live = mentions.filter((item) => findMention(text, item.token) >= 0);
+  return live.length === mentions.length ? mentions : live.length ? live : undefined;
 }

@@ -20,8 +20,9 @@ import { useDraftStore } from './draft-context';
 import { NEW_CHAT_DRAFT, type DraftSnapshot } from './draft-store';
 import { ModelControls } from './model-controls';
 import { PermissionControl } from './permission-control';
-import { reviewPrompt } from './review-comments';
+import { annotatedPrompt } from './review-comments';
 import { localCommands, parseSlash, useSlashCommands } from './slash-commands';
+import { promptMentions } from './mentions';
 import { Starters } from './starters';
 import { useModelSelection } from './use-model-selection';
 
@@ -89,7 +90,10 @@ export function NewChatView({
       const command = slash && catalog?.data?.find((item) => item.name === slash.name);
       if (slash && !command)
         throw new Error(`Unknown command /${slash.name}. Type / to see available commands.`);
-      const text = reviewPrompt(slash ? slash.text : input.draft.text, input.draft.comments);
+      const { text, annotations } = annotatedPrompt(
+        slash ? slash.text : input.draft.text,
+        input.draft.comments,
+      );
       if (text.length > 200_000)
         throw new Error('The draft is too long. Shorten it before sending.');
       const files = input.draft.attachments?.length
@@ -112,14 +116,15 @@ export function NewChatView({
         void client.invalidateQueries({ queryKey: ['worktrees', session.projectID] });
       }
       if (input.full) await api.sessionAccess(session.id, 'full');
-      await api.prompt(
-        session.id,
+      await api.prompt(session.id, {
         text,
-        input.model,
+        model: input.model,
         files,
-        command && !command.skill ? command.name : undefined,
-        command ? command.skill : undefined,
-      );
+        command: command && !command.skill ? command.name : undefined,
+        skill: command ? command.skill : undefined,
+        mentions: promptMentions(text, input.draft.mentions),
+        annotations,
+      });
       return session;
     },
     onSuccess: (session, input) => {

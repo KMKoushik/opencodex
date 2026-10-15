@@ -282,3 +282,107 @@
     min-height: 44px;
   }
 }
+.message-annotations {
+  anchor-scope: --message-annotations;
+}
+.message-annotations-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--user-message);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--chat-font-size);
+  anchor-name: --message-annotations;
+  cursor: pointer;
+}
+.message-annotations-chip > svg {
+  color: var(--text-secondary);
+}
+.message-annotations-chip:focus-visible {
+  outline: 2px solid var(--border-heavy);
+  outline-offset: 2px;
+}
+.message-annotations-preview {
+  position: fixed;
+  position-anchor: --message-annotations;
+  inset: auto;
+  top: calc(anchor(bottom) + 6px);
+  right: anchor(right);
+  position-try-fallbacks: flip-block;
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  max-height: min(320px, calc(100dvh - 32px));
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--border-heavy);
+  border-radius: 12px;
+  background: var(--elevated);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font: 13px/1.5 var(--font-sans);
+}
+.message-annotations-preview ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.message-annotations-preview li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+}
+.message-annotations-preview li + li {
+  border-top: 1px solid var(--border);
+}
+.message-annotation-number {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+.message-annotation-source {
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.message-annotations-preview small {
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+}
+.message-annotations-preview blockquote,
+.message-annotations-preview p {
+  margin: 0;
+  max-height: 120px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.message-annotations-preview blockquote {
+  padding-left: 10px;
+  border-left: 2px solid var(--border-heavy);
+  color: var(--text-secondary);
+}
+.message-annotations-preview blockquote[data-code='true'] {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+@media (hover: hover) {
+  .message-annotations-chip:hover {
+    background: var(--secondary-hover);
+  }
+}
+@media (pointer: coarse) {
+  .message-annotations-chip {
+    min-height: 44px;
+  }
+}

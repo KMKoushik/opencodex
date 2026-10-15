@@ -345,6 +345,71 @@ const attachmentInputSchema = z.object({
     .refine((uri) => (uri.length - uri.indexOf(',') - 1) % 4 === 0, 'Invalid attachment encoding.'),
   name: z.string().min(1).max(1024),
 });
+export const MAX_MENTIONS = 32;
+export const MAX_CHAT_MENTIONS = 8;
+/** Where a mention's `@` token sits in the sent text, as OpenCode records it. */
+const mentionRangeSchema = z.object({
+  start: z.number().int().nonnegative(),
+  end: z.number().int().positive(),
+  text: z.string().min(2).max(4096),
+});
+export const promptMentionSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('file'),
+    path: workspaceFileInputSchema.shape.path,
+    mention: mentionRangeSchema,
+  }),
+  z.object({
+    type: z.literal('skill'),
+    id: z.string().min(1).max(512),
+    mention: mentionRangeSchema,
+  }),
+  z.object({
+    type: z.literal('chat'),
+    id: z.string().min(1).max(256),
+    mention: mentionRangeSchema,
+  }),
+]);
+export type PromptMention = z.infer<typeof promptMentionSchema>;
+export const MESSAGE_ANNOTATIONS_KEY = 'opencodexAnnotations';
+const textRangeSchema = z.tuple([z.number().int().nonnegative(), z.number().int().nonnegative()]);
+/** Review comments sent with a message, as ranges of its text; the text stays the prompt. */
+export const messageAnnotationsSchema = z.object({
+  /** Where the user's own text ends; the comments follow it. */
+  end: z.number().int().nonnegative(),
+  items: z
+    .array(
+      z.object({
+        kind: z.enum(['annotation', 'comment']),
+        label: z.string().max(4096),
+        quote: textRangeSchema.optional(),
+        comment: textRangeSchema.optional(),
+      }),
+    )
+    .min(1)
+    .max(64),
+});
+export type MessageAnnotations = z.infer<typeof messageAnnotationsSchema>;
+function annotationsFit(text: string, annotations: MessageAnnotations) {
+  return (
+    annotations.end <= text.length &&
+    annotations.items.every((item) =>
+      [item.quote, item.comment].every(
+        (range) => !range || (range[0] <= range[1] && range[1] <= text.length),
+      ),
+    )
+  );
+}
+/** A sent message's annotations, if its metadata has a valid set that fits its text. */
+export function messageAnnotations(message: {
+  text: string;
+  metadata?: Record<string, unknown>;
+}): MessageAnnotations | undefined {
+  const value = message.metadata?.[MESSAGE_ANNOTATIONS_KEY];
+  if (!value) return;
+  const parsed = messageAnnotationsSchema.safeParse(value);
+  return parsed.success && annotationsFit(message.text, parsed.data) ? parsed.data : undefined;
+}
 export const promptInputSchema = z
   .object({
     text: z.string().max(200_000),
@@ -352,10 +417,28 @@ export const promptInputSchema = z
     skill: z.string().min(1).max(512).optional(),
     model: modelInputSchema.shape.model.optional(),
     files: z.array(attachmentInputSchema).max(MAX_ATTACHMENTS).optional(),
+    mentions: z.array(promptMentionSchema).max(MAX_MENTIONS).optional(),
+    annotations: messageAnnotationsSchema.optional(),
   })
   .refine(
     (input) => input.text.trim() || input.files?.length || input.command || input.skill,
     'Enter a message or attach a file.',
+  )
+  .refine(
+    (input) =>
+      input.mentions?.every(
+        ({ mention }) => input.text.slice(mention.start, mention.end) === mention.text,
+      ) ?? true,
+    'A mention no longer matches the message. Send again.',
+  )
+  .refine(
+    (input) => !input.annotations || annotationsFit(input.text, input.annotations),
+    'The comments no longer match the message. Send again.',
+  )
+  .refine(
+    (input) =>
+      (input.mentions?.filter((item) => item.type === 'chat').length ?? 0) <= MAX_CHAT_MENTIONS,
+    `Mention up to ${MAX_CHAT_MENTIONS} chats per message.`,
   )
   .superRefine((input, context) => {
     const error = attachmentLimitError(

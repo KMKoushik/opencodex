@@ -60,6 +60,13 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.mention-menu button > svg {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+.mention-menu button[aria-selected='true'] > svg {
+  color: var(--text-secondary);
+}
 .slash-menu button[aria-selected='true'] {
   color: var(--text);
   background: var(--selected);

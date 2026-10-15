@@ -2138,7 +2138,21 @@ svg {
     min-height: 44px;
   }
 }
-.composer > textarea {
+.composer-input {
+  position: relative;
+}
+.composer-input > textarea,
+.composer-mentions {
+  padding: 2px;
+  font: inherit;
+  font-size: var(--chat-font-size);
+  line-height: 1.5;
+  letter-spacing: normal;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+.composer-input > textarea {
+  position: relative;
   display: block;
   width: 100%;
   min-height: 52px;
@@ -2148,18 +2162,36 @@ svg {
   border: 0;
   background: transparent;
   color: var(--text);
-  font: inherit;
-  font-size: var(--chat-font-size);
-  line-height: 1.5;
   cursor: text;
   user-select: text;
   -webkit-app-region: no-drag;
 }
-.composer > textarea:focus-visible {
+.composer-input > textarea:focus-visible {
   outline: none;
 }
-.composer > textarea::placeholder {
+.composer-input > textarea::placeholder {
   color: var(--text-tertiary);
+}
+/* Same box and text as the textarea, so its pills sit under the textarea's own glyphs.
+   It scrolls like the textarea so a scrollbar narrows both wraps alike. */
+.composer-mentions {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  scrollbar-color: transparent transparent;
+  color: transparent;
+  pointer-events: none;
+}
+.mention {
+  border-radius: 4px;
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  color: inherit;
+}
+.user-message-bubble .mention {
+  color: var(--accent-text);
 }
 .composer-footer {
   container: composer-footer / inline-size;
@@ -2311,7 +2343,8 @@ svg {
   .chat-empty h2 {
     font-size: 26px;
   }
-  .composer textarea {
+  .composer-input > textarea,
+  .composer-mentions {
     font-size: max(16px, var(--chat-font-size));
   }
 }

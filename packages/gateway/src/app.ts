@@ -13,6 +13,7 @@ import {
   modelInputSchema,
   MAX_ATTACHMENTS,
   MAX_FILE_BYTES,
+  MESSAGE_ANNOTATIONS_KEY,
 } from '@opencodex/contracts';
 import { OpenCodeBackend } from './opencode';
 import { GatewayError } from './errors';
@@ -31,6 +32,7 @@ import { usageRoutes } from './usage';
 import { worktreeRoutes } from './worktrees';
 import { taskRoutes } from './tasks';
 import { prepareAttachments } from './attachments';
+import { resolveMentions } from './mentions';
 import { searchSessions } from './session-search';
 import { createReplyFormat } from './reply-format';
 import { CANVAS_ROOT, canvasRoutes, canvasRuntimeRoutes, createCanvasWatcher } from './canvases';
@@ -377,7 +379,22 @@ export function createApp(
         const sessionID = c.req.param('id');
         const session = await client.session.get({ sessionID }, options);
         await ensureReplyFormat(client, sessionID, options);
+        const mentioned = input.data.mentions?.length
+          ? await resolveMentions(client, session, input.data.mentions, options)
+          : { files: [], skills: [] };
         const prompt = await prepareAttachments(client, session, input.data, options);
+        const files = [...(prompt.files ?? []), ...mentioned.files];
+        const skills = [
+          ...(input.data.skill && !mentioned.skills.some((item) => item.id === input.data.skill)
+            ? [{ id: input.data.skill }]
+            : []),
+          ...mentioned.skills,
+        ];
+        const admission = {
+          text: prompt.text,
+          files: files.length ? files : undefined,
+          skills: skills.length ? skills : undefined,
+        };
         // V2 stages undo until the next explicit send; redo clears that stage.
         if (session.revert) await client.session.revert.commit({ sessionID }, options);
         if (session.agent !== 'build')
@@ -391,19 +408,31 @@ export function createApp(
         ) {
           await client.session.switchModel({ sessionID, model }, options);
         }
-        if (input.data.command) {
-          await client.session.command({ sessionID, name: input.data.command, ...prompt }, options);
-          return null;
+        try {
+          if (input.data.command) {
+            await client.session.command(
+              { sessionID, name: input.data.command, ...admission },
+              options,
+            );
+            return null;
+          }
+          return await client.session.prompt(
+            {
+              sessionID,
+              ...admission,
+              // Native commands take no metadata, so expanded commands show their plain text.
+              metadata: input.data.annotations
+                ? { [MESSAGE_ANNOTATIONS_KEY]: input.data.annotations }
+                : undefined,
+            },
+            options,
+          );
+        } catch (error) {
+          // Admission explains what it rejected, such as a missing skill or unreadable file.
+          if (error instanceof Error && (error as { _tag?: string })._tag === 'InvalidRequestError')
+            throw new GatewayError(error.message, 400);
+          throw error;
         }
-        return client.session.prompt(
-          {
-            sessionID,
-            text: prompt.text,
-            files: prompt.files,
-            skills: input.data.skill ? [{ id: input.data.skill }] : undefined,
-          },
-          options,
-        );
       }),
     );
   });

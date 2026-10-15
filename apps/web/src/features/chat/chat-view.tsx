@@ -15,8 +15,9 @@ import { useModelSelection } from './use-model-selection';
 import { useDraftStore } from './draft-context';
 import type { DraftSnapshot } from './draft-store';
 import { EMPTY_ATTACHMENTS, encodeAttachments } from './attachments';
-import { MessageAttachments } from './message-attachments';
-import { reviewPrompt } from './review-comments';
+import { UserPrompt } from './user-prompt';
+import { annotatedPrompt } from './review-comments';
+import { promptMentions } from './mentions';
 import { localCommands, parseSlash, useSlashCommands } from './slash-commands';
 import { SessionViewed } from '../sessions/session-viewed';
 import { BrandIcon } from '../brand/brand';
@@ -101,7 +102,11 @@ export function ChatView({
           const side = await api.createSideChat(sessionID);
           if (slash.text.trim()) {
             try {
-              await api.prompt(side.id, slash.text.trim());
+              const text = slash.text.trim();
+              await api.prompt(side.id, {
+                text,
+                mentions: promptMentions(text, input.draft.mentions),
+              });
             } catch (error) {
               await api.deleteSideChat(sessionID, side.id).catch(() => undefined);
               throw error;
@@ -168,7 +173,10 @@ export function ChatView({
       const command = slash && catalog?.data?.find((item) => item.name === slash.name);
       if (slash && !command)
         throw new Error(`Unknown command /${slash.name}. Type / to see available commands.`);
-      const text = reviewPrompt(slash ? slash.text : input.draft.text, input.draft.comments);
+      const { text, annotations } = annotatedPrompt(
+        slash ? slash.text : input.draft.text,
+        input.draft.comments,
+      );
       if (text.length > 200_000)
         throw new Error('The draft is too long. Shorten it before sending.');
       if (input.worktree) {
@@ -183,16 +191,17 @@ export function ChatView({
         client.setQueryData(['chat', sessionID, 'info'], moved);
         void client.invalidateQueries({ queryKey: ['worktrees', moved.projectID] });
       }
-      await api.prompt(
-        input.draft.sessionID,
+      await api.prompt(input.draft.sessionID, {
         text,
-        input.model,
-        input.draft.attachments?.length
+        model: input.model,
+        files: input.draft.attachments?.length
           ? await encodeAttachments(input.draft.attachments)
           : undefined,
-        command && !command.skill ? command.name : undefined,
-        command ? command.skill : undefined,
-      );
+        command: command && !command.skill ? command.name : undefined,
+        skill: command ? command.skill : undefined,
+        mentions: promptMentions(text, input.draft.mentions),
+        annotations,
+      });
       return { model: input.model };
     },
     retry: false,
@@ -290,8 +299,12 @@ export function ChatView({
         <article className="user-message" key={item.id}>
           {item.type === 'user' && (
             <>
-              {item.payload.text && <p className="user-message-bubble">{item.payload.text}</p>}
-              <MessageAttachments files={item.payload.files} />
+              <UserPrompt
+                text={item.payload.text}
+                files={item.payload.files}
+                skills={item.payload.skills}
+                metadata={item.payload.metadata}
+              />
             </>
           )}
           <span className="message-note">Pending in OpenCode</span>

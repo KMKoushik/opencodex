@@ -1,11 +1,13 @@
 import { attachmentLimitError, type SessionMessageInfo } from '@opencodex/contracts';
 import type { DraftAttachment } from './attachments';
+import { sentMentions } from './mentions';
 
 /** Decode only the undone prompt, never transcript rows or the streaming path. */
 export async function undoDraft(message: Extract<SessionMessageInfo, { type: 'user' }>) {
   if (message.text.length > 200_000)
     throw new Error('This message is too long to restore into the composer.');
-  const files = message.files ?? [];
+  // Mentioned files and chats return as mentions; OpenCode reads them again on the next send.
+  const files = message.files?.filter((file) => !file.mention) ?? [];
   const error = attachmentLimitError(
     files.map((file) => ({
       name: file.name || 'attachment',
@@ -31,5 +33,6 @@ export async function undoDraft(message: Extract<SessionMessageInfo, { type: 'us
       file: new File(chunks, file.name || 'attachment', { type: file.mime }),
     });
   }
-  return { text: message.text, attachments };
+  const mentions = sentMentions(message);
+  return { text: message.text, attachments, mentions: mentions.length ? mentions : undefined };
 }
