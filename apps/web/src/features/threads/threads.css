@@ -198,3 +198,26 @@
     color: var(--text);
   }
 }
+
+.thread-pin {
+  position: relative;
+}
+.thread-pin[data-dragging] {
+  opacity: 0.4;
+}
+.thread-pin[data-drop]::before {
+  position: absolute;
+  right: 6px;
+  left: 6px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  content: '';
+  pointer-events: none;
+}
+.thread-pin[data-drop='before']::before {
+  top: -1px;
+}
+.thread-pin[data-drop='after']::before {
+  bottom: -2px;
+}

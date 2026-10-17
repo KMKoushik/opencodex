@@ -76,13 +76,13 @@ export function sessionMetadataRoutes(write: MetadataWriter) {
   app.post('/:id/focus', async (c) => {
     const input = sessionFocusSchema.safeParse(await c.req.json().catch(() => null));
     if (!input.success) return c.json({ message: 'Invalid thread action.' }, 400);
-    const action = input.data.action;
+    const { action, pinned } = input.data;
     return c.json(
       await write(c.req.param('id'), c.req.raw.signal, async (session, client, options) => {
         let metadata: Record<string, number | null>;
         // Done also unpins and pinning reopens, so a thread has one place in the sidebar.
         if (action === 'pin')
-          metadata = { [SESSION_PINNED_KEY]: Date.now(), [SESSION_DONE_KEY]: null };
+          metadata = { [SESSION_PINNED_KEY]: pinned ?? Date.now(), [SESSION_DONE_KEY]: null };
         else if (action === 'unpin') metadata = { [SESSION_PINNED_KEY]: null };
         else if (action === 'undone') metadata = { [SESSION_DONE_KEY]: null };
         else {

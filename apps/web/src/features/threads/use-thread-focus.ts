@@ -22,6 +22,19 @@ export function useThreadFocus(sessionID: string) {
   return { ...mutation, pending };
 }
 
+/** Moves a pinned thread by giving it a sort value between its new neighbors. */
+export function useMovePin() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, pinned }: { id: string; pinned: number }) =>
+      api.focusSession(id, 'pin', pinned),
+    retry: false,
+    onMutate: ({ id, pinned }) => patchSessionFocus(client, id, { pinned, done: null }),
+    onSuccess: (marked, { id }) => patchSessionFocus(client, id, marked),
+    onError: (_error, { id }) => refreshSessions(client, [id]),
+  });
+}
+
 /** Applies one action to several threads; each write still uses its session's queue. */
 export function useFocusMany() {
   const client = useQueryClient();

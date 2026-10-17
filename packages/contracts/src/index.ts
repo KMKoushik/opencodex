@@ -294,7 +294,11 @@ export const taskUpdateSchema = z.object({
 });
 export type TaskUpdate = z.input<typeof taskUpdateSchema>;
 
-export const sessionFocusSchema = z.object({ action: z.enum(['pin', 'unpin', 'done', 'undone']) });
+export const sessionFocusSchema = z.object({
+  action: z.enum(['pin', 'unpin', 'done', 'undone']),
+  /** With `pin`: the sort value, to place it among the pins. Pinned threads sort highest first. */
+  pinned: z.number().positive().finite().optional(),
+});
 export type SessionFocusAction = z.infer<typeof sessionFocusSchema>['action'];
 /** Root threads waiting on an approval or a question, including requests from their subagents. */
 export type SessionAttention = Record<string, 'permission' | 'question'>;

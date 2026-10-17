@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type DragEvent,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 import {
   ArrowDown01Icon,
   ArrowRight01Icon,
@@ -16,7 +23,7 @@ import { SessionRow } from '../sessions/session-row';
 import { ACTIVE_WINDOW, deriveFocus, threadStatus, type ThreadRow } from './focus';
 import { rememberPinned, usePinnedIDs } from './pins';
 import { ProjectFilter } from './project-filter';
-import { dismissUndo, useFocusMany, useUndo } from './use-thread-focus';
+import { dismissUndo, useFocusMany, useMovePin, useUndo } from './use-thread-focus';
 import { useThreadShortcuts } from './use-thread-shortcuts';
 import './threads.css';
 
@@ -47,6 +54,9 @@ export function ThreadsView({
   // Presentation-only multi-selection; the open thread stays separate.
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
   const [anchor, setAnchor] = useState<string>();
+  // The pinned thread being dragged, and the gap it would drop into.
+  const [drag, setDrag] = useState<{ id: string; gap?: number }>();
+  const movePin = useMovePin();
   const now = useMinute();
   const refetchInterval = connected && !live ? 15_000 : false;
   const running = useQuery({
@@ -224,6 +234,20 @@ export function ThreadsView({
       onSelect(session);
     }
   }
+  /** Sorts the thread between the pins around `gap`, which counts the dragged one too. */
+  function dropPin(id: string, gap: number) {
+    const from = pinned.findIndex((session) => session.id === id);
+    if (from < 0 || gap === from || gap === from + 1) return;
+    const above = pinned[gap - 1]?.pinned;
+    const below = pinned[gap]?.pinned;
+    const value =
+      above && below
+        ? (above + below) / 2
+        : above
+          ? Math.max(above - 1, above / 2)
+          : below && below + 1;
+    if (value) movePin.mutate({ id, pinned: value });
+  }
   const row = ({ session, status }: ThreadRow) => (
     <SessionRow
       key={session.id}
@@ -278,9 +302,40 @@ export function ThreadsView({
         {pinned.length > 0 && (
           <section className="thread-section" aria-label="Pinned threads">
             <h2 className="sidebar-heading">Pinned</h2>
-            {pinned.map((session) =>
-              row({ session, status: threadStatus(session, running.data, requests) }),
-            )}
+            {pinned.map((session, index) => (
+              <div
+                key={session.id}
+                className="thread-pin"
+                draggable={!picking}
+                data-dragging={drag?.id === session.id || undefined}
+                data-drop={
+                  drag?.gap === index
+                    ? 'before'
+                    : drag?.gap === pinned.length && index === pinned.length - 1
+                      ? 'after'
+                      : undefined
+                }
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = 'move';
+                  event.dataTransfer.setData('text/plain', session.title);
+                  setDrag({ id: session.id });
+                }}
+                onDragOver={(event) => {
+                  if (!drag) return;
+                  event.preventDefault();
+                  const gap = index + (dropsAfter(event) ? 1 : 0);
+                  if (gap !== drag.gap) setDrag({ ...drag, gap });
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (drag?.gap !== undefined) dropPin(drag.id, drag.gap);
+                  setDrag(undefined);
+                }}
+                onDragEnd={() => setDrag(undefined)}
+              >
+                {row({ session, status: threadStatus(session, running.data, requests) })}
+              </div>
+            ))}
           </section>
         )}
         {view === 'projects' ? (
@@ -485,6 +540,11 @@ function readExcluded(): ReadonlySet<string> {
   } catch {
     return new Set();
   }
+}
+
+function dropsAfter(event: DragEvent<HTMLElement>) {
+  const rect = event.currentTarget.getBoundingClientRect();
+  return event.clientY > rect.top + rect.height / 2;
 }
 
 function pinnedData(results: UseQueryResult<SessionInfo>[]) {
