@@ -18,12 +18,21 @@ type LanguageModel = {
 const FORWARDED = new Set<string>(CLAUDE_CODE_PRESET.options.proxyOpencodeTools);
 const MAX_TRACKED = 256;
 // The bridge sends Claude only what follows the last assistant message, and keeps the
-// Claude conversation only when OpenCode has history before it.
-const COMPACT_PROMPT = [
+// Claude conversation only when OpenCode has history before it. OpenCode rejects a summary
+// without its template's headings, so its instructions become /compact's own.
+const compactPrompt = (instructions: string) => [
   { role: 'user', content: [{ type: 'text', text: 'Earlier conversation' }] },
   { role: 'assistant', content: [{ type: 'text', text: 'Earlier reply' }] },
-  { role: 'user', content: [{ type: 'text', text: '/compact' }] },
+  { role: 'user', content: [{ type: 'text', text: `/compact ${instructions}`.trim() }] },
 ];
+function lastUserText(prompt: unknown[] | undefined) {
+  const message = prompt?.at(-1) as { role?: string; content?: unknown } | undefined;
+  if (message?.role !== 'user' || !Array.isArray(message.content)) return '';
+  return (message.content as { type?: string; text?: unknown }[])
+    .flatMap((part) => (part.type === 'text' && typeof part.text === 'string' ? [part.text] : []))
+    .join('\n')
+    .trim();
+}
 const isClaude = (providerID: string) =>
   providerID === 'claude-code' || providerID.startsWith('claude-code-');
 
@@ -56,16 +65,18 @@ export default {
     // OpenCode's compaction would summarize with a separate Claude process and leave the
     // chat's own conversation full. Run Claude's /compact on that conversation instead;
     // its summary becomes OpenCode's. The bridge declines when no idle conversation
-    // exists, and the bridge's own summarizer runs as before.
+    // exists, and the bridge's own summarizer runs as before. It also handles OpenCode's
+    // retry after a summary misses the template, so Claude's conversation compacts once.
     async function compact(model: LanguageModel, options: StreamOptions) {
       const sessionID = options.headers?.['x-session-affinity'];
       const turn = sessionID ? turns.get(sessionID) : undefined;
+      if (sessionID) turns.delete(sessionID);
       if (turn && turn.model.provider === model.provider && turn.model.modelId === model.modelId) {
         try {
           return await turn.model.doStream({
             ...turn.options,
             headers: { ...turn.options.headers, 'x-opencodex-native-compact': '1' },
-            prompt: COMPACT_PROMPT,
+            prompt: compactPrompt(lastUserText(options.prompt)),
             abortSignal: options.abortSignal,
           });
         } catch (error) {

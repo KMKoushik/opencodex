@@ -1,8 +1,8 @@
 diff --git a/dist/index.js b/dist/index.js
-index 13ce768714c046ca544b23157dc35d9fd3808ae1..fc58ffb92fac437417c7405c0e9615054e2e0461 100644
+index 13ce768714c046ca544b23157dc35d9fd3808ae1..c4794d7a848d0451530db94036adea8235613864 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -14190,6 +14190,26 @@ function createLineHandler(state, ctx) {
+@@ -14190,6 +14190,31 @@ function createLineHandler(state, ctx) {
            ignoreAnthropicApiKey: ctx.config.ignoreAnthropicApiKey
          });
        }
@@ -17,7 +17,12 @@ index 13ce768714c046ca544b23157dc35d9fd3808ae1..fc58ffb92fac437417c7405c0e961505
 +      // The summary Claude now holds becomes opencode's compaction summary.
 +      if (state.nativeCompactBoundary && !state.nativeCompactSummary && msg.type === "user" && msg.isSynthetic) {
 +        const content = msg.message?.content;
-+        const summary = typeof content === "string" ? content : Array.isArray(content) ? content.filter((part) => part?.type === "text").map((part) => part.text ?? "").join("\n") : "";
++        const text = typeof content === "string" ? content : Array.isArray(content) ? content.filter((part) => part?.type === "text").map((part) => part.text ?? "").join("\n") : "";
++        // Keep the summary itself, without Claude's preamble or its instructions to resume.
++        const start = text.indexOf("\nSummary:\n");
++        const body = start < 0 ? text : text.slice(start + "\nSummary:\n".length);
++        const end = body.search(/\n\s*(If you need specific details from before compaction|Continue the conversation from where it left off)/);
++        const summary = end < 0 ? body : body.slice(0, end);
 +        if (summary.trim()) {
 +          state.nativeCompactSummary = true;
 +          state.sawVisibleText = true;
@@ -29,7 +34,7 @@ index 13ce768714c046ca544b23157dc35d9fd3808ae1..fc58ffb92fac437417c7405c0e961505
        if (msg.type === "system" && msg.subtype === "compact_boundary") {
          const note = reportCompactBoundary(msg);
          if (note) {
-@@ -15449,7 +15469,10 @@ var ClaudeCodeLanguageModel = class {
+@@ -15449,7 +15474,10 @@ var ClaudeCodeLanguageModel = class {
      const affinity = this.sessionAffinity(options);
      const cwd = await resolveSpawnCwdForSession(this.config.cwd, affinity);
      const compactionMode = this.isCompactionCall(options);
@@ -41,7 +46,7 @@ index 13ce768714c046ca544b23157dc35d9fd3808ae1..fc58ffb92fac437417c7405c0e961505
      const dispatchModelId = dispatchChoice?.model ? qualifyModelName(dispatchChoice.model, this.modelId) : null;
      const effectiveModelId = compactionMode ? this.resolveCompactionModel() : attempt?.modelOverride ?? dispatchModelId ?? resolveAgentModel(
        this.getOpencodeAgent(options),
-@@ -15673,7 +15696,7 @@ var ClaudeCodeLanguageModel = class {
+@@ -15673,7 +15701,7 @@ var ClaudeCodeLanguageModel = class {
        deleteActiveProcess(sk);
        clearCompression(sk);
      }
@@ -50,7 +55,7 @@ index 13ce768714c046ca544b23157dc35d9fd3808ae1..fc58ffb92fac437417c7405c0e961505
        sourceAccount,
        candidates: failoverCandidates(
          this.config.failoverAccounts,
-@@ -15797,6 +15820,11 @@ var ClaudeCodeLanguageModel = class {
+@@ -15797,6 +15825,11 @@ var ClaudeCodeLanguageModel = class {
      }
      const hasExistingSession = !!getClaudeSessionId(sk);
      const hasActiveProcess = !!getActiveProcess(sk);
@@ -62,7 +67,7 @@ index 13ce768714c046ca544b23157dc35d9fd3808ae1..fc58ffb92fac437417c7405c0e961505
      let includeHistoryContext = !hasExistingSession && !hasActiveProcess && hasPriorConversation;
      if (failoverAnswer?.kind === "switch" && hasPriorConversation && !conversationOnTarget) {
        includeHistoryContext = true;
-@@ -15979,7 +16007,7 @@ var ClaudeCodeLanguageModel = class {
+@@ -15979,7 +16012,7 @@ var ClaudeCodeLanguageModel = class {
      const { model: spawnModelId, fast: fastMode } = parseModelId(
        this.config.accountInProcess ? stripAccountSuffix(failover.modelId) : failover.modelId
      );
@@ -71,7 +76,7 @@ index 13ce768714c046ca544b23157dc35d9fd3808ae1..fc58ffb92fac437417c7405c0e961505
      if (exitPlanModeQuestionResult) {
        log.info("sending plan approval decision to claude", { sk });
      }
-@@ -16046,7 +16074,7 @@ var ClaudeCodeLanguageModel = class {
+@@ -16046,7 +16079,7 @@ var ClaudeCodeLanguageModel = class {
        sourceAccount,
        groups
      );
@@ -80,7 +85,7 @@ index 13ce768714c046ca544b23157dc35d9fd3808ae1..fc58ffb92fac437417c7405c0e961505
      // rate-limit error, never the form. See `TurnMode`.
      mode !== "generate" && isAccountFailoverQuestionActive({
        configured: this.config.accountFailover,
-@@ -16058,13 +16086,13 @@ var ClaudeCodeLanguageModel = class {
+@@ -16058,13 +16091,13 @@ var ClaudeCodeLanguageModel = class {
        // the operator is usually not even looking at.
        childSession: !!await fetchSessionParentId(affinity)
      });
@@ -96,7 +101,7 @@ index 13ce768714c046ca544b23157dc35d9fd3808ae1..fc58ffb92fac437417c7405c0e961505
        configured: this.config.subagentDispatch,
        opencodeHasQuestion: (await loadLiveToolInfo()).hasQuestion,
        compactionMode,
-@@ -16121,12 +16149,13 @@ var ClaudeCodeLanguageModel = class {
+@@ -16121,12 +16154,13 @@ var ClaudeCodeLanguageModel = class {
            ignoreAnthropicApiKey: self.config.ignoreAnthropicApiKey,
            userMsg,
            autoContinueEnabled: autoContinueEnabledFor(
@@ -111,7 +116,7 @@ index 13ce768714c046ca544b23157dc35d9fd3808ae1..fc58ffb92fac437417c7405c0e961505
          state.activeProcess = getActiveProcess(sk);
          state.proxyServer = state.activeProcess?.proxyServer ?? null;
          if (subagentDispatchActive) {
-@@ -16692,7 +16721,7 @@ var ClaudeCodeLanguageModel = class {
+@@ -16692,7 +16726,7 @@ var ClaudeCodeLanguageModel = class {
            state.autoContinueState.startedAt = Date.now();
            const completeResult = (msg) => {
              if (state.controllerClosed) return;
@@ -120,7 +125,7 @@ index 13ce768714c046ca544b23157dc35d9fd3808ae1..fc58ffb92fac437417c7405c0e961505
                recordResumePoint(sk, msg.session_id, options.prompt, cliPath, {
                  configDir: resolveConfigDir(self.skillBridgeSpawn(failover).configDir),
                  account: failover.target ?? sourceAccount
-@@ -16795,7 +16824,7 @@ var ClaudeCodeLanguageModel = class {
+@@ -16795,7 +16829,7 @@ var ClaudeCodeLanguageModel = class {
              }
              if (isSilentTurn({
                enabled: state.autoContinueState.enabled,
@@ -129,7 +134,7 @@ index 13ce768714c046ca544b23157dc35d9fd3808ae1..fc58ffb92fac437417c7405c0e961505
                sawVisibleText: state.sawVisibleText,
                sawToolActivity: state.sawToolActivity,
                sawProxyActivity: state.sawProxyActivity,
-@@ -16816,7 +16845,11 @@ var ClaudeCodeLanguageModel = class {
+@@ -16816,7 +16850,11 @@ var ClaudeCodeLanguageModel = class {
                });
                state.endTextBlock();
              }
@@ -142,7 +147,7 @@ index 13ce768714c046ca544b23157dc35d9fd3808ae1..fc58ffb92fac437417c7405c0e961505
                log.warn("claude could not compact the conversation; no summary was stored", {
                  sessionKey: sk,
                  cause: state.resultFailure
-@@ -16864,7 +16897,8 @@ var ClaudeCodeLanguageModel = class {
+@@ -16864,7 +16902,8 @@ var ClaudeCodeLanguageModel = class {
            };
            const lineHandler = createLineHandler(state, {
              config: self.config,
@@ -152,7 +157,7 @@ index 13ce768714c046ca544b23157dc35d9fd3808ae1..fc58ffb92fac437417c7405c0e961505
              fastMode,
              planModeQuestionActive,
              interactive: useInteractive,
-@@ -16998,12 +17032,19 @@ var ClaudeCodeLanguageModel = class {
+@@ -16998,12 +17037,19 @@ var ClaudeCodeLanguageModel = class {
                });
                let partialText = false;
                {
@@ -178,7 +183,7 @@ index 13ce768714c046ca544b23157dc35d9fd3808ae1..fc58ffb92fac437417c7405c0e961505
                  for (const line of unattended.lines) {
                    try {
                      const outer = JSON.parse(line);
-@@ -17011,7 +17052,7 @@ var ClaudeCodeLanguageModel = class {
+@@ -17011,7 +17057,7 @@ var ClaudeCodeLanguageModel = class {
                      let text = "";
                      if (msg.type === "content_block_delta" && msg.delta?.type === "text_delta") {
                        text = msg.delta.text ?? "";
@@ -187,7 +192,7 @@ index 13ce768714c046ca544b23157dc35d9fd3808ae1..fc58ffb92fac437417c7405c0e961505
                      } else if (msg.type === "assistant") {
                        if (!partialText) text = (msg.message?.content ?? []).filter((part) => part.type === "text").map((part) => part.text ?? "").join("");
                        partialText = false;
-@@ -17023,7 +17064,10 @@ var ClaudeCodeLanguageModel = class {
+@@ -17023,7 +17069,10 @@ var ClaudeCodeLanguageModel = class {
                        if (outer.session_id) setClaudeSessionId(sk, outer.session_id);
                        if (msg.is_error && msg.result) text = msg.result;
                      }
