@@ -71,3 +71,10 @@
   width: calc(100% + 8px);
   border-bottom: 1px solid var(--border);
 }
+/* Phones keep the chat full width; the header's panel toggle opens the workspace, and the
+   rail returns beside an open panel to switch views. */
+@media (max-width: 720px) {
+  .workspace-body:not(:has(.workbench:not([hidden]))) > .wb-rail {
+    display: none;
+  }
+}

@@ -1364,6 +1364,11 @@ svg {
   .toolbar-project {
     max-width: 35%;
   }
+  /* A thread's own title needs the room more than its project name. */
+  .toolbar-project:has(~ .session-title),
+  .toolbar-separator:has(~ .session-title) {
+    display: none;
+  }
   .settings-page,
   .session-view {
     padding-inline: 16px;
@@ -2071,6 +2076,7 @@ svg {
   font-size: 12px;
 }
 .composer {
+  container: composer / inline-size;
   position: relative;
   border-radius: 18px;
   padding: 14px 10px 10px 14px;
@@ -2330,7 +2336,6 @@ svg {
   color: var(--accent-text);
 }
 .composer-footer {
-  container: composer-footer / inline-size;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2439,12 +2444,30 @@ svg {
 .composer-send:disabled::before {
   display: none;
 }
-@media (max-width: 540px) {
-  .composer-controls {
+/* Narrow composers put the selectors on their own row above attach, access, and send. */
+@container composer (max-width: 480px) {
+  .composer-footer {
     flex-wrap: wrap;
+    row-gap: 4px;
+  }
+  .composer-controls {
+    order: -1;
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+  .composer-controls .model-select {
+    flex-shrink: 1;
+    min-width: 0;
   }
   .composer-controls .select-trigger {
-    max-width: min(180px, 100%);
+    max-width: 100%;
+  }
+  .composer-controls .select:last-child {
+    flex-shrink: 0;
+  }
+  .composer-footer > .composer-stop,
+  .composer-footer > :not(.composer-stop) + .composer-send {
+    margin-left: auto;
   }
 }
 @media (pointer: coarse) {
