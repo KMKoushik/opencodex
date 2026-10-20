@@ -1,0 +1,10 @@
+{
+  "name": "OpenCodex",
+  "short_name": "OpenCodex",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#1a1a1d",
+  "theme_color": "#1a1a1d",
+  "icons": [{ "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }]
+}

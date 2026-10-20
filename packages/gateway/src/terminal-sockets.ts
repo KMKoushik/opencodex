@@ -1,10 +1,25 @@
-import type { Server } from 'node:http';
+import type { IncomingMessage, Server } from 'node:http';
+import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
 import { projectInputSchema } from '@opencodex/contracts';
 import type { OpenCodeBackend } from './opencode';
 
+/** Returns the rejection status, or nothing to accept the upgrade. */
+type Admit = (request: IncomingMessage, socket: Duplex, url: URL) => number | undefined;
+
+const admitLocal: Admit = (request, _socket, url) =>
+  !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) ||
+  request.headers.origin !== url.origin ||
+  request.headers['sec-fetch-site'] === 'cross-site'
+    ? 403
+    : undefined;
+
 // Keep credentials and one-use OpenCode tickets inside the gateway. The browser uses /api only.
-export function attachTerminalSockets(server: Server, backend: OpenCodeBackend) {
+export function attachTerminalSockets(
+  server: Server,
+  backend: OpenCodeBackend,
+  admit: Admit = admitLocal,
+) {
   const sockets = new WebSocketServer({
     noServer: true,
     maxPayload: 1024 * 1024,
@@ -25,12 +40,9 @@ export function attachTerminalSockets(server: Server, backend: OpenCodeBackend) 
       reject(404);
       return;
     }
-    if (
-      !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) ||
-      request.headers.origin !== url.origin ||
-      request.headers['sec-fetch-site'] === 'cross-site'
-    ) {
-      reject(403);
+    const denied = admit(request, socket, url);
+    if (denied) {
+      reject(denied);
       return;
     }
     const input = projectInputSchema.safeParse({ directory: url.searchParams.get('directory') });

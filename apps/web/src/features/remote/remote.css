@@ -1,0 +1,108 @@
+.remote-input {
+  width: 240px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-heavy);
+  border-radius: 8px;
+  background: var(--control);
+  color: var(--text);
+  font-size: 13px;
+}
+.remote-port {
+  width: 96px;
+}
+.remote-status[data-tone='error'] {
+  color: var(--error);
+}
+.remote-status[data-tone='success'] {
+  color: var(--success);
+}
+.remote-actions {
+  justify-content: flex-end;
+  gap: 8px;
+}
+.remote-actions .field-error {
+  flex: 1;
+  flex-basis: auto;
+}
+
+.pair-dialog {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+}
+.pair-dialog strong,
+.pair-dialog-done {
+  color: var(--text);
+  font-weight: 500;
+}
+.pair-qr {
+  width: 216px;
+  height: 216px;
+  border-radius: 8px;
+  background: var(--scan-light);
+  fill: var(--scan-dark);
+}
+.pair-code {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  user-select: all;
+}
+
+.pair-screen {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: 24px;
+  background: var(--surface);
+  color: var(--text);
+}
+.pair-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, 360px);
+  text-align: center;
+}
+.pair-icon {
+  width: 72px;
+  height: 72px;
+}
+.pair-card h1 {
+  font-size: 20px;
+  font-weight: 600;
+}
+.pair-card p {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.pair-card input {
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border-heavy);
+  border-radius: 10px;
+  background: var(--control);
+  color: var(--text);
+  font-family: var(--font-mono);
+  /* 16px keeps iOS from zooming into the field. */
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.pair-card .button {
+  width: 100%;
+}
+.pair-card .field-error {
+  color: var(--error);
+  text-align: center;
+}

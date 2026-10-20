@@ -28,42 +28,50 @@
      │                                                               │                   │  Projects, UI + font size│
      │  Hono + V2 client; private service credentials                │                   │  Models + session layout │
      │  Bounded previews/logs; version-checked file writes           │                   │  Updater; browser profile│
-     │  Native APIs; binary file handoff; ticketed PTY relay         │                   └──────────────────────────┘
-     │  Host files: video/PDF ranges, reveal targets, canvases       │
-     │  Opt-in side-chat, tasks, canvas + Claude plugin files        ├──────────┐
-     │  Canvas app servers: child processes, runs + triggers         │          │
-     └─────────────────┬─────────────────────────────────┬───────────┘          │
-       HTTP + WS       │                               ▲ │Events + WS;          │
-       official client │                               │ │canvas tool HTTP      │        ┌──── SHARED CONTRACTS ────┐
-                       │                               │ └──────────────────┐   │        │                          │
-                       ▼                               │                    │   │        │  <>   Shared types       │
-     ┌──────────────────── OPENCODE 2.x SERVICE ───────┴─────────────┐      │   │        │                          │
-     │                                                               │      │   │        │  packages/contracts      │
-     │  <>   Shared backend; survives app shutdown                   │      │   │        │                          │
-     │                                                               │      │   │        │  API types + schemas     │
-     │  Owns sessions, permission rules + execution                  │      │   │        │  Native bridge types     │
-     │  Providers, tools, worktrees, VCS + filesystem                │      │   │        │                          │
-     │  Project copies: .opencode/opencodex-attachments              │      │   │        └──────────────────────────┘
-     │  Durable sessions; native agent shells + PTY replay           │      │   │
-     │  Loads side-chat, tasks, canvas + Claude plugins; task KV     │      │   │        Code, not a service
-     └─────────────────┬─────────────────────────────────────────────┘      │   │
-                       │                               ▲                    │   │
-       spawn + stdin   │                               │  stdout + tools    │   │
-                       │                               │                    │   │        ┌──── PLAN USAGE APIS ─────┐
-                       │                               │                    │   │ HTTPS  │                          │
-                       │                               │                    │   │        │  ChatGPT, Claude, Go     │
-                       ▼                               │                    │   └───────▶│  Read-only limit checks  │
-     ┌──────────────────── CLAUDE CODE (OPT-IN) ───────┴─────────────┐      │            │                          │
-     │                                                               │      │            │  Local sign-ins stay in  │
-     │  Official CLI subprocess on the OpenCode host                 │      │            │  the gateway             │
-     │                                                               │      │            └──────────────────────────┘
-     │  Own login, inference and Claude conversation files           │      │
-     │  Workspace tools return to OpenCode permissions               │      │
-     │  Plugin releases idle workers after five minutes              │      │            ┌──── OPENCODE SQLITE ─────┐
-     │                                                               │      │            │                          │
-     └───────────────────────────────────────────────────────────────┘      └───────────▶│  Read-only local search  │
-                                                                                         │  + active usage sign-ins │
-                                                                                         └──────────────────────────┘
+   ┌▶│  Native APIs; binary file handoff; ticketed PTY relay         │                   └──────────────────────────┘
+   │ │  Host files: video/PDF ranges, reveal targets, canvases       │
+   │ │  Opt-in side-chat, tasks, canvas + Claude plugin files        ├──────────┐
+   │ │  Canvas app servers: child processes, runs + triggers         │          │
+   │ └─────────────────┬─────────────────────────────────┬───────────┘          │
+   │   HTTP + WS       │                               ▲ │Events + WS;          │
+   │   official client │                               │ │canvas tool HTTP      │        ┌──── SHARED CONTRACTS ────┐
+   │                   │                               │ └──────────────────┐   │        │                          │
+   │                   ▼                               │                    │   │        │  <>   Shared types       │
+   │ ┌──────────────────── OPENCODE 2.x SERVICE ───────┴─────────────┐      │   │        │                          │
+   │ │                                                               │      │   │        │  packages/contracts      │
+   │ │  <>   Shared backend; survives app shutdown                   │      │   │        │                          │
+   │ │                                                               │      │   │        │  API types + schemas     │
+   │ │  Owns sessions, permission rules + execution                  │      │   │        │  Native bridge types     │
+   │ │  Providers, tools, worktrees, VCS + filesystem                │      │   │        │                          │
+   │ │  Project copies: .opencode/opencodex-attachments              │      │   │        └──────────────────────────┘
+   │ │  Durable sessions; native agent shells + PTY replay           │      │   │
+   │ │  Loads side-chat, tasks, canvas + Claude plugins; task KV     │      │   │        Code, not a service
+   │ └─────────────────┬─────────────────────────────────────────────┘      │   │
+   │                   │                               ▲                    │   │
+   │   spawn + stdin   │                               │  stdout + tools    │   │
+   │                   │                               │                    │   │        ┌──── PLAN USAGE APIS ─────┐
+   │                   │                               │                    │   │ HTTPS  │                          │
+   │                   │                               │                    │   │        │  ChatGPT, Claude, Go     │
+   │                   ▼                               │                    │   └───────▶│  Read-only limit checks  │
+   │ ┌──────────────────── CLAUDE CODE (OPT-IN) ───────┴─────────────┐      │            │                          │
+   │ │                                                               │      │            │  Local sign-ins stay in  │
+   │ │  Official CLI subprocess on the OpenCode host                 │      │            │  the gateway             │
+   │ │                                                               │      │            └──────────────────────────┘
+   │ │  Own login, inference and Claude conversation files           │      │
+   │ │  Workspace tools return to OpenCode permissions               │      │
+   │ │  Plugin releases idle workers after five minutes              │      │            ┌──── OPENCODE SQLITE ─────┐
+   │ │                                                               │      │            │                          │
+   │ └───────────────────────────────────────────────────────────────┘      └───────────▶│  Read-only local search  │
+   │                                                                                     │  + active usage sign-ins │
+   │                                                                                     └──────────────────────────┘
+   │ ┌─────────────────── REMOTE ACCESS (OPT-IN) ────────────────────┐
+   │ │ Paired phone or laptop → your Cloudflare hostname             │
+   │ │ cloudflared child → second listener on 127.0.0.1:4317         │
+   └─┤ One-time code → per-device cookie; revoke closes streams      │
+     │ ~/.opencodex/remote.json: hostname, token, device hashes      │
+     └───────────────────────────────────────────────────────────────┘
+
+
   ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
   RUNTIME HOSTING
@@ -71,3 +79,4 @@
   DEV          Vite :5173 proxies /api to :4310; macOS launches cached OpenCodex.app.
   WEB BUILD    Node gateway serves the UI and API on one loopback origin.
   DESKTOP      Electron main hosts the gateway and built UI on a free loopback port.
+  REMOTE       Built gateways also serve UI + API on :4317, paired devices only.

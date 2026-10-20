@@ -1,7 +1,7 @@
 {
   "canvas": {
     "width": 119,
-    "height": 75
+    "height": 83
   },
   "boxes": [
     {
@@ -111,6 +111,22 @@
       "height": 5,
       "title": "OPENCODE SQLITE",
       "color": "#c4a7ff"
+    },
+    {
+      "id": "remote",
+      "x": 5,
+      "y": 66,
+      "width": 65,
+      "height": 6,
+      "title": "REMOTE ACCESS (OPT-IN)",
+      "color": "#f6c177",
+      "align": "left",
+      "lines": [
+        "Paired phone or laptop \u2192 your Cloudflare hostname",
+        "cloudflared child \u2192 second listener on 127.0.0.1:4317",
+        "One-time code \u2192 per-device cookie; revoke closes streams",
+        "~/.opencodex/remote.json: hostname, token, device hashes"
+      ]
     }
   ],
   "connectors": [
@@ -216,13 +232,22 @@
         [88, 54]
       ],
       "color": "#5eead4"
+    },
+    {
+      "points": [
+        [5, 69],
+        [3, 69],
+        [3, 30],
+        [4, 30]
+      ],
+      "color": "#f6c177"
     }
   ],
   "lines": [
     {
       "points": [
-        [2, 66],
-        [114, 66]
+        [2, 74],
+        [114, 74]
       ],
       "color": "#626c7a"
     }
@@ -587,41 +612,41 @@
     },
     {
       "x": 2,
-      "y": 68,
+      "y": 76,
       "value": "RUNTIME HOSTING",
       "color": "#ffffff"
     },
     {
       "x": 2,
-      "y": 70,
+      "y": 78,
       "value": "DEV",
       "color": "#7bb8ff"
     },
     {
       "x": 15,
-      "y": 70,
+      "y": 78,
       "value": "Vite :5173 proxies /api to :4310; macOS launches cached OpenCodex.app."
     },
     {
       "x": 2,
-      "y": 71,
+      "y": 79,
       "value": "WEB BUILD",
       "color": "#5eead4"
     },
     {
       "x": 15,
-      "y": 71,
+      "y": 79,
       "value": "Node gateway serves the UI and API on one loopback origin."
     },
     {
       "x": 2,
-      "y": 72,
+      "y": 80,
       "value": "DESKTOP",
       "color": "#f6c177"
     },
     {
       "x": 15,
-      "y": 72,
+      "y": 80,
       "value": "Electron main hosts the gateway and built UI on a free loopback port."
     },
     {
@@ -702,6 +727,17 @@
       "x": 8,
       "y": 33,
       "value": "Canvas app servers: child processes, runs + triggers"
+    },
+    {
+      "x": 2,
+      "y": 81,
+      "value": "REMOTE",
+      "color": "#f6c177"
+    },
+    {
+      "x": 15,
+      "y": 81,
+      "value": "Built gateways also serve UI + API on :4317, paired devices only."
     }
   ],
   "requiredLabels": [
@@ -727,7 +763,8 @@
     "Claude plugin files",
     "CLAUDE CODE (OPT-IN)",
     "PLAN USAGE APIS",
-    "Canvas app servers"
+    "Canvas app servers",
+    "REMOTE ACCESS (OPT-IN)"
   ],
   "style": {
     "background": "#000000",

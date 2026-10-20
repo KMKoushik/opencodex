@@ -31,6 +31,7 @@ import {
 import { GeneralSettings } from '../features/settings/general-settings';
 import { settingsSections, type SettingsSection } from '../features/settings/sections';
 import { SettingsNav } from '../features/settings/settings-nav';
+import { RemoteSettings } from '../features/remote/remote-settings';
 import { AppearanceSettings } from '../features/theme/appearance-settings';
 import { useThemeEffect } from '../features/theme/use-theme';
 import { WorkspaceView } from '../features/workspace/workspace-view';
@@ -722,6 +723,8 @@ export function App() {
                       />
                     ) : settings === 'shortcuts' ? (
                       <ShortcutsSettings />
+                    ) : settings === 'remote' ? (
+                      <RemoteSettings />
                     ) : settings === 'usage' ? (
                       <UsageLimitsPage connected={connected} />
                     ) : settings === 'projects' ? (

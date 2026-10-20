@@ -5,6 +5,7 @@ import { Providers } from './app/providers';
 import { applyInitialTheme } from './features/theme/use-theme';
 import { applyInitialChatFontSize } from './features/settings/chat-font-size';
 import { initializeStorage } from './lib/storage';
+import { remoteClient, remotePaired } from './lib/remote';
 import { appName, development } from './features/brand/identity';
 import './styles/globals.css';
 
@@ -38,9 +39,28 @@ if (window.desktop) {
     .catch((error: unknown) => console.error('Could not read window fullscreen state.', error));
   import.meta.hot?.dispose(() => unsubscribe?.());
 }
-void initializeStorage().then(() => {
+void initializeStorage().then(async () => {
   applyInitialTheme();
   applyInitialChatFontSize();
+  // Only remote browsers check pairing; this computer's window renders without waiting.
+  // If the check fails, the app shows its own gateway-unavailable state.
+  const paired = await (remoteClient ? remotePaired() : Promise.resolve(true)).catch(
+    (error: unknown) => {
+      console.error(error);
+      return true;
+    },
+  );
+  if (!paired) {
+    const { PairScreen } = await import('./features/remote/pair-screen');
+    createRoot(root).render(
+      <StrictMode>
+        <PairScreen />
+      </StrictMode>,
+    );
+    return;
+  }
+  if (remoteClient && location.hash.startsWith('#pair='))
+    history.replaceState(null, '', location.pathname + location.search);
   createRoot(root).render(
     <StrictMode>
       <Providers>

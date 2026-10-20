@@ -56,6 +56,8 @@ import type {
   CanvasInfo,
   CanvasSource,
 } from '@opencodex/contracts/canvas';
+import type { RemoteConfig, RemotePairCode, RemoteStatus } from '@opencodex/contracts/remote';
+import { requirePairing } from './remote';
 
 async function nativeRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, {
@@ -63,6 +65,7 @@ async function nativeRequest<T>(path: string, options?: RequestInit): Promise<T>
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     signal: options?.signal ?? AbortSignal.timeout(30_000),
   });
+  if (response.status === 401) requirePairing();
   const body = await response.json();
   if (!response.ok) {
     const error = apiErrorSchema.safeParse(body);
@@ -312,6 +315,12 @@ export const api = {
     ),
   installClaudeCode: () => nativeRequest<{ ok: true }>('/claude-code', { method: 'PUT' }),
   removeClaudeCode: () => nativeRequest<{ ok: true }>('/claude-code', { method: 'DELETE' }),
+  remote: (signal: AbortSignal) => nativeRequest<RemoteStatus>('/remote', { signal }),
+  configureRemote: (config: RemoteConfig) =>
+    nativeRequest<RemoteStatus>('/remote', { method: 'PUT', body: JSON.stringify(config) }),
+  createPairCode: () => nativeRequest<RemotePairCode>('/remote/codes', post()),
+  revokeDevice: (id: string) =>
+    nativeRequest<{ ok: true }>(`/remote/devices/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   active: (signal: AbortSignal) =>
     nativeRequest<Record<string, SessionActive>>('/sessions/active', { signal }),
   messages: (id: string, cursor: string | undefined, signal: AbortSignal) =>

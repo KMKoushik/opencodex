@@ -156,6 +156,9 @@ function derive(
       ]),
     ),
     'on-project': css(white),
+    // Cameras read QR codes as dark modules on light, whatever the theme.
+    'scan-light': css(white),
+    'scan-dark': css(black),
     surface: css(surface),
     'surface-under': css(under),
     elevated: css(

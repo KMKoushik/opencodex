@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { bodyLimit } from 'hono/body-limit';
+import { HTTPException } from 'hono/http-exception';
 import {
   projectInputSchema,
   projectUpdateSchema,
@@ -38,28 +39,35 @@ import { createReplyFormat } from './reply-format';
 import { CANVAS_ROOT, canvasRoutes, canvasRuntimeRoutes, createCanvasWatcher } from './canvases';
 import { canvasPluginRoutes } from './canvas-plugin';
 import { Apps } from './apps';
+import { type RemoteAccess, remoteDenial, remoteRequest, remoteRoutes } from './remote';
 import { appModelUpdateSchema, canvasIconUpdateSchema } from '@opencodex/contracts/canvas';
 
 export function createApp(
   backend = new OpenCodeBackend(),
   shutdown = new AbortController().signal,
-  options: { triggers?: boolean } = {},
+  options: { triggers?: boolean; remote?: RemoteAccess } = {},
 ) {
   const app = new Hono();
 
   app.use('*', async (c, next) => {
-    const url = new URL(c.req.url);
-    if (!['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) {
-      return c.json({ message: 'This gateway accepts local requests only.' }, 403);
-    }
-    const origin = c.req.header('origin');
-    // Canvas frames have an opaque origin; their only request is the public runtime script.
-    const runtime = c.req.method === 'GET' && url.pathname === '/api/canvas-runtime/runtime.js';
-    if (
-      !runtime &&
-      ((origin && origin !== url.origin) || c.req.header('sec-fetch-site') === 'cross-site')
-    ) {
-      return c.json({ message: 'Cross-origin requests are not allowed.' }, 403);
+    const remote = remoteRequest(c);
+    if (remote) {
+      const denied = remoteDenial(c, remote);
+      if (denied) return denied;
+    } else {
+      const url = new URL(c.req.url);
+      if (!['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) {
+        return c.json({ message: 'This gateway accepts local requests only.' }, 403);
+      }
+      const origin = c.req.header('origin');
+      // Canvas frames have an opaque origin; their only request is the public runtime script.
+      const runtime = c.req.method === 'GET' && url.pathname === '/api/canvas-runtime/runtime.js';
+      if (
+        !runtime &&
+        ((origin && origin !== url.origin) || c.req.header('sec-fetch-site') === 'cross-site')
+      ) {
+        return c.json({ message: 'Cross-origin requests are not allowed.' }, 403);
+      }
     }
     c.header('X-Content-Type-Options', 'nosniff');
     c.header('Referrer-Policy', 'no-referrer');
@@ -67,6 +75,7 @@ export function createApp(
     await next();
   });
 
+  if (options.remote) app.route('/api/remote', remoteRoutes(options.remote));
   app.get('/api/connection', async (c) => c.json(await backend.connection()));
   app.post('/api/connection', async (c) => c.json(await backend.connection(true)));
   app.route('/api/terminals', terminalRoutes(backend));
@@ -567,7 +576,9 @@ export function createApp(
   app.onError((error, c) =>
     error instanceof GatewayError
       ? c.json({ message: error.message }, error.status)
-      : c.json({ message: 'The gateway could not complete this request.' }, 500),
+      : error instanceof HTTPException
+        ? c.json({ message: error.message || 'The request was rejected.' }, error.status)
+        : c.json({ message: 'The gateway could not complete this request.' }, 500),
   );
   return app;
 }
