@@ -35,6 +35,7 @@ import { taskRoutes } from './tasks';
 import { prepareAttachments } from './attachments';
 import { resolveMentions } from './mentions';
 import { searchSessions } from './session-search';
+import { formatTranscript } from './transcript';
 import { createReplyFormat } from './reply-format';
 import { CANVAS_ROOT, canvasRoutes, canvasRuntimeRoutes, createCanvasWatcher } from './canvases';
 import { canvasPluginRoutes } from './canvas-plugin';
@@ -260,13 +261,14 @@ export function createApp(
       }),
     );
   });
-  app.get('/api/sessions/:id/export', async (c) =>
-    c.json(
-      await backend.request(c.req.raw.signal, (client, options) =>
-        client.session.export({ sessionID: c.req.param('id') }, options),
-      ),
-    ),
-  );
+  app.get('/api/sessions/:id/export', async (c) => {
+    const data = await backend.request(c.req.raw.signal, (client, options) =>
+      client.session.export({ sessionID: c.req.param('id') }, options),
+    );
+    const markdown = c.req.query('format') === 'markdown';
+    c.header('Content-Type', `${markdown ? 'text/markdown' : 'application/json'}; charset=utf-8`);
+    return c.body(markdown ? formatTranscript(data) : JSON.stringify(data, null, 2));
+  });
   const workspace = workspaceRoutes(backend);
   app.route('/api/workspace', workspace.app);
   app.get('/api/workspace/:resource', async (c) => {

@@ -4,6 +4,7 @@ import { api } from '../../lib/api';
 import { cn } from '../../lib/utils';
 import { useThreadFocus } from '../threads/use-thread-focus';
 import { refreshSession } from './metadata';
+import { downloadSessionExport, type ExportFormat } from './session-export';
 import { isMac } from '../shortcuts/commands';
 import './session-row.css';
 
@@ -58,6 +59,11 @@ export function SessionActionsMenu({
       refreshSession(client, sessionID);
       dismiss();
     },
+  });
+  const exporting = useMutation({
+    mutationFn: (format: ExportFormat) => downloadSessionExport(sessionID, title, format),
+    retry: false,
+    onSuccess: () => dismiss(),
   });
   const focus = useThreadFocus(sessionID);
   const unlisten = useRef<() => void>(undefined);
@@ -218,6 +224,26 @@ export function SessionActionsMenu({
           >
             {pending ? 'Marking as unread…' : 'Mark as unread'}
           </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!connected || exporting.isPending}
+            onClick={() => exporting.mutate('markdown')}
+          >
+            {exporting.isPending && exporting.variables === 'markdown'
+              ? 'Exporting…'
+              : 'Export as Markdown'}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!connected || exporting.isPending}
+            onClick={() => exporting.mutate('json')}
+          >
+            {exporting.isPending && exporting.variables === 'json'
+              ? 'Exporting…'
+              : 'Export as JSON'}
+          </button>
           {onPick && (
             <button
               type="button"
@@ -233,6 +259,11 @@ export function SessionActionsMenu({
           {mark.isError && (
             <p className="session-actions-error" role="alert">
               Could not mark this thread as unread. {mark.error.message}
+            </p>
+          )}
+          {exporting.isError && (
+            <p className="session-actions-error" role="alert">
+              Could not export this thread. {exporting.error.message}
             </p>
           )}
           {focus.isError && (

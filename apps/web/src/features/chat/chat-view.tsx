@@ -20,6 +20,7 @@ import { annotatedPrompt } from './review-comments';
 import { promptMentions } from './mentions';
 import { localCommands, parseSlash, useSlashCommands } from './slash-commands';
 import { SessionViewed } from '../sessions/session-viewed';
+import { downloadSessionExport } from '../sessions/session-export';
 import { BrandIcon } from '../brand/brand';
 import { Starters } from './starters';
 import { sessionUnread } from '@opencodex/contracts';
@@ -155,17 +156,12 @@ export function ChatView({
           if (!slash.text.trim()) throw new Error('Enter a title after /rename.');
           await api.sessionAction(sessionID, { action: 'rename', title: slash.text.trim() });
         }
-        if (slash.name === 'export') {
-          const data = await api.exportSession(sessionID);
-          const url = URL.createObjectURL(
-            new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }),
+        if (slash.name === 'export')
+          await downloadSessionExport(
+            sessionID,
+            chat.info.data?.title ?? '',
+            slash.text.trim().toLowerCase() === 'json' ? 'json' : 'markdown',
           );
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `conversation-${sessionID}.json`;
-          link.click();
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-        }
         return { session: null };
       }
       const catalog = slash ? await commands.refetch() : undefined;

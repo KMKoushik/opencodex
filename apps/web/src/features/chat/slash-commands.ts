@@ -9,7 +9,7 @@ export const localCommands = [
   { name: 'new', description: 'Start a new thread in this project' },
   { name: 'compact', description: 'Summarize the conversation to free context' },
   { name: 'rename', description: 'Rename this thread · /rename New title' },
-  { name: 'export', description: 'Download this conversation as JSON' },
+  { name: 'export', description: 'Download this conversation as Markdown · /export json' },
 ];
 
 export function matchSlashCommands<T extends { name: string; description: string }>(

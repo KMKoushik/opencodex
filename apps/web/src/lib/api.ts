@@ -154,7 +154,22 @@ export const api = {
     nativeRequest<CommandInfo[]>(`/commands?${new URLSearchParams({ directory })}`, { signal }),
   sessionAction: (id: string, input: z.infer<typeof sessionActionSchema>) =>
     nativeRequest<SessionInfo | null>(`${sessionPath(id)}/action`, post(input)),
-  exportSession: (id: string) => nativeRequest<unknown>(`${sessionPath(id)}/export`),
+  exportSession: async (id: string, format: 'markdown' | 'json') => {
+    const response = await fetch(
+      `/api${sessionPath(id)}/export?${new URLSearchParams({ format })}`,
+      {
+        signal: AbortSignal.timeout(60_000),
+      },
+    );
+    if (response.status === 401) requirePairing();
+    if (!response.ok) {
+      const error = apiErrorSchema.safeParse(await response.json().catch(() => null));
+      throw new Error(
+        error.success ? error.data.message : 'The gateway could not export this thread.',
+      );
+    }
+    return response.blob();
+  },
   files: (directory: string, path: string, query: string, signal: AbortSignal) =>
     nativeRequest<FileSystemEntry[]>(
       `/workspace/files?${new URLSearchParams({ directory, ...(path ? { path } : {}), ...(query ? { query } : {}) })}`,
