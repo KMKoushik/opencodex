@@ -23,12 +23,10 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:smoke": "bun run build && playwright test",
-    "check": "bun run plugins:check && bun run canvas && bun run claude-code-plugin:check && bun run typecheck && bun run lint && bun run test && bun run build",
+    "check": "bun run plugins:check && bun run canvas && bun run typecheck && bun run lint && bun run test && bun run build",
     "plugins": "node scripts/plugins.mjs",
     "plugins:check": "node scripts/plugins.mjs --check",
     "canvas": "node scripts/canvas.mjs",
-    "claude-code-plugin": "bun scripts/claude-code-plugin.mjs",
-    "claude-code-plugin:check": "bun scripts/claude-code-plugin.mjs --check",
     "package:desktop": "bun run canvas && bun run --cwd apps/desktop package",
     "architecture": "node scripts/architecture.mjs",
     "architecture:check": "node scripts/architecture.mjs --check"
@@ -52,8 +50,5 @@
   "trustedDependencies": [
     "electron",
     "esbuild"
-  ],
-  "patchedDependencies": {
-    "@khalilgharbaoui/opencode-claude-code-plugin@0.54.2": "patches/@khalilgharbaoui%2Fopencode-claude-code-plugin@0.54.2.patch"
-  }
+  ]
 }

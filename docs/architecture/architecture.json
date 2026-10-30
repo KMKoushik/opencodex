@@ -1,7 +1,7 @@
 {
   "canvas": {
     "width": 119,
-    "height": 83
+    "height": 77
   },
   "boxes": [
     {
@@ -77,15 +77,6 @@
       "color": "#c4a7ff"
     },
     {
-      "id": "claude",
-      "x": 5,
-      "y": 55,
-      "width": 65,
-      "height": 9,
-      "title": "CLAUDE CODE (OPT-IN)",
-      "color": "#c4a7ff"
-    },
-    {
       "id": "contracts",
       "x": 89,
       "y": 36,
@@ -115,16 +106,16 @@
     {
       "id": "remote",
       "x": 5,
-      "y": 66,
+      "y": 53,
       "width": 65,
       "height": 6,
       "title": "REMOTE ACCESS (OPT-IN)",
       "color": "#f6c177",
       "align": "left",
       "lines": [
-        "Paired phone or laptop \u2192 your Cloudflare hostname",
-        "cloudflared child \u2192 second listener on 127.0.0.1:4317",
-        "One-time code \u2192 per-device cookie; revoke closes streams",
+        "Paired phone or laptop → your Cloudflare hostname",
+        "cloudflared child → second listener on 127.0.0.1:4317",
+        "One-time code → per-device cookie; revoke closes streams",
         "~/.opencodex/remote.json: hostname, token, device hashes"
       ]
     }
@@ -137,20 +128,6 @@
         [76, 37],
         [76, 63],
         [88, 63]
-      ],
-      "color": "#5eead4"
-    },
-    {
-      "points": [
-        [23, 48],
-        [23, 54]
-      ],
-      "color": "#c4a7ff"
-    },
-    {
-      "points": [
-        [55, 55],
-        [55, 49]
       ],
       "color": "#5eead4"
     },
@@ -235,8 +212,8 @@
     },
     {
       "points": [
-        [5, 69],
-        [3, 69],
+        [5, 56],
+        [3, 56],
         [3, 30],
         [4, 30]
       ],
@@ -246,8 +223,8 @@
   "lines": [
     {
       "points": [
-        [2, 74],
-        [114, 74]
+        [2, 68],
+        [114, 68]
       ],
       "color": "#626c7a"
     }
@@ -612,84 +589,52 @@
     },
     {
       "x": 2,
-      "y": 76,
+      "y": 70,
       "value": "RUNTIME HOSTING",
       "color": "#ffffff"
     },
     {
       "x": 2,
-      "y": 78,
+      "y": 72,
       "value": "DEV",
       "color": "#7bb8ff"
     },
     {
       "x": 15,
-      "y": 78,
+      "y": 72,
       "value": "Vite :5173 proxies /api to :4310; macOS launches cached OpenCodex.app."
     },
     {
       "x": 2,
-      "y": 79,
+      "y": 73,
       "value": "WEB BUILD",
       "color": "#5eead4"
     },
     {
       "x": 15,
-      "y": 79,
+      "y": 73,
       "value": "Node gateway serves the UI and API on one loopback origin."
     },
     {
       "x": 2,
-      "y": 80,
+      "y": 74,
       "value": "DESKTOP",
       "color": "#f6c177"
     },
     {
       "x": 15,
-      "y": 80,
+      "y": 74,
       "value": "Electron main hosts the gateway and built UI on a free loopback port."
     },
     {
       "x": 8,
       "y": 32,
-      "value": "Opt-in side-chat, tasks, canvas + Claude plugin files"
+      "value": "Opt-in side-chat, tasks + canvas plugin files"
     },
     {
       "x": 8,
       "y": 47,
-      "value": "Loads side-chat, tasks, canvas + Claude plugins; task KV"
-    },
-    {
-      "x": 7,
-      "y": 50,
-      "value": "spawn + stdin",
-      "color": "#c4a7ff"
-    },
-    {
-      "x": 58,
-      "y": 50,
-      "value": "stdout + tools",
-      "color": "#5eead4"
-    },
-    {
-      "x": 8,
-      "y": 57,
-      "value": "Official CLI subprocess on the OpenCode host"
-    },
-    {
-      "x": 8,
-      "y": 59,
-      "value": "Own login, inference and Claude conversation files"
-    },
-    {
-      "x": 8,
-      "y": 60,
-      "value": "Workspace tools return to OpenCode permissions"
-    },
-    {
-      "x": 8,
-      "y": 61,
-      "value": "Plugin releases idle workers after five minutes"
+      "value": "Loads side-chat, tasks + canvas plugins; task KV"
     },
     {
       "x": 92,
@@ -730,13 +675,13 @@
     },
     {
       "x": 2,
-      "y": 81,
+      "y": 75,
       "value": "REMOTE",
       "color": "#f6c177"
     },
     {
       "x": 15,
-      "y": 81,
+      "y": 75,
       "value": "Built gateways also serve UI + API on :4317, paired devices only."
     }
   ],
@@ -760,8 +705,6 @@
     "preferences.json",
     "localStorage: UI + type",
     "RUNTIME HOSTING",
-    "Claude plugin files",
-    "CLAUDE CODE (OPT-IN)",
     "PLAN USAGE APIS",
     "Canvas app servers",
     "REMOTE ACCESS (OPT-IN)"

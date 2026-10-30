@@ -101,12 +101,6 @@ export type ModelCatalog = ModelListOutput & {
 };
 export type WorkspaceVcs = { info: VcsInfo; files: VcsFileStatus[] };
 export type WorkspaceSkills = Pick<SkillInfo, 'id' | 'name' | 'description'>[];
-export type ClaudeCodeStatus = {
-  state: 'unavailable' | 'missing' | 'outdated' | 'loading' | 'active' | 'failed' | 'external';
-  removable: boolean;
-  path?: string;
-  message?: string;
-};
 /** One subscription rate-limit window, as reported by the plan's own usage endpoint. */
 export type UsageWindow = {
   id: string;

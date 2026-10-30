@@ -5,7 +5,7 @@ import { OpenCodeBackend, localEndpointResolver } from './opencode';
 import { attachTerminalSockets } from './terminal-sockets';
 import { registerGateway } from './canvases';
 import { CANVAS_PLUGIN_FILE } from './canvas-plugin';
-import { refreshClaudeCodePlugin } from './claude-code';
+import { retireClaudeCodeBridge } from './claude-code';
 import { refreshPlugin } from './plugin-files';
 import { SIDE_CHAT_PLUGIN_FILE } from './side-chats';
 import { TASKS_PLUGIN_FILE } from './tasks';
@@ -71,7 +71,7 @@ export async function startGateway(options: { port?: number; assets?: string } =
   // Installed plugins from an older OpenCodex would teach agents tools this gateway changed.
   void Promise.allSettled([
     ...[CANVAS_PLUGIN_FILE, TASKS_PLUGIN_FILE, SIDE_CHAT_PLUGIN_FILE].map(refreshPlugin),
-    refreshClaudeCodePlugin(),
+    retireClaudeCodeBridge(backend),
   ]);
   let unregister: (() => void) | undefined;
   try {

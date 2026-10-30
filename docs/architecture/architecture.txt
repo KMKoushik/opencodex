@@ -30,7 +30,7 @@
      │  Bounded previews/logs; version-checked file writes           │                   │  Updater; browser profile│
    ┌▶│  Native APIs; binary file handoff; ticketed PTY relay         │                   └──────────────────────────┘
    │ │  Host files: video/PDF ranges, reveal targets, canvases       │
-   │ │  Opt-in side-chat, tasks, canvas + Claude plugin files        ├──────────┐
+   │ │  Opt-in side-chat, tasks + canvas plugin files                ├──────────┐
    │ │  Canvas app servers: child processes, runs + triggers         │          │
    │ └─────────────────┬─────────────────────────────────┬───────────┘          │
    │   HTTP + WS       │                               ▲ │Events + WS;          │
@@ -45,31 +45,25 @@
    │ │  Providers, tools, worktrees, VCS + filesystem                │      │   │        │                          │
    │ │  Project copies: .opencode/opencodex-attachments              │      │   │        └──────────────────────────┘
    │ │  Durable sessions; native agent shells + PTY replay           │      │   │
-   │ │  Loads side-chat, tasks, canvas + Claude plugins; task KV     │      │   │        Code, not a service
-   │ └─────────────────┬─────────────────────────────────────────────┘      │   │
-   │                   │                               ▲                    │   │
-   │   spawn + stdin   │                               │  stdout + tools    │   │
-   │                   │                               │                    │   │        ┌──── PLAN USAGE APIS ─────┐
-   │                   │                               │                    │   │ HTTPS  │                          │
-   │                   │                               │                    │   │        │  ChatGPT, Claude, Go     │
-   │                   ▼                               │                    │   └───────▶│  Read-only limit checks  │
-   │ ┌──────────────────── CLAUDE CODE (OPT-IN) ───────┴─────────────┐      │            │                          │
-   │ │                                                               │      │            │  Local sign-ins stay in  │
-   │ │  Official CLI subprocess on the OpenCode host                 │      │            │  the gateway             │
-   │ │                                                               │      │            └──────────────────────────┘
-   │ │  Own login, inference and Claude conversation files           │      │
-   │ │  Workspace tools return to OpenCode permissions               │      │
-   │ │  Plugin releases idle workers after five minutes              │      │            ┌──── OPENCODE SQLITE ─────┐
-   │ │                                                               │      │            │                          │
-   │ └───────────────────────────────────────────────────────────────┘      └───────────▶│  Read-only local search  │
-   │                                                                                     │  + active usage sign-ins │
-   │                                                                                     └──────────────────────────┘
-   │ ┌─────────────────── REMOTE ACCESS (OPT-IN) ────────────────────┐
-   │ │ Paired phone or laptop → your Cloudflare hostname             │
-   │ │ cloudflared child → second listener on 127.0.0.1:4317         │
-   └─┤ One-time code → per-device cookie; revoke closes streams      │
-     │ ~/.opencodex/remote.json: hostname, token, device hashes      │
-     └───────────────────────────────────────────────────────────────┘
+   │ │  Loads side-chat, tasks + canvas plugins; task KV             │      │   │        Code, not a service
+   │ └───────────────────────────────────────────────────────────────┘      │   │
+   │                                                                        │   │
+   │                                                                        │   │
+   │                                                                        │   │        ┌──── PLAN USAGE APIS ─────┐
+   │                                                                        │   │ HTTPS  │                          │
+   │ ┌─────────────────── REMOTE ACCESS (OPT-IN) ────────────────────┐      │   │        │  ChatGPT, Claude, Go     │
+   │ │ Paired phone or laptop → your Cloudflare hostname             │      │   └───────▶│  Read-only limit checks  │
+   │ │ cloudflared child → second listener on 127.0.0.1:4317         │      │            │                          │
+   └─┤ One-time code → per-device cookie; revoke closes streams      │      │            │  Local sign-ins stay in  │
+     │ ~/.opencodex/remote.json: hostname, token, device hashes      │      │            │  the gateway             │
+     └───────────────────────────────────────────────────────────────┘      │            └──────────────────────────┘
+                                                                            │
+                                                                            │
+                                                                            │            ┌──── OPENCODE SQLITE ─────┐
+                                                                            │            │                          │
+                                                                            └───────────▶│  Read-only local search  │
+                                                                                         │  + active usage sign-ins │
+                                                                                         └──────────────────────────┘
 
 
   ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────

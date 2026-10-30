@@ -38,7 +38,6 @@ import {
   type ShellInfo,
   type ShellOutputOutput,
   type SideChatPluginStatus,
-  type ClaudeCodeStatus,
   type UsageLimits,
   type WorktreeDirectory,
   type Task,
@@ -323,13 +322,6 @@ export const api = {
   deleteTask: (id: string) =>
     nativeRequest<{ ok: true }>(`/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   usageLimits: (signal: AbortSignal) => nativeRequest<UsageLimits>('/usage/limits', { signal }),
-  claudeCode: (directory: string | undefined, signal: AbortSignal) =>
-    nativeRequest<ClaudeCodeStatus>(
-      `/claude-code${directory ? `?${new URLSearchParams({ directory })}` : ''}`,
-      { signal },
-    ),
-  installClaudeCode: () => nativeRequest<{ ok: true }>('/claude-code', { method: 'PUT' }),
-  removeClaudeCode: () => nativeRequest<{ ok: true }>('/claude-code', { method: 'DELETE' }),
   remote: (signal: AbortSignal) => nativeRequest<RemoteStatus>('/remote', { signal }),
   configureRemote: (config: RemoteConfig) =>
     nativeRequest<RemoteStatus>('/remote', { method: 'PUT', body: JSON.stringify(config) }),

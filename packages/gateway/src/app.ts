@@ -28,7 +28,6 @@ import { createMetadataWriter, sessionMetadataRoutes } from './session-metadata'
 import { sideChatRoutes } from './side-chats';
 import { sessionAccessRoutes } from './session-access';
 import { attention } from './attention';
-import { claudeCodeRoutes } from './claude-code';
 import { usageRoutes } from './usage';
 import { worktreeRoutes } from './worktrees';
 import { taskRoutes } from './tasks';
@@ -86,7 +85,6 @@ export function createApp(
   const writeMetadata = createMetadataWriter(backend);
   app.route('/api/sessions', sessionMetadataRoutes(writeMetadata));
   app.route('/api', sideChatRoutes(backend, writeMetadata));
-  app.route('/api/claude-code', claudeCodeRoutes(backend));
   app.route('/api/usage', usageRoutes(backend));
   app.route('/api/sessions', sessionAccessRoutes(backend));
   app.route('/api', worktreeRoutes(backend));

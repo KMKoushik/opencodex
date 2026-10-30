@@ -32,19 +32,11 @@ Use the paperclip, paste from the clipboard, or drop files onto the composer to 
 
 Themes live in **Settings → Appearance**. Choose Light, Dark, or System mode, then pick a separate light and dark theme, such as OpenCodex, Catppuccin (Latte, Mocha, Macchiato, Frappé), GitHub, Nord, Gruvbox, Solarized, Rosé Pine, Tokyo Night, Dracula, Everforest, or One. As in Codex, each theme is three seed colors — accent, background, and foreground — plus a contrast level; you can adjust any of them, and every other color is derived from them, including the glazed ceramic controls. The workspace panel, terminal, and code use the same theme as the rest of the app, with matching syntax colors in diffs and the editor. Choices persist across launches.
 
-### Claude Code subscriptions
+### Claude subscriptions
 
-Install the official Claude Code CLI on the OpenCode host and sign in with `claude auth login`. In **Settings → General → Claude Code**, choose **Enable**, then select a **Claude Code** model in the composer. **Remove** uninstalls the bridge; **Update** installs the bundled version. This applies across projects on your locally discovered OpenCode service. External connections require installation on that server.
+OpenCode 2.2.3 and later include a **Claude Agent** provider that runs your installed Claude Code CLI with its own login. Install the CLI on the OpenCode host and sign in with `claude auth login`, then connect the provider once with `opencode auth login claude-agent` (or **Connect provider → Claude Agent** in OpenCode). Its models then appear in the composer's model picker. Billing follows whatever Claude Code is signed in with; a subscription shows $0 cost.
 
-The bridge runs the real Claude CLI with its existing authentication. Subscription usage follows Anthropic's current rules for your account; API-key and cloud-provider logins retain their billing paths. OpenCodex does not collect Claude credentials. Check your login with `claude auth status`; consult Anthropic's [subscription guidance](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan) for billing rules.
-
-OpenCode supplies app-visible sessions, permissions, and forwarded tools, including Code Mode/MCP, subagents, and side-chat context tools. Claude retains its internal agent loop, context management, and conversation files. The bridge wraps the pinned [OpenCode Claude Code plugin](https://github.com/khalilgharbaoui/opencode-claude-code-plugin) with an OpenCodex preset and interruption cleanup. Arbitrary direct custom tools need explicit forwarding; Claude hooks still belong to your CLI environment. Context and cost reports are adapter-specific.
-
-`/compact` runs Claude Code's own `/compact` on the chat's live Claude conversation, so Claude's context actually shrinks; its summary becomes the chat's compaction summary. When Claude is in the middle of a tool call (as during OpenCode's automatic compaction inside a long turn), or no Claude conversation is live (after a restart), the upstream adapter's separate summarizer runs instead. Claude still compacts its own context when it fills.
-
-Forks and interrupted/steered turns rebuild Claude context from OpenCode history. The upstream adapter shortens older messages during reconstruction and flattens some role boundaries, so this is not lossless replay. For context-sensitive work, keep the experimental status in mind.
-
-The app installs one plugin under OpenCode's global `plugins/opencodex-claude-code/` folder and preserves customized files. Remove any separately configured Claude Code provider before enabling it. Loading is automatic; use **Check** if it has not appeared. Closing OpenCodex leaves ongoing work running; idle Claude workers expire after five minutes.
+OpenCodex 0.1.43 and earlier bundled a Claude Code bridge plugin. Once Claude Agent is connected, OpenCodex removes that bridge on its next launch, unless you edited the installed file. Threads that used a **Claude Code** model need a Claude Agent model picked before the next message.
 
 ### Review and edit your workspace
 

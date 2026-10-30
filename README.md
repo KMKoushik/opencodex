@@ -15,7 +15,7 @@ This is my attempt to bring one of the greatest coding-agent UXs (Codex) to [Ope
 - [opencode desktop](https://opencode.ai/)
 - [Codex](https://openai.com/codex/)
 
-This is not a T3 Code alternative / fork. It uses OpenCode as the backend and acts as a GUI with some basic plugins. Models and providers configured in OpenCode are available here. An experimental [Claude Code bridge](docs/readme.md#claude-code-subscriptions) lets your installed Claude CLI serve as an OpenCode provider.
+This is not a T3 Code alternative / fork. It uses OpenCode as the backend and acts as a GUI with some basic plugins. Models and providers configured in OpenCode are available here. Claude subscriptions work through OpenCode's [Claude Agent provider](docs/readme.md#claude-subscriptions).
 
 It currently supports:
 
