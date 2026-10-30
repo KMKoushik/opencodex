@@ -17,7 +17,7 @@ concurrency:
 jobs:
   sign-update-fixtures:
     name: Sign native update fixtures
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
   verify-update-install:
     name: Install update on a fresh Mac
     needs: sign-update-fixtures
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -64,7 +64,7 @@ jobs:
 
   mac:
     name: macOS DMG (arm64 + x64)
-    runs-on: macos-14
+    runs-on: macos-15
     needs: verify-update-install
     timeout-minutes: 45
     steps:
