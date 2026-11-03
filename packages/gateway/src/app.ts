@@ -453,7 +453,8 @@ export function createApp(
   app.post('/api/sessions/:id/interrupt', async (c) =>
     c.json(
       await backend.request(c.req.raw.signal, (client, options) =>
-        client.session.interrupt({ sessionID: c.req.param('id') }, options),
+        // Stopping claims the run's pending wake; `resume` lets messages sent mid-run still run.
+        client.session.interrupt({ sessionID: c.req.param('id'), resume: true }, options),
       ),
     ),
   );
