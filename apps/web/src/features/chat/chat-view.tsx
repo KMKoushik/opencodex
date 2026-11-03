@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useIsMutating, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ModelRef, Project, SessionInfo, WorktreeDirectory } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
@@ -27,6 +27,7 @@ import { sessionUnread } from '@opencodex/contracts';
 import { ProjectSwitcher } from '../projects/project-switcher';
 import { undoDraft } from './undo-draft';
 import { ActivityTray } from './activity-tray';
+import { blockingWork, NO_BLOCKING_WORK } from './blocking-work';
 import { PermissionControl } from './permission-control';
 import { useCheckout } from '../worktrees/checkout';
 import { WorkspaceBar, type WorkspaceChoice } from '../worktrees/workspace-bar';
@@ -84,6 +85,12 @@ export function ChatView({
       queryKey: key,
       predicate: (query) => query.queryKey[2] !== 'stream',
     });
+  // Read after a send is admitted, so work that started meanwhile moves too.
+  const blocked = useRef(false);
+  const toBackground = useMutation({
+    mutationFn: () => api.background(sessionID),
+    onSettled: () => void refresh(),
+  });
   const send = useMutation({
     mutationKey: sendKey,
     gcTime: 0,
@@ -198,6 +205,9 @@ export function ChatView({
         mentions: promptMentions(text, input.draft.mentions),
         annotations,
       });
+      // Like OpenCode's app: a message sent mid-run steers, which waits for blocking calls to end,
+      // so move them to the background and let the agent read it at its next step.
+      if (input.draft.sessionID === sessionID && blocked.current) toBackground.mutate();
       return { model: input.model };
     },
     retry: false,
@@ -250,6 +260,13 @@ export function ChatView({
     return { unique, seen };
   }, [chat.messages.data, chat.info.data?.revert?.messageID]);
   const running = Boolean(chat.active.data?.[sessionID]);
+  const blocking = useMemo(
+    () => (running ? blockingWork(unique) : NO_BLOCKING_WORK),
+    [running, unique],
+  );
+  useLayoutEffect(() => {
+    blocked.current = blocking !== NO_BLOCKING_WORK;
+  });
   const waiting =
     chat.inbox.data?.filter((item) => item.type === 'user' && !seen.has(item.id)) ?? [];
   const failed = [
@@ -484,6 +501,11 @@ export function ChatView({
             {send.error.message} Your draft is kept. Check the conversation before sending again.
           </p>
         )}
+        {toBackground.isError && (
+          <p className="text-error" role="alert">
+            Could not move work to the background. {toBackground.error.message}
+          </p>
+        )}
         {stop.isError && (
           <p className="text-error" role="alert">
             {stop.error.message}
@@ -493,6 +515,9 @@ export function ChatView({
           directory={chat.info.data?.location.directory}
           sessionID={sessionID}
           live={live}
+          blocking={blocking}
+          moving={toBackground.isPending}
+          onBackground={() => toBackground.mutate()}
           onOpenSubagent={onOpenSubagent}
         />
         {chat.forms.data?.[0] ? (

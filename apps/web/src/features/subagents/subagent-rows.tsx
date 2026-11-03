@@ -4,6 +4,7 @@ import { cn } from '../../lib/utils';
 import { formatDuration, useTicker } from '../chat/elapsed';
 import type { RunningSubagent } from './running-subagents';
 import type { SubagentAttention } from './subagent-attention';
+import { RunMode } from '../shell/shell-rows';
 import './subagent-tray.css';
 
 const agentName = (agent?: string) =>
@@ -12,11 +13,14 @@ const agentName = (agent?: string) =>
 export function SubagentRows({
   items,
   attention,
+  foreground,
   onOpen,
   className,
 }: {
   items: RunningSubagent[];
   attention: SubagentAttention[];
+  /** Whether the current reply waits on this subagent; otherwise it runs in the background. */
+  foreground: (id: string) => boolean;
   onOpen: (id: string) => void;
   className?: string;
 }) {
@@ -43,6 +47,7 @@ export function SubagentRows({
               )}
               <span className="subagent-tray-agent">{agentName(item.agent)}</span>
               <span className="subagent-tray-title truncate">{title}</span>
+              <RunMode foreground={foreground(item.id)} />
               <span className="subagent-tray-meta" data-status={status ?? 'running'}>
                 {status === 'permission'
                   ? 'Needs approval'

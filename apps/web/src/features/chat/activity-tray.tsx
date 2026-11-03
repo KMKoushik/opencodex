@@ -8,6 +8,9 @@ import { SubagentRows } from '../subagents/subagent-rows';
 import { useRunningShells } from '../shell/running-shells';
 import { ShellRows } from '../shell/shell-rows';
 import { ShellOutput } from '../shell/shell-output';
+import { shortcutProps } from '../shortcuts/commands';
+import { useCommand } from '../shortcuts/use-command';
+import { blocksReply, type BlockingWork } from './blocking-work';
 import './activity-tray.css';
 
 type Tab = 'subagents' | 'shell';
@@ -17,12 +20,19 @@ export function ActivityTray({
   directory,
   sessionID,
   live,
+  blocking,
+  moving,
+  onBackground,
   onOpenSubagent,
   className,
 }: {
   directory?: string;
   sessionID: string;
   live: boolean;
+  /** Work the current reply waits on; everything else here runs in the background. */
+  blocking: BlockingWork;
+  moving: boolean;
+  onBackground: () => void;
   onOpenSubagent: (id: string) => void;
   className?: string;
 }) {
@@ -39,6 +49,9 @@ export function ActivityTray({
   const approvals = subagents.attention.filter((value) => value === 'permission').length;
   const questions = subagents.attention.filter((value) => value === 'question').length;
   const requestErrors = subagents.attention.some((value) => value === 'error');
+  const blocked = blocking.shells.length + blocking.subagents.length;
+  const movable = blocked > 0 && !moving;
+  useCommand('chat.background', movable ? onBackground : undefined);
   const summary = [
     subagents.failed
       ? 'Could not check running subagents'
@@ -49,6 +62,7 @@ export function ActivityTray({
     approvals > 0 && `${approvals} need approval`,
     questions > 0 && `${questions} have questions`,
     requestErrors && 'Could not check subagent requests',
+    blocked > 0 && `The reply is waiting on ${blocked} of them`,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -141,6 +155,18 @@ export function ActivityTray({
                   alertLabel="Could not check running shell commands"
                 />
               </div>
+              {blocked > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="activity-tray-background"
+                  disabled={moving}
+                  onClick={onBackground}
+                  {...shortcutProps('chat.background')}
+                >
+                  {moving ? 'Moving…' : 'Move to background'}
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -177,6 +203,7 @@ export function ActivityTray({
                   <SubagentRows
                     items={subagents.items}
                     attention={subagents.attention}
+                    foreground={(id) => blocking.subagents.some((item) => item.id === id)}
                     onOpen={onOpenSubagent}
                   />
                 ) : (
@@ -200,7 +227,11 @@ export function ActivityTray({
                     onRetry={() => void shells.refetch()}
                   />
                 ) : items.length > 0 ? (
-                  <ShellRows items={items} onOpen={setShellID} />
+                  <ShellRows
+                    items={items}
+                    foreground={(shell) => blocksReply(shell, blocking)}
+                    onOpen={setShellID}
+                  />
                 ) : (
                   <p className="activity-tray-empty">
                     {shells.isPending && directory

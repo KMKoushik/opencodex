@@ -7,10 +7,13 @@ import './shell.css';
 
 export function ShellRows({
   items,
+  foreground,
   onOpen,
   className,
 }: {
   items: ShellInfo[];
+  /** Whether the current reply waits on this shell; otherwise it runs in the background. */
+  foreground: (shell: ShellInfo) => boolean;
   onOpen: (id: string) => void;
   className?: string;
 }) {
@@ -28,11 +31,29 @@ export function ShellRows({
           >
             <span className="session-activity" aria-hidden="true" />
             <code className="truncate">{shell.command}</code>
+            <RunMode foreground={foreground(shell)} />
             <span className="shell-tray-time">{formatDuration(now - shell.time.started)}</span>
             <HugeiconsIcon icon={ArrowRight01Icon} size={14} aria-hidden="true" />
           </button>
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Foreground work holds up the reply; background work reports back when it finishes. */
+export function RunMode({ foreground }: { foreground: boolean }) {
+  return (
+    <span
+      className="run-mode"
+      data-mode={foreground ? 'foreground' : 'background'}
+      data-tooltip={
+        foreground
+          ? 'The reply is waiting for this to finish'
+          : 'Runs in the background; the agent is told when it finishes'
+      }
+    >
+      {foreground ? 'Foreground' : 'Background'}
+    </span>
   );
 }

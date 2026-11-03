@@ -458,6 +458,13 @@ export function createApp(
       ),
     ),
   );
+  // Native: moves the run's blocking shells and subagents to background jobs; no-op when none block.
+  app.post('/api/sessions/:id/background', async (c) => {
+    await backend.request(c.req.raw.signal, (client, options) =>
+      client.session.background({ sessionID: c.req.param('id') }, options),
+    );
+    return c.json({ ok: true });
+  });
   app.get('/api/sessions/:id/permissions', async (c) =>
     c.json(
       await backend.request(c.req.raw.signal, (client, options) =>

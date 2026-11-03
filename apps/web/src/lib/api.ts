@@ -350,6 +350,7 @@ export const api = {
     },
   ) => nativeRequest<SessionInboxUser | null>(`${sessionPath(id)}/prompt`, post(input)),
   interrupt: (id: string) => nativeRequest(`${sessionPath(id)}/interrupt`, post()),
+  background: (id: string) => nativeRequest<{ ok: true }>(`${sessionPath(id)}/background`, post()),
   permissions: (id: string, signal: AbortSignal) =>
     nativeRequest<PermissionRequest[]>(`${sessionPath(id)}/permissions`, { signal }),
   sessionAccess: (id: string, mode: z.infer<typeof sessionAccessSchema>['mode']) =>

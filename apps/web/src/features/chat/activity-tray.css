@@ -118,3 +118,11 @@
     margin-inline: 10px;
   }
 }
+.activity-tray-background.button {
+  flex: none;
+  min-height: 30px;
+  padding-inline: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}

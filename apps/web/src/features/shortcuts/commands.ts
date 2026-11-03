@@ -5,6 +5,8 @@ type Binding = {
   alt?: boolean;
   shift?: boolean;
   presses?: 2;
+  /** Limits a binding to macOS (`true`) or other platforms (`false`). */
+  mac?: boolean;
 };
 type Command = {
   id: string;
@@ -134,6 +136,17 @@ export const commands = [
     inInput: true,
   },
   {
+    id: 'chat.background',
+    label: 'Move running work to the background',
+    group: 'Chat',
+    // As in OpenCode; Ctrl+B already toggles the sidebar outside macOS.
+    bindings: [
+      { key: 'b', ctrl: true, mac: true },
+      { key: 'b', ctrl: true, shift: true, mac: false },
+    ],
+    inInput: true,
+  },
+  {
     id: 'chat.stop',
     label: 'Stop response',
     group: 'Chat',
@@ -148,10 +161,14 @@ export const isMac =
   typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 
 export function shortcutLabel(id: CommandID, mac = isMac) {
-  return commands
-    .find((command) => command.id === id)!
-    .bindings.map((binding) => bindingLabel(binding, mac))
+  return platformBindings(id, mac)
+    .map((binding) => bindingLabel(binding, mac))
     .join(' / ');
+}
+
+function platformBindings(id: CommandID, mac: boolean) {
+  const bindings: readonly Binding[] = commands.find((command) => command.id === id)!.bindings;
+  return bindings.filter((binding) => binding.mac === undefined || binding.mac === mac);
 }
 
 function bindingLabel(binding: Binding, mac: boolean) {
@@ -174,8 +191,8 @@ export function shortcutProps(id: CommandID) {
     'data-shortcut': shortcutLabel(id),
     // ARIA describes chords, not sequences; the tooltip describes double Escape.
     'aria-keyshortcuts':
-      command.bindings
-        .flatMap((binding: Binding) =>
+      platformBindings(id, isMac)
+        .flatMap((binding) =>
           binding.presses
             ? []
             : [
@@ -255,6 +272,7 @@ export class CommandRegistry {
       const bindings: readonly Binding[] = command.bindings;
       for (const binding of bindings) {
         if (
+          (binding.mac !== undefined && binding.mac !== context.mac) ||
           event.metaKey !== (context.mac && !!binding.mod) ||
           event.ctrlKey !== (!!binding.ctrl || (!context.mac && !!binding.mod)) ||
           event.altKey !== !!binding.alt ||
