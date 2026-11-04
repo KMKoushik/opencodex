@@ -277,7 +277,7 @@ final class CodeBlockCell: TranscriptCell {
     box.layer.borderColor = theme.border.cgColor
     copy.configuration?.baseForegroundColor = theme.textTertiary
     copy.backgroundColor = theme.codeBlock
-    let key = "\(theme.id)|\(typography.category.rawValue)"
+    let key = "\(theme.id)|\(typography.key)"
     guard text != source || key != styleKey || name != language else { return }
     let style = SyntaxHighlighter.Style(typography: typography, theme: theme)
     if key != styleKey { lastHighlight = nil }

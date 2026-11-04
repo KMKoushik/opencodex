@@ -82,15 +82,6 @@ nonisolated struct TranscriptTheme: @unchecked Sendable {
     ThemeCatalog.shared.palettes.first { $0.id == ThemeCatalog.shared.light }!)
 }
 
-extension Palette {
-  /// A token's raw value, for non-color tokens such as `syntax-keyword-weight`. Core exposes
-  /// colors only, so this reads the token table by reflection (once per theme change).
-  nonisolated func string(_ token: String) -> String? {
-    Mirror(reflecting: self).children.first { $0.label == "tokens" }
-      .flatMap { ($0.value as? [String: String])?[token] }
-  }
-}
-
 extension UIColor {
   /// `color-mix` in sRGB: `amount` of `other` over self.
   nonisolated func mixed(with other: UIColor, _ amount: CGFloat) -> UIColor {

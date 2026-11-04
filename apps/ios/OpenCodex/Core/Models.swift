@@ -78,6 +78,9 @@ nonisolated struct SessionInfo: Codable, Hashable, Identifiable, Sendable {
   var time: Times
   var permissions: [Rule]?
   var metadata: [String: JSONValue]?
+  /// A staged undo: messages from `messageID` on are hidden until redo or the next prompt.
+  struct Revert: Codable, Hashable, Sendable { var messageID: String }
+  var revert: Revert?
 
   /// A trailing allow-all rule is the thread's Full access override.
   var fullAccess: Bool {

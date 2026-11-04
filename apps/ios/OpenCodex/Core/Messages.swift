@@ -70,6 +70,10 @@ nonisolated struct UserMessage: Codable, Hashable, Sendable {
     var uri: String?
     var mime: String?
     var name: String?
+    /// Inline base64 bytes, for images sent with the prompt.
+    var data: String?
+    /// Set for `@` mentions, which show in the text instead of as attachments.
+    var mention: JSONValue?
   }
   var id: String
   var time: Created

@@ -38,6 +38,9 @@ nonisolated struct Palette: Sendable {
 
   func color(_ token: String) -> Color { Color(uiColor: ui(token)) }
 
+  /// A token's raw CSS value, for non-color tokens such as `syntax-keyword-weight`.
+  func string(_ token: String) -> String? { tokens[token] }
+
   /// A `linear-gradient(...)` token's stops, top to bottom; a plain color is one stop.
   func gradient(_ token: String) -> LinearGradient {
     let stops = Self.colors(in: tokens[token] ?? "").map { Color(uiColor: $0) }

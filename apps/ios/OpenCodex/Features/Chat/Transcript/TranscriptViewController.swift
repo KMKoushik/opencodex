@@ -79,6 +79,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     MainActor.assumeIsolated {
       displayLink?.invalidate()
       ticker?.invalidate()
+      if let fontObserver { NotificationCenter.default.removeObserver(fontObserver) }
     }
   }
 
@@ -128,6 +129,15 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
       (self: TranscriptViewController, _: UITraitCollection) in
       self.typographyChanged()
     }
+    // Settings → Appearance → Chat font size, which may change while this chat is open.
+    fontObserver = NotificationCenter.default.addObserver(
+      forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated {
+        guard let self, ChatFontSize.current != self.typography.chatSize else { return }
+        self.typographyChanged()
+      }
+    }
     observeSnapshot()
     observeLive()
     observeSends()
@@ -140,6 +150,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
   private func observeSnapshot() {
     withObservationTracking {
       _ = model.messages
+      _ = model.undone
       _ = model.running
       _ = model.inbox
       _ = model.hasOlder
@@ -342,6 +353,11 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     }
     for segment in segments { list += segment }
     list += builder.pending(model.inbox, known: Set(model.messages.lazy.map(\.id)))
+    if model.undone {
+      // The desktop's footer note while an undo is staged.
+      let note = "Conversation undone. Use /redo to restore it, or send a message to continue from here."
+      list.append(TranscriptItem(id: "undone", content: .note(note), row: "undone"))
+    }
     // Diffable data sources require unique IDs; overlapping pages must never crash.
     var seen = Set<String>()
     list = list.filter { seen.insert($0.id).inserted }
@@ -1010,6 +1026,8 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
       }
     }
   }
+
+  private var fontObserver: NSObjectProtocol?
 
   private func typographyChanged() {
     typography = Typography(traitCollection)

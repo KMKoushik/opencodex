@@ -321,30 +321,3 @@ private struct TreeRowStyle: ButtonStyle {
   }
 }
 
-/// A toolbar button that opens the workspace for a chat's project. Mount it in the chat's
-/// toolbar: `WorkspaceButton(client:events:directory:)`.
-struct WorkspaceButton: View {
-  let client: GatewayClient
-  let events: EventHub
-  let directory: String?
-  @State private var open = false
-  /// `-workspace YES` opens it once per launch, for tests.
-  private static var openedAtLaunch = false
-
-  var body: some View {
-    Button("Workspace", systemImage: "folder") { open = true }
-      .disabled(directory == nil)
-      .accessibilityIdentifier("workspace-open")
-      .task(id: directory) {
-        guard directory != nil, !Self.openedAtLaunch, UserDefaults.standard.bool(forKey: "workspace")
-        else { return }
-        Self.openedAtLaunch = true
-        open = true
-      }
-      .fullScreenCover(isPresented: $open) {
-        if let directory {
-          WorkspaceView(client: client, events: events, directory: directory)
-        }
-      }
-  }
-}

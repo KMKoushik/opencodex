@@ -6,7 +6,7 @@ import UIKit
 /// Rows are styled as they appear, so a 20,000-line diff costs the same as a short one.
 struct CodeLines: UIViewRepresentable {
   let document: CodeDocument
-  let highlighter: SyntaxHighlighter
+  let highlighter: CodeHighlighter
   /// Tapping a separator ("N unmodified lines") calls this, when set.
   var expand: (() -> Void)?
   var identifier = "code-lines"
@@ -27,7 +27,7 @@ final class CodeLinesView: UIView, UICollectionViewDataSource, UICollectionViewD
   private let layout = LinesLayout()
   private lazy var collection = UICollectionView(frame: .zero, collectionViewLayout: layout)
   private var document = CodeDocument(lines: [], columns: 0, maxNumber: 0)
-  private var highlighter = SyntaxHighlighter(path: "")
+  private var highlighter = CodeHighlighter(path: "")
   private var palette: Palette?
   private var expand: (() -> Void)?
   private var style = LineStyle()
@@ -58,7 +58,7 @@ final class CodeLinesView: UIView, UICollectionViewDataSource, UICollectionViewD
   }
 
   func update(
-    document: CodeDocument, highlighter: SyntaxHighlighter, palette: Palette, expand: (() -> Void)?
+    document: CodeDocument, highlighter: CodeHighlighter, palette: Palette, expand: (() -> Void)?
   ) {
     self.expand = expand
     let newPalette = self.palette?.id != palette.id

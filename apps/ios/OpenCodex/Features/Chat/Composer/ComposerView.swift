@@ -29,6 +29,8 @@ private struct ComposerBody: View {
 
   @Environment(\.palette) private var palette
   @Environment(\.composerNavigation) private var navigation
+  /// Settings → Appearance → Chat font size applies to the prompt too, like the desktop.
+  @AppStorage(ChatFontSize.key) private var chatSize = ChatFontSize.standard
 
   @State private var sending = false
   @State private var stopping = false
@@ -158,7 +160,8 @@ private struct ComposerBody: View {
           .foregroundStyle(palette.color("text-tertiary")),
         axis: .vertical
       )
-      .font(.body)
+      // The transcript's prose size: the desktop's px scaled 16/14, with Dynamic Type.
+      .font(Font(Typography(UITraitCollection.current, chatSize: chatSize).body))
       .foregroundStyle(palette.color("text"))
       .lineLimit(2...8)
       .focused($focused)

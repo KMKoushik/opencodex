@@ -21,9 +21,16 @@ final class ChatModel {
   private(set) var sessionID: String?
   let directory: String?
 
-  private(set) var session: SessionInfo?
-  /// Oldest first.
+  private(set) var session: SessionInfo? {
+    didSet { if oldValue?.revert != session?.revert { updateVisible() } }
+  }
+  /// The visible history, oldest first: like the desktop, an undo hides the reverted message
+  /// and everything after it until it's redone or a new prompt commits it.
   private(set) var messages: [SessionMessage] = []
+  /// Every loaded message, oldest first, including undone ones.
+  private var history: [SessionMessage] = [] { didSet { updateVisible() } }
+  /// True while an undo is staged.
+  var undone: Bool { session?.revert != nil }
   private(set) var hasOlder = false
   private(set) var loadingOlder = false
   private(set) var loaded = false
@@ -105,7 +112,7 @@ final class ChatModel {
       async let inbox = client.inbox(id)
       let first = try await page
       self.session = try await session
-      messages = first.data.reversed()
+      history = first.data.reversed()
       olderCursor = first.cursor?.next ?? nil
       hasOlder = olderCursor != nil
       running = try await active[id] != nil
@@ -127,8 +134,8 @@ final class ChatModel {
     defer { loadingOlder = false }
     do {
       let page = try await client.messages(id, cursor: cursor)
-      let known = Set(messages.map(\.id))
-      messages.insert(contentsOf: page.data.reversed().filter { !known.contains($0.id) }, at: 0)
+      let known = Set(history.map(\.id))
+      history.insert(contentsOf: page.data.reversed().filter { !known.contains($0.id) }, at: 0)
       olderCursor = page.cursor?.next ?? nil
       hasOlder = olderCursor != nil
     } catch {
@@ -230,6 +237,15 @@ final class ChatModel {
     } catch { self.error = error.localizedDescription }
   }
 
+  private func updateVisible() {
+    guard let boundary = session?.revert?.messageID else {
+      messages = history
+      return
+    }
+    let end = history.firstIndex { $0.id == boundary }
+    messages = end.map { Array(history[..<$0]) } ?? []
+  }
+
   /// Refetches the thread's info, e.g. after a rename, pin or mute from its menu.
   func refreshSession() { schedule([.session]) }
 
@@ -277,6 +293,9 @@ final class ChatModel {
       schedule([.inbox, .messages])
     case "session.renamed", "session.permissions", "session.model.selected", "session.viewed":
       schedule([.session])
+    case "session.revert.staged", "session.revert.cleared", "session.revert.committed":
+      // Undo and redo move the boundary the transcript hides after.
+      schedule([.session, .messages])
     case "session.usage.updated":
       break
     default:
@@ -334,14 +353,14 @@ final class ChatModel {
   private func merge(newest page: MessagePage) {
     let fresh = Array(page.data.reversed())
     guard let oldest = fresh.first else {
-      messages = []
+      history = []
       return
     }
-    if let index = messages.firstIndex(where: { $0.id == oldest.id }) {
-      messages = Array(messages[..<index]) + fresh
+    if let index = history.firstIndex(where: { $0.id == oldest.id }) {
+      history = Array(history[..<index]) + fresh
     } else {
       // No overlap (a whole page arrived since the last read, or an undo): start over from it.
-      messages = fresh
+      history = fresh
       olderCursor = page.cursor?.next ?? nil
       hasOlder = olderCursor != nil
     }
@@ -353,7 +372,7 @@ final class ChatModel {
   private func pruneLive() {
     guard !live.isEmpty else { return }
     var completed = Set<String>()
-    for message in messages {
+    for message in history {
       if case .assistant(let assistant) = message, assistant.time.completed != nil {
         completed.insert(assistant.id)
       }
@@ -366,7 +385,7 @@ final class ChatModel {
 
   /// The snapshot's text for a streaming part, if it has that part yet.
   func snapshotText(_ key: LiveKey) -> String? {
-    for message in messages.reversed() {
+    for message in history.reversed() {
       guard case .assistant(let assistant) = message, assistant.id == key.messageID else { continue }
       var ordinal = 0
       for part in assistant.content {

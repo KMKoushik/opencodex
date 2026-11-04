@@ -66,7 +66,7 @@ struct FilePreviewScreen: View {
         if isMarkdown && markdownPreview {
           MarkdownPreview(text: text) { markdownPreview = false }
         } else if let document {
-          CodeLines(document: document, highlighter: SyntaxHighlighter(path: path), identifier: "file-lines")
+          CodeLines(document: document, highlighter: CodeHighlighter(path: path), identifier: "file-lines")
         }
       case .image(let uri, let bytes):
         ImagePreview(uri: uri, bytes: bytes, name: (path as NSString).lastPathComponent)

@@ -3,7 +3,7 @@ import Foundation
 /// A light, line-at-a-time highlighter: keywords, strings, comments and punctuation, the four
 /// roles the themes' `syntax-*` tokens define. One linear scan per visible line, so it runs as
 /// rows appear rather than over the whole file.
-nonisolated struct SyntaxHighlighter: Sendable {
+nonisolated struct CodeHighlighter: Sendable {
   enum Role: Sendable { case keyword, string, comment, punctuation }
   struct Span: Sendable, Equatable {
     var range: Range<Int>

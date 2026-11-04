@@ -175,10 +175,14 @@ nonisolated final class TranscriptItemBuilder {
   private func items(for message: SessionMessage) -> [TranscriptItem] {
     switch message {
     case .user(let user):
-      let files = (user.files ?? []).enumerated().map { index, file in
-        Attachment(
+      // Mentioned files show in the text instead, like `MessageAttachments`.
+      let files = (user.files ?? []).enumerated().compactMap { index, file -> Attachment? in
+        guard file.mention == nil else { return nil }
+        let key = "\(user.id)#\(index)"
+        return Attachment(
           name: file.name ?? "", mime: file.mime ?? "",
-          source: file.uri.flatMap { Self.source($0, key: "\(user.id)#\(index)") })
+          source: file.data.map { .data(key: key, base64: $0) }
+            ?? file.uri.flatMap { Self.source($0, key: key) })
       }
       return [
         TranscriptItem(id: user.id, content: .user(text: user.text, files: files, pending: false), row: user.id)

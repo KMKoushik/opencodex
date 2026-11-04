@@ -31,7 +31,7 @@ nonisolated final class SyntaxHighlighter: @unchecked Sendable {
       bold = typography.monoBold
       self.paragraph = paragraph
       syntax = theme.syntax
-      key = "\(theme.id)|\(typography.category.rawValue)"
+      key = "\(theme.id)|\(typography.key)"
     }
   }
 

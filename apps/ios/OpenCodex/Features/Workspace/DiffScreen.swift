@@ -35,7 +35,7 @@ struct DiffScreen: View {
           WorkspaceEmpty(message: "No text diff available.")
         } else {
           CodeLines(
-            document: document, highlighter: SyntaxHighlighter(path: path),
+            document: document, highlighter: CodeHighlighter(path: path),
             expand: full ? nil : { Task { await expand() } }, identifier: "diff-lines")
         }
       }

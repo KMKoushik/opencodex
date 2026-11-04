@@ -34,6 +34,7 @@ struct TranscriptView: View {
 
   private var isEmpty: Bool {
     model.messages.isEmpty && model.inbox.isEmpty && !model.running && model.error == nil
+      && !model.undone
   }
 
   private var project: String? {

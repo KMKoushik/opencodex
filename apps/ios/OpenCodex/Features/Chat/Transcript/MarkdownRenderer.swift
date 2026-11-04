@@ -9,7 +9,11 @@ nonisolated struct Typography: @unchecked Sendable {
   static let scale: CGFloat = 16.0 / 14.0
 
   let category: UIContentSizeCategory
-  /// Chat prose (14px).
+  /// Settings → Appearance's chat font size (desktop px), for prose and headings only.
+  let chatSize: Int
+  /// Identifies these fonts in render caches.
+  var key: String { "\(category.rawValue)|\(chatSize)" }
+  /// Chat prose (14px by default).
   let body: UIFont
   /// Disclosure triggers and turn headers (13px).
   let label: UIFont
@@ -29,8 +33,10 @@ nonisolated struct Typography: @unchecked Sendable {
   /// The chat line height (1.625 × prose).
   let lineHeight: CGFloat
 
-  init(_ traits: UITraitCollection) {
+  init(_ traits: UITraitCollection, chatSize: Int = ChatFontSize.current) {
     category = traits.preferredContentSizeCategory
+    self.chatSize = chatSize
+    let prose = CGFloat(chatSize)
     func px(_ size: CGFloat) -> CGFloat { size * Self.scale }
     func scaled(_ size: CGFloat, _ weight: UIFont.Weight = .regular) -> UIFont {
       UIFontMetrics(forTextStyle: .body).scaledFont(
@@ -40,7 +46,7 @@ nonisolated struct Typography: @unchecked Sendable {
       UIFontMetrics(forTextStyle: .body).scaledFont(
         for: .monospacedSystemFont(ofSize: px(size), weight: weight), compatibleWith: traits)
     }
-    body = scaled(14)
+    body = scaled(prose)
     label = scaled(13)
     small = scaled(12)
     caption = scaled(11)
@@ -48,7 +54,7 @@ nonisolated struct Typography: @unchecked Sendable {
     monoBold = mono(13, .semibold)
     monoSmall = mono(12)
     monoCaption = mono(11)
-    headings = [scaled(24.5, .semibold), scaled(21, .semibold), scaled(17.5, .semibold), scaled(14, .semibold)]
+    headings = [1.75, 1.5, 1.25, 1].map { scaled(prose * $0, .semibold) }
     lineHeight = (body.pointSize * 1.625).rounded()
   }
 
@@ -113,7 +119,7 @@ nonisolated final class MarkdownRenderer: @unchecked Sendable {
   private func key(
     _ block: MarkdownBlock, _ style: ProseStyle, _ typography: Typography, _ theme: TranscriptTheme
   ) -> NSString {
-    "\(theme.id)|\(typography.category.rawValue)|\(style.rawValue)|\(block.kind.rawValue)|\(block.definitions ?? "")|\(block.source)"
+    "\(theme.id)|\(typography.key)|\(style.rawValue)|\(block.kind.rawValue)|\(block.definitions ?? "")|\(block.source)"
       as NSString
   }
 

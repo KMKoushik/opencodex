@@ -54,6 +54,7 @@ final class MarkdownCollection: UIView, UICollectionViewDataSource {
     view.register(CodeBlockCell.self, forCellWithReuseIdentifier: "code")
     view.register(TableCell.self, forCellWithReuseIdentifier: "table")
     view.register(RuleCell.self, forCellWithReuseIdentifier: "rule")
+    view.register(ImageBlockCell.self, forCellWithReuseIdentifier: "image")
     return view
   }()
 
@@ -90,39 +91,32 @@ final class MarkdownCollection: UIView, UICollectionViewDataSource {
   {
     let block = blocks[indexPath.item]
     let typography = Typography.current
-    switch MarkdownRenderer.shared.render(block, style: .answer, typography: typography) {
+    // The chat's renderer and cells, in this file's theme.
+    let theme = palette.map(TranscriptTheme.init) ?? TranscriptTheme.fallback
+    switch MarkdownRenderer.shared.render(block, style: .answer, typography: typography, theme: theme) {
     case .text(let text):
       let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "text", for: indexPath) as! TextBlockCell
-      cell.configure(themed(text), quote: block.kind == .quote, indent: 0)
+      cell.configure(text, quote: block.kind == .quote, panel: nil, theme: theme)
       return cell
     case .code(let language, let code):
       let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "code", for: indexPath) as! CodeBlockCell
-      cell.configure(language: language, code: code, typography: typography)
+      cell.configure(language: language, code: code, typography: typography, theme: theme)
       return cell
     case .table(let content):
       let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "table", for: indexPath) as! TableCell
       cell.configure(content)
       return cell
+    case .image(let source, let alt):
+      // Remote images only; relative paths would need the file's folder.
+      let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "image", for: indexPath) as! ImageBlockCell
+      cell.configure(
+        source: source.flatMap { TranscriptItemBuilder.source($0, key: $0) }, alt: alt,
+        typography: typography, theme: theme)
+      return cell
     case .rule:
-      return collectionView.dequeueReusableCell(withReuseIdentifier: "rule", for: indexPath)
+      let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "rule", for: indexPath) as! RuleCell
+      cell.configure(theme: theme)
+      return cell
     }
-  }
-
-  /// Maps the renderer's system label colors to the theme's text tokens.
-  private func themed(_ text: NSAttributedString) -> NSAttributedString {
-    guard let palette else { return text }
-    let result = NSMutableAttributedString(attributedString: text)
-    let text = palette.ui("text")
-    let secondary = palette.ui("text-secondary")
-    result.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: result.length)) {
-      value, range, _ in
-      guard let color = value as? UIColor else { return }
-      if color == .label {
-        result.addAttribute(.foregroundColor, value: text, range: range)
-      } else if color == .secondaryLabel {
-        result.addAttribute(.foregroundColor, value: secondary, range: range)
-      }
-    }
-    return result
   }
 }
