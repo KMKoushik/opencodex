@@ -8,13 +8,9 @@ nonisolated final class ComposerTests: XCTestCase {
 
   @MainActor func testAnsweringAQuestionRemovesItsCard() async throws {
     let gateway = TestGateway()
-    var session = "ses_e57ae1ee6ffeETjMgCzWdm0Oy0"
-    if try await gateway.forms(session).isEmpty {
-      // The shared sample was already answered; ask a new question.
-      session = try await gateway.createSession()
-      try await gateway.prompt(session, "Use your question tool to ask me which color I prefer, red or blue")
-      try await gateway.waitForForm(session)
-    }
+    let session = try await gateway.createSession()
+    try await gateway.prompt(session, "ask: Which color do you prefer?")
+    try await gateway.waitForForm(session)
     let app = XCUIApplication.opencodex(["-session", session])
     app.launch()
 
@@ -22,7 +18,15 @@ nonisolated final class ComposerTests: XCTestCase {
     XCTAssertTrue(card.waitForExistence(timeout: 15))
     app.buttons["Blue"].tap()
     XCTAssertTrue(app.buttons["Blue"].isSelected)
-    app.buttons["question.submit"].tap()
+    // Like the desktop: Next/Review answers until the review, then Send answers.
+    let submit = app.buttons["question.submit"]
+    for _ in 0..<6 where card.exists {
+      submit.tap()
+      if submit.label == "Send answers" {
+        submit.tap()
+        break
+      }
+    }
     XCTAssertTrue(card.waitForNonExistence(timeout: 15))
   }
 
@@ -39,16 +43,40 @@ nonisolated final class ComposerTests: XCTestCase {
     app.buttons["composer.send"].tap()
     let cleared = NSPredicate { _, _ in
       let value = input.value as? String ?? ""
-      return value.isEmpty || value == "Message"
+      return value.isEmpty || value == "Ask anything, or describe what to build"
     }
     await fulfillment(of: [expectation(for: cleared, evaluatedWith: nil)], timeout: 15)
+  }
+
+  /// `/` opens the desktop's command menu; `/rename` runs as a thread action, no model needed.
+  @MainActor func testSlashRenameRenamesTheThread() async throws {
+    let gateway = TestGateway()
+    let session = try await gateway.createSession()
+    let app = XCUIApplication.opencodex(["-session", session])
+    app.launch()
+
+    let input = app.textViews["composer.input"].exists
+      ? app.textViews["composer.input"] : app.textFields["composer.input"]
+    XCTAssertTrue(input.waitForExistence(timeout: 15))
+    input.tap()
+    input.typeText("/ren")
+    let rename = app.buttons["menu.rename"]
+    XCTAssertTrue(rename.waitForExistence(timeout: 5))
+    rename.tap()
+    let title = "Renamed \(UUID().uuidString.prefix(6))"
+    input.typeText(title)
+    app.buttons["composer.send"].tap()
+    XCTAssertTrue(app.navigationBars.staticTexts[title].waitForExistence(timeout: 15))
+    let info = try await gateway.call("/sessions/\(session)") as? [String: Any]
+    XCTAssertEqual(info?["title"] as? String, title)
   }
 }
 
 /// Just enough of the gateway's `/api` to set up a chat for a test.
 nonisolated struct TestGateway {
   static let project = "/private/var/folders/vc/0tczn37n3wn7qz1g3g1933_40000gn/T/opencode/ocios/proj"
-  static let model = ["id": "deepseek-v4.1-flash-free", "providerID": "opencode"]
+  /// The test gateway's free, deterministic scripted model.
+  static let model = ["id": "scripted", "providerID": "fake"]
 
   let base = URL(
     string: ProcessInfo.processInfo.environment["OPENCODEX_GATEWAY"] ?? "http://127.0.0.1:4310")!

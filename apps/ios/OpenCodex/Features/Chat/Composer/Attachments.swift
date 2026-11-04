@@ -100,6 +100,7 @@ struct CameraPicker: UIViewControllerRepresentable {
 
 /// Removable thumbnails above the input.
 struct AttachmentStrip: View {
+  @Environment(\.palette) private var palette
   let attachments: [DraftAttachment]
   /// Photos still being prepared.
   var encoding = 0
@@ -136,12 +137,11 @@ struct AttachmentStrip: View {
         ForEach(0..<encoding, id: \.self) { _ in
           ProgressView()
             .frame(width: 56, height: 56)
-            .background(.fill.tertiary, in: .rect(cornerRadius: 12))
+            .background(palette.color("secondary"), in: .rect(cornerRadius: 12))
             .accessibilityLabel("Preparing photo")
         }
       }
-      .padding(.horizontal, 14)
-      .padding(.top, 12)
+
     }
     .scrollClipDisabled()
   }

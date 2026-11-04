@@ -75,3 +75,70 @@ struct ComposerTests {
     #expect(answers.invalid == nil)
   }
 }
+
+struct SlashAndMentionTests {
+  @Test func slashCommandsParseAndRankLikeTheDesktop() {
+    #expect(SlashCommand.parse("  /rename  New title \n")! == ("rename", "New title"))
+    #expect(SlashCommand.parse("/undo")! == ("undo", ""))
+    #expect(SlashCommand.parse("/a/b") == nil)
+    #expect(SlashCommand.parse("hello /undo") == nil)
+    #expect(SlashCommand.isSearch("/re"))
+    #expect(!SlashCommand.isSearch("/rename x"))
+
+    let commands = [
+      SlashCommand(name: "review", description: "review changes"),
+      SlashCommand(name: "pre", description: "x"),
+      SlashCommand(name: "init", description: "prepare AGENTS.md"),
+      SlashCommand(name: "re", description: "y"),
+    ]
+    // Exact, then prefix, then substring, then description.
+    #expect(SlashCommand.match(commands, "re").map(\.name) == ["re", "review", "pre", "init"])
+    let many = (0..<80).map { SlashCommand(name: "c\($0)", description: "") }
+    #expect(SlashCommand.match(many, "").count == 50)
+  }
+
+  @Test func mentionRangesCountUTF16LikeTheGateway() {
+    // "😀" is two UTF-16 units, so the token starts at 7, not 6.
+    let text = "fix 😀 @a.ts and @a.tsx, then ask @Review."
+    #expect(Mentions.find(text, "@a.ts") == 7)
+    // A whole token only: "@a.ts" isn't found inside "@a.tsx".
+    #expect(Mentions.find(text, "@a.ts", from: 8) == nil)
+    let mentions: [DraftMention] = [
+      .file(path: "a.tsx", token: "@a.tsx"), .skill(id: "review", token: "@Review"),
+      .chat(id: "ses_1", token: "@Gone"),
+    ]
+    let sent = Mentions.prompt(text, mentions)
+    #expect(sent.map(\.type) == ["file", "skill"])
+    #expect(sent[0].mention == .init(start: 17, end: 23, text: "@a.tsx"))
+    #expect(sent[1].path == nil && sent[1].id == "review")
+    let units = Array(text.utf16)
+    #expect(String(decoding: units[sent[1].mention.start..<sent[1].mention.end], as: UTF16.self) == "@Review")
+    // Deleting a token drops its mention.
+    #expect(Mentions.live("fix @a.ts", mentions).isEmpty)
+  }
+
+  @Test func mentionQueryFindsTheTokenBeforeTheCaret() {
+    let text = "see (@src/ma and me@x"
+    #expect(Mentions.query(text, caret: 12)! == (5, "src/ma"))
+    // An `@` inside a word isn't a mention, and a space ends the query.
+    #expect(Mentions.query(text, caret: text.utf16.count) == nil)
+    #expect(Mentions.query("@a b", caret: 4) == nil)
+    #expect(Mentions.query("@", caret: 1)! == (0, ""))
+  }
+
+  @Test func undoRestoresSentMentions() throws {
+    let message = try JSONDecoder().decode(
+      SentMessage.self,
+      from: Data(
+        #"""
+        {"id":"m","type":"user","text":"read @a.ts and @Chat",
+         "files":[{"data":"","mime":"text/plain","source":{"type":"uri","uri":"file:///p/a.ts"},
+                   "mention":{"start":5,"end":10,"text":"@a.ts"}},
+                  {"data":"","mime":"text/plain","source":{"type":"inline"},
+                   "description":"Chat transcript (ses_9)","mention":{"start":15,"end":20,"text":"@Chat"}},
+                  {"data":"aGk=","mime":"image/png","source":{"type":"inline"}}],
+         "skills":[{"id":"s","name":"S"}]}
+        """#.utf8))
+    #expect(message.mentions == [.file(path: "a.ts", token: "@a.ts"), .chat(id: "ses_9", token: "@Chat")])
+  }
+}

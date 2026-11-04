@@ -83,6 +83,8 @@ final class ModelCatalogStore {
 
   struct Entry {
     var catalog: ModelCatalog?
+    /// Provider ID → canonical provider, for logos.
+    var canonical: [String: String] = [:]
     var error: String?
     var loading = false
     var fetched: Date?
@@ -100,8 +102,10 @@ final class ModelCatalogStore {
     }
     entries[directory, default: Entry()].loading = true
     do {
-      let catalog = try await client.models(directory: directory)
-      entries[directory] = Entry(catalog: catalog, fetched: Date())
+      let response = try await client.get(
+        "/models", ["directory": directory], as: CatalogResponse.self)
+      entries[directory] = Entry(
+        catalog: response.catalog, canonical: response.canonical, fetched: Date())
     } catch {
       entries[directory, default: Entry()].loading = false
       entries[directory, default: Entry()].error = error.localizedDescription

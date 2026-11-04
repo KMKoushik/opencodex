@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Pending approvals and questions, stacked above the composer. Compact: at most about 45% of
-/// the screen, scrolling inside.
+/// Pending approvals, stacked above the composer. Compact: at most about 45% of the screen,
+/// scrolling inside. Questions take the composer's place (`QuestionDock`), as on the desktop.
 struct RequestsView: View {
   let model: ChatModel
 
@@ -10,17 +10,14 @@ struct RequestsView: View {
   @State private var keyboardHeight: CGFloat = 0
 
   var body: some View {
-    if !model.permissions.isEmpty || !model.forms.isEmpty {
+    if !model.permissions.isEmpty {
       ScrollView {
         VStack(spacing: 8) {
           ForEach(model.permissions) { request in
             PermissionCard(model: model, request: request)
           }
-          ForEach(model.forms) { form in
-            QuestionCard(model: model, form: form)
-          }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 12)
         .padding(.top, 8)
         .padding(.bottom, 4)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
@@ -45,7 +42,7 @@ struct RequestsView: View {
         keyboardHeight = 0
       }
       .transition(.move(edge: .bottom).combined(with: .opacity))
-      .animation(.snappy(duration: 0.25), value: model.permissions.map(\.id) + model.forms.map(\.id))
+      .animation(.snappy(duration: 0.25), value: model.permissions.map(\.id))
     }
   }
 }
