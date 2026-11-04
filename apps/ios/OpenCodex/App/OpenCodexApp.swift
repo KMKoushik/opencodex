@@ -3,11 +3,14 @@ import SwiftUI
 @main
 struct OpenCodexApp: App {
   @State private var connection = ConnectionStore()
+  @State private var themes = ThemeStore()
 
   var body: some Scene {
     WindowGroup {
       RootView()
         .environment(connection)
+        .modifier(Themed())
+        .environment(themes)
     }
   }
 }

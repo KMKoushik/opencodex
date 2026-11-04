@@ -16,3 +16,4 @@ apps/ios/OpenCodexTests/Fixtures/
 apps/ios/OpenCodex/Assets.xcassets/
 apps/ios/build/
 apps/ios/OpenCodex.xcodeproj/
+apps/ios/OpenCodex/Core/Theme/themes.json
