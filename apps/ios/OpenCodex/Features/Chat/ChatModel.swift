@@ -34,6 +34,13 @@ final class ChatModel {
   private(set) var forms: [FormInfo] = []
   /// Messages sent mid-run, waiting for OpenCode to deliver them.
   private(set) var inbox: [InboxItem] = []
+  /// Where an unsent chat starts, like the desktop's workspace bar: nil is the local checkout,
+  /// otherwise a new worktree from `branch` (nil for the current HEAD).
+  struct Worktree: Equatable { var branch: String? }
+  var worktree: Worktree?
+  /// True while the first send is creating the chat's worktree.
+  private(set) var startingWorktree = false
+
   /// Bumped when the user sends, so the transcript can jump to the end.
   private(set) var sends = 0
   var error: String?
@@ -137,6 +144,19 @@ final class ChatModel {
       let created = try await client.createSession(directory: directory, model: model)
       sessionID = created.id
       session = created
+      if let worktree {
+        // Like the desktop: move the new chat before its first prompt. A failure keeps the
+        // created chat, so a retry reuses it instead of making another.
+        startingWorktree = true
+        defer { startingWorktree = false }
+        session = try await client.startWorktree(created.id, branch: worktree.branch)
+        self.worktree = nil
+      }
+    } else if let id = sessionID, let worktree, session?.location.directory == directory {
+      startingWorktree = true
+      defer { startingWorktree = false }
+      session = try await client.startWorktree(id, branch: worktree.branch)
+      self.worktree = nil
     }
     guard let id = sessionID else { return }
     sends += 1

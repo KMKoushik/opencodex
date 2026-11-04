@@ -66,7 +66,7 @@ struct ChatScreen<Actions: View>: View {
       ComposerView(model: model)
         .id(ObjectIdentifier(model))
       if model.sessionID == nil, let directory = model.directory {
-        WorkspaceBar(client: model.client, directory: directory, projects: projects)
+        WorkspaceBar(model: model, directory: directory, projects: projects)
           .id(directory)
       }
     }

@@ -1,28 +1,69 @@
 import SwiftUI
 
-/// Where an unsent chat will work, under its composer: "Local" and the checkout's current
-/// branch, like the desktop's workspace bar. Read-only for now: starting in a new worktree
-/// needs the send to call `/sessions/:id/worktree` between creating the chat and prompting it.
+/// Where an unsent chat will work, under its composer, like the desktop's workspace bar:
+/// Local (the project folder) or a new worktree from a branch, created by the first send.
 /// Hidden for projects without version control, like the desktop.
 struct WorkspaceBar: View {
-  let client: GatewayClient
+  let model: ChatModel
   let directory: String
   let projects: [SessionDetails.Project]?
   /// nil until loaded; an empty string is a detached HEAD.
   @State private var branch: String?
+  @State private var branches: [String] = []
   @Environment(\.palette) private var palette
+
+  private var client: GatewayClient { model.client }
 
   var body: some View {
     HStack(spacing: 2) {
-      if checkout?.local == true {
-        Label {
-          Text("Local")
-        } icon: {
-          Image(systemName: "folder")
+      if model.startingWorktree {
+        Label("Creating worktree…", systemImage: "arrow.triangle.branch")
+          .foregroundStyle(palette.color("text-secondary"))
+          .padding(.horizontal, 8)
+      } else if checkout?.local == true {
+        Menu {
+          Picker("Where this chat works", selection: worktreeMode) {
+            Label("Local", systemImage: "folder").tag(false)
+            Label("New worktree", systemImage: "folder.badge.gearshape").tag(true)
+          }
+        } label: {
+          Label {
+            HStack(spacing: 3) {
+              Text(model.worktree == nil ? "Local" : "New worktree")
+              Image(systemName: "chevron.down").imageScale(.small)
+            }
+          } icon: {
+            Image(systemName: model.worktree == nil ? "folder" : "folder.badge.gearshape")
+          }
+          .foregroundStyle(palette.color("text-secondary"))
+          .padding(.horizontal, 8)
+          .frame(minHeight: 30)
         }
-        .foregroundStyle(palette.color("text-secondary"))
-        .padding(.horizontal, 8)
-        if let branch {
+        .accessibilityIdentifier("newThread.workspace.mode")
+        if model.worktree != nil {
+          Menu {
+            Picker("Starting branch", selection: startBranch) {
+              Text("Current branch\(branch.map { $0.isEmpty ? "" : " (\($0))" } ?? "")")
+                .tag(String?.none)
+              ForEach(branches, id: \.self) { name in Text(name).tag(Optional(name)) }
+            }
+          } label: {
+            Label {
+              HStack(spacing: 3) {
+                Text(model.worktree?.branch ?? branch.flatMap { $0.isEmpty ? nil : $0 } ?? "HEAD")
+                  .lineLimit(1)
+                Image(systemName: "chevron.down").imageScale(.small)
+              }
+            } icon: {
+              Image(systemName: "arrow.triangle.branch")
+            }
+            .foregroundStyle(palette.color("text-tertiary"))
+            .padding(.horizontal, 8)
+            .frame(minHeight: 30)
+          }
+          .accessibilityLabel("Starting branch")
+          .task { branches = (try? await client.branches(directory: directory)) ?? [] }
+        } else if let branch {
           Label {
             Text(branch.isEmpty ? "Detached HEAD" : branch).lineLimit(1)
           } icon: {
@@ -44,6 +85,18 @@ struct WorkspaceBar: View {
     .accessibilityLabel("Workspace")
     .accessibilityIdentifier("newThread.workspace")
     .task(id: checkout?.canonical) { await load() }
+  }
+
+  private var worktreeMode: Binding<Bool> {
+    Binding(
+      get: { model.worktree != nil },
+      set: { model.worktree = $0 ? ChatModel.Worktree(branch: nil) : nil })
+  }
+
+  private var startBranch: Binding<String?> {
+    Binding(
+      get: { model.worktree?.branch },
+      set: { model.worktree = ChatModel.Worktree(branch: $0) })
   }
 
   private var checkout: SessionDetails.Checkout? {

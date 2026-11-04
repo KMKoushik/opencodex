@@ -136,6 +136,15 @@ nonisolated extension GatewayClient {
   func prompt(_ id: String, _ prompt: Prompt) async throws -> JSONValue {
     try await post("/sessions/\(id)/prompt", prompt)
   }
+  /// Moves an unprompted chat into a new worktree from `branch` (nil: the current HEAD).
+  struct StartWorktree: Encodable { var branch: String? }
+  func startWorktree(_ id: String, branch: String?) async throws -> SessionInfo {
+    // Synthesized encoding omits a nil branch, which the gateway reads as the current HEAD.
+    try await post("/sessions/\(id)/worktree", StartWorktree(branch: branch))
+  }
+  func branches(directory: String, search: String = "") async throws -> [String] {
+    try await get("/workspace/branches", ["directory": directory, "search": search])
+  }
   func interrupt(_ id: String) async throws -> JSONValue {
     try await post("/sessions/\(id)/interrupt")
   }
