@@ -4,7 +4,7 @@ import Markdown
 /// One top-level Markdown block's source. Each renders as its own transcript row, so a growing
 /// answer re-renders only its tail and long answers stay virtualized.
 nonisolated struct MarkdownBlock: Hashable, Sendable {
-  enum Kind: String, Sendable { case text, quote, code, table, rule }
+  enum Kind: String, Sendable { case text, quote, code, table, rule, image }
   var kind: Kind
   var source: String
   /// Link reference definitions from the whole text: they resolve across blocks.
@@ -24,6 +24,29 @@ nonisolated enum MarkdownBlocks {
     }
   }
 
+  /// A paragraph that is only an image renders as the image itself, like `.markdown-image`.
+  static func soleImage(_ paragraph: Paragraph) -> Markdown.Image? {
+    var image: Markdown.Image?
+    for child in paragraph.children {
+      if let candidate = child as? Markdown.Image, image == nil {
+        image = candidate
+      } else if let text = child as? Markdown.Text, text.string.allSatisfy(\.isWhitespace) {
+        continue
+      } else if child is SoftBreak || child is LineBreak {
+        continue
+      } else {
+        return nil
+      }
+    }
+    return image
+  }
+
+  /// A link into the workspace rather than to a site: no scheme and not an anchor.
+  static func isLocal(_ href: String) -> Bool {
+    guard !href.isEmpty, !href.hasPrefix("#") else { return false }
+    return href.range(of: #"^[a-zA-Z][a-zA-Z\d+.-]*:"#, options: .regularExpression) == nil
+  }
+
   static func definitions(in text: String) -> String? {
     guard text.contains("]:") else { return nil }
     let range = NSRange(text.startIndex..., in: text)
@@ -38,7 +61,7 @@ nonisolated enum MarkdownBlocks {
     kind: MarkdownBlock.Kind, source: String, start: Int
   )] {
     guard !text.isEmpty else { return [] }
-    let document = Document(parsing: text)
+    let document = Document(parsing: text, options: [.disableSmartOpts])
     var lineStarts = [0]
     let utf8 = text.utf8
     var offset = 0
@@ -59,6 +82,7 @@ nonisolated enum MarkdownBlocks {
         case is Table: .table
         case is ThematicBreak: .rule
         case is BlockQuote: .quote
+        case let paragraph as Paragraph where soleImage(paragraph) != nil: .image
         default: .text
         }
       if let last = starts.last, last.0 >= start { continue }

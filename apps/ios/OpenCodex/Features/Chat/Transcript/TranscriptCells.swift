@@ -3,9 +3,12 @@ import UIKit
 /// Base cell: manual layout in a centered, readable column, sized by `measure(width:)`.
 /// Manual sizing keeps self-sizing cheap enough to run every frame for a streaming row.
 class TranscriptCell: UICollectionViewCell {
+  /// `.timeline-row` side padding on phones (16px).
   static let side: CGFloat = 18
-  static let maxColumn: CGFloat = 700
-  static let indentStep: CGFloat = 12
+  /// `--thread-width` (768px) less its padding.
+  static let maxColumn: CGFloat = 720
+  /// `.activity-entries`: 8px margin + 12px padding.
+  static let indentStep: CGFloat = 23
 
   var indent = 0
 
@@ -29,6 +32,18 @@ class TranscriptCell: UICollectionViewCell {
   }
 }
 
+/// Symbols matching the desktop's Hugeicons.
+enum Symbol {
+  static func image(_ name: String, _ size: CGFloat, _ weight: UIImage.SymbolWeight = .regular) -> UIImage? {
+    UIImage(systemName: name, withConfiguration: UIImage.SymbolConfiguration(pointSize: size, weight: weight))
+  }
+  /// `ArrowRight01Icon`.
+  static let chevron = "chevron.right"
+  /// `Copy01Icon` / `Tick02Icon`.
+  static let copy = "square.on.square"
+  static let copied = "checkmark"
+}
+
 // MARK: Prose
 
 /// A UITextView for read-only selectable text that opens web links in Safari.
@@ -49,7 +64,8 @@ final class ProseTextView: UITextView, UITextViewDelegate {
     textContainerInset = .zero
     textContainer.lineFragmentPadding = 0
     dataDetectorTypes = []
-    linkTextAttributes = [.foregroundColor: UIColor.tintColor]
+    // Links carry their own color and `link-underline` underline.
+    linkTextAttributes = [:]
     adjustsFontForContentSizeCategory = false
     delegate = self
   }
@@ -77,13 +93,12 @@ nonisolated final class ProseLayoutManager: NSLayoutManager {
   override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
     super.drawBackground(forGlyphRange: glyphsToShow, at: origin)
     guard let storage = textStorage, let container = textContainers.first,
-      let context = UIGraphicsGetCurrentContext()
+      UIGraphicsGetCurrentContext() != nil
     else { return }
     let characters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
-    context.saveGState()
-    TranscriptColors.inlineCode.setFill()
     storage.enumerateAttribute(.codeBackground, in: characters) { value, range, _ in
-      guard value != nil else { return }
+      guard let color = value as? UIColor else { return }
+      color.setFill()
       let font = storage.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont
       let ascender = font?.ascender ?? 12
       let descender = font?.descender ?? -3
@@ -95,107 +110,152 @@ nonisolated final class ProseLayoutManager: NSLayoutManager {
           let scalar = (storage.string as NSString).substring(
             with: self.characterRange(forGlyphRange: NSRange(location: NSMaxRange(line) - 1, length: 1), actualGlyphRange: nil)
           ).unicodeScalars.first,
-          CharacterSet.whitespacesAndNewlines.contains(scalar)
+          CharacterSet.whitespacesAndNewlines.contains(scalar), scalar != "\u{202F}"
         {
           line.length -= 1
         }
         guard line.length > 0 else { return }
         let bounds = self.boundingRect(forGlyphRange: line, in: container)
         let baseline = fragment.minY + self.location(forGlyphAt: line.location).y
+        // `padding: 1px 5px; border-radius: 5px`.
         let rect = CGRect(
-          x: bounds.minX + origin.x, y: baseline - ascender - 1.5 + origin.y,
-          width: bounds.width, height: ascender - descender + 3)
-        UIBezierPath(roundedRect: rect, cornerRadius: 4).fill()
+          x: bounds.minX + origin.x, y: baseline - ascender - 1 + origin.y,
+          width: bounds.width, height: ascender - descender + 2)
+        UIBezierPath(roundedRect: rect, cornerRadius: 5).fill()
       }
     }
-    context.restoreGState()
   }
 }
 
 final class TextBlockCell: TranscriptCell {
   private let textView = ProseTextView()
   private let bar = UIView()
+  private let panelView = UIView()
   private var quote = false
+  private var panel: TranscriptItem.Panel?
   private var rendered: NSAttributedString?
   private var measured: (width: CGFloat, text: NSAttributedString, height: CGFloat)?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
-    bar.backgroundColor = .tertiaryLabel
-    bar.layer.cornerRadius = 1.5
+    bar.layer.cornerRadius = 1
+    panelView.layer.cornerRadius = 9
+    panelView.layer.cornerCurve = .continuous
+    contentView.addSubview(panelView)
     contentView.addSubview(bar)
     contentView.addSubview(textView)
   }
 
   required init?(coder: NSCoder) { fatalError() }
 
-  func configure(_ text: NSAttributedString, quote: Bool, indent: Int) {
-    self.indent = indent
+  func configure(_ text: NSAttributedString, quote: Bool, panel: TranscriptItem.Panel?, theme: TranscriptTheme) {
     self.quote = quote
     bar.isHidden = !quote
+    bar.backgroundColor = theme.borderHeavy
+    panelView.isHidden = panel == nil
+    panelView.backgroundColor = theme.panel
+    if panel != self.panel {
+      self.panel = panel
+      measured = nil
+      setNeedsLayout()
+    }
     guard text !== rendered else { return }
     rendered = text
     textView.attributedText = text
     setNeedsLayout()
   }
 
-  private var textInset: CGFloat { quote ? 15 : 0 }
+  /// `.reasoning-text`: `margin: 4px 8px 12px 22px; padding: 10px 12px`.
+  private var panelInsets: UIEdgeInsets {
+    guard let panel else { return .zero }
+    let first = panel == .first || panel == .only
+    let last = panel == .last || panel == .only
+    return UIEdgeInsets(top: first ? 5 : 0, left: 25, bottom: last ? 14 : 0, right: 9)
+  }
+
+  private var textInsets: UIEdgeInsets {
+    if quote { return UIEdgeInsets(top: 0, left: 18, bottom: 0, right: 0) }
+    guard let panel else { return .zero }
+    let outer = panelInsets
+    let first = panel == .first || panel == .only
+    let last = panel == .last || panel == .only
+    // Blocks inside one reasoning panel sit a line apart, like its pre-wrap newlines.
+    return UIEdgeInsets(
+      top: outer.top + (first ? 11 : 10), left: outer.left + 14, bottom: outer.bottom + (last ? 11 : 0),
+      right: outer.right + 14)
+  }
 
   override func measure(width: CGFloat) -> CGFloat {
     let column = column(width)
-    let textWidth = column.width - textInset
-    if let measured, measured.width == textWidth, measured.text === rendered { return measured.height }
+    let insets = textInsets
+    let textWidth = column.width - insets.left - insets.right
+    if let measured, measured.width == textWidth, measured.text === rendered {
+      return measured.height + insets.top + insets.bottom
+    }
     let height = textView.height(for: textWidth)
     if let rendered { measured = (textWidth, rendered, height) }
-    return height
+    return height + insets.top + insets.bottom
   }
 
   override func layoutSubviews() {
     super.layoutSubviews()
     let column = column(bounds.width)
+    let insets = textInsets
     textView.frame = CGRect(
-      x: column.x + textInset, y: 0, width: column.width - textInset, height: bounds.height)
-    bar.frame = CGRect(x: column.x + 1, y: 2, width: 3, height: max(0, bounds.height - 4))
+      x: column.x + insets.left, y: insets.top, width: column.width - insets.left - insets.right,
+      height: max(0, bounds.height - insets.top - insets.bottom))
+    // `border-left: 2px solid var(--border-heavy); padding-left: 16px`.
+    bar.frame = CGRect(x: column.x, y: 0, width: 2, height: bounds.height)
+    if let panel {
+      let outer = panelInsets
+      panelView.frame = CGRect(
+        x: column.x + outer.left, y: outer.top, width: column.width - outer.left - outer.right,
+        height: bounds.height - outer.top - outer.bottom)
+      var corners: CACornerMask = []
+      if panel == .first || panel == .only { corners.formUnion([.layerMinXMinYCorner, .layerMaxXMinYCorner]) }
+      if panel == .last || panel == .only { corners.formUnion([.layerMinXMaxYCorner, .layerMaxXMaxYCorner]) }
+      panelView.layer.maskedCorners = corners
+    }
   }
 }
 
 // MARK: Code
 
+/// A fenced code block: `.markdown pre` on `surface-under` with a hairline border, highlighted
+/// with the theme's syntax tokens. Copy sits in the corner (the desktop copies by selection).
 final class CodeBlockCell: TranscriptCell {
-  private static let maxLines = 400
-  private static let maxLineLength = 400
+  nonisolated private static let maxLines = 400
+  nonisolated private static let maxLineLength = 400
 
   private let box = UIView()
-  private let header = UIView()
-  private let language = UILabel()
   private let copy = UIButton(type: .system)
   private let scroll = UIScrollView()
   private let code = UILabel()
   private var source = ""
+  private var shown = ""
+  private var language = ""
+  private var styleKey = ""
+  private var style: SyntaxHighlighter.Style?
   private var codeSize = CGSize.zero
-  private let headerHeight: CGFloat = 32
-  private let padding: CGFloat = 14
+  /// While text streams, at most one highlight is in flight; the latest source follows it.
+  private var highlightInFlight = false
+  private var lastHighlight: (source: String, text: NSAttributedString)?
+  /// `padding: 14px 16px`.
+  private let padding = UIEdgeInsets(top: 16, left: 18, bottom: 16, right: 18)
 
   override init(frame: CGRect) {
     super.init(frame: frame)
-    box.backgroundColor = TranscriptColors.codeBackground
-    box.layer.cornerRadius = 12
+    box.layer.cornerRadius = 11
     box.layer.cornerCurve = .continuous
-    box.layer.borderWidth = 1 / 3
-    box.layer.borderColor = TranscriptColors.border.resolvedColor(with: traitCollection).cgColor
-    registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: CodeBlockCell, _: UITraitCollection) in
-      self.box.layer.borderColor = TranscriptColors.border.resolvedColor(with: self.traitCollection).cgColor
-    }
+    box.layer.borderWidth = 1
     box.clipsToBounds = true
-    header.backgroundColor = TranscriptColors.codeHeader
-    language.textColor = .secondaryLabel
     var configuration = UIButton.Configuration.plain()
-    configuration.image = UIImage(systemName: "doc.on.doc")
-    configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 12, weight: .medium)
-    configuration.baseForegroundColor = .secondaryLabel
-    configuration.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 12)
+    configuration.image = Symbol.image(Symbol.copy, 14)
+    configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
     copy.configuration = configuration
+    copy.layer.cornerRadius = 8
     copy.accessibilityLabel = "Copy code"
+    copy.accessibilityIdentifier = "transcript.copy-code"
     copy.addAction(UIAction { [weak self] _ in self?.copyCode() }, for: .primaryActionTriggered)
     scroll.showsHorizontalScrollIndicator = false
     scroll.showsVerticalScrollIndicator = false
@@ -205,39 +265,84 @@ final class CodeBlockCell: TranscriptCell {
     code.lineBreakMode = .byClipping
     code.accessibilityIdentifier = "transcript.code"
     contentView.addSubview(box)
-    box.addSubview(header)
-    header.addSubview(language)
-    header.addSubview(copy)
     box.addSubview(scroll)
     scroll.addSubview(code)
+    box.addSubview(copy)
   }
 
   required init?(coder: NSCoder) { fatalError() }
 
-  func configure(language name: String, code text: String, typography: Typography) {
-    language.font = typography.caption
-    language.text = name.isEmpty ? "code" : name
-    guard text != source || code.font != typography.mono else { return }
+  func configure(language name: String, code text: String, typography: Typography, theme: TranscriptTheme) {
+    box.backgroundColor = theme.codeBlock
+    box.layer.borderColor = theme.border.cgColor
+    copy.configuration?.baseForegroundColor = theme.textTertiary
+    copy.backgroundColor = theme.codeBlock
+    let key = "\(theme.id)|\(typography.category.rawValue)"
+    guard text != source || key != styleKey || name != language else { return }
+    let style = SyntaxHighlighter.Style(typography: typography, theme: theme)
+    if key != styleKey { lastHighlight = nil }
     source = text
-    var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-    var note = ""
-    if lines.count > Self.maxLines {
-      note = "\n… \(lines.count - Self.maxLines) more lines (Copy for all)"
-      lines = Array(lines.prefix(Self.maxLines))
-    }
-    let shown =
-      lines.map { $0.count > Self.maxLineLength ? $0.prefix(Self.maxLineLength) + "…" : $0 }
-      .joined(separator: "\n") + note
-    let paragraph = NSMutableParagraphStyle()
-    paragraph.lineSpacing = 3
-    code.attributedText = NSAttributedString(
-      string: shown.isEmpty ? " " : shown,
-      attributes: [.font: typography.mono, .foregroundColor: UIColor.label, .paragraphStyle: paragraph])
+    language = name
+    styleKey = key
+    self.style = style
+    shown = Self.displayed(text)
+    code.attributedText = attributed(shown, style)
     codeSize = code.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude))
     codeSize.width = codeSize.width.rounded(.up)
     codeSize.height = codeSize.height.rounded(.up)
-    scroll.contentOffset = .zero
     setNeedsLayout()
+    requestHighlight()
+  }
+
+  /// The cached highlight, else the last highlight plus the new tail in plain color, so a
+  /// streaming block never flashes back to plain while the next highlight runs.
+  private func attributed(_ text: String, _ style: SyntaxHighlighter.Style) -> NSAttributedString {
+    if let cached = SyntaxHighlighter.shared.cached(text, language: language, style: style) {
+      lastHighlight = (text, cached)
+      return cached
+    }
+    if let highlighted = lastHighlight, text.hasPrefix(highlighted.source) {
+      let out = NSMutableAttributedString(attributedString: highlighted.text)
+      let tail = String(text.utf16.dropFirst(highlighted.source.utf16.count)) ?? ""
+      out.append(SyntaxHighlighter.plain(tail, style: style))
+      return out
+    }
+    return SyntaxHighlighter.plain(text, style: style)
+  }
+
+  private func requestHighlight() {
+    guard !highlightInFlight, let style, lastHighlight?.source != shown else { return }
+    highlightInFlight = true
+    let text = shown
+    let key = styleKey
+    SyntaxHighlighter.shared.highlight(text, language: language, style: style) { [weak self] result in
+      guard let self else { return }
+      self.highlightInFlight = false
+      guard key == self.styleKey else { return self.requestHighlight() }
+      self.lastHighlight = (text, result)
+      if text == self.shown {
+        // Same font and glyph advances: no remeasure.
+        self.code.attributedText = result
+      } else {
+        // The block grew meanwhile: catch up, at most one highlight at a time.
+        self.code.attributedText = self.attributed(self.shown, style)
+        self.requestHighlight()
+      }
+    }
+  }
+
+  /// What the block shows: at most 400 lines of 400 characters; Copy takes everything.
+  nonisolated static func displayed(_ text: String) -> String {
+    var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+    var note = ""
+    if lines.count > maxLines {
+      note = "\n… \(lines.count - maxLines) more lines (Copy for all)"
+      lines = Array(lines.prefix(maxLines))
+    }
+    let shown =
+      lines.map { $0.count > maxLineLength ? $0.prefix(maxLineLength) + "…" : $0 }
+      .joined(separator: "\n") + note
+    return shown.isEmpty ? " " : shown
   }
 
   private func copyCode() {
@@ -246,34 +351,30 @@ final class CodeBlockCell: TranscriptCell {
   }
 
   override func measure(width: CGFloat) -> CGFloat {
-    headerHeight + codeSize.height + padding * 2 - 4
+    codeSize.height + padding.top + padding.bottom + 2
   }
 
   override func layoutSubviews() {
     super.layoutSubviews()
     let column = column(bounds.width)
     box.frame = CGRect(x: column.x, y: 0, width: column.width, height: bounds.height)
-    header.frame = CGRect(x: 0, y: 0, width: column.width, height: headerHeight)
-    let copySize = copy.sizeThatFits(CGSize(width: 80, height: headerHeight))
-    copy.frame = CGRect(
-      x: column.width - copySize.width, y: (headerHeight - copySize.height) / 2,
-      width: copySize.width, height: copySize.height)
-    language.frame = CGRect(x: padding, y: 0, width: copy.frame.minX - padding, height: headerHeight)
-    scroll.frame = CGRect(x: 0, y: headerHeight, width: column.width, height: bounds.height - headerHeight)
-    code.frame = CGRect(x: padding, y: padding - 2, width: codeSize.width, height: codeSize.height)
-    scroll.contentSize = CGSize(width: codeSize.width + padding * 2, height: scroll.frame.height)
+    copy.frame = CGRect(x: column.width - 40, y: 6, width: 34, height: 34)
+    scroll.frame = box.bounds
+    code.frame = CGRect(x: padding.left, y: padding.top + 1, width: codeSize.width, height: codeSize.height)
+    scroll.contentSize = CGSize(width: codeSize.width + padding.left + padding.right, height: box.bounds.height)
   }
-
 }
 
 // MARK: Table
 
-/// Draws a Markdown table: no subviews, so even wide tables stay cheap.
+/// Draws a Markdown table like `.markdown table`: full width, a heavier rule under the header
+/// and a hairline under each row, no outer box. No subviews, so even wide tables stay cheap.
 final class TableGridView: UIView {
   private var content: TableContent?
   private var widths: [CGFloat] = []
   private var heights: [CGFloat] = []
-  private let pad = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
+  /// `padding: 10px 12px`.
+  private let pad = UIEdgeInsets(top: 11, left: 14, bottom: 11, right: 14)
   private(set) var size = CGSize.zero
   private var laidOutFor: CGFloat = -1
 
@@ -302,22 +403,28 @@ final class TableGridView: UIView {
     guard let content, laidOutFor != available else { return size }
     laidOutFor = available
     let columns = max(content.header.count, content.rows.map(\.count).max() ?? 0)
-    let cap = max(150, available * 0.62)
     let all = [content.header] + content.rows
-    widths = (0..<columns).map { column in
-      let natural = all.map { row -> CGFloat in
-        guard column < row.count else { return 0 }
-        return row[column].boundingRect(
-          with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude),
-          options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil
-        ).width.rounded(.up)
-      }.max() ?? 0
-      return min(cap, max(44, natural)) + pad.left + pad.right
+    let horizontal = pad.left + pad.right
+    // CSS automatic table layout: max-content widths when they fit, else each column shrinks
+    // toward its longest word in proportion to its slack; past that, the table scrolls.
+    var natural = [CGFloat](repeating: 0, count: columns)
+    var minimum = [CGFloat](repeating: 0, count: columns)
+    for row in all {
+      for (column, cell) in row.enumerated() where column < columns {
+        natural[column] = max(natural[column], Self.width(cell) + horizontal)
+        minimum[column] = max(minimum[column], Self.longestWord(cell) + horizontal)
+      }
     }
-    // Narrow tables stretch to the column.
-    let total = widths.reduce(0, +)
-    if total < available, total > 0 {
-      widths = widths.map { ($0 * available / total).rounded(.down) }
+    let totalNatural = natural.reduce(0, +)
+    let totalMinimum = minimum.reduce(0, +)
+    if totalNatural <= available {
+      // `width: 100%`: narrow tables stretch to the column.
+      widths = natural.map { totalNatural > 0 ? ($0 * available / totalNatural).rounded(.down) : 0 }
+    } else if totalMinimum >= available {
+      widths = minimum
+    } else {
+      let share = (available - totalMinimum) / max(1, totalNatural - totalMinimum)
+      widths = zip(minimum, natural).map { ($0 + ($1 - $0) * share).rounded(.down) }
     }
     heights = all.map { row in
       var height: CGFloat = 0
@@ -333,15 +440,33 @@ final class TableGridView: UIView {
     return size
   }
 
+  private static func width(_ text: NSAttributedString) -> CGFloat {
+    text.boundingRect(
+      with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude),
+      options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil
+    ).width.rounded(.up)
+  }
+
+  /// The widest unbreakable run (min-content): text between ordinary spaces and line breaks.
+  private static func longestWord(_ text: NSAttributedString) -> CGFloat {
+    let string = text.string as NSString
+    var longest: CGFloat = 0
+    var start = 0
+    for index in 0...string.length {
+      let breaks =
+        index == string.length || [0x20, 0x0A, 0x09, 0x2028].contains(Int(string.character(at: index)))
+      guard breaks else { continue }
+      if index > start {
+        longest = max(longest, width(text.attributedSubstring(from: NSRange(location: start, length: index - start))))
+      }
+      start = index + 1
+    }
+    return longest
+  }
+
   override func draw(_ rect: CGRect) {
     guard let content, let context = UIGraphicsGetCurrentContext() else { return }
     let all = [content.header] + content.rows
-    let bounds = CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5)
-    let outline = UIBezierPath(roundedRect: bounds, cornerRadius: 10)
-    context.saveGState()
-    outline.addClip()
-    TranscriptColors.tableHeader.setFill()
-    context.fill(CGRect(x: 0, y: 0, width: size.width, height: heights.first ?? 0))
     let hairline = 1 / max(1, traitCollection.displayScale)
     var y: CGFloat = 0
     for (index, row) in all.enumerated() {
@@ -363,23 +488,10 @@ final class TableGridView: UIView {
         x += width
       }
       y += height
+      // After the text: drawing attributed strings changes the fill color.
+      (index == 0 ? content.borderHeavy : content.border).setFill()
+      context.fill(CGRect(x: 0, y: y - max(hairline, 1), width: size.width, height: max(hairline, 1)))
     }
-    // After the text: drawing attributed strings changes the fill color.
-    TranscriptColors.border.setFill()
-    var lineX: CGFloat = 0
-    for width in widths.dropLast() {
-      lineX += width
-      context.fill(CGRect(x: lineX, y: 0, width: hairline, height: size.height))
-    }
-    var lineY: CGFloat = 0
-    for height in heights.dropLast() {
-      lineY += height
-      context.fill(CGRect(x: 0, y: lineY, width: size.width, height: hairline))
-    }
-    context.restoreGState()
-    TranscriptColors.border.setStroke()
-    outline.lineWidth = hairline * 2
-    outline.stroke()
   }
 }
 
@@ -395,9 +507,6 @@ final class TableCell: TranscriptCell {
     scroll.clipsToBounds = true
     contentView.addSubview(scroll)
     scroll.addSubview(grid)
-    registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: TableCell, _: UITraitCollection) in
-      self.grid.setNeedsDisplay()
-    }
   }
 
   required init?(coder: NSCoder) { fatalError() }
@@ -409,7 +518,7 @@ final class TableCell: TranscriptCell {
   }
 
   override func measure(width: CGFloat) -> CGFloat {
-    grid.layout(for: column(width).width).height + 2
+    grid.layout(for: column(width).width).height
   }
 
   override func layoutSubviews() {
@@ -417,7 +526,7 @@ final class TableCell: TranscriptCell {
     let column = column(bounds.width)
     let size = grid.layout(for: column.width)
     scroll.frame = CGRect(x: column.x, y: 0, width: column.width, height: bounds.height)
-    grid.frame = CGRect(x: 0, y: 1, width: size.width, height: size.height)
+    grid.frame = CGRect(x: 0, y: 0, width: size.width, height: size.height)
     scroll.contentSize = CGSize(width: size.width, height: bounds.height)
   }
 }
@@ -427,44 +536,187 @@ final class RuleCell: TranscriptCell {
 
   override init(frame: CGRect) {
     super.init(frame: frame)
-    line.backgroundColor = .separator
     contentView.addSubview(line)
   }
 
   required init?(coder: NSCoder) { fatalError() }
+
+  func configure(theme: TranscriptTheme) { line.backgroundColor = theme.border }
 
   override func measure(width: CGFloat) -> CGFloat { 13 }
 
   override func layoutSubviews() {
     super.layoutSubviews()
     let column = column(bounds.width)
-    let hairline = 1 / max(1, traitCollection.displayScale)
-    line.frame = CGRect(x: column.x, y: 6, width: column.width, height: hairline)
+    line.frame = CGRect(x: column.x, y: 6, width: column.width, height: 1)
+  }
+}
+
+// MARK: Images
+
+/// `MarkdownImage`: a paragraph that is only an image shows it at its natural size up to the
+/// column and 560px tall, rounded 8px; tap to enlarge. Failures offer Retry.
+final class ImageBlockCell: TranscriptCell {
+  var onOpen: ((UIImage?, ImageSource, String) -> Void)?
+  /// The row's height changed after loading.
+  var onResize: (() -> Void)?
+
+  private let imageView = UIImageView()
+  private let message = UILabel()
+  private let retry = UIButton(type: .system)
+  private var source: ImageSource?
+  private var name = ""
+  private var maxHeight: CGFloat = 640
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    imageView.contentMode = .scaleAspectFit
+    imageView.clipsToBounds = true
+    imageView.layer.cornerRadius = 9
+    imageView.layer.cornerCurve = .continuous
+    imageView.isUserInteractionEnabled = true
+    imageView.isAccessibilityElement = true
+    imageView.accessibilityTraits = [.image, .button]
+    imageView.accessibilityIdentifier = "transcript.image"
+    imageView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(open)))
+    message.numberOfLines = 0
+    var configuration = UIButton.Configuration.plain()
+    configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8)
+    retry.configuration = configuration
+    retry.addAction(UIAction { [weak self] _ in self?.load() }, for: .primaryActionTriggered)
+    contentView.addSubview(imageView)
+    contentView.addSubview(message)
+    contentView.addSubview(retry)
+  }
+
+  required init?(coder: NSCoder) { fatalError() }
+
+  override func prepareForReuse() {
+    super.prepareForReuse()
+    onOpen = nil
+    onResize = nil
+  }
+
+  func configure(source: ImageSource?, alt: String, typography: Typography, theme: TranscriptTheme) {
+    name = alt.isEmpty ? "Image" : alt
+    maxHeight = typography.px(560)
+    imageView.backgroundColor = theme.panel
+    imageView.accessibilityLabel = "Preview \(name)"
+    message.font = typography.label
+    message.textColor = theme.textTertiary
+    retry.configuration?.attributedTitle = AttributedString(
+      "Retry", attributes: AttributeContainer([
+        .font: typography.label, .foregroundColor: theme.text,
+        .underlineStyle: NSUnderlineStyle.single.rawValue,
+      ]))
+    let changed = source != self.source
+    self.source = source
+    if changed || imageView.image == nil { show() }
+    if changed { load() }
+  }
+
+  private func show() {
+    guard let source else {
+      imageView.image = nil
+      message.text = "Image unavailable: \(name)"
+      return setNeedsLayout()
+    }
+    switch TranscriptImages.shared.state(source) {
+    case .loaded(let image):
+      imageView.image = image
+      message.text = nil
+    case .failed:
+      imageView.image = nil
+      message.text = "Could not load image: \(name)"
+    case .loading:
+      imageView.image = nil
+      message.text = nil
+    }
+    setNeedsLayout()
+  }
+
+  private func load() {
+    guard let source else { return }
+    let scale = max(2, traitCollection.displayScale)
+    TranscriptImages.shared.load(source, maxPixels: 720 * scale) { [weak self] _ in
+      guard let self, self.source == source else { return }
+      let before = self.bounds.height
+      self.show()
+      if abs(self.measure(width: self.bounds.width) - before) > 0.5 { self.onResize?() }
+    }
+    show()
+  }
+
+  @objc private func open() {
+    guard let source, let image = imageView.image else { return }
+    onOpen?(image, source, name)
+  }
+
+  private func imageSize(_ width: CGFloat) -> CGSize? {
+    guard let source, imageView.image != nil, let natural = TranscriptImages.shared.size(source),
+      natural.width > 0, natural.height > 0
+    else { return nil }
+    let column = column(width).width
+    let scale = min(1, column / natural.width, maxHeight / natural.height)
+    return CGSize(width: (natural.width * scale).rounded(), height: (natural.height * scale).rounded())
+  }
+
+  override func measure(width: CGFloat) -> CGFloat {
+    if let size = imageSize(width) { return size.height }
+    if message.text != nil { return 44 }
+    return 180
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    let column = column(bounds.width)
+    let failed = message.text != nil
+    imageView.isHidden = failed
+    message.isHidden = !failed
+    let canRetry = failed && source != nil
+    retry.isHidden = !canRetry
+    if let size = imageSize(bounds.width) {
+      imageView.frame = CGRect(x: column.x, y: 0, width: size.width, height: size.height)
+    } else {
+      imageView.frame = CGRect(x: column.x, y: 0, width: min(column.width, 280), height: bounds.height)
+    }
+    let retryWidth: CGFloat = canRetry ? retry.sizeThatFits(CGSize(width: 120, height: 44)).width : 0
+    let text = message.sizeThatFits(CGSize(width: column.width - retryWidth - 8, height: 44))
+    message.frame = CGRect(x: column.x, y: 0, width: min(text.width, column.width - retryWidth - 8), height: 44)
+    retry.frame = CGRect(x: message.frame.maxX + 4, y: 0, width: retryWidth, height: 44)
   }
 }
 
 // MARK: User
 
+/// A sent prompt: the `user-message` bubble, then its attachments, right-aligned.
 final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
+  var onOpen: ((UIImage?, ImageSource, String) -> Void)?
+
   private let bubble = UIView()
   private let label = UILabel()
-  private let footer = UILabel()
+  private let note = UILabel()
+  private var tiles: [AttachmentTile] = []
   private var text = ""
+  private var files: [Attachment] = []
+  private var pending = false
+  /// `padding: 8px 12px; border-radius: 16px`.
   private let padding = UIEdgeInsets(top: 9, left: 14, bottom: 9, right: 14)
+  /// `gap: 8px` between the bubble, attachments and the pending note.
+  private let gap: CGFloat = 9
+  private var typography = Typography.current
+  private var theme = TranscriptTheme.fallback
 
   override init(frame: CGRect) {
     super.init(frame: frame)
-    bubble.backgroundColor = TranscriptColors.bubble
-    bubble.layer.cornerRadius = 20
+    bubble.layer.cornerRadius = 18
     bubble.layer.cornerCurve = .continuous
     label.numberOfLines = 0
-    label.textColor = .label
-    footer.textColor = .secondaryLabel
-    footer.textAlignment = .right
-    footer.numberOfLines = 0
+    note.textAlignment = .right
+    note.text = "Pending in OpenCode"
     contentView.addSubview(bubble)
     bubble.addSubview(label)
-    contentView.addSubview(footer)
+    contentView.addSubview(note)
     bubble.addInteraction(UIContextMenuInteraction(delegate: self))
     bubble.isAccessibilityElement = true
     bubble.accessibilityTraits = .staticText
@@ -472,52 +724,110 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
 
   required init?(coder: NSCoder) { fatalError() }
 
-  func configure(text: String, files: [String], pending: Bool, typography: Typography) {
+  override func prepareForReuse() {
+    super.prepareForReuse()
+    onOpen = nil
+  }
+
+  func configure(
+    text: String, files: [Attachment], pending: Bool, typography: Typography, theme: TranscriptTheme
+  ) {
     self.text = text
+    self.pending = pending
+    self.typography = typography
+    self.theme = theme
+    bubble.backgroundColor = theme.userMessage
     let paragraph = NSMutableParagraphStyle()
-    paragraph.lineSpacing = 2
+    paragraph.lineSpacing = typography.spacing(typography.body)
     label.attributedText = NSAttributedString(
-      string: text, attributes: [.font: typography.body, .foregroundColor: UIColor.label, .paragraphStyle: paragraph])
-    var notes = files.map { "📎 \($0)" }
-    if pending { notes.append("Pending") }
-    footer.font = typography.caption
-    footer.text = notes.joined(separator: "\n")
-    footer.isHidden = notes.isEmpty
+      string: text, attributes: [.font: typography.body, .foregroundColor: theme.text, .paragraphStyle: paragraph])
+    note.font = typography.small
+    note.textColor = theme.textTertiary
+    note.isHidden = !pending
     bubble.isHidden = text.isEmpty
-    contentView.alpha = pending ? 0.55 : 1
-    bubble.accessibilityLabel = pending ? "Pending: \(text)" : text
+    bubble.accessibilityLabel = text
     bubble.accessibilityIdentifier = pending ? "transcript.pending" : "transcript.user"
+    if files != self.files {
+      self.files = files
+      tiles.forEach { $0.removeFromSuperview() }
+      tiles = files.map { file in
+        let tile = AttachmentTile(file)
+        tile.onOpen = { [weak self] image, source, name in self?.onOpen?(image, source, name) }
+        contentView.addSubview(tile)
+        return tile
+      }
+    }
+    for tile in tiles { tile.apply(typography: typography, theme: theme) }
     setNeedsLayout()
   }
 
-  private func sizes(_ width: CGFloat) -> (bubble: CGSize, footer: CGFloat) {
-    let column = column(width)
-    let maxBubble = (column.width * 0.84).rounded()
-    let labelSize = text.isEmpty
-      ? .zero
-      : label.sizeThatFits(CGSize(width: maxBubble - padding.left - padding.right, height: .greatestFiniteMagnitude))
-    let bubble = text.isEmpty
-      ? .zero
-      : CGSize(
-        width: (labelSize.width + padding.left + padding.right).rounded(.up),
-        height: (labelSize.height + padding.top + padding.bottom).rounded(.up))
-    let footer = footer.isHidden ? 0 : footer.sizeThatFits(CGSize(width: column.width, height: .greatestFiniteMagnitude)).height + 4
-    return (bubble, footer)
+  private struct Frames {
+    var bubble: CGRect
+    var tiles: [CGRect]
+    var note: CGRect
+    var height: CGFloat
   }
 
-  override func measure(width: CGFloat) -> CGFloat {
-    let sizes = sizes(width)
-    return sizes.bubble.height + sizes.footer
+  private func frames(_ width: CGFloat) -> Frames {
+    let column = column(width)
+    let right = column.x + column.width
+    var y: CGFloat = 0
+    var bubbleFrame = CGRect.zero
+    if !text.isEmpty {
+      // `max-width: 90%` on phones.
+      let maxBubble = (column.width * 0.9).rounded()
+      let size = label.sizeThatFits(
+        CGSize(width: maxBubble - padding.left - padding.right, height: .greatestFiniteMagnitude))
+      let bubbleWidth = (size.width + padding.left + padding.right).rounded(.up)
+      let bubbleHeight = (size.height + padding.top + padding.bottom).rounded(.up)
+      bubbleFrame = CGRect(x: right - bubbleWidth, y: 0, width: bubbleWidth, height: bubbleHeight)
+      y = bubbleHeight
+    }
+    // `flex-wrap: wrap; justify-content: flex-end`.
+    var tileFrames: [CGRect] = []
+    if !tiles.isEmpty {
+      if y > 0 { y += gap }
+      var rows: [[CGSize]] = [[]]
+      var rowWidth: CGFloat = 0
+      for tile in tiles {
+        let size = tile.size(maxWidth: column.width)
+        if rowWidth > 0 && rowWidth + gap + size.width > column.width {
+          rows.append([])
+          rowWidth = 0
+        }
+        rowWidth += (rowWidth > 0 ? gap : 0) + size.width
+        rows[rows.count - 1].append(size)
+      }
+      for (index, row) in rows.enumerated() {
+        let total = row.reduce(0) { $0 + $1.width } + gap * CGFloat(max(0, row.count - 1))
+        var x = right - total
+        let height = row.map(\.height).max() ?? 0
+        for size in row {
+          tileFrames.append(CGRect(x: x, y: y, width: size.width, height: size.height))
+          x += size.width + gap
+        }
+        y += height + (index < rows.count - 1 ? gap : 0)
+      }
+    }
+    var noteFrame = CGRect.zero
+    if pending {
+      if y > 0 { y += gap }
+      let height = note.font.lineHeight.rounded(.up)
+      noteFrame = CGRect(x: column.x, y: y, width: column.width, height: height)
+      y += height
+    }
+    return Frames(bubble: bubbleFrame, tiles: tileFrames, note: noteFrame, height: y)
   }
+
+  override func measure(width: CGFloat) -> CGFloat { frames(width).height }
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    let column = column(bounds.width)
-    let sizes = sizes(bounds.width)
-    bubble.frame = CGRect(
-      x: column.x + column.width - sizes.bubble.width, y: 0, width: sizes.bubble.width, height: sizes.bubble.height)
+    let frames = frames(bounds.width)
+    bubble.frame = frames.bubble
     label.frame = bubble.bounds.inset(by: padding)
-    footer.frame = CGRect(x: column.x, y: sizes.bubble.height + 4, width: column.width, height: max(0, sizes.footer - 4))
+    for (tile, frame) in zip(tiles, frames.tiles) { tile.frame = frame }
+    note.frame = frames.note
   }
 
   func contextMenuInteraction(
@@ -534,69 +844,165 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
   }
 }
 
+/// One attachment under a prompt: a 96×76px image thumbnail or a 240×76px file card.
+final class AttachmentTile: UIControl {
+  var onOpen: ((UIImage?, ImageSource, String) -> Void)?
+
+  private let file: Attachment
+  private let imageView = UIImageView()
+  private let name = UILabel()
+  private let type = UILabel()
+
+  init(_ file: Attachment) {
+    self.file = file
+    super.init(frame: .zero)
+    layer.cornerRadius = 11
+    layer.cornerCurve = .continuous
+    layer.borderWidth = 1
+    clipsToBounds = true
+    isAccessibilityElement = true
+    if file.isImage {
+      imageView.contentMode = .scaleAspectFill
+      imageView.clipsToBounds = true
+      addSubview(imageView)
+      accessibilityLabel = "Preview \(file.name.isEmpty ? "Attached image" : file.name)"
+      accessibilityTraits = [.image, .button]
+      accessibilityIdentifier = "transcript.attachment.image"
+      addAction(UIAction { [weak self] _ in self?.open() }, for: .primaryActionTriggered)
+      if let source = file.source {
+        TranscriptImages.shared.load(source, maxPixels: 330) { [weak self] state in
+          if case .loaded(let image) = state { self?.imageView.image = image }
+        }
+      }
+    } else {
+      name.text = file.name.isEmpty ? file.mime : file.name
+      name.lineBreakMode = .byTruncatingTail
+      type.text = file.typeLabel
+      addSubview(name)
+      addSubview(type)
+      accessibilityLabel = "\(name.text ?? ""), \(file.typeLabel)"
+      accessibilityIdentifier = "transcript.attachment.file"
+    }
+  }
+
+  required init?(coder: NSCoder) { fatalError() }
+
+  func apply(typography: Typography, theme: TranscriptTheme) {
+    layer.borderColor = theme.border.cgColor
+    backgroundColor = theme.panel
+    name.font = typography.body
+    name.textColor = theme.text
+    type.font = typography.small
+    type.textColor = theme.textSecondary
+  }
+
+  func size(maxWidth: CGFloat) -> CGSize {
+    file.isImage ? CGSize(width: 110, height: 87) : CGSize(width: min(274, maxWidth), height: 87)
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    imageView.frame = bounds
+    // `padding: 10px 12px; gap: 4px`, centered vertically.
+    let nameHeight = name.font.lineHeight.rounded(.up)
+    let typeHeight = type.font.lineHeight.rounded(.up)
+    let top = ((bounds.height - nameHeight - typeHeight - 5) / 2).rounded()
+    name.frame = CGRect(x: 14, y: top, width: bounds.width - 28, height: nameHeight)
+    type.frame = CGRect(x: 14, y: name.frame.maxY + 5, width: bounds.width - 28, height: typeHeight)
+  }
+
+  private func open() {
+    guard let source = file.source else { return }
+    onOpen?(imageView.image, source, file.name.isEmpty ? "Attached image" : file.name)
+  }
+}
+
 // MARK: Disclosure rows
 
 /// A tappable header that dims while pressed.
 final class PressableView: UIControl {
+  /// Extra touch area above and below, for rows shorter than 44pt.
+  var touchOutset: CGFloat = 0
+
   override var isHighlighted: Bool {
     didSet {
       UIView.animate(withDuration: isHighlighted ? 0.05 : 0.2) {
-        self.alpha = self.isHighlighted ? 0.45 : 1
+        self.alpha = self.isHighlighted ? 0.55 : 1
       }
     }
   }
+
+  override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+    bounds.insetBy(dx: 0, dy: -touchOutset).contains(point)
+  }
 }
 
-/// Turn headers, activity groups, tools, reasoning, skills and shell commands: a one-line
-/// header that toggles, with optional monospaced details below.
+/// Turn headers, activity groups, tools, reasoning, skills and shell commands, laid out like the
+/// desktop's `.disclosure-trigger`: chevron, icon, label, target, status, left to right, with
+/// optional details in a `secondary` panel below.
 final class DisclosureCell: TranscriptCell {
-  enum Status { case none, running, done, failed }
-
   var onToggle: (() -> Void)?
 
   private let header = PressableView()
+  private let chevron = UIImageView()
   private let icon = UIImageView()
   private let title = UILabel()
   private let detail = UILabel()
   private let trailing = UILabel()
-  private let spinner = UIActivityIndicatorView(style: .medium)
   private let statusIcon = UIImageView()
-  private let chevron = UIImageView()
-  private let rule = UIView()
   private let body = UIView()
   private let bodyText = ProseTextView()
+  private let footer = UILabel()
+  private let below = UILabel()
 
-  private var hasIcon = false
-  private var hasRule = false
-  private var showsChevron = true
-  private var open = false
+  private var model = Model(title: "", accessibilityIdentifier: "")
   private var bodyContent: NSAttributedString?
-  private var rowHeight: CGFloat = 34
-  private var timer: Timer?
   private var turn: TurnRow?
+
+  struct Model {
+    /// Leading chevron (a disclosure), trailing (a turn header) or none.
+    enum Chevron { case leading, trailing, none }
+    var chevron = Chevron.leading
+    /// Toggles details, with or without a visible chevron.
+    var expandable = true
+    var open = false
+    var icon: String?
+    var iconTint: UIColor?
+    var title: String
+    var attributedTitle: NSAttributedString?
+    var titleFont: UIFont?
+    var titleColor: UIColor?
+    /// Text after the title: a tool's target or a group's running summary.
+    var detail: String?
+    var detailFont: UIFont?
+    var detailColor: UIColor?
+    /// The detail takes the remaining width (`flex: 1`), pushing the status to the end.
+    var detailFills = false
+    var trailing: String?
+    var trailingColor: UIColor?
+    var trailingFont: UIFont?
+    var statusIcon: String?
+    var statusTint: UIColor?
+    var height: CGFloat = 44
+    var body: NSAttributedString?
+    var footer: String?
+    /// Error text under a row without a panel (a failed skill).
+    var below: String?
+    var accessibilityIdentifier: String
+  }
 
   override init(frame: CGRect) {
     super.init(frame: frame)
-    icon.contentMode = .center
-    icon.tintColor = .secondaryLabel
-    title.textColor = .secondaryLabel
-    detail.textColor = .secondaryLabel
-    detail.lineBreakMode = .byTruncatingMiddle
-    trailing.textColor = .systemRed
-    spinner.hidesWhenStopped = true
-    spinner.transform = CGAffineTransform(scaleX: 0.75, y: 0.75)
-    statusIcon.contentMode = .center
     chevron.contentMode = .center
-    chevron.tintColor = .tertiaryLabel
-    chevron.image = UIImage(
-      systemName: "chevron.right",
-      withConfiguration: UIImage.SymbolConfiguration(pointSize: 11, weight: .semibold))
-    rule.backgroundColor = .separator
-    body.backgroundColor = TranscriptColors.codeBackground
-    body.layer.cornerRadius = 10
+    icon.contentMode = .center
+    statusIcon.contentMode = .center
+    detail.lineBreakMode = .byTruncatingTail
+    title.lineBreakMode = .byTruncatingTail
+    body.layer.cornerRadius = 9
     body.layer.cornerCurve = .continuous
     body.clipsToBounds = true
-    for view in [icon, title, detail, trailing, spinner, statusIcon, chevron, rule] {
+    below.numberOfLines = 0
+    for view in [chevron, icon, title, detail, trailing, statusIcon] {
       view.isUserInteractionEnabled = false
       header.addSubview(view)
     }
@@ -606,113 +1012,92 @@ final class DisclosureCell: TranscriptCell {
     contentView.addSubview(header)
     contentView.addSubview(body)
     body.addSubview(bodyText)
+    contentView.addSubview(footer)
+    contentView.addSubview(below)
   }
 
   required init?(coder: NSCoder) { fatalError() }
 
   override func prepareForReuse() {
     super.prepareForReuse()
-    timer?.invalidate()
-    timer = nil
     turn = nil
     onToggle = nil
   }
 
-  struct Model {
-    var icon: String?
-    var iconTint: UIColor = .secondaryLabel
-    var title: String
-    var titleColor: UIColor = .secondaryLabel
-    var titleMono = false
-    var detail: String?
-    var detailMono = false
-    var trailing: String?
-    var status: Status = .none
-    var open = false
-    var chevron = true
-    var rule = false
-    var body: NSAttributedString?
-    var accessibilityIdentifier: String
-  }
-
-  func configure(_ model: Model, indent: Int, typography: Typography) {
-    self.indent = indent
-    hasIcon = model.icon != nil
+  func configure(_ model: Model, theme: TranscriptTheme, typography: Typography) {
+    self.model = model
+    let tint = model.titleColor ?? theme.textSecondary
+    chevron.image = Symbol.image(Symbol.chevron, model.chevron == .trailing ? 11 : 12, .medium)
+    chevron.tintColor = model.chevron == .trailing ? tint : theme.textTertiary
+    chevron.isHidden = model.chevron == .none
+    chevron.transform = model.open ? CGAffineTransform(rotationAngle: .pi / 2) : .identity
+    icon.isHidden = model.icon == nil
     if let name = model.icon {
-      icon.image = UIImage(
-        systemName: name, withConfiguration: UIImage.SymbolConfiguration(pointSize: 12.5, weight: .medium))
-      icon.tintColor = model.iconTint
+      icon.image = Symbol.image(name, 13.5)
+      icon.tintColor = model.iconTint ?? tint
     }
-    icon.isHidden = !hasIcon
-    title.font = model.titleMono ? typography.mono : typography.small
-    title.textColor = model.titleColor
-    title.text = model.title
-    title.lineBreakMode = .byTruncatingTail
-    detail.font = model.detailMono ? typography.monoSmall : typography.small
+    title.font = model.titleFont ?? typography.label
+    title.textColor = tint
+    if let attributed = model.attributedTitle {
+      title.attributedText = attributed
+    } else {
+      title.text = model.title
+    }
+    detail.font = model.detailFont ?? typography.small
+    detail.textColor = model.detailColor ?? theme.textTertiary
     detail.text = model.detail
     detail.isHidden = (model.detail ?? "").isEmpty
-    trailing.font = typography.small
+    trailing.font = model.trailingFont ?? typography.small
+    trailing.textColor = model.trailingColor ?? theme.textTertiary
     trailing.text = model.trailing
     trailing.isHidden = (model.trailing ?? "").isEmpty
-    switch model.status {
-    case .running:
-      spinner.startAnimating()
-      statusIcon.isHidden = true
-    case .done:
-      spinner.stopAnimating()
-      statusIcon.isHidden = false
-      statusIcon.image = UIImage(
-        systemName: "checkmark", withConfiguration: UIImage.SymbolConfiguration(pointSize: 11, weight: .semibold))
-      statusIcon.tintColor = .tertiaryLabel
-    case .failed:
-      spinner.stopAnimating()
-      statusIcon.isHidden = false
-      statusIcon.image = UIImage(
-        systemName: "exclamationmark.circle.fill",
-        withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .regular))
-      statusIcon.tintColor = .systemRed
-    case .none:
-      spinner.stopAnimating()
-      statusIcon.isHidden = true
+    statusIcon.isHidden = model.statusIcon == nil
+    if let name = model.statusIcon {
+      statusIcon.image = Symbol.image(name, 13)
+      statusIcon.tintColor = model.statusTint ?? theme.textTertiary
     }
-    showsChevron = model.chevron
-    chevron.isHidden = !model.chevron
-    hasRule = model.rule
-    rule.isHidden = !model.rule
-    open = model.open
-    chevron.transform = open ? CGAffineTransform(rotationAngle: .pi / 2) : .identity
     if model.body !== bodyContent {
       bodyContent = model.body
       bodyText.attributedText = model.body ?? NSAttributedString()
     }
     body.isHidden = model.body == nil
-    rowHeight = max(34, (typography.small.lineHeight + 16).rounded())
+    body.backgroundColor = theme.panel
+    footer.text = model.footer
+    footer.isHidden = model.footer == nil
+    footer.font = typography.small
+    footer.textColor = theme.textTertiary
+    below.text = model.below
+    below.isHidden = model.below == nil
+    below.font = typography.small
+    below.textColor = theme.error
+    header.touchOutset = max(0, (44 - model.height) / 2)
     header.accessibilityIdentifier = model.accessibilityIdentifier
-    header.accessibilityLabel = [model.title, model.detail, model.trailing].compactMap { $0 }.joined(separator: ", ")
-    header.accessibilityValue = model.chevron ? (model.open ? "Expanded" : "Collapsed") : nil
+    header.accessibilityLabel =
+      [model.attributedTitle?.string ?? model.title, model.detail, model.trailing].compactMap { $0 }
+      .filter { !$0.isEmpty }.joined(separator: ", ")
+    header.accessibilityValue = model.expandable ? (model.open ? "Expanded" : "Collapsed") : nil
     setNeedsLayout()
   }
 
-  /// A turn header: its label ticks each second only while the turn works.
-  func configure(turn: TurnRow, typography: Typography) {
+  /// A turn header: "Working for 1m 4s" while it runs, then "Worked for …" or "Stopped after …".
+  func configure(turn: TurnRow, theme: TranscriptTheme, typography: Typography) {
     self.turn = turn
     configure(
       Model(
-        title: Self.label(turn), titleColor: .secondaryLabel, open: turn.open, rule: true,
-        accessibilityIdentifier: "transcript.turn"),
-      indent: 0, typography: typography)
-    timer?.invalidate()
-    timer = nil
-    if turn.status == .working {
-      timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-        MainActor.assumeIsolated {
-          guard let self, let turn = self.turn else { return }
-          self.title.text = Self.label(turn)
-          self.header.accessibilityLabel = self.title.text
-          self.setNeedsLayout()
-        }
-      }
-    }
+        chevron: .trailing, open: turn.open, title: Self.label(turn),
+        titleFont: typography.label.withMonospacedDigits(), titleColor: theme.textTertiary,
+        height: typography.px(24), accessibilityIdentifier: "transcript.turn"),
+      theme: theme, typography: typography)
+  }
+
+  /// Advances a working turn's elapsed label; the list's single ticker calls this each second.
+  func tick() {
+    guard let turn, turn.status == .working else { return }
+    let label = Self.label(turn)
+    guard label != title.text else { return }
+    title.text = label
+    header.accessibilityLabel = label
+    setNeedsLayout()
   }
 
   static func label(_ turn: TurnRow) -> String {
@@ -725,56 +1110,90 @@ final class DisclosureCell: TranscriptCell {
     }
   }
 
-  private var bodyInset: UIEdgeInsets { UIEdgeInsets(top: 10, left: 12, bottom: 10, right: 12) }
+  /// `.tool-details`: `margin: 4px 8px 12px 22px; padding: 10px 12px`.
+  private let panelOuter = UIEdgeInsets(top: 5, left: 25, bottom: 14, right: 9)
+  private let panelInner = UIEdgeInsets(top: 11, left: 14, bottom: 11, right: 14)
 
   override func measure(width: CGFloat) -> CGFloat {
-    guard bodyContent != nil else { return rowHeight }
     let column = column(width)
-    let text = bodyText.height(for: column.width - bodyInset.left - bodyInset.right)
-    return rowHeight + text + bodyInset.top + bodyInset.bottom + 6
+    var height = model.height
+    if model.below != nil {
+      height += below.sizeThatFits(CGSize(width: column.width - 4, height: .greatestFiniteMagnitude)).height + 4
+    }
+    guard bodyContent != nil else { return height }
+    let textWidth = column.width - panelOuter.left - panelOuter.right - panelInner.left - panelInner.right
+    height += panelOuter.top + panelInner.top + bodyText.height(for: textWidth) + panelInner.bottom
+    if model.footer != nil { height += 9 + footer.font.lineHeight.rounded(.up) }
+    return height + panelOuter.bottom
   }
 
   override func layoutSubviews() {
     super.layoutSubviews()
     let column = column(bounds.width)
-    header.frame = CGRect(x: column.x, y: 0, width: column.width, height: rowHeight)
-    let mid = rowHeight / 2
-    var x: CGFloat = 0
-    if hasIcon {
-      icon.frame = CGRect(x: 0, y: mid - 10, width: 18, height: 20)
-      x = 24
+    let height = model.height
+    header.frame = CGRect(x: column.x, y: 0, width: column.width, height: height)
+    let mid = height / 2
+    // `padding: 4px 2px; gap: 8px`.
+    var x: CGFloat = 2
+    let gap: CGFloat = 9
+    if model.chevron == .leading {
+      chevron.frame = CGRect(x: x, y: mid - 8, width: 16, height: 16)
+      x += 16 + gap
     }
-    var right = column.width
-    if showsChevron {
-      chevron.frame = CGRect(x: right - 14, y: mid - 8, width: 14, height: 16)
-      right -= 20
+    if model.icon != nil {
+      icon.frame = CGRect(x: x, y: mid - 8, width: 16, height: 16)
+      x += 16 + gap
     }
-    if spinner.isAnimating {
-      spinner.center = CGPoint(x: right - 9, y: mid)
-      right -= 24
-    } else if !statusIcon.isHidden {
-      statusIcon.frame = CGRect(x: right - 18, y: mid - 9, width: 18, height: 18)
-      right -= 24
+    // `.activity-item .disclosure-trigger { padding-right: 8px }`.
+    var right = column.width - (indent > 0 ? 9 : 2)
+    if model.statusIcon != nil {
+      statusIcon.frame = CGRect(x: right - 16, y: mid - 8, width: 16, height: 16)
+      right -= 16 + gap
     }
-    if !trailing.isHidden {
-      let size = trailing.sizeThatFits(CGSize(width: 120, height: rowHeight))
-      trailing.frame = CGRect(x: right - size.width, y: 0, width: size.width, height: rowHeight)
-      right -= size.width + 8
+    if !trailing.isHidden && model.detailFills {
+      let size = trailing.sizeThatFits(CGSize(width: 160, height: height))
+      trailing.frame = CGRect(x: right - size.width, y: 0, width: size.width, height: height)
+      right -= size.width + gap
     }
-    let titleWidth = min(title.sizeThatFits(CGSize(width: .greatestFiniteMagnitude, height: rowHeight)).width.rounded(.up), right - x)
-    title.frame = CGRect(x: x, y: 0, width: titleWidth, height: rowHeight)
-    x += titleWidth + 8
+    let titleWidth = min(
+      title.sizeThatFits(CGSize(width: .greatestFiniteMagnitude, height: height)).width.rounded(.up),
+      max(0, right - x))
+    title.frame = CGRect(x: x, y: 0, width: titleWidth, height: height)
+    x += titleWidth
+    if model.chevron == .trailing {
+      x += 7
+      chevron.frame = CGRect(x: x, y: mid - 7, width: 14, height: 14)
+      x += 14
+    }
     if !detail.isHidden {
-      detail.frame = CGRect(x: x, y: 0, width: max(0, right - x), height: rowHeight)
-      x = right
+      x += gap
+      let natural = detail.sizeThatFits(CGSize(width: .greatestFiniteMagnitude, height: height)).width.rounded(.up)
+      let width = model.detailFills ? max(0, right - x) : min(natural, max(0, right - x))
+      detail.frame = CGRect(x: x, y: 0, width: width, height: height)
+      x += width
     }
-    if hasRule {
-      let hairline = 1 / max(1, traitCollection.displayScale)
-      rule.frame = CGRect(x: x + 2, y: mid, width: max(0, right - x - 2), height: hairline)
+    if !trailing.isHidden && !model.detailFills {
+      x += gap
+      let size = trailing.sizeThatFits(CGSize(width: .greatestFiniteMagnitude, height: height))
+      trailing.frame = CGRect(x: x, y: 0, width: min(size.width, max(0, right - x)), height: height)
+    }
+    var y = height
+    if model.below != nil {
+      let size = below.sizeThatFits(CGSize(width: column.width - 4, height: .greatestFiniteMagnitude))
+      below.frame = CGRect(x: column.x + 2, y: y, width: column.width - 4, height: size.height)
+      y += size.height + 4
     }
     if bodyContent != nil {
-      body.frame = CGRect(x: column.x, y: rowHeight + 2, width: column.width, height: bounds.height - rowHeight - 6)
-      bodyText.frame = body.bounds.inset(by: bodyInset)
+      let panelWidth = column.width - panelOuter.left - panelOuter.right
+      let textWidth = panelWidth - panelInner.left - panelInner.right
+      let textHeight = bodyText.height(for: textWidth)
+      body.frame = CGRect(
+        x: column.x + panelOuter.left, y: y + panelOuter.top, width: panelWidth,
+        height: textHeight + panelInner.top + panelInner.bottom)
+      bodyText.frame = CGRect(x: panelInner.left, y: panelInner.top, width: textWidth, height: textHeight)
+      footer.frame = CGRect(
+        x: column.x + panelOuter.left, y: body.frame.maxY + 9, width: panelWidth,
+        height: footer.font.lineHeight.rounded(.up))
     }
   }
 }
@@ -792,40 +1211,31 @@ nonisolated func formatDuration(_ ms: Double) -> String {
 
 // MARK: Notes
 
-/// Small rows: history status, notes, errors and the answer's Copy button.
+/// Small rows: the history status, notes, errors and the answer's Copy button.
 final class NoteCell: TranscriptCell {
-  enum Style { case note, failure, copy, history(loading: Bool) }
+  enum Style { case note, failure, copy, history }
 
   var onCopy: (() -> Void)?
 
   private let label = UILabel()
-  private let icon = UIImageView()
-  private let spinner = UIActivityIndicatorView(style: .medium)
   private let button = UIButton(type: .system)
+  private let status = UILabel()
   private var style = Style.note
+  private var reset: Task<Void, Never>?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
     label.numberOfLines = 0
-    icon.contentMode = .center
-    spinner.hidesWhenStopped = true
     var configuration = UIButton.Configuration.plain()
-    configuration.image = UIImage(systemName: "doc.on.doc")
-    configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 13, weight: .regular)
-    configuration.baseForegroundColor = .secondaryLabel
-    configuration.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 8)
+    configuration.image = Symbol.image(Symbol.copy, 15)
+    configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
     button.configuration = configuration
-    button.accessibilityLabel = "Copy answer"
+    button.accessibilityLabel = "Copy response"
     button.accessibilityIdentifier = "transcript.copy"
-    button.addAction(UIAction { [weak self] _ in
-      guard let self else { return }
-      self.onCopy?()
-      flashCopied(self.button)
-    }, for: .primaryActionTriggered)
+    button.addAction(UIAction { [weak self] _ in self?.copied() }, for: .primaryActionTriggered)
     contentView.addSubview(label)
-    contentView.addSubview(icon)
-    contentView.addSubview(spinner)
     contentView.addSubview(button)
+    contentView.addSubview(status)
   }
 
   required init?(coder: NSCoder) { fatalError() }
@@ -833,68 +1243,87 @@ final class NoteCell: TranscriptCell {
   override func prepareForReuse() {
     super.prepareForReuse()
     onCopy = nil
+    reset?.cancel()
+    showCopied(false)
   }
 
-  func configure(_ style: Style, text: String, typography: Typography) {
+  func configure(_ style: Style, text: String, typography: Typography, theme: TranscriptTheme) {
     self.style = style
-    label.text = text
-    label.font = typography.caption
-    label.textAlignment = .center
-    label.textColor = .tertiaryLabel
-    label.isHidden = false
-    icon.isHidden = true
-    button.isHidden = true
-    spinner.stopAnimating()
+    label.isHidden = style == .copy
+    button.isHidden = style != .copy
+    status.isHidden = style != .copy || status.text == nil
+    label.textAlignment = .natural
     switch style {
-    case .note: break
+    case .note:
+      label.attributedText = NSAttributedString(
+        string: text, attributes: [.font: typography.small, .foregroundColor: theme.textTertiary])
     case .failure:
-      label.font = typography.small
-      label.textAlignment = .natural
-      label.textColor = .systemRed
-      icon.isHidden = false
-      icon.image = UIImage(
-        systemName: "exclamationmark.triangle.fill",
-        withConfiguration: UIImage.SymbolConfiguration(pointSize: 12, weight: .regular))
-      icon.tintColor = .systemRed
+      let paragraph = NSMutableParagraphStyle()
+      paragraph.lineSpacing = typography.spacing(typography.body)
+      label.attributedText = NSAttributedString(
+        string: text,
+        attributes: [.font: typography.body, .foregroundColor: theme.error, .paragraphStyle: paragraph])
+      label.accessibilityIdentifier = "transcript.failure"
+    case .history:
+      label.attributedText = NSAttributedString(
+        string: text, attributes: [.font: typography.caption, .foregroundColor: theme.textTertiary])
+      label.textAlignment = .center
+      label.accessibilityIdentifier = "transcript.history"
     case .copy:
-      label.isHidden = true
-      button.isHidden = false
-    case .history(let loading):
-      if loading { spinner.startAnimating() }
-      label.isHidden = loading
+      button.configuration?.baseForegroundColor = theme.textTertiary
+      status.font = typography.small
+      status.textColor = theme.textTertiary
     }
     setNeedsLayout()
   }
 
-  private var iconWidth: CGFloat { icon.isHidden ? 0 : 22 }
+  private func copied() {
+    onCopy?()
+    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    showCopied(true)
+    reset?.cancel()
+    reset = Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .seconds(2))
+      guard !Task.isCancelled else { return }
+      self?.showCopied(false)
+    }
+  }
+
+  private func showCopied(_ copied: Bool) {
+    button.configuration?.image = Symbol.image(copied ? Symbol.copied : Symbol.copy, 15)
+    button.isEnabled = !copied
+    status.text = copied ? "Copied" : nil
+    status.isHidden = !copied
+    setNeedsLayout()
+  }
 
   override func measure(width: CGFloat) -> CGFloat {
     switch style {
-    case .copy: return 30
-    case .history: return 32
+    case .copy: return 32
+    case .history: return 50
     default:
       let column = column(width)
-      return label.sizeThatFits(CGSize(width: column.width - iconWidth, height: .greatestFiniteMagnitude)).height + 4
+      return label.sizeThatFits(CGSize(width: column.width, height: .greatestFiniteMagnitude)).height.rounded(.up)
     }
   }
 
   override func layoutSubviews() {
     super.layoutSubviews()
     let column = column(bounds.width)
-    icon.frame = CGRect(x: column.x, y: 2, width: 16, height: label.font.lineHeight)
-    label.frame = CGRect(x: column.x + iconWidth, y: 2, width: column.width - iconWidth, height: bounds.height - 4)
-    spinner.center = CGPoint(x: bounds.midX, y: bounds.midY)
-    button.frame = CGRect(x: column.x - 2, y: 0, width: 44, height: 30)
+    label.frame = CGRect(x: column.x, y: 0, width: column.width, height: bounds.height)
+    // The ghost button's icon lines up with the text column.
+    button.frame = CGRect(x: column.x - 8, y: (bounds.height - 32) / 2, width: 32, height: 32)
+    status.frame = CGRect(x: button.frame.maxX + 2, y: 0, width: 120, height: bounds.height)
   }
 }
 
 /// Swaps a button's image to a checkmark briefly after copying.
 func flashCopied(_ button: UIButton) {
   let original = button.configuration?.image
-  button.configuration?.image = UIImage(systemName: "checkmark")
+  button.configuration?.image = Symbol.image(Symbol.copied, 14)
   UIImpactFeedbackGenerator(style: .light).impactOccurred()
   Task { @MainActor [weak button] in
-    try? await Task.sleep(for: .seconds(1.4))
+    try? await Task.sleep(for: .seconds(2))
     button?.configuration?.image = original
   }
 }

@@ -181,10 +181,8 @@ nonisolated final class TimelineProjector {
       }
       return entries
     case .skill(let skill): return [.work(.skill(skill))]
-    case .idle, .other: return []
-    case .synthetic(let note), .system(let note):
-      // Shown as small notes when they describe themselves; raw context isn't for reading.
-      return note.description?.isEmpty == false ? [.row(.message(message))] : []
+    // Like the desktop, injected context (system, synthetic) is not part of the conversation.
+    case .idle, .other, .synthetic, .system: return []
     case .user, .shell, .compaction: return [.row(.message(message))]
     }
   }

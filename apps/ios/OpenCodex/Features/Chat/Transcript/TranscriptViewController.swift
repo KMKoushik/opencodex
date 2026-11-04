@@ -45,6 +45,9 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
   private var gaps: [String: CGFloat] = [:]
   private var estimates: [String: CGFloat] = [:]
   private var typography = Typography.current
+  private var theme = TranscriptTheme.fallback
+  /// One ticker for the list: advances working turn headers each second.
+  private var ticker: Timer?
 
   // Streaming
   private var liveKeys: Set<ChatModel.LiveKey> = []
@@ -53,6 +56,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
   private var displayed: [String: String] = [:]
   private var pacers: [String: PacedText] = [:]
   private var displayLink: CADisplayLink?
+  private let hitches = HitchMonitor()
   private var lastTick: CFTimeInterval = 0
 
   // Scrolling
@@ -72,7 +76,27 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
   required init?(coder: NSCoder) { fatalError() }
 
   deinit {
-    MainActor.assumeIsolated { displayLink?.invalidate() }
+    MainActor.assumeIsolated {
+      displayLink?.invalidate()
+      ticker?.invalidate()
+    }
+  }
+
+  /// The active theme from the SwiftUI environment. A change re-renders the visible rows;
+  /// rendered text is cached per theme, so switching back is free.
+  func setPalette(_ palette: Palette) {
+    guard palette.id != theme.id else { return }
+    theme = TranscriptTheme(palette)
+    guard isViewLoaded else { return }
+    styleChrome()
+    var snapshot = dataSource.snapshot()
+    snapshot.reconfigureItems(snapshot.itemIdentifiers)
+    dataSource.apply(snapshot, animatingDifferences: false)
+  }
+
+  private func styleChrome() {
+    jump.configuration?.baseForegroundColor = theme.text
+    collectionView.indicatorStyle = theme.dark ? .white : .black
   }
 
   override func viewDidLoad() {
@@ -98,6 +122,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     view.addSubview(collectionView)
     configureDataSource()
     configureJumpButton()
+    styleChrome()
     sends = model.sends
     registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) {
       (self: TranscriptViewController, _: UITraitCollection) in
@@ -160,6 +185,12 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
   // MARK: Projection
 
   private func reproject() {
+    // A reply streams for as long as the chat runs.
+    if model.running {
+      hitches.begin("stream")
+    } else if displayLink == nil && !userScrolling {
+      hitches.end()
+    }
     let messages = withLiveParts(model.messages, live: liveKeys)
     projected = projector.project(messages)
     grouped = messages
@@ -168,6 +199,22 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
 
   private func regroup(animated: Bool) {
     rows = grouper.group(projected, messages: grouped, running: model.running, overrides: overrides)
+    #if DEBUG
+      // `-transcriptExpand YES` opens every turn, group, tool and shell, for screenshots.
+      if UserDefaults.standard.bool(forKey: "transcriptExpand") {
+        for row in rows {
+          if case .turn(let turn) = row, !turn.open, overrides[turn.id] == nil {
+            overrides[turn.id] = true
+            return regroup(animated: animated)
+          }
+          if case .activity(let activity) = row {
+            builder.open.insert(activity.id)
+            for entry in activity.entries { builder.open.insert(entry.id) }
+          }
+          if case .message(.shell(let shell)) = row { builder.open.insert(shell.id) }
+        }
+      }
+    #endif
     rebuild(animated: animated)
   }
 
@@ -272,7 +319,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
   private func update(_ item: TranscriptItem) {
     guard let position = positions[item.id] else { return }
     if position > 0, let previous = items[order[position - 1]] {
-      gaps[item.id] = transcriptGap(after: previous, item)
+      gaps[item.id] = gap(after: previous, item)
     }
     let path = IndexPath(item: position, section: 0)
     guard let cell = collectionView.cellForItem(at: path) as? TranscriptCell else { return }
@@ -287,8 +334,11 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
   private func assemble(animated: Bool) {
     var list: [TranscriptItem] = []
     list.reserveCapacity(segments.reduce(0) { $0 + $1.count } + 4)
-    if model.hasOlder && !segments.isEmpty {
-      list.append(TranscriptItem(id: "history", content: .history(loading: model.loadingOlder)))
+    // The desktop's list header: loading, the beginning, or room for the next page.
+    if !segments.isEmpty {
+      let history: TranscriptItem.History =
+        model.loadingOlder ? .loading : model.hasOlder ? .more : .beginning
+      list.append(TranscriptItem(id: "history", content: .history(history), row: "history"))
     }
     for segment in segments { list += segment }
     list += builder.pending(model.inbox, known: Set(model.messages.lazy.map(\.id)))
@@ -309,7 +359,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     nextItems.reserveCapacity(list.count)
     nextPositions.reserveCapacity(list.count)
     for (index, item) in list.enumerated() {
-      nextGaps[item.id] = transcriptGap(after: index > 0 ? list[index - 1] : nil, item)
+      nextGaps[item.id] = gap(after: index > 0 ? list[index - 1] : nil, item)
       nextItems[item.id] = item
       nextPositions[item.id] = index
       nextEstimates[item.id] =
@@ -326,6 +376,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     gaps = nextGaps
     estimates = nextEstimates
     updateJump()
+    updateTicker(list)
     guard orderChanged || !reconfigure.isEmpty || !reload.isEmpty else {
       if gapsChanged { layout.invalidateLayout() }
       return
@@ -368,6 +419,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     if pacers.isEmpty {
       displayLink?.invalidate()
       displayLink = nil
+      if !userScrolling && !model.running { hitches.end() }
     }
   }
 
@@ -379,6 +431,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     let code = UICollectionView.CellRegistration<CodeBlockCell, String> { _, _, _ in }
     let table = UICollectionView.CellRegistration<TableCell, String> { _, _, _ in }
     let rule = UICollectionView.CellRegistration<RuleCell, String> { _, _, _ in }
+    let image = UICollectionView.CellRegistration<ImageBlockCell, String> { _, _, _ in }
     let disclosure = UICollectionView.CellRegistration<DisclosureCell, String> { _, _, _ in }
     let note = UICollectionView.CellRegistration<NoteCell, String> { _, _, _ in }
     dataSource = UICollectionViewDiffableDataSource(collectionView: collectionView) {
@@ -393,6 +446,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
         case .code: collectionView.dequeueConfiguredReusableCell(using: code, for: indexPath, item: id)
         case .table: collectionView.dequeueConfiguredReusableCell(using: table, for: indexPath, item: id)
         case .rule: collectionView.dequeueConfiguredReusableCell(using: rule, for: indexPath, item: id)
+        case .image: collectionView.dequeueConfiguredReusableCell(using: image, for: indexPath, item: id)
         case .disclosure:
           collectionView.dequeueConfiguredReusableCell(using: disclosure, for: indexPath, item: id)
         case .note, .copy, .history:
@@ -406,40 +460,56 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
   private func configure(_ cell: TranscriptCell, _ item: TranscriptItem) {
     cell.indent = item.indent
     switch item.content {
-    case .history(let loading):
-      (cell as? NoteCell)?.configure(.history(loading: loading), text: "", typography: typography)
+    case .history(let history):
+      let text =
+        switch history {
+        case .loading: "Loading earlier messages…"
+        case .beginning: "Beginning of conversation"
+        case .more: ""
+        }
+      (cell as? NoteCell)?.configure(.history, text: text, typography: typography, theme: theme)
     case .user(let text, let files, let pending):
-      (cell as? BubbleCell)?.configure(text: text, files: files, pending: pending, typography: typography)
+      guard let cell = cell as? BubbleCell else { return }
+      cell.configure(text: text, files: files, pending: pending, typography: typography, theme: theme)
+      cell.onOpen = { [weak self] image, source, name in self?.preview(image, source, name) }
     case .block(let block, let style):
-      let rendered = MarkdownRenderer.shared.render(block, style: style, typography: typography)
+      let rendered = MarkdownRenderer.shared.render(block, style: style, typography: typography, theme: theme)
       switch (rendered, cell) {
       case (.text(let text), let cell as TextBlockCell):
-        cell.configure(text, quote: block.kind == .quote, indent: item.indent)
+        cell.configure(text, quote: block.kind == .quote, panel: item.panel, theme: theme)
       case (.code(let language, let code), let cell as CodeBlockCell):
-        cell.configure(language: language, code: code, typography: typography)
+        cell.configure(language: language, code: code, typography: typography, theme: theme)
       case (.table(let content), let cell as TableCell):
         cell.configure(content)
+      case (.rule, let cell as RuleCell):
+        cell.configure(theme: theme)
+      case (.image(let source, let alt), let cell as ImageBlockCell):
+        cell.configure(source: source.flatMap(imageSource), alt: alt, typography: typography, theme: theme)
+        cell.onOpen = { [weak self] image, source, name in self?.preview(image, source, name) }
+        let id = item.id
+        cell.onResize = { [weak self] in self?.resize(id) }
       case (_, let cell as TextBlockCell):
         cell.configure(
-          NSAttributedString(string: block.source, attributes: [.font: typography.body, .foregroundColor: UIColor.label]),
-          quote: false, indent: item.indent)
+          NSAttributedString(
+            string: block.source, attributes: [.font: typography.body, .foregroundColor: theme.text]),
+          quote: false, panel: item.panel, theme: theme)
       default: break
       }
     case .copy(let text):
       guard let cell = cell as? NoteCell else { return }
-      cell.configure(.copy, text: "", typography: typography)
+      cell.configure(.copy, text: "", typography: typography, theme: theme)
       cell.onCopy = { UIPasteboard.general.string = text }
     case .note(let text):
-      (cell as? NoteCell)?.configure(.note, text: text, typography: typography)
+      (cell as? NoteCell)?.configure(.note, text: text, typography: typography, theme: theme)
     case .failure(let text):
-      (cell as? NoteCell)?.configure(.failure, text: text, typography: typography)
+      (cell as? NoteCell)?.configure(.failure, text: text, typography: typography, theme: theme)
     case .turn(let turn):
       guard let cell = cell as? DisclosureCell else { return }
-      cell.configure(turn: turn, typography: typography)
+      cell.configure(turn: turn, theme: theme, typography: typography)
       cell.onToggle = { [weak self] in self?.toggleTurn(turn) }
     default:
       guard let cell = cell as? DisclosureCell else { return }
-      cell.configure(disclosure(item), indent: item.indent, typography: typography)
+      cell.configure(disclosure(item), theme: theme, typography: typography)
       let id = item.id
       cell.onToggle = { [weak self] in self?.toggle(id) }
     }
@@ -447,78 +517,113 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
 
   private var directory: String? { model.session?.location.directory ?? model.directory }
 
+  /// Rows worded like the desktop's `activity.tsx`, `skill.tsx` and `message.tsx`.
   private func disclosure(_ item: TranscriptItem) -> DisclosureCell.Model {
     switch item.content {
     case .activity(let summary, let active, let errors, let open):
+      // The group's chevron is hidden on the desktop; its label alone toggles it.
       return .init(
-        title: active ? "Working" : summary, titleColor: .secondaryLabel,
-        detail: active ? summary : nil, trailing: errors > 0 ? "\(errors) failed" : nil,
-        status: active ? .running : .none, open: open, accessibilityIdentifier: "transcript.activity")
+        chevron: .none, open: open, title: active ? "Working" : summary, detail: active ? summary : nil,
+        trailing: errors > 0 ? "\(errors) failed" : nil, trailingColor: theme.error,
+        trailingFont: typography.label, accessibilityIdentifier: "transcript.activity")
     case .tool(let tool, let open):
-      let kind = ToolKind(tool.name)
-      let status: DisclosureCell.Status =
-        switch tool.state.status {
-        case .completed: .done
-        case .error: .failed
-        case .running, .streaming: .running
-        }
-      return .init(
-        icon: Self.icon(kind), title: Self.title(tool, kind), titleColor: .label,
-        detail: target(tool), detailMono: true, status: status, open: open,
+      let kind = Self.iconKind(tool.name)
+      let target = target(tool) ?? (tool.name == "question" ? "" : tool.name)
+      // `.activity-group .disclosure-chevron { display: none }` hides nested chevrons too.
+      var model = DisclosureCell.Model(
+        chevron: .none, open: open, icon: kind.symbol, iconTint: kind.tint(theme), title: Self.title(tool),
+        titleFont: typography.small, detail: target, detailFont: typography.monoCaption, detailFills: true,
         body: open ? details(tool) : nil, accessibilityIdentifier: "transcript.tool")
+      switch tool.state.status {
+      case .completed:
+        model.statusIcon = "checkmark.circle"
+      case .error:
+        model.statusIcon = "exclamationmark.circle"
+        model.statusTint = theme.error
+      case .running: model.trailing = "Running…"
+      case .streaming: model.trailing = "Preparing…"
+      }
+      return model
     case .skill(let name, let status, let error):
-      let title =
+      let verb =
         switch status {
         case .completed: "Used skill"
         case .error: "Failed to load skill"
         default: "Loading skill"
         }
-      return .init(
-        icon: "square.stack.3d.up", title: title, titleColor: .label, detail: name,
-        status: status == .error ? .failed : status == .completed ? .none : .running, chevron: false,
-        body: error.map { NSAttributedString(string: $0, attributes: [.font: typography.monoSmall, .foregroundColor: UIColor.systemRed]) },
-        accessibilityIdentifier: "transcript.skill")
-    case .thinking(let active, let open, let empty):
-      return .init(
-        icon: "brain", title: active ? "Thinking" : "Thought", titleColor: .label,
-        status: active ? .running : .none, open: open, chevron: !empty,
-        accessibilityIdentifier: "transcript.thinking")
-    case .shell(let shell, let open):
-      let output = shell.output?.output ?? ""
-      var body: NSAttributedString?
-      if open {
-        var text = Self.capped(output.isEmpty ? "(no output)" : output)
-        if shell.output?.truncated == true { text += "\n\nOutput truncated by OpenCode." }
-        body = NSAttributedString(string: text, attributes: [.font: typography.monoSmall, .foregroundColor: UIColor.label])
+      let title = NSMutableAttributedString(
+        string: name.isEmpty ? verb : "\(verb): ",
+        attributes: [.font: typography.small, .foregroundColor: theme.textSecondary])
+      if !name.isEmpty {
+        title.append(
+          NSAttributedString(string: name, attributes: [.font: typography.small, .foregroundColor: theme.text]))
+      }
+      if status == .running || status == .streaming {
+        title.append(
+          NSAttributedString(string: "…", attributes: [.font: typography.small, .foregroundColor: theme.textSecondary]))
       }
       return .init(
-        icon: "terminal", title: "$ \(shell.command)", titleColor: .label, titleMono: true,
-        status: shell.status == "running" ? .running : .none, open: open, body: body,
+        chevron: .none, expandable: false, icon: "square.stack.3d.up", iconTint: theme.activitySkill, title: title.string,
+        attributedTitle: title, titleFont: typography.small, height: typography.px(32), below: error,
+        accessibilityIdentifier: "transcript.skill")
+    case .thinking(let open, _):
+      return .init(
+        chevron: .none, open: open, title: "Thinking", titleFont: typography.small,
+        accessibilityIdentifier: "transcript.thinking")
+    case .shell(let shell, let open):
+      var body: NSAttributedString?
+      if open {
+        body = NSAttributedString(
+          string: Self.capped(shell.output?.output ?? ""),
+          attributes: [
+            .font: typography.monoSmall, .foregroundColor: theme.text, .paragraphStyle: monoParagraph(),
+          ])
+      }
+      return .init(
+        open: open, title: shell.command, titleFont: typography.mono, body: body,
+        footer: open && shell.output?.truncated == true ? "Output truncated by OpenCode." : nil,
         accessibilityIdentifier: "transcript.shell")
     default:
       return .init(title: "", accessibilityIdentifier: "transcript.row")
     }
   }
 
-  private static func icon(_ kind: ToolKind) -> String {
-    switch kind {
-    case .read: "doc.text"
-    case .search: "magnifyingglass"
-    case .shell: "terminal"
-    case .edit: "pencil"
-    case .question: "questionmark.bubble"
-    case .skill: "square.stack.3d.up"
-    case .other: "wrench.and.screwdriver"
+  /// `activity.tsx`'s icon families: search, edit, shell, and a file for everything else.
+  private enum IconKind {
+    case search, edit, shell, read
+    var symbol: String {
+      switch self {
+      case .search: "magnifyingglass"
+      case .edit: "square.and.pencil"
+      case .shell: "apple.terminal"
+      case .read: "doc"
+      }
+    }
+    func tint(_ theme: TranscriptTheme) -> UIColor? {
+      switch self {
+      case .search: theme.activitySearch
+      case .edit: theme.activityEdit
+      default: nil
+      }
     }
   }
 
-  private static func title(_ tool: ToolCall, _ kind: ToolKind) -> String {
-    switch kind {
+  private static func iconKind(_ name: String) -> IconKind {
+    switch ToolKind(name) {
+    case .search: .search
+    case .edit: .edit
+    case .shell: .shell
+    default: .read
+    }
+  }
+
+  /// "Read", "Run", "Question", else the tool's own name, as the desktop shows it.
+  private static func title(_ tool: ToolCall) -> String {
+    switch ToolKind(tool.name) {
     case .read: "Read"
     case .shell: "Run"
     case .question: "Question"
-    case .edit: tool.name == "write" || tool.name == "write_file" ? "Write" : "Edit"
-    default: tool.name.prefix(1).uppercased() + tool.name.dropFirst()
+    default: tool.name
     }
   }
 
@@ -535,35 +640,60 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     text.count > 4000 ? text.prefix(4000) + "\n… \(text.count - 4000) more characters" : text
   }
 
+  /// `font: 12px/1.6 var(--font-mono)`.
+  private func monoParagraph() -> NSParagraphStyle {
+    let paragraph = NSMutableParagraphStyle()
+    paragraph.lineSpacing = typography.spacing(typography.monoSmall, ratio: 1.6)
+    return paragraph
+  }
+
+  /// `ToolDetails`: Input, then the error, then each output.
   private func details(_ tool: ToolCall) -> NSAttributedString {
     let out = NSMutableAttributedString()
-    let label: [NSAttributedString.Key: Any] = [.font: typography.caption, .foregroundColor: UIColor.secondaryLabel]
-    let body: [NSAttributedString.Key: Any] = [.font: typography.monoSmall, .foregroundColor: UIColor.label]
+    let label: [NSAttributedString.Key: Any] = [.font: typography.caption, .foregroundColor: theme.textTertiary]
+    let pre: [NSAttributedString.Key: Any] = [
+      .font: typography.monoSmall, .foregroundColor: theme.text, .paragraphStyle: monoParagraph(),
+    ]
+    // `pre { margin-top: 10px }`.
+    let spacer = NSMutableParagraphStyle()
+    spacer.minimumLineHeight = 11
+    spacer.maximumLineHeight = 11
+    let gap = NSAttributedString(string: "\n", attributes: [.font: UIFont.systemFont(ofSize: 4), .paragraphStyle: spacer])
+    func section(_ text: String, _ attributes: [NSAttributedString.Key: Any]) {
+      out.append(NSAttributedString(string: "\n", attributes: attributes))
+      out.append(gap)
+      out.append(NSAttributedString(string: text, attributes: attributes))
+    }
+    out.append(NSAttributedString(string: "Input", attributes: label))
     let input: String =
-      if let command = tool.input("command") { command } else { tool.state.input.map(Self.pretty) ?? "" }
-    if !input.isEmpty {
-      out.append(NSAttributedString(string: "Input\n", attributes: label))
-      out.append(NSAttributedString(string: Self.capped(input), attributes: body))
+      switch tool.state.input {
+      case .string(let text)?: text
+      case let value?: Self.pretty(value)
+      case nil: ""
+      }
+    section(Self.capped(input), pre)
+    if tool.state.status == .error, let error = tool.state.error {
+      section(error.message, [.font: typography.small, .foregroundColor: theme.error])
     }
-    if let error = tool.state.error {
-      if out.length > 0 { out.append(NSAttributedString(string: "\n\n", attributes: body)) }
-      out.append(NSAttributedString(string: error.message, attributes: [.font: typography.monoSmall, .foregroundColor: UIColor.systemRed]))
+    for content in tool.state.content ?? [] {
+      if content.type == "text" {
+        section(Self.capped((content.text ?? "").trimmingCharacters(in: .newlines)), pre)
+      } else {
+        section(
+          "File output (\(content.mime ?? content.type))",
+          [.font: typography.small, .foregroundColor: theme.textTertiary])
+      }
     }
-    let output = tool.output
-    if !output.isEmpty {
-      if out.length > 0 { out.append(NSAttributedString(string: "\n\n", attributes: body)) }
-      out.append(NSAttributedString(string: "Output\n", attributes: label))
-      out.append(NSAttributedString(string: Self.capped(output.trimmingCharacters(in: .newlines)), attributes: body))
-    }
-    if out.length == 0 { out.append(NSAttributedString(string: "No details yet", attributes: label)) }
     return out
   }
 
+  /// `JSON.stringify(input, null, 2)`.
   private static func pretty(_ value: JSONValue) -> String {
-    if case .string(let text) = value { return text }
     let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-    return (try? encoder.encode(value)).flatMap { String(data: $0, encoding: .utf8) } ?? value.text
+    encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+    let text = (try? encoder.encode(value)).flatMap { String(data: $0, encoding: .utf8) } ?? value.text
+    // Foundation indents with 2 spaces and writes `"key" : value`.
+    return text.replacingOccurrences(of: "\" : ", with: "\": ")
   }
 
   private static func newlines(_ text: String) -> Int {
@@ -572,26 +702,100 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     return count
   }
 
+  /// Desktop pixels of space above an item, in points.
+  private func gap(after previous: TranscriptItem?, _ item: TranscriptItem) -> CGFloat {
+    let px = transcriptGap(after: previous, item)
+    return px == 0 ? 0 : typography.px(CGFloat(px))
+  }
+
   private func estimate(_ item: TranscriptItem) -> CGFloat {
-    let line = typography.body.lineHeight + typography.bodyLineSpacing
-    let charsPerLine = max(20, (min(view.bounds.width - 36, 700) / (typography.body.pointSize * 0.5)))
+    let line = typography.lineHeight
+    let charsPerLine = max(20, (min(view.bounds.width - 36, 720) / (typography.body.pointSize * 0.5)))
     switch item.content {
-    case .user(let text, _, _):
-      return 22 + line * max(1, (CGFloat(text.count) / (charsPerLine * 0.8)).rounded(.up))
-    case .block(let block, _):
+    case .user(let text, let files, _):
+      return 18 + line * max(1, (CGFloat(text.count) / (charsPerLine * 0.85)).rounded(.up))
+        + (files.isEmpty ? 0 : 96)
+    case .block(let block, let style):
       switch block.kind {
-      case .code: return 60 + CGFloat(Self.newlines(block.source)) * 19
-      case .table: return 12 + CGFloat(Self.newlines(block.source)) * 36
+      case .code: return 34 + CGFloat(Self.newlines(block.source) + 1) * line
+      case .table: return CGFloat(Self.newlines(block.source)) * (line + 22)
       case .rule: return 13
+      case .image: return 180
       default:
         // Wrapped lines from length, plus one per explicit line break.
         let wrapped = (CGFloat(block.source.utf8.count) / charsPerLine).rounded(.up)
-        return max(line, (wrapped + CGFloat(Self.newlines(block.source)) * 0.5) * line)
+        let estimate = max(line, (wrapped + CGFloat(Self.newlines(block.source)) * 0.5) * line)
+        return style == .reasoning ? estimate * 0.9 + 12 : estimate
       }
-    case .copy: return 30
-    case .history: return 32
-    case .note, .failure: return 20
-    default: return 34
+    case .copy: return 32
+    case .history: return 50
+    case .turn: return typography.px(24)
+    case .skill: return typography.px(32)
+    case .note: return 18
+    case .failure: return line
+    default: return 44
+    }
+  }
+
+  // MARK: Images
+
+  /// `MarkdownImage`'s source: web and data URLs as they are, workspace paths through the
+  /// gateway's session image route.
+  private func imageSource(_ src: String) -> ImageSource? {
+    if src.range(of: #"^(https?:|//)"#, options: [.regularExpression, .caseInsensitive]) != nil {
+      let url = URL(string: src.hasPrefix("//") ? "https:" + src : src)
+      return url.map { .request(URLRequest(url: $0)) }
+    }
+    if src.lowercased().hasPrefix("data:image/"), let comma = src.firstIndex(of: ",") {
+      return .data(key: src.count > 256 ? "data:\(src.hashValue)" : src, base64: String(src[src.index(after: comma)...]))
+    }
+    guard let id = model.sessionID else { return nil }
+    let path = src.lowercased().hasPrefix("file:") ? src : (src.removingPercentEncoding ?? src)
+    let client = model.client
+    return .request(client.request(client.url("/sessions/\(id)/image", ["path": path])))
+  }
+
+  private func preview(_ image: UIImage?, _ source: ImageSource, _ name: String) {
+    let preview = ImagePreviewController(image: image, source: source, name: name, theme: theme)
+    present(preview, animated: true)
+  }
+
+  /// A row whose content changed size on its own (an image loaded): resize it, keeping what the
+  /// reader is looking at in place.
+  private func resize(_ id: String) {
+    guard let position = positions[id],
+      let cell = collectionView.cellForItem(at: IndexPath(item: position, section: 0)) as? TranscriptCell
+    else { return }
+    let anchor = following ? nil : captureAnchor()
+    let scale = max(1, traitCollection.displayScale)
+    layout.setHeight((cell.measure(width: collectionView.bounds.width) * scale).rounded(.up) / scale, for: id)
+    collectionView.layoutIfNeeded()
+    if let anchor, anchor.id != id { restore(anchor) }
+  }
+
+  // MARK: Ticker
+
+  /// Runs one 1-second timer while any turn is working, never one per row.
+  private func updateTicker(_ list: [TranscriptItem]) {
+    let working = list.contains { item in
+      if case .turn(let turn) = item.content { turn.status == .working } else { false }
+    }
+    if working, ticker == nil {
+      let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+        MainActor.assumeIsolated { self?.tickTurns() }
+      }
+      timer.tolerance = 0.1
+      RunLoop.main.add(timer, forMode: .common)
+      ticker = timer
+    } else if !working {
+      ticker?.invalidate()
+      ticker = nil
+    }
+  }
+
+  private func tickTurns() {
+    for cell in collectionView.visibleCells {
+      (cell as? DisclosureCell)?.tick()
     }
   }
 
@@ -654,7 +858,22 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     }
   }
 
+  #if DEBUG
+    private var debugScrolled = false
+  #endif
+
   private func didLayout() {
+    #if DEBUG
+      // `-transcriptOffset <points>` opens the chat scrolled that far from the top, for screenshots.
+      if !debugScrolled, model.loaded, !order.isEmpty,
+        let offset = UserDefaults.standard.object(forKey: "transcriptOffset") as? Double
+      {
+        debugScrolled = true
+        setFollowing(false)
+        collectionView.contentOffset.y = min(endOffset, -collectionView.adjustedContentInset.top + offset)
+        return
+      }
+    #endif
     let height = collectionView.bounds.height - collectionView.adjustedContentInset.bottom
     if visibleHeight > 0, height != visibleHeight, !following, !userScrolling {
       // The keyboard (or composer) changed the visible height: keep what sits at the bottom
@@ -675,16 +894,21 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
   }
 
   func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+    hitches.begin("scroll")
     userScrolling = true
     animatingToEnd = false
   }
 
   func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-    if !decelerate { userScrolling = false }
+    if !decelerate {
+      userScrolling = false
+      if displayLink == nil && !model.running { hitches.end() }
+    }
   }
 
   func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
     userScrolling = false
+    if displayLink == nil && !model.running { hitches.end() }
   }
 
   func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
@@ -768,6 +992,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
 
   func collectionView(_ collectionView: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
     let typography = typography
+    let theme = theme
     let blocks: [(MarkdownBlock, ProseStyle)] = indexPaths.compactMap { path in
       guard path.item < order.count, case .block(let block, let style)? = items[order[path.item]]?.content
       else { return nil }
@@ -776,7 +1001,12 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     guard !blocks.isEmpty else { return }
     DispatchQueue.global(qos: .userInitiated).async {
       for (block, style) in blocks {
-        _ = MarkdownRenderer.shared.render(block, style: style, typography: typography)
+        let rendered = MarkdownRenderer.shared.render(block, style: style, typography: typography, theme: theme)
+        if case .code(let language, let code) = rendered {
+          SyntaxHighlighter.shared.warm(
+            CodeBlockCell.displayed(code), language: language,
+            style: SyntaxHighlighter.Style(typography: typography, theme: theme))
+        }
       }
     }
   }

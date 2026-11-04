@@ -3,6 +3,7 @@ import SwiftUI
 /// The chat transcript, with loading, empty and error states around the UIKit list.
 struct TranscriptView: View {
   let model: ChatModel
+  @Environment(\.palette) private var palette
 
   var body: some View {
     TranscriptList(model: model)
@@ -27,6 +28,8 @@ struct TranscriptView: View {
         }
       }
       .animation(.snappy, value: model.error)
+      // The chat's page color, under the navigation bar and composer too.
+      .background(palette.color("surface").ignoresSafeArea())
   }
 
   private var isEmpty: Bool {
@@ -41,29 +44,36 @@ struct TranscriptView: View {
 
 private struct TranscriptList: UIViewControllerRepresentable {
   let model: ChatModel
+  @Environment(\.palette) private var palette
 
   func makeUIViewController(context: Context) -> TranscriptViewController {
-    TranscriptViewController(model: model)
+    let controller = TranscriptViewController(model: model)
+    controller.setPalette(palette)
+    return controller
   }
 
-  func updateUIViewController(_ controller: TranscriptViewController, context: Context) {}
+  func updateUIViewController(_ controller: TranscriptViewController, context: Context) {
+    controller.setPalette(palette)
+  }
 }
 
 private struct EmptyTranscript: View {
   let project: String?
+  @Environment(\.palette) private var palette
 
   var body: some View {
     VStack(spacing: 6) {
       Image(systemName: "sparkles")
         .font(.system(size: 28, weight: .light))
-        .foregroundStyle(.tertiary)
+        .foregroundStyle(palette.color("text-tertiary"))
         .padding(.bottom, 6)
       Text("Ask anything")
         .font(.title2.weight(.semibold))
+        .foregroundStyle(palette.color("text"))
       if let project {
         Text("in \(project)")
           .font(.body)
-          .foregroundStyle(.secondary)
+          .foregroundStyle(palette.color("text-secondary"))
       }
     }
     .multilineTextAlignment(.center)
@@ -76,21 +86,22 @@ private struct EmptyTranscript: View {
 private struct ErrorBanner: View {
   let message: String
   let dismiss: () -> Void
+  @Environment(\.palette) private var palette
 
   var body: some View {
     Button(action: dismiss) {
       HStack(spacing: 8) {
         Image(systemName: "exclamationmark.triangle.fill")
-          .foregroundStyle(.orange)
+          .foregroundStyle(palette.color("warning"))
         Text(message)
           .font(.footnote)
-          .foregroundStyle(.primary)
+          .foregroundStyle(palette.color("text"))
           .lineLimit(2)
           .multilineTextAlignment(.leading)
         Spacer(minLength: 0)
         Image(systemName: "xmark")
           .font(.caption.weight(.semibold))
-          .foregroundStyle(.secondary)
+          .foregroundStyle(palette.color("text-secondary"))
       }
       .padding(.horizontal, 14)
       .padding(.vertical, 10)

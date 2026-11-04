@@ -106,6 +106,28 @@ struct TimelineTests {
     #expect(splitter.split(text).map(\.kind) == [.text, .text, .text, .code, .text])
     #expect(MarkdownBlocks.split(text).map(\.source) == splitter.split(text).map(\.source))
   }
+
+  @Test func codeTokensFollowTheLanguage() throws {
+    func tokens(_ code: String, _ language: String) throws -> [String: SyntaxHighlighter.Token] {
+      let grammar = try #require(SyntaxHighlighter.Grammar.for(language))
+      let text = code as NSString
+      var out: [String: SyntaxHighlighter.Token] = [:]
+      for (range, token) in SyntaxHighlighter.tokens(code, grammar) { out[text.substring(with: range)] = token }
+      return out
+    }
+    let ts = try tokens("// math.ts\nexport function add(a: number): Total { return `${a}` + 1.5 }", "ts")
+    #expect(ts["// math.ts"] == .comment)
+    #expect(ts["export"] == .keyword && ts["return"] == .keyword)
+    #expect(ts["add"] == .function && ts["Total"] == .type)
+    #expect(ts["`${a}`"] == .string && ts["1.5"] == .constant)
+    // A shell `#` comments only at a word boundary; `--flags` stay plain.
+    let shell = try tokens("echo \"$#\" a#b --if # done", "sh")
+    #expect(shell["# done"] == .comment && shell["\"$#\""] == .string)
+    #expect(shell["if"] == nil && shell["echo"] == .keyword)
+    // Rust lifetimes aren't strings.
+    #expect(try tokens("fn f<'a>(x: &'a str) {}", "rust")["'a>(x: &'"] == nil)
+    #expect(SyntaxHighlighter.Grammar.for("brainfuck") == nil)
+  }
 }
 
 private final class Marker {}
