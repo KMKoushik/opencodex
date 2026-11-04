@@ -3,6 +3,7 @@ import {
   SESSION_DONE_KEY,
   SESSION_PINNED_KEY,
   sessionMarker,
+  sessionMuted,
   sessionUnread,
   type SessionInfo,
   type SessionPage,
@@ -20,6 +21,7 @@ export function updateSessionMetadata(
     unread: sessionUnread({ metadata }),
     pinned: sessionMarker({ metadata }, SESSION_PINNED_KEY),
     done: sessionMarker({ metadata }, SESSION_DONE_KEY),
+    muted: sessionMuted({ metadata }) || undefined,
   };
   rememberPinned(sessionID, Boolean(marked.pinned));
   client.setQueryData<SessionInfo>(['chat', sessionID, 'info'], (session) =>

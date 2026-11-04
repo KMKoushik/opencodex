@@ -3,10 +3,12 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import {
   SESSION_DONE_KEY,
+  SESSION_MUTED_KEY,
   SESSION_PINNED_KEY,
   SESSION_UNREAD_KEY,
   sessionFocusSchema,
   sessionMarker,
+  sessionMuteSchema,
   sessionUnread,
   sessionUnreadSchema,
 } from '@opencodex/contracts';
@@ -69,6 +71,19 @@ export function sessionMetadataRoutes(write: MetadataWriter) {
         const unread = input.data.action === 'mark' ? randomUUID() : null;
         return { metadata: { [SESSION_UNREAD_KEY]: unread }, result: { unread } };
       }),
+    );
+  });
+
+  app.use('/:id/mute', bodyLimit({ maxSize: 1024 }));
+  app.post('/:id/mute', async (c) => {
+    const input = sessionMuteSchema.safeParse(await c.req.json().catch(() => null));
+    if (!input.success) return c.json({ message: 'Invalid mute action.' }, 400);
+    const { muted } = input.data;
+    return c.json(
+      await write(c.req.param('id'), c.req.raw.signal, async () => ({
+        metadata: { [SESSION_MUTED_KEY]: muted || null },
+        result: { muted },
+      })),
     );
   });
 

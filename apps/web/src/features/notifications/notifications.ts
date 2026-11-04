@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 import {
+  sessionMuted,
   sessionSummary,
   sideChatParent,
   type Session,
@@ -119,7 +120,10 @@ export async function notifySession(
     for (let depth = 0; session.parentID && depth < 8; depth++)
       session = await info(client, session.parentID);
     const main = sideChatParent(session);
-    const thread = sessionSummary(main ? await info(client, main) : session);
+    const root = main ? await info(client, main) : session;
+    // A muted thread stays quiet, including its subagents and side chats.
+    if (sessionMuted(root)) return;
+    const thread = sessionSummary(root);
     if (viewing(thread.id)) return;
     shown.get(thread.id)?.close();
     const notification = new Notification(failed ? 'Reply failed' : titles[kind], {

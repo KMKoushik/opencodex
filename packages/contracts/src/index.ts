@@ -75,6 +75,7 @@ export const sessionSchema = z.object({
   unread: z.string().optional(),
   pinned: z.number().optional(),
   done: z.number().optional(),
+  muted: z.boolean().optional(),
   model: z.string().optional(),
   fork: z.object({ sessionID: z.string() }).optional(),
   /** Present only on message-content search results. */
@@ -209,6 +210,12 @@ export function sessionMarker(
   const value = session.metadata?.[key];
   return typeof value === 'number' && value > 0 ? value : undefined;
 }
+/** `true` while the thread's notifications are muted; covers its subagents and side chats. */
+export const SESSION_MUTED_KEY = 'opencodexMuted';
+export function sessionMuted(session: { metadata?: Record<string, unknown> }) {
+  return session.metadata?.[SESSION_MUTED_KEY] === true;
+}
+export const sessionMuteSchema = z.object({ muted: z.boolean() });
 /** On a side chat: `{ parentID }`, the main chat it was forked from. */
 export const SIDE_CHAT_KEY = 'opencodexSideChat';
 /** On a main chat: its side chats' IDs, oldest first. */
@@ -307,6 +314,7 @@ export function sessionSummary(session: SessionInfo): Session {
     unread: sessionUnread(session),
     pinned: sessionMarker(session, SESSION_PINNED_KEY),
     done: sessionMarker(session, SESSION_DONE_KEY),
+    muted: sessionMuted(session) || undefined,
     model: session.model?.id,
     fork: session.fork ? { sessionID: session.fork.sessionID } : undefined,
   };

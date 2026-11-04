@@ -66,6 +66,7 @@ export function SessionActionsToggle({
         connected
         pinned={Boolean(info.data?.pinned)}
         done={Boolean(info.data && isSettled(info.data))}
+        muted={Boolean(info.data?.muted)}
         running={Boolean(active.data?.[sessionID])}
         anchor={trigger}
         align="end"

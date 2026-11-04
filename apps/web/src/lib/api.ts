@@ -238,6 +238,8 @@ export const api = {
     nativeRequest<{ ok: true }>(`${sessionPath(id)}/view`, post({ idle })),
   unreadSession: (id: string, input: z.infer<typeof sessionUnreadSchema>) =>
     nativeRequest<{ unread: string | null }>(`${sessionPath(id)}/unread`, post(input)),
+  muteSession: (id: string, muted: boolean) =>
+    nativeRequest<{ muted: boolean }>(`${sessionPath(id)}/mute`, post({ muted })),
   focusSession: (id: string, action: SessionFocusAction, pinned?: number) =>
     nativeRequest<{ pinned: number | null; done: number | null }>(
       `${sessionPath(id)}/focus`,

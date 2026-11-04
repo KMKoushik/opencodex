@@ -9,6 +9,7 @@ export default tseslint.config(
     ignores: [
       '.reference/**',
       '**/node_modules/**',
+      'apps/ios/build/**',
       '**/out/**',
       '**/dist/**',
       '**/release/**',

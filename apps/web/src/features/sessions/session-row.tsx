@@ -1,5 +1,10 @@
 import { useEffect, useId, useRef, useState, type ComponentProps, type MouseEvent } from 'react';
-import { FolderGit2Icon, GitForkIcon, Tick02Icon } from '@hugeicons/core-free-icons';
+import {
+  FolderGit2Icon,
+  GitForkIcon,
+  NotificationOff02Icon,
+  Tick02Icon,
+} from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import type { OpenCodeProject, Session } from '@opencodex/contracts';
 import { ProjectIcon } from '../projects/project-icon';
@@ -217,6 +222,16 @@ export function SessionRow({
               <HugeiconsIcon icon={FolderGit2Icon} size={14} aria-hidden="true" />
             </span>
           )}
+          {session.muted && (
+            <span
+              className="session-kind"
+              role="img"
+              aria-label="Notifications muted"
+              title="Notifications muted"
+            >
+              <HugeiconsIcon icon={NotificationOff02Icon} size={14} aria-hidden="true" />
+            </span>
+          )}
           {session.fork && (
             <span
               className="session-kind"
@@ -279,6 +294,7 @@ export function SessionRow({
           connected={connected}
           pinned={Boolean(session.pinned)}
           done={isSettled(session)}
+          muted={Boolean(session.muted)}
           running={responding}
           selection={checked ? selection : undefined}
           onPick={onPick}

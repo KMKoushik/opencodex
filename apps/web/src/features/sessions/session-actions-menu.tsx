@@ -22,6 +22,7 @@ export function SessionActionsMenu({
   connected,
   pinned,
   done,
+  muted,
   running,
   selection,
   onPick,
@@ -37,6 +38,7 @@ export function SessionActionsMenu({
   connected: boolean;
   pinned: boolean;
   done: boolean;
+  muted: boolean;
   running: boolean;
   /** Set when this row is part of a multi-selection; the menu acts on the whole selection. */
   selection?: { count: number; ready: number; onDone: () => void; onClear: () => void };
@@ -54,6 +56,15 @@ export function SessionActionsMenu({
   const mark = useMutation({
     mutationKey,
     mutationFn: () => api.unreadSession(sessionID, { action: 'mark' }),
+    retry: false,
+    onSuccess: () => {
+      refreshSession(client, sessionID);
+      dismiss();
+    },
+  });
+  const mute = useMutation({
+    mutationKey: ['chat', sessionID, 'mute'],
+    mutationFn: (next: boolean) => api.muteSession(sessionID, next),
     retry: false,
     onSuccess: () => {
       refreshSession(client, sessionID);
@@ -227,6 +238,14 @@ export function SessionActionsMenu({
           <button
             type="button"
             role="menuitem"
+            disabled={!connected || mute.isPending}
+            onClick={() => mute.mutate(!muted)}
+          >
+            {muted ? 'Unmute notifications' : 'Mute notifications'}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
             disabled={!connected || exporting.isPending}
             onClick={() => exporting.mutate('markdown')}
           >
@@ -259,6 +278,11 @@ export function SessionActionsMenu({
           {mark.isError && (
             <p className="session-actions-error" role="alert">
               Could not mark this thread as unread. {mark.error.message}
+            </p>
+          )}
+          {mute.isError && (
+            <p className="session-actions-error" role="alert">
+              Could not change this thread's notifications. {mute.error.message}
             </p>
           )}
           {exporting.isError && (
