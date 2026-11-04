@@ -50,7 +50,7 @@ final class ConnectionStore {
         url.scheme == "https", let host = url.host(), let fragment = url.fragment,
         fragment.hasPrefix("pair=")
       else { return nil }
-      self.host = URL(string: "https://\(host)")!
+      self.host = URL(string: "https://\(host)\(url.port.map { ":\($0)" } ?? "")")!
       self.code = String(fragment.dropFirst(5))
     }
 
