@@ -8,6 +8,7 @@ Use the repositories in `.reference/` for inspiration when designing and impleme
 
 - `apps/web` owns the React UI shared by browser and Electron.
 - `apps/desktop` owns native windows, lifecycle, and the narrow preload bridge.
+- `apps/ios` owns the native iPhone client (SwiftUI/UIKit). It talks only to the gateway's `/api` through Remote access; see `apps/ios/README.md`.
 - `packages/gateway` owns OpenCode connections, authentication, HTTP routes, and event forwarding.
 - `packages/contracts` owns app-facing API schemas and native bridge types.
 - Agent data uses the same relative `/api` transport on both surfaces. Keep Node and Electron imports out of the UI.

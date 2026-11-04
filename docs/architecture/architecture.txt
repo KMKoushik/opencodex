@@ -51,12 +51,12 @@
    │                                                                        │   │
    │                                                                        │   │        ┌──── PLAN USAGE APIS ─────┐
    │                                                                        │   │ HTTPS  │                          │
-   │ ┌─────────────────── REMOTE ACCESS (OPT-IN) ────────────────────┐      │   │        │  ChatGPT, Claude, Go     │
-   │ │ Paired phone or laptop → your Cloudflare hostname             │      │   └───────▶│  Read-only limit checks  │
-   │ │ cloudflared child → second listener on 127.0.0.1:4317         │      │            │                          │
-   └─┤ One-time code → per-device cookie; revoke closes streams      │      │            │  Local sign-ins stay in  │
-     │ ~/.opencodex/remote.json: hostname, token, device hashes      │      │            │  the gateway             │
-     └───────────────────────────────────────────────────────────────┘      │            └──────────────────────────┘
+   │ ┌──────────────────── REMOTE ACCESS (OPT-IN) ────────────────────┐     │   │        │  ChatGPT, Claude, Go     │
+   │ │ Browser or iPhone app (apps/ios) → your Cloudflare hostname    │     │   └───────▶│  Read-only limit checks  │
+   │ │ cloudflared child → second listener on 127.0.0.1:4317          │     │            │                          │
+   └─┤ One-time code → cookie or iPhone bearer; revoke closes streams │     │            │  Local sign-ins stay in  │
+     │ ~/.opencodex/remote.json: hostname, token, device hashes       │     │            │  the gateway             │
+     └────────────────────────────────────────────────────────────────┘     │            └──────────────────────────┘
                                                                             │
                                                                             │
                                                                             │            ┌──── OPENCODE SQLITE ─────┐

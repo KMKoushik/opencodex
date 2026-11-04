@@ -113,9 +113,9 @@
       "color": "#f6c177",
       "align": "left",
       "lines": [
-        "Paired phone or laptop → your Cloudflare hostname",
+        "Browser or iPhone app (apps/ios) → your Cloudflare hostname",
         "cloudflared child → second listener on 127.0.0.1:4317",
-        "One-time code → per-device cookie; revoke closes streams",
+        "One-time code → cookie or iPhone bearer; revoke closes streams",
         "~/.opencodex/remote.json: hostname, token, device hashes"
       ]
     }
