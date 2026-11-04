@@ -84,6 +84,11 @@ function cookie(header: string | undefined) {
   }
 }
 
+/** The iOS app's token. Browsers never send one, so it can't be forged cross-site like a cookie. */
+function bearer(header: string | undefined) {
+  return /^Bearer ([\w-]{43})$/.exec(header ?? '')?.[1];
+}
+
 function deviceName(agent: string) {
   const system = /iPhone/.test(agent)
     ? 'iPhone'
@@ -674,13 +679,15 @@ export class RemoteAccess {
     const hostname = this.config.hostname;
     if (!hostname || request.headers.host?.toLowerCase() !== hostname) return 421;
     const site = request.headers['sec-fetch-site'];
+    const native = bearer(request.headers.authorization) !== undefined;
     if (
-      request.headers.origin !== `https://${hostname}` ||
-      site === 'cross-site' ||
-      site === 'same-site'
+      !native &&
+      (request.headers.origin !== `https://${hostname}` ||
+        site === 'cross-site' ||
+        site === 'same-site')
     )
       return 403;
-    const device = this.device(request.headers.cookie);
+    const device = this.device(request.headers);
     if (!device) return 401;
     this.track(device, socket, socket);
   };
@@ -698,14 +705,14 @@ export class RemoteAccess {
     }
     // Cloudflare terminates TLS; the app should see the address the device used.
     request.url = `https://${hostname}${request.url}`;
-    const device = this.device(request.headers.cookie);
+    const device = this.device(request.headers);
     if (device) this.track(device, request.socket, response);
     this.context.set(request, { origin: `https://${hostname}`, device });
     this.handler!(request, response);
   };
 
-  private device(header: string | undefined) {
-    const token = cookie(header);
+  private device(headers: IncomingMessage['headers']) {
+    const token = bearer(headers.authorization) ?? cookie(headers.cookie);
     const device = token ? this.devices.get(hash(token)) : undefined;
     if (!device) return null;
     const now = Date.now();
@@ -828,6 +835,7 @@ export function remoteRoutes(remote: RemoteAccess) {
         { message: 'That code is wrong or has expired. Make a new one on your computer.' },
         400,
       );
+    if (input.success && input.data.client === 'native') return c.json({ ok: true, token });
     c.header(
       'Set-Cookie',
       `${COOKIE}=${token}; Path=/; Max-Age=${COOKIE_AGE}; Secure; HttpOnly; SameSite=Strict`,

@@ -123,6 +123,28 @@ describe('remote access', () => {
     ).toBe(403);
   });
 
+  it('pairs a native app with a bearer token', async () => {
+    const { remote, send } = await setup();
+    const { code } = await remote.createCode();
+    const paired = await send(
+      'POST',
+      '/api/remote/pair',
+      { 'User-Agent': 'OpenCodex iOS (iPhone)' },
+      { code, client: 'native' },
+    );
+    expect(paired.headers['set-cookie']).toBeUndefined();
+    const { token } = JSON.parse(paired.body) as { token: string };
+    const auth = { Authorization: `Bearer ${token}` };
+    expect(JSON.parse((await send('GET', '/api/remote/session', auth)).body)).toEqual({
+      remote: true,
+      paired: true,
+    });
+    expect(
+      (await send('GET', '/api/connection', { Authorization: `Bearer ${'x'.repeat(43)}` })).status,
+    ).toBe(401);
+    expect(remote.status().devices.map((device) => device.name)).toEqual(['iPhone']);
+  });
+
   it('revoking a device closes its open streams and rejects its cookie', async () => {
     const { remote, port, send, pair } = await setup();
     const cookie = await pair();

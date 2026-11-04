@@ -60,7 +60,11 @@ export const remotePairCodeSchema = z.object({
   expires: z.number(),
 });
 
-export const remotePairSchema = z.object({ code: z.string().trim().min(1).max(32) });
+export const remotePairSchema = z.object({
+  code: z.string().trim().min(1).max(32),
+  /** Native apps keep the token themselves and send it as a bearer token, not a cookie. */
+  client: z.literal('native').optional(),
+});
 
 export const remoteSessionSchema = z.object({ remote: z.boolean(), paired: z.boolean() });
 
