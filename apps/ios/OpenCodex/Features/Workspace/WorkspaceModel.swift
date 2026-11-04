@@ -232,6 +232,10 @@ final class WorkspaceModel {
       scheduleRefresh()
     } else if event.type.hasPrefix("vcs.") {
       scheduleRefresh()
+    } else if event.type == "session.step.ended", event.data?["files"]?.array?.isEmpty == false {
+      // OpenCode's own list of files an agent step changed: edits show even when the
+      // service runs without a file watcher (and so sends no `filesystem.changed`).
+      scheduleRefresh()
     }
   }
 
