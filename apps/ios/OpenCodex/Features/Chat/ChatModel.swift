@@ -226,7 +226,7 @@ final class ChatModel {
       }
       schedule([.messages])
     case "session.step.started":
-      live = [:]
+      pruneLive()
       schedule([.messages])
     case "session.execution.started":
       running = true
@@ -306,8 +306,23 @@ final class ChatModel {
       olderCursor = page.cursor?.next ?? nil
       hasOlder = olderCursor != nil
     }
-    // Completed snapshots win: drop overlay parts the snapshot already has in full.
-    for (key, text) in live where snapshotText(key) == text { live[key] = nil }
+    pruneLive()
+  }
+
+  /// Snapshots win once they catch up: drop overlay parts the snapshot has at full length, and
+  /// parts of replies that have finished. Until then the overlay stays, so text never shrinks.
+  private func pruneLive() {
+    guard !live.isEmpty else { return }
+    var completed = Set<String>()
+    for message in messages {
+      if case .assistant(let assistant) = message, assistant.time.completed != nil {
+        completed.insert(assistant.id)
+      }
+    }
+    let kept = live.filter { key, text in
+      !completed.contains(key.messageID) && (snapshotText(key)?.count ?? -1) < text.count
+    }
+    if kept.count != live.count { live = kept }
   }
 
   /// The snapshot's text for a streaming part, if it has that part yet.
