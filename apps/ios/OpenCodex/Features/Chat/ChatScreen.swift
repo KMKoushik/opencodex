@@ -16,6 +16,7 @@ struct ChatScreen<Actions: View>: View {
   @State private var model: ChatModel
   @State private var projects: [SessionDetails.Project]?
   @State private var showDetails = false
+  @State private var showSubagents = false
   @Environment(\.palette) private var palette
   private let actions: (ChatModel) -> Actions
 
@@ -41,9 +42,14 @@ struct ChatScreen<Actions: View>: View {
       .toolbar { toolbar }
       .sheet(isPresented: $showDetails) {
         if let id = model.sessionID {
-          SessionDetailsSheet(chat: model, sessionID: id, projectName: projectName)
+          SessionDetailsSheet(chat: model, sessionID: id, projectName: projectName) { panel in
+            guard panel == "subagents" else { return }
+            showDetails = false
+            showSubagents = true
+          }
         }
       }
+      .sheet(isPresented: $showSubagents) { SubagentsSheet(model: model) }
       // Restarts when the draft moves to another project, which makes a new model.
       .task(id: ObjectIdentifier(model)) { await model.run() }
       .task(id: model.session?.time.idle) { await model.markViewed() }
@@ -62,6 +68,11 @@ struct ChatScreen<Actions: View>: View {
   private var dock: some View {
     VStack(spacing: 0) {
       RequestsView(model: model)
+      if model.sessionID != nil {
+        // Always mounted for a thread: it loads the running shells and subagents the toolbar
+        // badge reads, and shows itself only while something runs.
+        ActivityTray(model: model)
+      }
       // A draft moved to another project gets a fresh composer for its new model.
       ComposerView(model: model)
         .id(ObjectIdentifier(model))
@@ -85,6 +96,19 @@ struct ChatScreen<Actions: View>: View {
           Label("Thread actions", systemImage: "ellipsis")
         }
         .accessibilityIdentifier("chat.actions")
+      }
+      ToolbarItem(placement: .topBarTrailing) {
+        // The desktop rail's subagents button, with its running-count badge.
+        Button {
+          showSubagents = true
+        } label: {
+          Image(systemName: ActivitySymbol.subagent)
+            .overlay(alignment: .topTrailing) {
+              RunningSubagentsBadge(model: model).offset(x: 8, y: -6)
+            }
+        }
+        .accessibilityLabel("Subagents")
+        .accessibilityIdentifier("chat.subagents")
       }
       ToolbarItem(placement: .topBarTrailing) {
         Button("Session details", systemImage: "info.circle") { showDetails = true }
