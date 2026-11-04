@@ -23,8 +23,13 @@ For a real iPhone, create `Config/Local.xcconfig` (gitignored) with `DEVELOPMENT
 - `OpenCodex/Features/<Screen>`: one folder per screen. `Chat/ChatModel.swift` owns one chat's
   snapshots, the streamed-text overlay, and its actions; the transcript, composer and request
   cards read it.
-- `OpenCodexTests`: decoding of real gateway responses in `Fixtures/`.
-- `OpenCodexUITests`: screen flows against a live loopback gateway.
+- `OpenCodex/Features/Chat/Transcript`: a port of the web timeline projection
+  (`TimelineModel.swift`) drawn by a `UICollectionView` with a small custom layout that keeps
+  the visible row anchored when older pages load. Answers are one row per top-level Markdown
+  block, so long replies stay virtualized and streaming re-renders only the last block; a
+  `CADisplayLink` pacer reveals streamed words steadily.
+- `OpenCodexTests`: decoding of real gateway responses in `Fixtures/`, and the timeline projection.
+- `OpenCodexUITests`: screen flows against a live loopback gateway, including `FlowTests`: new chat → send → approve the edit → the file exists → the reply finishes.
 
 ## Testing against an isolated OpenCode
 
