@@ -17,7 +17,7 @@ nonisolated final class FlowTests: XCTestCase {
     let project = app.buttons["project-proj"]
     XCTAssertTrue(project.waitForExistence(timeout: 10))
     project.tap()
-    XCTAssertTrue(app.descendants(matching: .any)["transcript.empty"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.descendants(matching: .any)["chat.new"].waitForExistence(timeout: 10))
 
     let input =
       app.textViews["composer.input"].exists
