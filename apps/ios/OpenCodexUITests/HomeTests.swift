@@ -1,24 +1,32 @@
 import XCTest
 
-/// The threads list shows a thread made on the gateway, and opening it shows its chat.
+/// A thread made on the gateway shows in both views, like the desktop sidebar, and opens.
 nonisolated final class HomeTests: XCTestCase {
   private static var gateway: URL {
     URL(string: ProcessInfo.processInfo.environment["OPENCODEX_GATEWAY"] ?? "http://127.0.0.1:4310")!
   }
 
-  @MainActor func testOpensThreadFromList() async throws {
+  @MainActor func testSwitchesViewsAndOpensThread() async throws {
     let title = "Home test \(UUID().uuidString.prefix(8))"
     let id = try await makeThread(title: title)
     addTeardownBlock {
-      // There's no delete route; Done keeps test threads out of the list.
+      // There's no delete route; Done keeps test threads out of Focus.
       _ = try? await Self.post("/api/sessions/\(id)/focus", ["action": "done"])
     }
 
-    let app = XCUIApplication.opencodex()
+    // Start in Projects; the newest thread tops its project's group.
+    let app = XCUIApplication.opencodex(["-threadView", "projects"])
     app.launch()
     let row = app.buttons["thread-\(id)"]
-    XCTAssertTrue(row.waitForExistence(timeout: 15), "The new thread should appear in the list")
+    XCTAssertTrue(row.waitForExistence(timeout: 15), "The new thread should show in its project")
     XCTAssertTrue(row.label.contains(title))
+
+    // Focus lists every project's recent threads, with the project avatar per row.
+    app.buttons["view-toggle"].tap()
+    XCTAssertTrue(app.staticTexts["Focus"].waitForExistence(timeout: 5))
+    // With nothing to answer yet, it ranks after the threads that need you.
+    for _ in 0..<10 where !row.waitForExistence(timeout: 1) { app.swipeUp() }
+    XCTAssertTrue(row.exists, "A new thread is active in Focus")
 
     row.tap()
     XCTAssertTrue(

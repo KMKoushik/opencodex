@@ -1,301 +1,269 @@
 import SwiftUI
 
-/// The threads screen: every project's root threads, pinned ones on top, with search, a
-/// project filter, swipe actions for Pin and Done, and live status.
+/// The threads screen, laid out like the desktop sidebar: the brand with search, New thread,
+/// pinned threads, then the Projects groups or the Focus list, and Settings at the foot.
 struct HomeView: View {
   let client: GatewayClient
   @Environment(ConnectionStore.self) private var connection
+  @Environment(\.palette) private var palette
   @State private var model: HomeModel
+  @State private var actions: ThreadActions
   @State private var path: [ChatRoute] = []
   /// `-session` opens its chat once per launch, so Back can leave it.
   @State private var openedLaunchSession = false
   @State private var sheet: Sheet?
 
-  private enum Sheet: String, Identifiable {
-    case newChat, settings
-    var id: String { rawValue }
+  private enum Sheet: Identifiable {
+    case newChat, search
+    case settings(SettingsSection?)
+    var id: String {
+      switch self {
+      case .newChat: "new"
+      case .search: "search"
+      case .settings(let section): "settings-\(section?.rawValue ?? "")"
+      }
+    }
   }
 
   init(client: GatewayClient) {
     self.client = client
     _model = State(initialValue: HomeModel(client: client))
+    _actions = State(initialValue: ThreadActions(client: client))
   }
 
   var body: some View {
     NavigationStack(path: $path) {
-      ThreadList(model: model, newChat: { sheet = .newChat })
-        .navigationTitle("Threads")
-        .navigationSubtitle(model.filterName ?? "")
-        .searchable(text: $model.searchText, prompt: "Search threads")
-        .toolbar { toolbar }
-        .navigationDestination(for: ChatRoute.self) { route in
-          ChatScreen(client: client, events: connection.events, route: route)
+      ThreadList(
+        model: model, actions: actions,
+        open: { path.append(.session($0)) },
+        newThread: { sheet = .newChat },
+        newThreadIn: { path.append(.new(directory: $0)) }
+      )
+      .safeAreaInset(edge: .top, spacing: 0) {
+        HomeHeader(
+          search: { sheet = .search },
+          settings: { sheet = .settings($0) })
+      }
+      .safeAreaInset(edge: .bottom, spacing: 0) { footer }
+      .background(palette.color("surface-under"))
+      .toolbar(.hidden, for: .navigationBar)
+      .navigationTitle("Threads")
+      .navigationDestination(for: ChatRoute.self) { route in
+        ChatScreen(client: client, events: connection.events, route: route)
+      }
+      .onAppear {
+        actions.focusHandler = { [model] action, target in model.perform(action, on: target) }
+        actions.onChange = { [model] _ in model.scheduleRefresh(after: .zero) }
+        // A fork opens at once, as the desktop's fork dialog does.
+        actions.onOpen = { id in path.append(.session(id)) }
+        model.appear(events: connection.events)
+      }
+      .onDisappear { model.disappear() }
+      .task {
+        // Tests can open a chat directly with `-session <id>`.
+        if !openedLaunchSession, let id = UserDefaults.standard.string(forKey: "session") {
+          openedLaunchSession = true
+          path = [.session(id)]
         }
-        .onAppear { model.appear(events: connection.events) }
-        .onDisappear { model.disappear() }
-        .task {
-          // Tests can open a chat directly with `-session <id>`.
-          if !openedLaunchSession, let id = UserDefaults.standard.string(forKey: "session") {
-            openedLaunchSession = true
-            path = [.session(id)]
-          }
-          await model.reload()
-        }
-        .task(id: model.searchText) {
-          try? await Task.sleep(for: .milliseconds(250))
+        if model.phase != .loaded { await model.reload() }
+      }
+      .task(id: connection.events.live) {
+        // The event stream is down: poll until it recovers.
+        guard !connection.events.live else { return }
+        while !Task.isCancelled {
+          try? await Task.sleep(for: .seconds(5))
           guard !Task.isCancelled else { return }
-          await model.applySearch()
+          await model.refresh()
         }
-        .task(id: connection.events.live) {
-          // The event stream is down: poll until it recovers.
-          guard !connection.events.live else { return }
-          while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled else { return }
-            await model.refresh()
-          }
-        }
-        .alert(
-          "Couldn’t update the thread",
-          isPresented: Binding(
-            get: { model.actionError != nil }, set: { if !$0 { model.actionError = nil } })
-        ) {
-          Button("OK", role: .cancel) {}
-        } message: {
-          Text(model.actionError ?? "")
-        }
-        .sheet(item: $sheet) { sheet in
-          switch sheet {
-          case .newChat:
-            NewChatSheet(model: model) { directory in
-              self.sheet = nil
-              path.append(.new(directory: directory))
-            }
-          case .settings:
-            SettingsView(client: client)
-          }
-        }
-    }
-  }
-
-  @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-    ToolbarItem(placement: .topBarLeading) {
-      Button("Settings", systemImage: "gearshape") { sheet = .settings }
-    }
-    ToolbarItem(placement: .topBarTrailing) {
-      ProjectFilterMenu(model: model)
-    }
-    DefaultToolbarItem(kind: .search, placement: .bottomBar)
-    ToolbarSpacer(.flexible, placement: .bottomBar)
-    ToolbarItem(placement: .bottomBar) {
-      Button("New Chat", systemImage: "square.and.pencil") { sheet = .newChat }
-        .accessibilityIdentifier("new-chat")
-    }
-  }
-}
-
-/// All projects, or one project's threads.
-private struct ProjectFilterMenu: View {
-  let model: HomeModel
-
-  var body: some View {
-    Menu {
-      Picker(
-        "Project",
-        selection: Binding(
-          get: { model.filter },
-          set: { directory in Task { await model.setFilter(directory) } })
+      }
+      .alert(
+        "Could not update this thread",
+        isPresented: Binding(
+          get: { model.actionError != nil }, set: { if !$0 { model.actionError = nil } })
       ) {
-        Label("All Projects", systemImage: "square.stack").tag(String?.none)
-        Section {
-          ForEach(model.projects) { project in
-            Label(project.displayName, systemImage: "folder").tag(Optional(project.canonical))
+        Button("OK", role: .cancel) {}
+      } message: {
+        Text(model.actionError ?? "")
+      }
+      .threadActionsHost(actions)
+      .sheet(item: $sheet) { sheet in
+        switch sheet {
+        case .newChat:
+          NewChatSheet(model: model) { directory in
+            self.sheet = nil
+            path.append(.new(directory: directory))
           }
+        case .search:
+          ThreadSearchSheet(client: client) { id in
+            self.sheet = nil
+            path.append(.session(id))
+          }
+        case .settings(let section):
+          SettingsView(client: client, section: section)
         }
       }
-    } label: {
-      Label(
-        "Filter by project",
-        systemImage: model.filter == nil
-          ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
     }
-    .accessibilityIdentifier("project-filter")
   }
-}
 
-/// The list itself, kept apart so search typing and sheets don't re-render rows.
-private struct ThreadList: View {
-  let model: HomeModel
-  let newChat: () -> Void
-
-  var body: some View {
-    TimelineView(.everyMinute) { context in
-      List {
-        if let error = model.refreshError {
-          Section {
-            Label {
-              VStack(alignment: .leading, spacing: 4) {
-                Text("Couldn’t refresh").font(.subheadline.weight(.semibold))
-                Text(error).font(.footnote).foregroundStyle(.secondary)
-              }
-            } icon: {
-              Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
-            }
-            Button("Retry") { Task { await model.refresh() } }
-          }
-        }
-        if let notice = model.searchNotice {
-          Section {
-            Label(notice, systemImage: "info.circle")
-              .font(.footnote)
-              .foregroundStyle(.secondary)
-          }
-        }
-        if !model.pinned.isEmpty {
-          Section("Pinned") {
-            ForEach(model.pinned) { item in
-              row(item, now: context.date)
-            }
-          }
-        }
-        Section {
-          ForEach(model.threads) { item in
-            row(item, now: context.date)
-          }
-          if model.hasMore { more }
-        } header: {
-          if !model.pinned.isEmpty, !model.threads.isEmpty { Text("Threads") }
-        }
-      }
-      .listStyle(.insetGrouped)
-    }
-    .refreshable { await model.reload() }
-    .overlay { overlay }
-    .safeAreaInset(edge: .bottom) {
+  /// The undo notice above the sidebar footer: Settings, and the usage shortcut.
+  private var footer: some View {
+    VStack(spacing: 6) {
       if let item = model.undoDone {
-        UndoBanner(title: item.title) { model.undo() }
-          .padding(.bottom, 8)
+        UndoNotice(undo: { model.undo() }, dismiss: { model.dismissUndo() })
+          .id(item.id)
           .transition(.move(edge: .bottom).combined(with: .opacity))
       }
+      HStack(spacing: 2) {
+        Button {
+          sheet = .settings(nil)
+        } label: {
+          Label("Settings", systemImage: "gearshape")
+            .labelStyle(NavLabelStyle())
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(.rect)
+        }
+        .buttonStyle(NavRowStyle())
+        .accessibilityIdentifier("settings")
+        Button {
+          sheet = .settings(.usage)
+        } label: {
+          Image(systemName: "gauge.with.dots.needle.33percent")
+            .font(.body)
+            .foregroundStyle(palette.color("text-secondary"))
+            .frame(width: 44, height: 44)
+            .contentShape(.rect)
+        }
+        .buttonStyle(IconButtonStyle())
+        .accessibilityLabel("Usage limits")
+      }
     }
+    .padding(.horizontal, 12)
+    .padding(.top, 6)
+    .background(palette.color("surface-under"))
     .animation(.default, value: model.undoDone?.id)
   }
+}
 
-  private func row(_ item: ThreadItem, now: Date) -> some View {
-    NavigationLink(value: ChatRoute.session(item.id)) {
-      ThreadRow(item: item, now: now)
-    }
-    .accessibilityIdentifier("thread-\(item.id)")
-    .swipeActions(edge: .leading) {
-      pinButton(item).tint(.orange)
-    }
-    .swipeActions(edge: .trailing) {
-      doneButton(item)
-    }
-    .contextMenu {
-      pinButton(item)
-      doneButton(item)
-    }
-  }
+/// The sidebar's identity row: the brand (a menu of settings sections) and search.
+private struct HomeHeader: View {
+  let search: () -> Void
+  let settings: (SettingsSection?) -> Void
+  @Environment(\.palette) private var palette
 
-  @ViewBuilder private func pinButton(_ item: ThreadItem) -> some View {
-    if item.pinned {
-      Button("Unpin", systemImage: "pin.slash") { model.perform(.unpin, on: item) }
-    } else {
-      Button("Pin", systemImage: "pin") { model.perform(.pin, on: item) }
-    }
-  }
-
-  @ViewBuilder private func doneButton(_ item: ThreadItem) -> some View {
-    if item.done {
-      Button("Not Done", systemImage: "arrow.uturn.backward") { model.perform(.undone, on: item) }
-        .tint(.gray)
-    } else if item.status != .running {
-      Button("Done", systemImage: "checkmark") { model.perform(.done, on: item) }
-        .tint(.green)
-    }
-  }
-
-  /// Loads the next page as it scrolls into view.
-  @ViewBuilder private var more: some View {
-    if let error = model.moreError {
-      Button {
-        Task { await model.loadMore() }
+  var body: some View {
+    HStack(spacing: 4) {
+      Menu {
+        // The desktop's brand menu, without the sections a phone can't use.
+        Button("Appearance") { settings(.appearance) }
+        Button("Usage") { settings(.usage) }
       } label: {
-        Label {
-          VStack(alignment: .leading) {
-            Text("Couldn’t load more threads. Retry")
-            Text(error).font(.footnote).foregroundStyle(.secondary)
-          }
-        } icon: {
-          Image(systemName: "arrow.clockwise")
+        HStack(spacing: 6) {
+          BrandIcon(size: 28)
+          Wordmark(height: 19)
+          DevelopmentBadge()
+          Image(systemName: "chevron.down")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(palette.color("text-tertiary"))
         }
+        .frame(minHeight: 44)
+        .contentShape(.rect)
       }
-    } else {
-      HStack {
-        Spacer()
-        ProgressView()
-        Spacer()
+      .accessibilityLabel("OpenCodex menu")
+      Spacer(minLength: 0)
+      Button(action: search) {
+        Image(systemName: "magnifyingglass")
+          .font(.body)
+          .foregroundStyle(palette.color("text-secondary"))
+          .frame(width: 44, height: 44)
+          .contentShape(.rect)
       }
-      .id(model.pageCount)
-      .task { await model.loadMore() }
+      .buttonStyle(IconButtonStyle())
+      .accessibilityLabel("Search threads")
+      .accessibilityIdentifier("search-threads")
     }
+    .padding(.leading, 20)
+    .padding(.trailing, 12)
+    .padding(.bottom, 4)
+    .background(palette.color("surface-under"))
   }
+}
 
-  @ViewBuilder private var overlay: some View {
-    let empty = model.pinned.isEmpty && model.threads.isEmpty
-    switch model.phase {
-    case .loading where empty:
-      ProgressView()
-    case .failed(let message) where empty:
-      ContentUnavailableView {
-        Label("Couldn’t Load Threads", systemImage: "wifi.exclamationmark")
-      } description: {
-        Text(message)
-      } actions: {
-        Button("Try Again") { Task { await model.reload() } }
-          .buttonStyle(.borderedProminent)
+/// "Dev" on development builds, like the desktop's `DevelopmentBadge`.
+struct DevelopmentBadge: View {
+  @Environment(\.palette) private var palette
+
+  var body: some View {
+    #if DEBUG
+      Text("Dev")
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundStyle(palette.color("on-project"))
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(palette.color("project-blue"), in: .rect(cornerRadius: 4))
+    #endif
+  }
+}
+
+/// The desktop's `.thread-undo`: "Marked as done" with Undo and dismiss.
+private struct UndoNotice: View {
+  let undo: () -> Void
+  let dismiss: () -> Void
+  @Environment(\.palette) private var palette
+
+  var body: some View {
+    HStack(spacing: 2) {
+      Text("Marked as done")
+        .font(.subheadline)
+        .foregroundStyle(palette.color("text-secondary"))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, 12)
+      Button("Undo", action: undo)
+        .font(.subheadline.weight(.medium))
+        .foregroundStyle(palette.color("text"))
+        .padding(.horizontal, 12)
+        .frame(minHeight: 40)
+        .buttonStyle(IconButtonStyle())
+      Button(action: dismiss) {
+        Image(systemName: "xmark")
+          .font(.caption.weight(.semibold))
+          .foregroundStyle(palette.color("text-secondary"))
+          .frame(width: 40, height: 40)
+          .contentShape(.rect)
       }
-    case .loaded where empty:
-      if model.searching {
-        ContentUnavailableView.search(text: model.searchText)
-      } else {
-        ContentUnavailableView {
-          Label("No Threads", systemImage: "bubble.left.and.bubble.right")
-        } description: {
-          Text(
-            model.filter == nil
-              ? "Chats you start on this phone or your computer appear here."
-              : "No open threads in \(model.filterName ?? "this project").")
-        } actions: {
-          Button("New Chat", action: newChat)
-            .buttonStyle(.borderedProminent)
-        }
-      }
-    default:
-      EmptyView()
+      .buttonStyle(IconButtonStyle())
+      .accessibilityLabel("Dismiss")
+    }
+    .background(palette.color("elevated"), in: .rect(cornerRadius: 10, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: 10, style: .continuous)
+        .strokeBorder(palette.color("border"))
     }
   }
 }
 
-/// "Marked done" with an Undo button, for a few seconds after a Done.
-private struct UndoBanner: View {
-  let title: String
-  let undo: () -> Void
+/// Icon and title in `text-secondary`, like `.nav-row`.
+struct NavLabelStyle: LabelStyle {
+  @Environment(\.palette) private var palette
 
-  var body: some View {
+  func makeBody(configuration: Configuration) -> some View {
     HStack(spacing: 12) {
-      Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-      Text("Marked “\(title)” done")
-        .font(.subheadline)
-        .lineLimit(1)
-      Spacer(minLength: 0)
-      Button("Undo", action: undo)
-        .font(.subheadline.weight(.semibold))
+      configuration.icon
+        .frame(width: 22)
+      configuration.title
     }
-    .padding(.horizontal, 16)
-    .padding(.vertical, 12)
-    .glassEffect(.regular, in: .capsule)
-    .padding(.horizontal, 16)
+    .font(.body)
+    .foregroundStyle(palette.color("text-secondary"))
+  }
+}
+
+/// Ghost icon buttons press to `hover`.
+struct IconButtonStyle: ButtonStyle {
+  @Environment(\.palette) private var palette
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .background(
+        configuration.isPressed ? palette.color("hover") : .clear,
+        in: .rect(cornerRadius: 8, style: .continuous))
   }
 }

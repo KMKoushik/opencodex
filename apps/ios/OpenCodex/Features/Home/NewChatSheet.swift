@@ -1,47 +1,54 @@
 import SwiftUI
 
-/// Picks the project for a new chat, most recently active first.
+/// Picks the project for a new thread, most recently active first.
 struct NewChatSheet: View {
   let model: HomeModel
   let start: (_ directory: String) -> Void
   @Environment(\.dismiss) private var dismiss
-
-  private var projects: [HomeProject] {
-    model.projects.sorted { $0.activeAt > $1.activeAt }
-  }
+  @Environment(\.palette) private var palette
 
   var body: some View {
     NavigationStack {
-      List(projects) { project in
+      List(model.projects) { project in
         Button {
           start(project.canonical)
         } label: {
           HStack(spacing: 12) {
-            Image(systemName: "folder")
-              .foregroundStyle(Color.accentColor)
-              .frame(width: 28)
+            ProjectIcon(
+              badge: ProjectBadge(name: project.displayName, icon: project.icon), size: 28)
             VStack(alignment: .leading, spacing: 2) {
               Text(project.displayName)
-                .foregroundStyle(.primary)
+                .foregroundStyle(palette.color("text"))
               Text(Self.abbreviated(project.canonical))
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(palette.color("text-tertiary"))
                 .lineLimit(1)
                 .truncationMode(.head)
             }
+            Spacer(minLength: 0)
           }
+          .frame(minHeight: 52)
+          .contentShape(.rect)
         }
-        .tint(.primary)
+        .buttonStyle(NavRowStyle())
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
         .accessibilityIdentifier("project-\(project.displayName)")
       }
+      .listStyle(.plain)
+      .scrollContentBackground(.hidden)
+      .background(palette.color("surface"))
       .overlay {
-        if projects.isEmpty {
-          ContentUnavailableView(
-            "No Projects", systemImage: "folder",
-            description: Text("Open a project on your computer, then start a chat here."))
+        if model.projects.isEmpty {
+          Text("Open a project on your computer, then start a thread here.")
+            .font(.subheadline)
+            .foregroundStyle(palette.color("text-tertiary"))
+            .multilineTextAlignment(.center)
+            .padding(32)
         }
       }
-      .navigationTitle("New Chat")
+      .navigationTitle("New thread")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
