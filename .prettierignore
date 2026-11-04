@@ -12,3 +12,7 @@ packages/gateway/src/tasks-plugin.generated.ts
 packages/gateway/src/canvas-plugin.generated.ts
 packages/gateway/src/canvas-runtime.generated.ts
 packages/gateway/src/canvas-types.generated.ts
+apps/ios/OpenCodexTests/Fixtures/
+apps/ios/OpenCodex/Assets.xcassets/
+apps/ios/build/
+apps/ios/OpenCodex.xcodeproj/

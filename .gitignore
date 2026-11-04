@@ -15,3 +15,6 @@ playwright-report/
 .playwright-cli/
 packages/gateway/src/canvas-*.generated.ts
 !packages/gateway/src/canvas-plugin.generated.ts
+apps/ios/OpenCodex.xcodeproj/
+apps/ios/Config/Local.xcconfig
+apps/ios/build/
