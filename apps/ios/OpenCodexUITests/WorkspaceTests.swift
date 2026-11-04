@@ -15,8 +15,11 @@ nonisolated final class WorkspaceTests: XCTestCase {
     addTeardownBlock { try? FileManager.default.removeItem(at: file) }
     let session = try await gateway.createSession()
 
-    let app = XCUIApplication.opencodex(["-session", session, "-workspace", "YES"])
+    let app = XCUIApplication.opencodex(["-session", session])
     app.launch()
+    let open = app.buttons["workspace-open"]
+    XCTAssertTrue(open.waitForExistence(timeout: 15))
+    open.tap()
 
     let changes = app.buttons["workspace-changes"]
     XCTAssertTrue(changes.waitForExistence(timeout: 15), "The workspace should open")

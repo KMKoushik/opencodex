@@ -173,14 +173,9 @@ extension ChatModel {
   /// command, skill or mentions post directly once the thread exists; the events that follow
   /// refresh the chat.
   func send(_ prompt: ComposerPrompt) async throws {
-    guard let id = sessionID, !prompt.isPlain else {
-      if sessionID == nil, prompt.command != nil || prompt.skill != nil {
-        throw ComposerFailure("Send a message first, then run this command.")
-      }
-      try await send(prompt.text, model: prompt.model, files: prompt.files ?? [])
-      return
-    }
-    _ = try await client.post("/sessions/\(id)/prompt", prompt, as: JSONValue.self)
+    // One path for plain and rich prompts: drafts get their chat (and worktree) first, and
+    // the transcript jumps to the end.
+    try await send(body: prompt, model: prompt.model)
   }
 
   private func runLocal(
@@ -306,10 +301,3 @@ extension ChatModel {
 }
 
 /// The system share sheet, for exported threads.
-struct ShareSheet: UIViewControllerRepresentable {
-  let url: URL
-  func makeUIViewController(context: Context) -> UIActivityViewController {
-    UIActivityViewController(activityItems: [url], applicationActivities: nil)
-  }
-  func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
-}

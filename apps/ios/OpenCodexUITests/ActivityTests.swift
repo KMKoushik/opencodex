@@ -9,7 +9,7 @@ nonisolated final class ActivityTests: XCTestCase {
   private let directory =
     ProcessInfo.processInfo.environment["OPENCODEX_SHELL_PROJECT"]
     ?? "/private/var/folders/vc/0tczn37n3wn7qz1g3g1933_40000gn/T/opencode/ocios/home-demo"
-  private let model = ["id": "deepseek-v4.1-flash-free", "providerID": "opencode"]
+  private let model = ["id": "scripted", "providerID": "fake"]
 
   override func setUp() {
     continueAfterFailure = false
@@ -23,8 +23,8 @@ nonisolated final class ActivityTests: XCTestCase {
     _ = try await post(
       "/api/sessions/\(id)/prompt",
       [
-        "text": "Run exactly this with your shell tool in the foreground: sleep 120 && echo done. "
-          + "If it is stopped, don't run it again; just reply stopped.",
+        // The test server's scripted model runs `run:` commands with its shell tool.
+        "text": "run: sleep 120 && echo done",
         "model": model,
       ])
 

@@ -15,14 +15,16 @@ struct ChatScreen: View {
   @State private var projects: [SessionDetails.Project]?
   @State private var showDetails = false
   @State private var showSubagents = false
+  /// The open workspace panel, on Files or Changes.
+  @State private var workspace: WorkspaceModel.Segment?
   @Environment(\.palette) private var palette
   /// The desktop's thread menu, with its rename alert, export sheet and errors on this screen.
   @State private var threadActions: ThreadActions
   /// Opens another thread, e.g. a fork just made.
-  private let open: ((String) -> Void)?
+  private let open: ((ChatRoute) -> Void)?
 
   init(
-    client: GatewayClient, events: EventHub, route: ChatRoute, open: ((String) -> Void)? = nil
+    client: GatewayClient, events: EventHub, route: ChatRoute, open: ((ChatRoute) -> Void)? = nil
   ) {
     _threadActions = State(initialValue: ThreadActions(client: client))
     self.open = open
@@ -44,18 +46,30 @@ struct ChatScreen: View {
       .threadActionsHost(threadActions)
       .onAppear {
         threadActions.onChange = { [model] _ in model.refreshSession() }
-        threadActions.onOpen = open
+        threadActions.onOpen = open.map { open in { open(.session($0)) } }
       }
       .sheet(isPresented: $showDetails) {
         if let id = model.sessionID {
           SessionDetailsSheet(chat: model, sessionID: id, projectName: projectName) { panel in
-            guard panel == "subagents" else { return }
             showDetails = false
-            showSubagents = true
+            if panel == "subagents" { showSubagents = true }
+            if panel == "changes" { workspace = .changes }
           }
         }
       }
       .sheet(isPresented: $showSubagents) { SubagentsSheet(model: model) }
+      .fullScreenCover(item: $workspace) { segment in
+        if let directory {
+          WorkspaceView(
+            client: model.client, events: model.events, directory: directory, segment: segment)
+        }
+      }
+      // `/new` and forks from the composer open threads, like the desktop.
+      .environment(
+        \.composerNavigation,
+        ComposerNavigation(
+          newThread: directory.map { directory in { open?(.new(directory: directory)) } },
+          openSession: { id in open?(.session(id)) }))
       // Restarts when the draft moves to another project, which makes a new model.
       .task(id: ObjectIdentifier(model)) { await model.run() }
       .task(id: model.session?.time.idle) { await model.markViewed() }
@@ -102,6 +116,12 @@ struct ChatScreen: View {
           Label("Thread actions", systemImage: "ellipsis")
         }
         .accessibilityIdentifier("chat.actions")
+      }
+      ToolbarItem(placement: .topBarTrailing) {
+        // The desktop rail's Files and Changes.
+        Button("Workspace", systemImage: "folder") { workspace = .files }
+          .disabled(directory == nil)
+          .accessibilityIdentifier("workspace-open")
       }
       ToolbarItem(placement: .topBarTrailing) {
         // The desktop rail's subagents button, with its running-count badge.

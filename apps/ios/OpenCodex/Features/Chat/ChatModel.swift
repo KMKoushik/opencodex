@@ -140,6 +140,17 @@ final class ChatModel {
 
   /// Sends a message: creates the chat first if it's a draft. Mid-run messages steer the reply.
   func send(_ text: String, model: ModelRef?, files: [GatewayClient.Prompt.File] = []) async throws {
+    try await prepare(model: model)
+    guard let id = sessionID else { return }
+    sends += 1
+    _ = try await client.prompt(
+      id, .init(text: text, model: model, files: files.isEmpty ? nil : files))
+    running = true
+    schedule([.messages, .inbox, .active, .session])
+  }
+
+  /// Creates a draft's chat, and moves it into its worktree, before the first prompt.
+  private func prepare(model: ModelRef?) async throws {
     if sessionID == nil, let directory {
       let created = try await client.createSession(directory: directory, model: model)
       sessionID = created.id
@@ -158,10 +169,15 @@ final class ChatModel {
       session = try await client.startWorktree(id, branch: worktree.branch)
       self.worktree = nil
     }
+  }
+
+  /// Sends any `/prompt` body (text with commands, skills or mentions), creating the chat first
+  /// if it's a draft, exactly like `send(_:model:files:)`.
+  func send(body: some Encodable & Sendable, model: ModelRef?) async throws {
+    try await prepare(model: model)
     guard let id = sessionID else { return }
     sends += 1
-    _ = try await client.prompt(
-      id, .init(text: text, model: model, files: files.isEmpty ? nil : files))
+    _ = try await client.post("/sessions/\(id)/prompt", body, as: JSONValue.self)
     running = true
     schedule([.messages, .inbox, .active, .session])
   }

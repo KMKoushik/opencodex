@@ -7,7 +7,10 @@ import Observation
 /// follow `revision`.
 @Observable
 final class WorkspaceModel {
-  enum Segment: String { case files, changes }
+  enum Segment: String, Identifiable {
+    case files, changes
+    var id: String { rawValue }
+  }
 
   let client: GatewayClient
   let events: EventHub

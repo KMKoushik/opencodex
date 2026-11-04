@@ -41,11 +41,12 @@ nonisolated final class FlowTests: XCTestCase {
     // The agent may ask again (e.g. to `cat` the file); approve until the reply finishes,
     // when Send replaces Stop and the turn header settles.
     let deadline = Date.now.addingTimeInterval(120)
-    while !app.buttons["composer.send"].exists, Date.now < deadline {
+    // Send stays beside Stop, as on the desktop, so wait for Stop to go away.
+    while app.buttons["composer.stop"].exists, Date.now < deadline {
       if card.exists, app.buttons["permission.once"].isHittable { app.buttons["permission.once"].tap() }
-      _ = app.buttons["composer.send"].waitForExistence(timeout: 2)
+      _ = app.buttons["composer.stop"].waitForNonExistence(timeout: 2)
     }
-    XCTAssertTrue(app.buttons["composer.send"].exists, "The reply should finish")
+    XCTAssertFalse(app.buttons["composer.stop"].exists, "The reply should finish")
     XCTAssertTrue(
       app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Worked for'")).firstMatch
         .waitForExistence(timeout: 90))

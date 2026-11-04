@@ -49,7 +49,7 @@ struct HomeView: View {
       .toolbar(.hidden, for: .navigationBar)
       .navigationTitle("Threads")
       .navigationDestination(for: ChatRoute.self) { route in
-        ChatScreen(client: client, events: connection.events, route: route) { path.append(.session($0)) }
+        ChatScreen(client: client, events: connection.events, route: route) { path.append($0) }
       }
       .onAppear {
         actions.focusHandler = { [model] action, target in model.perform(action, on: target) }

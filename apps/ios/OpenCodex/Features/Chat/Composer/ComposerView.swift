@@ -98,7 +98,7 @@ private struct ComposerBody: View {
       .presentationDragIndicator(.visible)
     }
     .sheet(item: $exported) { file in
-      ShareSheet(url: file.url)
+      ShareSheet(items: [file.url])
         .presentationDetents([.medium, .large])
     }
     .photosPicker(

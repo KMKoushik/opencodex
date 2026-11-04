@@ -14,8 +14,15 @@ struct WorkspaceView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(\.palette) private var palette
 
-  init(client: GatewayClient, events: EventHub, directory: String) {
-    _model = State(initialValue: WorkspaceModel(client: client, events: events, directory: directory))
+  /// `segment` opens on Files or Changes, e.g. from Session details' changes row; nil keeps
+  /// the last one used.
+  init(
+    client: GatewayClient, events: EventHub, directory: String,
+    segment: WorkspaceModel.Segment? = nil
+  ) {
+    let model = WorkspaceModel(client: client, events: events, directory: directory)
+    if let segment { model.segment = segment }
+    _model = State(initialValue: model)
   }
 
   var body: some View {
