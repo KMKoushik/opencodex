@@ -19,6 +19,7 @@ export const preferenceInputSchema = z.object({
     'focusExcluded',
     'sessionWorkbench',
     'notifications',
+    'activityTrayOpen',
   ]),
   value: z.string().max(16_384).nullable(),
 });
@@ -45,6 +46,7 @@ export function createPreferences() {
       focusExcluded: { type: ['string', 'null'] },
       sessionWorkbench: { type: ['string', 'null'] },
       notifications: { type: ['string', 'null'] },
+      activityTrayOpen: { enum: ['true', 'false', null] },
     },
     accessPropertiesByDotNotation: false,
     clearInvalidConfig: true,

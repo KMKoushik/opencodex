@@ -99,7 +99,8 @@ export type PreferenceKey =
   | 'pinnedThreads'
   | 'focusExcluded'
   | 'sessionWorkbench'
-  | 'notifications';
+  | 'notifications'
+  | 'activityTrayOpen';
 export type DesktopPreferences = Record<
   Exclude<
     PreferenceKey,
@@ -115,6 +116,7 @@ export type DesktopPreferences = Record<
     | 'focusExcluded'
     | 'sessionWorkbench'
     | 'notifications'
+    | 'activityTrayOpen'
   >,
   string | null
 > & {
@@ -130,6 +132,7 @@ export type DesktopPreferences = Record<
   focusExcluded?: string | null;
   sessionWorkbench?: string | null;
   notifications?: string | null;
+  activityTrayOpen?: string | null;
 };
 
 export const openAppIDs = [

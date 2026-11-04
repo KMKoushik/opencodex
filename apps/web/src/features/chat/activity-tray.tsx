@@ -1,7 +1,8 @@
-import { useId, useState, type CSSProperties } from 'react';
+import { useId, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { ArrowRight01Icon, BotIcon, CommandLineIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
+import { readStorage, writeStorage } from '../../lib/storage';
 import { cn } from '../../lib/utils';
 import { useSubagentActivity } from '../subagents/subagent-attention';
 import { SubagentRows } from '../subagents/subagent-rows';
@@ -14,6 +15,27 @@ import { blocksReply, type BlockingWork } from './blocking-work';
 import './activity-tray.css';
 
 type Tab = 'subagents' | 'shell';
+
+// One app-wide disclosure, collapsed by default; the tray remounts with each chat.
+let trayOpen: boolean | undefined;
+const trayListeners = new Set<() => void>();
+
+function getTrayOpen() {
+  trayOpen ??= readStorage('activityTrayOpen') === 'true';
+  return trayOpen;
+}
+
+function subscribeTray(listener: () => void) {
+  trayListeners.add(listener);
+  return () => trayListeners.delete(listener);
+}
+
+function setTrayOpen(open: boolean) {
+  if (open === getTrayOpen()) return;
+  trayOpen = open;
+  writeStorage('activityTrayOpen', String(open));
+  for (const listener of trayListeners) listener();
+}
 
 /** Shared activity chrome; query updates and row timers never render the transcript. */
 export function ActivityTray({
@@ -40,7 +62,7 @@ export function ActivityTray({
   const shells = useRunningShells(directory, sessionID, live);
   const items = shells.data ?? [];
   const [selected, setSelected] = useState<Tab>();
-  const [open, setOpen] = useState(true);
+  const open = useSyncExternalStore(subscribeTray, getTrayOpen);
   const [shellID, setShellID] = useState<string>();
   const id = useId();
   const hasSubagents = subagents.failed || subagents.items.length > 0;
@@ -68,7 +90,7 @@ export function ActivityTray({
     .join(' · ');
   const select = (value: Tab) => {
     setSelected(value);
-    setOpen(true);
+    setTrayOpen(true);
   };
   return (
     <>
@@ -174,7 +196,7 @@ export function ActivityTray({
                 aria-label={open ? 'Collapse running activity' : 'Expand running activity'}
                 aria-expanded={open}
                 aria-controls={`${id}-${tab}-panel`}
-                onClick={() => setOpen(!open)}
+                onClick={() => setTrayOpen(!open)}
               >
                 <HugeiconsIcon
                   icon={ArrowRight01Icon}
