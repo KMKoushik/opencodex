@@ -112,6 +112,8 @@ struct ChatScreen: View {
       ToolbarItem(placement: .topBarTrailing) {
         Menu {
           if let target { ThreadActionsMenu(actions: threadActions, target: target) }
+          Divider()
+          Button("Subagents", systemImage: ActivitySymbol.subagent) { showSubagents = true }
         } label: {
           Label("Thread actions", systemImage: "ellipsis")
         }
@@ -123,18 +125,21 @@ struct ChatScreen: View {
           .disabled(directory == nil)
           .accessibilityIdentifier("workspace-open")
       }
-      ToolbarItem(placement: .topBarTrailing) {
-        // The desktop rail's subagents button, with its running-count badge.
-        Button {
-          showSubagents = true
-        } label: {
-          Image(systemName: ActivitySymbol.subagent)
-            .overlay(alignment: .topTrailing) {
-              RunningSubagentsBadge(model: model).offset(x: 8, y: -6)
-            }
+      // The desktop rail's subagents button with its running-count badge, while any run; the
+      // phone's narrow toolbar keeps it in the "…" menu otherwise.
+      if subagentsRunning {
+        ToolbarItem(placement: .topBarTrailing) {
+          Button {
+            showSubagents = true
+          } label: {
+            Image(systemName: ActivitySymbol.subagent)
+              .overlay(alignment: .topTrailing) {
+                RunningSubagentsBadge(model: model).offset(x: 8, y: -6)
+              }
+          }
+          .accessibilityLabel("Subagents")
+          .accessibilityIdentifier("chat.subagents")
         }
-        .accessibilityLabel("Subagents")
-        .accessibilityIdentifier("chat.subagents")
       }
       ToolbarItem(placement: .topBarTrailing) {
         Button("Session details", systemImage: "info.circle") { showDetails = true }
@@ -142,6 +147,8 @@ struct ChatScreen: View {
       }
     }
   }
+
+  private var subagentsRunning: Bool { !ActivityModel.shared(for: model).subagents.isEmpty }
 
   private var title: String { model.sessionID == nil ? "New thread" : model.title }
 
