@@ -72,9 +72,6 @@ final class HomeModel {
   @ObservationIgnored private var staleExtras: Set<String> = []
   @ObservationIgnored private lazy var pinIndex = PinIndex(gateway: client.base)
 
-  /// The gateway's page size; a shorter page is the last one.
-  private static let pageSize = 50
-
   init(client: GatewayClient) {
     self.client = client
   }
@@ -206,8 +203,9 @@ final class HomeModel {
   }
 
   private static func more(_ page: SessionPage) -> Bool {
-    // Native cursors mark an anchor even on the last page.
-    page.nextCursor != nil && page.sessions.count >= pageSize
+    // Native cursors mark an anchor even on the last page, and the gateway drops side chats
+    // from pages, so a short page isn't the end. Follow the cursor until a page comes back empty.
+    page.nextCursor != nil && !page.sessions.isEmpty
   }
 
   func loadMore() async {
