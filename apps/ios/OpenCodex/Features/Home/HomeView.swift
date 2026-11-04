@@ -7,6 +7,8 @@ struct HomeView: View {
   @Environment(ConnectionStore.self) private var connection
   @State private var model: HomeModel
   @State private var path: [ChatRoute] = []
+  /// `-session` opens its chat once per launch, so Back can leave it.
+  @State private var openedLaunchSession = false
   @State private var sheet: Sheet?
 
   private enum Sheet: String, Identifiable {
@@ -33,7 +35,8 @@ struct HomeView: View {
         .onDisappear { model.disappear() }
         .task {
           // Tests can open a chat directly with `-session <id>`.
-          if let id = UserDefaults.standard.string(forKey: "session"), path.isEmpty {
+          if !openedLaunchSession, let id = UserDefaults.standard.string(forKey: "session") {
+            openedLaunchSession = true
             path = [.session(id)]
           }
           await model.reload()

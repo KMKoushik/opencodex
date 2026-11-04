@@ -71,6 +71,8 @@ nonisolated struct PermissionSummary {
 struct PermissionCard: View {
   let model: ChatModel
   let request: PermissionRequest
+  /// Like the desktop: Always allow only when the request names patterns to save.
+  private var canAlways: Bool { !(request.save ?? []).isEmpty }
 
   @State private var busy: PermissionDecision?
   @State private var error: String?
@@ -116,13 +118,13 @@ struct PermissionCard: View {
       ViewThatFits(in: .horizontal) {
         HStack(spacing: 8) {
           decision(.reject, "Reject", role: .destructive)
-          decision(.always, "Always allow")
+          if canAlways { decision(.always, "Always allow") }
           decision(.once, "Allow once", prominent: true)
         }
         .controlSize(.regular)
         VStack(spacing: 8) {
           decision(.once, "Allow once", prominent: true)
-          decision(.always, "Always allow")
+          if canAlways { decision(.always, "Always allow") }
           decision(.reject, "Reject", role: .destructive)
         }
         .controlSize(.large)

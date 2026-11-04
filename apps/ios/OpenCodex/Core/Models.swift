@@ -137,6 +137,9 @@ nonisolated struct PermissionRequest: Codable, Hashable, Identifiable, Sendable 
   var sessionID: String
   var action: String
   var resources: [String]?
+  /// Patterns an "Always allow" reply would save; empty means it can only be allowed once.
+  var save: [String]?
+  var message: String?
   var metadata: [String: JSONValue]?
 }
 
