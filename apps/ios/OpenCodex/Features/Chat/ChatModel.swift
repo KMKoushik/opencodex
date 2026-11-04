@@ -214,6 +214,9 @@ final class ChatModel {
     } catch { self.error = error.localizedDescription }
   }
 
+  /// Refetches the thread's info, e.g. after a rename, pin or mute from its menu.
+  func refreshSession() { schedule([.session]) }
+
   /// Marks the finished reply read, like the desktop app does while a chat is on screen.
   func markViewed() async {
     guard let id = sessionID, let idle = session?.time.idle, idle > (session?.time.viewed ?? 0)

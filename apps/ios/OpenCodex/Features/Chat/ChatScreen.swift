@@ -10,27 +10,28 @@ enum ChatRoute: Hashable {
 /// One chat: the transcript (or, for an unsent draft, the new-thread hero), with pending
 /// requests and the composer docked at the bottom. The toolbar matches the desktop's: the
 /// project / title breadcrumb, the thread actions "…" menu and Session details.
-///
-/// `actions` supplies the "…" menu's items, so the shared thread actions can plug in.
-struct ChatScreen<Actions: View>: View {
+struct ChatScreen: View {
   @State private var model: ChatModel
   @State private var projects: [SessionDetails.Project]?
   @State private var showDetails = false
   @State private var showSubagents = false
   @Environment(\.palette) private var palette
-  private let actions: (ChatModel) -> Actions
+  /// The desktop's thread menu, with its rename alert, export sheet and errors on this screen.
+  @State private var threadActions: ThreadActions
+  /// Opens another thread, e.g. a fork just made.
+  private let open: ((String) -> Void)?
 
   init(
-    client: GatewayClient, events: EventHub, route: ChatRoute,
-    @ViewBuilder actions: @escaping (ChatModel) -> Actions
+    client: GatewayClient, events: EventHub, route: ChatRoute, open: ((String) -> Void)? = nil
   ) {
+    _threadActions = State(initialValue: ThreadActions(client: client))
+    self.open = open
     switch route {
     case .session(let id):
       _model = State(initialValue: ChatModel(client: client, events: events, sessionID: id))
     case .new(let directory):
       _model = State(initialValue: ChatModel(client: client, events: events, directory: directory))
     }
-    self.actions = actions
   }
 
   var body: some View {
@@ -40,6 +41,11 @@ struct ChatScreen<Actions: View>: View {
       .navigationTitle(title)
       .navigationBarTitleDisplayMode(.inline)
       .toolbar { toolbar }
+      .threadActionsHost(threadActions)
+      .onAppear {
+        threadActions.onChange = { [model] _ in model.refreshSession() }
+        threadActions.onOpen = open
+      }
       .sheet(isPresented: $showDetails) {
         if let id = model.sessionID {
           SessionDetailsSheet(chat: model, sessionID: id, projectName: projectName) { panel in
@@ -91,7 +97,7 @@ struct ChatScreen<Actions: View>: View {
     if model.sessionID != nil {
       ToolbarItem(placement: .topBarTrailing) {
         Menu {
-          actions(model)
+          if let target { ThreadActionsMenu(actions: threadActions, target: target) }
         } label: {
           Label("Thread actions", systemImage: "ellipsis")
         }
@@ -143,8 +149,13 @@ struct ChatScreen<Actions: View>: View {
   }
 }
 
-extension ChatScreen where Actions == ThreadMenuPlaceholder {
-  init(client: GatewayClient, events: EventHub, route: ChatRoute) {
-    self.init(client: client, events: events, route: route) { ThreadMenuPlaceholder(model: $0) }
+extension ChatScreen {
+  /// This thread as the shared thread menu sees it.
+  fileprivate var target: ThreadActionTarget? {
+    guard let info = model.session else { return nil }
+    let thread = ThreadSession(info)
+    return ThreadActionTarget(
+      id: thread.id, title: thread.title, pinned: thread.pinned != nil, done: thread.settled,
+      muted: thread.muted == true, running: model.running)
   }
 }

@@ -38,14 +38,3 @@ struct ChatTitle: View {
     .accessibilityIdentifier("chat.title")
   }
 }
-
-/// The "…" button's menu until the shared thread actions are plugged in.
-struct ThreadMenuPlaceholder: View {
-  let model: ChatModel
-
-  var body: some View {
-    if let id = model.sessionID {
-      Button("Copy Thread ID", systemImage: "doc.on.doc") { UIPasteboard.general.string = id }
-    }
-  }
-}

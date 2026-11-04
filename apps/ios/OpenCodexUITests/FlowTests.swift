@@ -23,7 +23,8 @@ nonisolated final class FlowTests: XCTestCase {
       app.textViews["composer.input"].exists
       ? app.textViews["composer.input"] : app.textFields["composer.input"]
     input.tap()
-    input.typeText("Create a file named \(name) containing exactly the line: hello from the phone")
+    // The test server's scripted model writes the file with its write tool.
+    input.typeText("write \(name): hello from the phone")
     app.buttons["composer.send"].tap()
 
     let card = app.descendants(matching: .any)["request.permission"]
@@ -48,6 +49,10 @@ nonisolated final class FlowTests: XCTestCase {
     XCTAssertTrue(
       app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Worked for'")).firstMatch
         .waitForExistence(timeout: 90))
+
+    // The chat's "…" menu is the desktop's thread menu.
+    app.buttons["chat.actions"].tap()
+    XCTAssertTrue(app.buttons["Rename thread"].waitForExistence(timeout: 5))
     try? FileManager.default.removeItem(at: file)
   }
 
