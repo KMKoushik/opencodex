@@ -29,17 +29,39 @@ targets:
     platform: iOS
     sources:
       - path: OpenCodex
+      # The Live Activity's attributes, shared with the widget extension.
+      - path: OpenCodexActivity/ReplyActivityAttributes.swift
     dependencies:
       - package: Markdown
       - package: SwiftTerm
+      - target: OpenCodexActivity
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.kmkoushik.opencodex
         INFOPLIST_FILE: OpenCodex/Info.plist
+        # Push notifications (APNs). The Live Activity needs no App Group: ActivityKit hands the
+        # extension its attributes and state.
+        CODE_SIGN_ENTITLEMENTS: Config/OpenCodex.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
         CURRENT_PROJECT_VERSION: 1
         MARKETING_VERSION: 0.1.0
+  OpenCodexActivity:
+    # The running-reply Live Activity (WidgetKit). Its bundle ID sits under the app's, so
+    # automatic signing with the app's team covers it.
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: OpenCodexActivity
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kmkoushik.opencodex.activity
+        INFOPLIST_FILE: OpenCodexActivity/Info.plist
+        CODE_SIGN_STYLE: Automatic
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.1.0
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
   OpenCodexTests:
     type: bundle.unit-test
     platform: iOS

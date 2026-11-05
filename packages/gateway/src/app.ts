@@ -40,12 +40,13 @@ import { CANVAS_ROOT, canvasRoutes, canvasRuntimeRoutes, createCanvasWatcher } f
 import { canvasPluginRoutes } from './canvas-plugin';
 import { Apps } from './apps';
 import { type RemoteAccess, remoteDenial, remoteRequest, remoteRoutes } from './remote';
+import { Push, pushRoutes } from './push';
 import { appModelUpdateSchema, canvasIconUpdateSchema } from '@opencodex/contracts/canvas';
 
 export function createApp(
   backend = new OpenCodeBackend(),
   shutdown = new AbortController().signal,
-  options: { triggers?: boolean; remote?: RemoteAccess } = {},
+  options: { triggers?: boolean; remote?: RemoteAccess; push?: Push } = {},
 ) {
   const app = new Hono();
 
@@ -75,7 +76,13 @@ export function createApp(
     await next();
   });
 
-  if (options.remote) app.route('/api/remote', remoteRoutes(options.remote));
+  if (options.remote) {
+    // push.json lives beside remote.json, so a gateway with a test folder never reads ~/.opencodex.
+    const push = options.push ?? new Push(options.remote, backend);
+    options.remote.onClaim(() => void push.refresh(shutdown));
+    app.route('/api/remote', pushRoutes(push, options.remote, shutdown));
+    app.route('/api/remote', remoteRoutes(options.remote));
+  }
   app.get('/api/connection', async (c) => c.json(await backend.connection()));
   app.post('/api/connection', async (c) => c.json(await backend.connection(true)));
   app.route('/api/terminals', terminalRoutes(backend));
