@@ -65,6 +65,10 @@ ENABLE_TESTABILITY=YES`). Release-only crashes have happened (see Known issues).
       for 5 minutes, progressive loads, prefetch of the top 6 threads, 400 ms spinner delay.
       Modelled on T3 Code's mobile cache.
 
+- [~] Camera / Photo Library sometimes open nothing on device (never reproduced in the
+  simulator). Build 160 presents both from UIKit's topmost controller after any running
+  transition instead of SwiftUI modifiers; awaiting owner confirmation.
+
 ## In progress
 
 - [ ] Notifications: in-app notifications, APNs push from the owner's gateway, and a Live
