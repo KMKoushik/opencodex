@@ -77,10 +77,7 @@ extension XCUIApplication {
 
   var transcript: XCUIElement { collectionViews["transcript"] }
 
-  /// The composer's input, a text view or a text field depending on its state.
-  var composerInput: XCUIElement {
-    textViews["composer.input"].exists ? textViews["composer.input"] : textFields["composer.input"]
-  }
+  // `composerInput` is shared from ComposerTests.swift.
 
   /// Pastes the clipboard into the composer and returns what it then holds, which shows what
   /// a Copy action put on the clipboard without asking the system for paste access.

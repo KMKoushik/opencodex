@@ -51,7 +51,7 @@ nonisolated final class PairingTests: XCTestCase {
     host.tap()
     host.typeText("http://ox.example.com")
     XCTAssertTrue(app.staticTexts["Use an https address, like ox.example.com."].waitForExistence(timeout: 3))
-    host.clear()
+    host.clearField()
     host.typeText("ox.example.com")
     XCTAssertTrue(app.staticTexts["Use an https address, like ox.example.com."].waitForNonExistence(timeout: 3))
 
@@ -62,10 +62,10 @@ nonisolated final class PairingTests: XCTestCase {
     code.typeText("0")
     XCTAssertTrue(app.staticTexts["Codes never use 0, 1, I or O."].waitForExistence(timeout: 3))
     XCTAssertFalse(pair.isEnabled)
-    code.clear()
+    code.clearField()
     code.typeText("abcde*")
     XCTAssertTrue(app.staticTexts["Codes use only letters and digits."].waitForExistence(timeout: 3))
-    code.clear()
+    code.clearField()
     code.typeText("abcde23456")
     XCTAssertEqual(code.value as? String, "abcde23456", "Every keystroke lands")
     XCTAssertTrue(pair.isEnabled)
@@ -75,7 +75,7 @@ nonisolated final class PairingTests: XCTestCase {
     app.snap("pairing-manual")
 
     // A pasted pairing link fills in both fields.
-    host.clear()
+    host.clearField()
     UIPasteboard.general.string = "https://pair.example.com/#pair=XYZWV98765"
     host.press(forDuration: 1.2)
     let paste = app.menuItems["Paste"]
@@ -86,9 +86,9 @@ nonisolated final class PairingTests: XCTestCase {
     }
 
     // The error path: nothing answers at that address.
-    host.clear()
+    host.clearField()
     host.typeText("http://127.0.0.1:9")
-    code.clear()
+    code.clearField()
     code.typeText("abcde23456")
     XCTAssertTrue(pair.isEnabled)
     pair.tap()
@@ -113,7 +113,7 @@ nonisolated final class PairingTests: XCTestCase {
 
 extension XCUIElement {
   /// Deletes a text field's contents.
-  func clear() {
+  func clearField() {
     guard let text = value as? String, !text.isEmpty else { return }
     tap()
     // Move to the end, then delete everything.
