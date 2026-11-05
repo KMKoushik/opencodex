@@ -74,6 +74,11 @@ ENABLE_TESTABILITY=YES`). Release-only crashes have happened (see Known issues).
 - [x] Shell pill morphs into a Liquid Glass panel when opened (`GlassEffectContainer`).
 - [x] Usage loading screen: full-width background, centered native spinner after 400 ms.
 
+- [x] Push notifications live (desktop 0.1.54, APNs key in `~/.opencodex/apns/`): Slack-style —
+      sent only after 30 s if the thread wasn't opened, the request wasn't answered, and the Mac
+      had no input; title = thread, subtitle = project, body = reply preview / question /
+      "Needs approval: …". Tapping opens the thread (build 167 fixed a tap crash).
+
 ## In progress
 
 - [ ] Notifications: in-app notifications, APNs push from the owner's gateway, and a Live
