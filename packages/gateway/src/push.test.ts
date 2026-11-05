@@ -34,17 +34,41 @@ async function setup(options: { delay?: number; idle?: number } = {}) {
   const sent: ApnsRequest[] = [];
   const sessions: Record<
     string,
-    { id: string; title?: string; parentID?: string; metadata?: Record<string, unknown> }
+    {
+      id: string;
+      title?: string;
+      parentID?: string;
+      metadata?: Record<string, unknown>;
+      location?: { directory: string };
+    }
   > = {
-    root: { id: 'root', title: 'Fix the build' },
+    root: { id: 'root', title: 'Fix the build', location: { directory: '/work/dawn' } },
     child: { id: 'child', parentID: 'root' },
     quiet: { id: 'quiet', title: 'Muted', metadata: { opencodexMuted: true } },
   };
-  // Only what push.ts reads: session.get, and an event stream that stays empty.
+  // Only what push.ts reads: session.get, the last reply, and an event stream that stays empty.
   const backend = {
     request: (_: AbortSignal, operation: (client: unknown, options: object) => unknown) =>
       operation(
-        { session: { get: async ({ sessionID }: { sessionID: string }) => sessions[sessionID] } },
+        {
+          session: { get: async ({ sessionID }: { sessionID: string }) => sessions[sessionID] },
+          message: {
+            list: async () => ({
+              data: [
+                {
+                  type: 'assistant',
+                  content: [
+                    { type: 'reasoning', text: 'thinking' },
+                    {
+                      type: 'text',
+                      text: '## Done\n\nThe **build** passes:\n\n```sh\nbun check\n```\nShipped.',
+                    },
+                  ],
+                },
+              ],
+            }),
+          },
+        },
         {},
       ),
     async *events() {},
@@ -164,14 +188,31 @@ describe('push notifications', () => {
       signal,
     );
     await push.handle({ type: 'permission.asked', data: { sessionID: 'quiet' } }, signal);
-    await push.handle({ type: 'form.created', data: { form: { sessionID: 'child' } } }, signal);
+    await push.handle(
+      {
+        type: 'form.created',
+        data: { form: { sessionID: 'child', fields: [{ title: 'Which **branch**?' }, {}] } },
+      },
+      signal,
+    );
+    await push.handle(
+      {
+        type: 'permission.asked',
+        data: { id: 'per_2', sessionID: 'child', action: 'bash', resources: ['bun test'] },
+      },
+      signal,
+    );
     expect(sent.map((item) => [item.environment, item.token, item.payload])).toEqual([
       [
         'development',
         TOKEN,
         {
           aps: {
-            alert: { title: 'Reply finished', body: 'Fix the build' },
+            alert: {
+              title: 'Fix the build',
+              subtitle: 'dawn',
+              body: 'Done The build passes: Shipped.',
+            },
             sound: 'default',
             'thread-id': 'root',
           },
@@ -184,12 +225,29 @@ describe('push notifications', () => {
         TOKEN,
         {
           aps: {
-            alert: { title: 'Question waiting', body: 'Fix the build' },
+            alert: { title: 'Fix the build', subtitle: 'dawn', body: 'Which branch? (+1 more)' },
             sound: 'default',
             'thread-id': 'root',
           },
           sessionID: 'root',
           kind: 'question',
+        },
+      ],
+      [
+        'development',
+        TOKEN,
+        {
+          aps: {
+            alert: {
+              title: 'Fix the build',
+              subtitle: 'dawn',
+              body: 'Needs approval: Run bun test',
+            },
+            sound: 'default',
+            'thread-id': 'root',
+          },
+          sessionID: 'root',
+          kind: 'permission',
         },
       ],
     ]);
@@ -203,7 +261,7 @@ describe('push notifications', () => {
       { type: 'session.execution.interrupted', data: { sessionID: 'root' } },
       signal,
     );
-    expect(sent[2]).toMatchObject({
+    expect(sent[3]).toMatchObject({
       token: 'cd'.repeat(32),
       headers: {
         'apns-topic': 'dev.example.opencodex.push-type.liveactivity',

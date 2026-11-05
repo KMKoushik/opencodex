@@ -172,11 +172,38 @@ type EventData = {
   id?: string;
   sessionID?: string;
   requestID?: string;
-  form?: { id?: string; sessionID?: string };
+  action?: string;
+  resources?: string[];
+  message?: string;
+  form?: { id?: string; sessionID?: string; fields?: { title?: string; description?: string }[] };
 };
+
+const PREVIEW = 180;
+const actions: Record<string, string> = {
+  bash: 'Run',
+  edit: 'Edit',
+  write: 'Write',
+  read: 'Read',
+  webfetch: 'Fetch',
+  external_directory: 'Use files outside the project',
+};
+
+/** Markdown as one plain line, cut to fit a lock screen notification. */
+export function plainPreview(markdown: string, limit = PREVIEW) {
+  const text = markdown
+    .replace(/```[\s\S]*?(```|$)/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+[.)])\s+/gm, '')
+    .replace(/[*_~`]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.length > limit ? `${text.slice(0, limit - 1).trimEnd()}…` : text;
+}
 type SessionInfo = {
   id: string;
   title?: string;
+  location?: { directory?: string };
   parentID?: string;
   metadata?: Record<string, unknown>;
 };
@@ -312,6 +339,9 @@ export class Push {
     const thread = await this.thread(kind, sessionID, signal);
     if (!thread) return;
     const failed = event.type === 'session.execution.failed';
+    const body =
+      (await this.preview(kind, sessionID, data, failed, signal).catch(() => undefined)) ??
+      (failed ? 'Reply failed' : titles[kind]);
     await Promise.all(
       devices.map(({ push }) =>
         this.deliver(push.token, push.environment, {
@@ -323,7 +353,12 @@ export class Push {
           },
           payload: {
             aps: {
-              alert: { title: failed ? 'Reply failed' : titles[kind], body: thread.title },
+              // Like Slack: who (the thread), where (the project), then what it said.
+              alert: {
+                title: thread.title,
+                ...(thread.project ? { subtitle: thread.project } : {}),
+                body,
+              },
               sound: 'default',
               'thread-id': thread.id,
             },
@@ -350,7 +385,50 @@ export class Push {
     const root = main ? await info(main) : session;
     // A muted thread stays quiet, including its subagents and side chats.
     if (sessionMuted(root)) return;
-    return { id: root.id, title: root.title || 'Untitled session' };
+    const directory = root.location?.directory ?? session.location?.directory;
+    const project = directory?.split(/[\\/]/).filter(Boolean).pop();
+    return { id: root.id, title: root.title || 'Untitled session', project };
+  }
+
+  /** What happened, in a line: the reply's text, the question, or what needs approval. */
+  private async preview(
+    kind: PushKind,
+    sessionID: string,
+    data: EventData,
+    failed: boolean,
+    signal: AbortSignal,
+  ) {
+    if (kind === 'permission') {
+      const what = data.message?.trim()
+        ? data.message
+        : [actions[data.action ?? ''] ?? data.action, data.resources?.join(', ')]
+            .filter(Boolean)
+            .join(' ');
+      return `Needs approval: ${plainPreview(what || 'a tool', PREVIEW - 16)}`;
+    }
+    if (kind === 'question') {
+      const fields = data.form?.fields ?? [];
+      const first = fields[0]?.title || fields[0]?.description;
+      const more = fields.length > 1 ? ` (+${fields.length - 1} more)` : '';
+      return first ? `${plainPreview(first, PREVIEW - 12)}${more}` : titles.question;
+    }
+    const [last] = (
+      (await this.backend.request(signal, (client, options) =>
+        client.message.list({ sessionID, order: 'desc', limit: 1, type: 'assistant' }, options),
+      )) as {
+        data: {
+          type: string;
+          error?: { message?: string };
+          content?: { type: string; text?: string }[];
+        }[];
+      }
+    ).data;
+    if (failed || last?.error)
+      return `Reply failed${last?.error?.message ? `: ${plainPreview(last.error.message, PREVIEW - 14)}` : ''}`;
+    const text = (last?.content ?? [])
+      .flatMap((part) => (part.type === 'text' && part.text ? [part.text] : []))
+      .join('\n');
+    return plainPreview(text) || titles.reply;
   }
 
   private async deliver(
