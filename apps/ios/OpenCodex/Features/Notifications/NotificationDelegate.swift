@@ -30,7 +30,9 @@ nonisolated final class NotificationDelegate: NSObject, UNUserNotificationCenter
   ) {
     let sessionID =
       response.actionIdentifier == UNNotificationDefaultActionIdentifier
-      ? response.notification.request.content.userInfo["sessionID"] as? String : nil
+      ? (response.notification.request.content.userInfo["sessionID"] as? String).flatMap {
+        $0.isEmpty ? nil : $0
+      } : nil
     DispatchQueue.main.async {
       if let sessionID {
         MainActor.assumeIsolated { NotificationCenterModel.shared.open(sessionID) }
