@@ -92,7 +92,7 @@ struct Starters: View {
 
   private func card(_ starter: Starter, tint: String) -> some View {
     Button {
-      DraftStore.shared.draft(key).text = starter.prompt
+      DraftStore.shared.fill(key, text: starter.prompt)
     } label: {
       VStack(alignment: .leading, spacing: 12) {
         StarterIcon(name: starter.icon, tint: tint)
