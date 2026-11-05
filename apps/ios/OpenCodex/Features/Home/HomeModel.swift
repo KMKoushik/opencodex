@@ -68,6 +68,9 @@ final class HomeModel {
   private(set) var focusError: String?
   /// The gateway's projects, one per folder, newest activity first.
   private(set) var projects: [ThreadProject] = []
+  /// True until every shown project's first page has arrived, so an empty Projects view reads
+  /// as loading rather than "No threads yet".
+  private(set) var groupsPending = true
   /// Projects hidden from the Projects view on this phone.
   private(set) var hidden: Set<String>
   /// Projects hidden from Focus; their approvals and questions still show.
@@ -97,6 +100,9 @@ final class HomeModel {
   @ObservationIgnored private var subscriptions: [Subscription] = []
   @ObservationIgnored private var pinIndex: PinIndex
   @ObservationIgnored private let keys: Keys
+  /// Threads already warmed in the disk cache, by their update time.
+  @ObservationIgnored private var warmed: [String: Millis] = [:]
+  @ObservationIgnored private var prefetchTask: Task<Void, Never>?
 
   /// One project's loaded threads, like the desktop's per-folder `useSessions`.
   private struct Feed {
@@ -160,6 +166,8 @@ final class HomeModel {
   private func handle(_ event: GatewayEvent) {
     let type = event.type
     if type == "session.deleted", let id = event.sessionID {
+      let cache = client.cache
+      Task { await cache.removeThread(id) }
       remove(id)
       rebuild()
       return
@@ -205,52 +213,95 @@ final class HomeModel {
 
   // MARK: Loading
 
-  /// Everything from scratch: projects, the newest threads, every shown project's first page,
-  /// and pins older than all of them.
+  /// Draws the last session's lists from the disk cache, before any request. `reload()`
+  /// replaces them with live snapshots.
+  func hydrate() async {
+    guard phase == .loading else { return }
+    let cache = client.cache
+    guard let page = await cache.read(.threadSearch, as: ThreadPage.self) else { return }
+    let projects = Self.folders(await cache.read(.projects, as: [ThreadProject].self) ?? [])
+    var sessions: [String: ThreadSession] = [:]
+    var feeds: [String: Feed] = [:]
+    for session in page.sessions { sessions[session.id] = session }
+    for folder in projects.map(\.canonical) where !hidden.contains(folder) {
+      guard let first = await cache.read(.projectPage(folder), as: ThreadPage.self) else { continue }
+      for session in first.sessions where sessions[session.id] == nil { sessions[session.id] = session }
+      feeds[folder] = Feed(ids: Set(first.sessions.map(\.id)), cursor: first.nextCursor, hasMore: first.hasMore)
+    }
+    // A live load may have finished first.
+    guard phase == .loading else { return }
+    self.projects = projects
+    self.sessions = sessions
+    self.feeds = feeds
+    focusIDs = Set(page.sessions.map(\.id))
+    focusCursor = page.nextCursor
+    focusHasMore = page.hasMore
+    focusPages = 1
+    phase = .loaded
+    rebuild()
+  }
+
+  /// Everything from scratch: the newest threads first (Focus and pins show then), then
+  /// projects, then each shown project's first page as it arrives, then pins older than all of
+  /// them. Cached rows stay until their live snapshot replaces them; at the end only live
+  /// threads remain.
   func reload() async {
     generation += 1
     let generation = generation
+    let client = client
+    let cache = client.cache
     do {
-      async let catalog = client.threadProjects()
+      async let catalog = client.threadProjectsFetched()
       async let active = client.active()
-      let page = try await client.threadSearch()
-      let projects = Self.folders(try await catalog)
-      let running = Set(try await active.keys)
-      let shown = projects.map(\.canonical).filter { !hidden.contains($0) }
-      let pages = await fetchFirstPages(shown)
+      let page = try await client.threadSearchFetched()
       guard generation == self.generation else { return }
-
-      var sessions: [String: ThreadSession] = [:]
-      var feeds: [String: Feed] = [:]
-      for session in page.sessions { sessions[session.id] = session }
-      for (directory, result) in pages {
-        var feed = Feed(visible: self.feeds[directory]?.visible ?? Self.groupStep)
-        switch result {
-        case .success(let page):
-          for session in page.sessions { sessions[session.id] = session }
-          feed.ids = Set(page.sessions.map(\.id))
-          feed.cursor = page.nextCursor
-          feed.hasMore = page.hasMore
-        case .failure(let error):
-          feed.error = error.localizedDescription
-        }
-        feeds[directory] = feed
+      await cache.write(.threadSearch, page.data)
+      var fresh: [String: ThreadSession] = [:]
+      for session in page.value.sessions {
+        fresh[session.id] = session
+        sessions[session.id] = session
       }
-      self.projects = projects
-      self.sessions = sessions
-      self.feeds = feeds
-      self.running = running
-      focusIDs = Set(page.sessions.map(\.id))
-      focusCursor = page.nextCursor
-      focusHasMore = page.hasMore
+      focusIDs = Set(page.value.sessions.map(\.id))
+      focusCursor = page.value.nextCursor
+      focusHasMore = page.value.hasMore
       focusPages = 1
       focusError = nil
+      if let running = try? await active.keys { self.running = Set(running) }
       phase = .loaded
       refreshError = nil
+      rebuild()
+
+      let projects = try await catalog
+      guard generation == self.generation else { return }
+      await cache.write(.projects, projects.data)
+      self.projects = Self.folders(projects.value)
+      let shown = self.projects.map(\.canonical).filter { !hidden.contains($0) }
+      let kept = Set(shown)
+      feeds = feeds.filter { kept.contains($0.key) }
+      rebuild()
+      // A few at a time, so a gateway with many projects isn't flooded; each shows on arrival.
+      _ = await Concurrently.map(shown, limit: 6) { [weak self] folder -> Bool in
+        let result: Result<Fetched<ThreadPage>, Error>
+        do {
+          result = .success(try await client.threadSessionsFetched(directory: folder))
+        } catch {
+          result = .failure(error)
+        }
+        if case .success(let page) = result { await cache.write(.projectPage(folder), page.data) }
+        await self?.applyFirstPage(folder, result.map(\.value), into: generation)
+        return true
+      }
+      guard generation == self.generation else { return }
+      for feed in feeds.values {
+        for id in feed.ids { if let session = sessions[id] { fresh[id] = session } }
+      }
+      sessions = fresh
+      groupsPending = false
       rebuild()
       await loadExtraPins(generation: generation)
       await loadAttention(generation: generation)
       await fillFocus()
+      prefetch()
     } catch {
       guard generation == self.generation, !Self.cancelled(error) else { return }
       if phase == .loaded {
@@ -258,6 +309,44 @@ final class HomeModel {
       } else {
         phase = .failed(error.localizedDescription)
       }
+    }
+  }
+
+  /// One project's live first page, replacing its cached rows.
+  private func applyFirstPage(_ folder: String, _ result: Result<ThreadPage, Error>, into generation: Int) {
+    guard generation == self.generation else { return }
+    var feed = Feed(visible: feeds[folder]?.visible ?? Self.groupStep)
+    switch result {
+    case .success(let page):
+      for session in page.sessions { sessions[session.id] = session }
+      feed.ids = Set(page.sessions.map(\.id))
+      feed.cursor = page.nextCursor
+      feed.hasMore = page.hasMore
+    case .failure(let error):
+      feed.error = error.localizedDescription
+    }
+    feeds[folder] = feed
+    rebuild()
+  }
+
+  /// Warms the disk cache for the threads most likely opened next: running ones, then pinned,
+  /// then the newest. Two at a time at low priority, and not in Low Data Mode.
+  private func prefetch() {
+    guard !NetworkPath.shared.constrained else { return }
+    let candidates = sessions.values.sorted {
+      let a = (running.contains($0.id), $0.pinned != nil, $0.updatedAt)
+      let b = (running.contains($1.id), $1.pinned != nil, $1.updatedAt)
+      return a.0 != b.0 ? a.0 : a.1 != b.1 ? a.1 : a.2 > b.2
+    }
+    .prefix(6)
+    .filter { warmed[$0.id] != $0.updatedAt }
+    guard !candidates.isEmpty else { return }
+    for session in candidates { warmed[session.id] = session.updatedAt }
+    let client = client
+    let ids = candidates.map(\.id)
+    prefetchTask?.cancel()
+    prefetchTask = Task(priority: .utility) {
+      _ = await Concurrently.map(ids, limit: 2) { id in await client.warm(id) }
     }
   }
 
@@ -270,9 +359,11 @@ final class HomeModel {
     let generation = generation
     do {
       async let active = client.active()
-      let page = try await client.threadSearch()
+      let fetched = try await client.threadSearchFetched()
+      let page = fetched.value
       let running = Set(try await active.keys)
       guard generation == self.generation else { return }
+      await client.cache.write(.threadSearch, fetched.data)
       self.running = running
       var newFolders: [String] = []
       for session in page.sessions {
@@ -324,19 +415,6 @@ final class HomeModel {
         ? $0.activeAt > $1.activeAt
         : $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
     }
-  }
-
-  private func fetchFirstPages(_ folders: [String]) async -> [String: Result<ThreadPage, Error>] {
-    let client = client
-    // A few at a time, so a gateway with many projects isn't flooded.
-    let pages = await Concurrently.map(folders, limit: 6) { folder -> Result<ThreadPage, Error> in
-      do {
-        return .success(try await client.threadSessions(directory: folder))
-      } catch {
-        return .failure(error)
-      }
-    }
-    return Dictionary(zip(folders, pages), uniquingKeysWith: { first, _ in first })
   }
 
   /// A project's first page, or its next one for Show more.

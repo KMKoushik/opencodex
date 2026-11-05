@@ -65,6 +65,15 @@ final class ChatModel {
   @ObservationIgnored private var refreshTask: Task<Void, Never>?
   @ObservationIgnored private var pending: Set<Refresh> = []
   @ObservationIgnored private var recovery: Task<Void, Never>?
+  /// Screens running this model; a kept model can be on screen twice in a navigation stack.
+  @ObservationIgnored private var runs = 0
+  /// True once older pages were read, so a reload merges into them instead of replacing.
+  @ObservationIgnored private var loadedOlder = false
+  /// The newest snapshots' JSON, saved to the disk cache while the chat is idle.
+  @ObservationIgnored private var sessionJSON: Data?
+  @ObservationIgnored private var messagesJSON: Data?
+  @ObservationIgnored private var savedSessionJSON: Data?
+  @ObservationIgnored private var savedMessagesJSON: Data?
 
   private enum Refresh { case messages, session, active, requests, inbox }
 
@@ -91,13 +100,19 @@ final class ChatModel {
 
   /// Starts loading and listening. Call from the screen's `.task`; cancelled when it disappears.
   func run() async {
-    subscriptions = [
-      events.subscribe { [weak self] event in self?.handle(event) },
-      events.onReconnect { [weak self] in self?.schedule([.messages, .session, .active, .requests, .inbox]) },
-    ]
+    runs += 1
+    if runs == 1 {
+      subscriptions = [
+        events.subscribe { [weak self] event in self?.handle(event) },
+        events.onReconnect { [weak self] in self?.schedule([.messages, .session, .active, .requests, .inbox]) },
+      ]
+    }
     defer {
-      subscriptions = []
-      recovery?.cancel()
+      runs -= 1
+      if runs == 0 {
+        subscriptions = []
+        recovery?.cancel()
+      }
     }
     await load()
     // While the event stream is down, poll so a running reply still finishes on screen.
@@ -109,30 +124,98 @@ final class ChatModel {
     }
   }
 
+  /// Shows the chat as soon as the thread and its newest messages arrive (or at once from the
+  /// disk cache on a cold open); running state and requests fill in as they come.
   func load() async {
     guard let id = sessionID else { return }
+    // Deltas missed while off screen would splice into stale text; snapshots catch up instead.
+    if !live.isEmpty { live = [:] }
+    let client = client
+    async let session = client.sessionFetched(id)
+    async let page = client.messagesFetched(id)
+    async let active = client.active()
+    async let permissions = client.permissions(id)
+    async let forms = client.forms(id)
+    async let inbox = client.inbox(id)
+    if !loaded { await hydrate(id) }
     do {
-      async let session = client.session(id)
-      async let page = client.messages(id)
-      async let active = client.active()
-      async let permissions = client.permissions(id)
-      async let forms = client.forms(id)
-      async let inbox = client.inbox(id)
       let first = try await page
-      self.session = try await session
-      history = first.data.reversed()
-      olderCursor = first.cursor?.next ?? nil
-      olderPages = olderCursor != nil
+      let info = try await session
+      self.session = info.value
+      apply(newest: first.value)
+      sessionJSON = info.data
+      messagesJSON = first.data
+      loaded = true
+      error = nil
+    } catch {
+      guard !Self.cancelled(error) else { return }
+      if (error as? GatewayError)?.status == 404 { forgetDeleted(id) }
+      self.error = error.localizedDescription
+      loaded = true
+      return
+    }
+    do {
       running = try await active[id] != nil
       self.permissions = try await permissions
       self.forms = try await forms
       self.inbox = try await inbox
-      loaded = true
-      error = nil
+      persist()
     } catch {
+      guard !Self.cancelled(error) else { return }
       self.error = error.localizedDescription
-      loaded = true
     }
+  }
+
+  /// A cold open draws the cached thread right away; the live snapshot replaces it.
+  private func hydrate(_ id: String) async {
+    let cache = client.cache
+    guard let info = await cache.read(.session(id), as: SessionInfo.self),
+      let page = await cache.read(.messages(id), as: MessagePage.self),
+      !loaded
+    else { return }
+    session = info
+    apply(newest: page)
+    loaded = true
+  }
+
+  /// The newest page: replaces the history unless older pages were read, then merges into it.
+  private func apply(newest page: MessagePage) {
+    guard !loadedOlder else { return merge(newest: page) }
+    let fresh = Array(page.data.reversed())
+    if fresh != history { history = fresh }
+    olderCursor = page.cursor?.next ?? nil
+    olderPages = olderCursor != nil
+    pruneLive()
+  }
+
+  /// Saves the newest snapshots for the next cold open, only while idle: a running reply
+  /// changes them constantly, and its finished snapshot is saved once it ends.
+  private func persist() {
+    guard let id = sessionID, loaded, !running else { return }
+    let cache = client.cache
+    if let data = sessionJSON, data != savedSessionJSON {
+      savedSessionJSON = data
+      Task { await cache.write(.session(id), data) }
+    }
+    if let data = messagesJSON, data != savedMessagesJSON {
+      savedMessagesJSON = data
+      Task { await cache.write(.messages(id), data) }
+    }
+  }
+
+  /// The thread is gone: so are its cached copies and anything it showed.
+  private func forgetDeleted(_ id: String) {
+    let cache = client.cache
+    Task { await cache.removeThread(id) }
+    ChatModelStore.shared.remove(client: client, sessionID: id)
+    history = []
+    sessionJSON = nil
+    messagesJSON = nil
+  }
+
+  /// The screen closed mid-request; not a failure to show when the chat reopens.
+  private static func cancelled(_ error: Error) -> Bool {
+    error is CancellationError || (error as? URLError)?.code == .cancelled
   }
 
   /// Loads the next older page, for scrolling up.
@@ -144,6 +227,7 @@ final class ChatModel {
       let page = try await client.messages(id, cursor: cursor)
       let known = Set(history.map(\.id))
       history.insert(contentsOf: page.data.reversed().filter { !known.contains($0.id) }, at: 0)
+      loadedOlder = true
       olderCursor = page.cursor?.next ?? nil
       olderPages = olderCursor != nil
     } catch {
@@ -355,10 +439,15 @@ final class ChatModel {
     guard let id = sessionID else { return }
     do {
       if what.contains(.messages) {
-        let page = try await client.messages(id)
-        merge(newest: page)
+        let page = try await client.messagesFetched(id)
+        merge(newest: page.value)
+        messagesJSON = page.data
       }
-      if what.contains(.session) { session = try await client.session(id) }
+      if what.contains(.session) {
+        let info = try await client.sessionFetched(id)
+        session = info.value
+        sessionJSON = info.data
+      }
       if what.contains(.active) { running = try await client.active()[id] != nil }
       if what.contains(.requests) {
         async let permissions = client.permissions(id)
@@ -368,7 +457,11 @@ final class ChatModel {
       }
       if what.contains(.inbox) { inbox = try await client.inbox(id) }
       error = nil
+      persist()
     } catch let failure as GatewayError {
+      if failure.status == 404, what.contains(.session) || what.contains(.messages) {
+        forgetDeleted(id)
+      }
       error = failure.message
     } catch {
       // Transient network errors recover on the next event or poll.

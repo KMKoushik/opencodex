@@ -90,7 +90,11 @@ struct HomeView: View {
             openedLaunchSession = true
             path.append(ChatRoute.session(id))
           }
-          if model.phase != .loaded { await model.reload() }
+          if model.phase != .loaded {
+            // The last session's lists first, from disk; then live snapshots replace them.
+            await model.hydrate()
+            await model.reload()
+          }
         }
         .task(id: connection.events.live) {
           // The event stream is down: poll until it recovers.

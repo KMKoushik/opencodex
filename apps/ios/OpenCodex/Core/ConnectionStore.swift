@@ -21,6 +21,9 @@ final class ConnectionStore {
 
   init() {
     let arguments = UserDefaults.standard
+    #if DEBUG
+      if arguments.bool(forKey: "clearLocalCache") { LocalCache.clearAll() }
+    #endif
     if CommandLine.arguments.contains("-reset") {
       arguments.removeObject(forKey: Self.hostKey)
       Keychain.remove(Self.hostKey)
@@ -79,6 +82,12 @@ final class ConnectionStore {
   /// Forgets this gateway. The computer still lists the device until it's revoked there.
   func forget() {
     events.stop()
+    // This computer's threads leave the phone with it.
+    if let base = client?.base {
+      let cache = LocalCache.shared(for: base)
+      Task { await cache.clear() }
+    }
+    ChatModelStore.shared.removeAll()
     UserDefaults.standard.removeObject(forKey: Self.hostKey)
     Keychain.remove(Self.hostKey)
     client = nil

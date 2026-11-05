@@ -81,7 +81,7 @@ struct ThreadList: View {
         set: { model.setHidden($0, !$1) }, showAll: { model.showAllProjects() })
       ViewToggle(model: model)
     }
-    if model.phase == .loading {
+    if model.phase == .loading || (model.groupsPending && model.groups.isEmpty) {
       LoadingNote()
     } else if model.phase == .loaded, model.groups.isEmpty {
       Note(model.hidden.isEmpty ? "No threads yet" : "Every project is hidden")
@@ -279,14 +279,17 @@ private struct LoadingNote: View {
   @Environment(\.palette) private var palette
 
   var body: some View {
-    HStack(spacing: 8) {
-      ProgressView().controlSize(.small)
-      Text("Loading…")
+    // Only for a slow load, so a fast one never flashes it.
+    Delayed {
+      HStack(spacing: 8) {
+        ProgressView().controlSize(.small)
+        Text("Loading…")
+      }
+      .font(.subheadline)
+      .foregroundStyle(palette.color("text-tertiary"))
+      .padding(.leading, 8)
+      .padding(.vertical, 8)
     }
-    .font(.subheadline)
-    .foregroundStyle(palette.color("text-tertiary"))
-    .padding(.leading, 8)
-    .padding(.vertical, 8)
   }
 }
 

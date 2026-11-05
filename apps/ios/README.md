@@ -19,7 +19,10 @@ For a real iPhone, create `Config/Local.xcconfig` (gitignored) with `DEVELOPMENT
 
 - `OpenCodex/Core`: gateway client, Codable models, the shared event stream (`EventHub`),
   Keychain and pairing (`ConnectionStore`). Models decode leniently; unknown message kinds
-  become `.other`.
+  become `.other`. `LocalCache` keeps the gateway's raw JSON for the thread list and recently
+  used threads in `Library/Caches`, so screens draw at once over the tunnel and then refresh.
+- `Features/Chat/ChatModelStore.swift`: the last eight opened chats stay in memory for five
+  minutes, so going back and reopening one is instant.
 - `OpenCodex/Features/<Screen>`: one folder per screen. `Chat/ChatModel.swift` owns one chat's
   snapshots, the streamed-text overlay, and its actions; the transcript, composer and request
   cards read it.

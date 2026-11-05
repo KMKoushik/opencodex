@@ -14,7 +14,8 @@ struct TranscriptView: View {
       .ignoresSafeArea(.container, edges: .top)
       .overlay {
         if !model.loaded {
-          ProgressView()
+          // Cached chats draw at once; a spinner shows only for a slow first load.
+          DelayedProgress()
             .controlSize(.large)
             .accessibilityIdentifier("transcript.loading")
         } else if isEmpty {

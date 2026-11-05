@@ -37,7 +37,9 @@ struct ChatScreen: View {
     self.open = open
     switch route {
     case .session(let id):
-      _model = State(initialValue: ChatModel(client: client, events: events, sessionID: id))
+      // A thread opened in the last few minutes comes back with its transcript.
+      _model = State(
+        initialValue: ChatModelStore.shared.model(client: client, events: events, sessionID: id))
     case .new(let directory):
       _model = State(initialValue: ChatModel(client: client, events: events, directory: directory))
     }
@@ -104,6 +106,7 @@ struct ChatScreen: View {
         NotificationCenterModel.shared.visibleSessionID = id
       }
       .onDisappear {
+        ChatModelStore.shared.release(model)
         if NotificationCenterModel.shared.visibleSessionID == model.sessionID {
           NotificationCenterModel.shared.visibleSessionID = nil
         }

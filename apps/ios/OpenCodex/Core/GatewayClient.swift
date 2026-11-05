@@ -9,6 +9,12 @@ nonisolated struct GatewayError: LocalizedError, Sendable {
   var unpaired: Bool { status == 401 }
 }
 
+/// A decoded response and the JSON it came from.
+nonisolated struct Fetched<T: Sendable>: Sendable {
+  var value: T
+  var data: Data
+}
+
 /// Talks to an OpenCodex gateway's `/api`, the same routes the desktop and web UI use.
 /// Remote gateways need the device's bearer token; a loopback gateway (simulator) needs none.
 nonisolated struct GatewayClient: Sendable {
@@ -61,6 +67,16 @@ nonisolated struct GatewayClient: Sendable {
   }
 
   @concurrent func send<T: Decodable & Sendable>(_ request: URLRequest) async throws -> T {
+    try await fetch(request).value
+  }
+
+  /// The decoded response plus its raw JSON, for responses the app also caches on disk.
+  @concurrent func fetch<T: Decodable & Sendable>(_ request: URLRequest) async throws -> Fetched<T> {
+    #if DEBUG
+      // `-gatewayDelay <seconds>` simulates a slow tunnel, for the cache tests.
+      let delay = UserDefaults.standard.double(forKey: "gatewayDelay")
+      if delay > 0 { try await Task.sleep(for: .seconds(delay)) }
+    #endif
     let (data, response) = try await Self.session.data(for: request)
     let status = (response as? HTTPURLResponse)?.statusCode ?? 0
     guard (200..<300).contains(status) else {
@@ -68,7 +84,7 @@ nonisolated struct GatewayClient: Sendable {
       throw GatewayError(
         status: status, message: message ?? "The gateway could not complete this request.")
     }
-    return try JSONDecoder().decode(T.self, from: data)
+    return Fetched(value: try JSONDecoder().decode(T.self, from: data), data: data)
   }
 
   /// Opens the server-sent event stream. The caller owns reconnection.
