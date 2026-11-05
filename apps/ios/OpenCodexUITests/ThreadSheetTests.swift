@@ -58,7 +58,7 @@ nonisolated final class ThreadSheetTests: XCTestCase {
     scroll(app, to: model, up: false)
     XCTAssertTrue((model.value as? String)?.hasPrefix("Scripted") == true, "\(model.value ?? "")")
     model.tap()
-    let search = app.textFields["model.search"]
+    let search = app.searchFields["Search"]
     XCTAssertTrue(search.waitForExistence(timeout: 10), "The model picker should open")
     search.tap()
     search.typeText("DeepSeek")

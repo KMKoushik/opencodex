@@ -33,16 +33,16 @@ struct ThinkingControl: View {
   }
 }
 
-/// The model menu: search, the most-used models, then collapsible provider groups with each
-/// model's context size, and the thinking level in the bottom bar. Port of the desktop
-/// `ModelMenu`, as a sheet.
+/// The model picker, like OpenCode's iPhone app: Cancel, the title and the thinking level in
+/// the bar, a search field, then one flat list (logo, model, provider). Models used most lead,
+/// then the current model, then every other model by provider and name.
 struct ModelPicker: View {
   let catalog: ModelCatalog?
   var canonical: [String: String] = [:]
   let loading: Bool
   let error: String?
   let current: ModelRef?
-  /// The current model's thinking levels; empty hides the bottom bar.
+  /// The current model's thinking levels; empty hides the thinking control.
   var variants: [String] = []
   var onSelect: (ModelRef) -> Void
   var onThinking: (String?) -> Void = { _ in }
@@ -51,56 +51,37 @@ struct ModelPicker: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(\.palette) private var palette
   @State private var query = ""
-  @State private var collapsed: Set<String> = []
   @State private var usage = ModelUsage.read()
 
-  private struct Group: Identifiable {
-    var id: String
-    var name: String
-    var canonical: String?
-    var models: [ModelCatalog.Model]
-    var frequent = false
+  private struct Entry: Identifiable {
+    var model: ModelCatalog.Model
+    var provider: String
+    var id: String { model.ref.key }
   }
 
-  private var groups: [Group] {
+  /// Every enabled model in picker order, filtered by the search.
+  private var entries: [Entry] {
     let names = Dictionary(
       (catalog?.providers ?? []).map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
-    var grouped: [String: [ModelCatalog.Model]] = [:]
-    for model in catalog?.data ?? [] where model.enabled != false {
-      grouped[model.providerID, default: []].append(model)
+    let all = (catalog?.data ?? []).filter { $0.enabled != false }
+      .map { Entry(model: $0, provider: names[$0.providerID] ?? $0.providerID) }
+    func rank(_ entry: Entry) -> (Int, Int) {
+      if let uses = usage[ModelUsage.key(entry.model.ref)] { return (0, -uses) }
+      return entry.model.ref.key == current?.key ? (1, 0) : (2, 0)
     }
-    return grouped.map { id, models in
-      Group(
-        id: id, name: names[id] ?? id, canonical: canonical[id],
-        models: models.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending })
+    let ordered = all.sorted { a, b in
+      let (ra, rb) = (rank(a), rank(b))
+      if ra != rb { return ra < rb }
+      let provider = a.provider.localizedStandardCompare(b.provider)
+      if provider != .orderedSame { return provider == .orderedAscending }
+      return a.model.name.localizedStandardCompare(b.model.name) == .orderedAscending
     }
-    .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-  }
-
-  /// Most used (or the current model) first, then providers; each filtered by the search.
-  private var sections: [Group] {
-    let groups = self.groups
     let terms = query.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
-    let all = groups.flatMap(\.models)
-    var frequent = all.filter { usage[ModelUsage.key($0.ref)] != nil }
-      .sorted { usage[ModelUsage.key($0.ref)]! > usage[ModelUsage.key($1.ref)]! }
-    if frequent.isEmpty, let current, let model = all.first(where: { $0.ref.key == current.key }) {
-      frequent = [model]
-    }
-    var sections = groups
-    if !frequent.isEmpty, terms.isEmpty {
-      sections.insert(
-        Group(
-          id: "most-used", name: usage.isEmpty ? "Current model" : "Most used",
-          models: Array(frequent.prefix(5)), frequent: true), at: 0)
-    }
-    return sections.compactMap { group in
-      var shown = group
-      shown.models = group.models.filter { model in
-        let search = "\(group.name) \(model.providerID) \(model.name) \(model.id)".lowercased()
-        return terms.allSatisfy { search.contains($0) }
-      }
-      return shown.models.isEmpty ? nil : shown
+    guard !terms.isEmpty else { return ordered }
+    return ordered.filter { entry in
+      let text = "\(entry.provider) \(entry.model.providerID) \(entry.model.name) \(entry.model.id)"
+        .lowercased()
+      return terms.allSatisfy { text.contains($0) }
     }
   }
 
@@ -110,28 +91,21 @@ struct ModelPicker: View {
         .navigationTitle("Model")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(
-          text: $query, placement: .navigationBarDrawer(displayMode: .always),
-          prompt: "Search models…")
-        .onChange(of: query) { collapsed = [] }
+          text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
         .toolbar {
+          ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel", role: .cancel) { dismiss() }
+              .accessibilityIdentifier("model.cancel")
+          }
           if !variants.isEmpty {
-            ToolbarItem(placement: .bottomBar) {
-              Text("Thinking")
-                .font(.subheadline)
-                .foregroundStyle(palette.color("text-secondary"))
-                .padding(.horizontal, 6)
-            }
-            .sharedBackgroundVisibility(.hidden)
-            ToolbarSpacer(.flexible, placement: .bottomBar)
-            ToolbarItem(placement: .bottomBar) {
+            ToolbarItem(placement: .primaryAction) {
               ThinkingControl(variants: variants, selected: current?.thinking, onChange: onThinking)
-                .padding(.horizontal, 6)
+                .padding(.horizontal, 4)
             }
           }
         }
     }
     .tint(palette.color("text"))
-    .presentationBackground(palette.color("elevated"))
   }
 
   @ViewBuilder private var content: some View {
@@ -152,94 +126,52 @@ struct ModelPicker: View {
         .foregroundStyle(palette.color("text-secondary"))
       }
     } else {
-      let sections = self.sections
-      if sections.isEmpty {
+      let entries = self.entries
+      if entries.isEmpty {
         ContentUnavailableView.search(text: query)
           .foregroundStyle(palette.color("text-secondary"))
       } else {
-        // Opens at the top, where Most used (or the current model) leads, as on the desktop.
-        List {
-          ForEach(sections) { group in
-            let expanded = !collapsed.contains(group.id)
-            Section {
-              if expanded {
-                ForEach(group.models) { model in row(model, group: group) }
-              }
-            } header: {
-              header(group, expanded: expanded)
-            }
-          }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .scrollDismissesKeyboard(.immediately)
+        List(entries) { row($0) }
+          .listStyle(.plain)
+          .scrollContentBackground(.hidden)
+          .scrollDismissesKeyboard(.immediately)
       }
     }
   }
 
-  private func header(_ group: Group, expanded: Bool) -> some View {
-    Button {
-      if expanded { collapsed.insert(group.id) } else { collapsed.remove(group.id) }
-    } label: {
-      HStack(spacing: 8) {
-        if !group.frequent {
-          ProviderLogo(providerID: group.id, canonical: group.canonical)
-        }
-        Text(group.name).lineLimit(1)
-        Spacer(minLength: 8)
-        Text("\(group.models.count)")
-          .font(.caption.monospacedDigit())
-          .foregroundStyle(palette.color("text-tertiary"))
-        Image(systemName: "chevron.down")
-          .font(.system(size: 11, weight: .medium))
-          .rotationEffect(.degrees(expanded ? 0 : -90))
-          .frame(width: 14)
-      }
-      .font(.footnote.weight(.medium))
-      .foregroundStyle(palette.color("text-secondary"))
-      .frame(minHeight: 36)
-      .contentShape(.rect)
-    }
-    .buttonStyle(.plain)
-    .accessibilityLabel(group.name)
-    .accessibilityValue(expanded ? "Expanded" : "Collapsed")
-    .accessibilityAddTraits(.isHeader)
-    .accessibilityIdentifier("model.group.\(group.id)")
-  }
-
-  private func row(_ model: ModelCatalog.Model, group: Group) -> some View {
+  private func row(_ entry: Entry) -> some View {
+    let model = entry.model
     let selected = model.ref.key == current?.key
     return Button {
       ModelUsage.record(model.ref)
       onSelect(model.ref)
       dismiss()
     } label: {
-      HStack(spacing: 10) {
-        if group.frequent {
-          ProviderLogo(providerID: model.providerID, canonical: canonical[model.providerID])
-        }
-        Text(model.name)
-          .lineLimit(1)
-          .foregroundStyle(palette.color("text"))
-        Spacer(minLength: 8)
-        if let context = model.limit?.context, context > 0 {
-          Text(context.formatted(.number.notation(.compactName).precision(.fractionLength(0...1))))
-            .font(.caption.monospacedDigit())
+      HStack(spacing: 14) {
+        ProviderLogo(providerID: model.providerID, canonical: canonical[model.providerID])
+          .foregroundStyle(palette.color("text-secondary"))
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+          Text(model.name)
+            .foregroundStyle(palette.color("text"))
+            .layoutPriority(1)
+          Text(entry.provider)
             .foregroundStyle(palette.color("text-tertiary"))
         }
-        Image(systemName: "checkmark")
-          .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(palette.color("text-secondary"))
-          .frame(width: 16)
-          .opacity(selected ? 1 : 0)
+        .lineLimit(1)
+        Spacer(minLength: 8)
+        if selected {
+          Image(systemName: "checkmark")
+            .font(.body.weight(.semibold))
+            .foregroundStyle(palette.color("accent"))
+        }
       }
-      .font(.subheadline)
+      .frame(minHeight: 44)
       .contentShape(.rect)
     }
     .buttonStyle(.plain)
-    .listRowBackground(selected ? palette.color("selected") : Color.clear)
-    .listRowSeparator(.hidden)
-    .accessibilityLabel("\(model.name), \(group.frequent ? model.providerID : group.name)")
+    .listRowBackground(Color.clear)
+    .listRowSeparator(.hidden, edges: .top)
+    .accessibilityLabel("\(model.name), \(entry.provider)")
     .accessibilityAddTraits(selected ? .isSelected : [])
   }
 }

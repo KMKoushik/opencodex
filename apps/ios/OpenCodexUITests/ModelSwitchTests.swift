@@ -1,7 +1,7 @@
 import XCTest
 
-/// The composer's model control: the picker's search, groups and Most used, picking a model,
-/// and the thinking level in its bottom bar; then a send uses the choice.
+/// The composer's model control: the picker's search, Cancel, most-used order, picking a model,
+/// and the thinking level at the top right; then a send uses the choice.
 nonisolated final class ModelSwitchTests: XCTestCase {
   override func setUp() {
     continueAfterFailure = false
@@ -22,19 +22,19 @@ nonisolated final class ModelSwitchTests: XCTestCase {
     await waitFor(timeout: 10) { (model.value as? String)?.hasPrefix("Scripted") == true }
     model.tap()
 
-    // Groups collapse and expand.
-    let search = app.searchFields["Search models…"]
+    // One flat list: logo, model and provider on each row.
+    let search = app.searchFields["Search"]
     XCTAssertTrue(search.waitForExistence(timeout: 10), "The model picker should open")
-    let group = app.buttons["model.group.opencode"]
-    XCTAssertTrue(group.waitForExistence(timeout: 5))
     let pickle = app.buttons["Big Pickle, OpenCode"]
-    XCTAssertTrue(pickle.exists)
-    XCTAssertEqual(group.value as? String, "Expanded")
-    group.tap()
-    XCTAssertEqual(group.value as? String, "Collapsed")
-    XCTAssertFalse(pickle.exists, "A collapsed group hides its models")
-    group.tap()
-    XCTAssertTrue(pickle.waitForExistence(timeout: 2))
+    XCTAssertTrue(pickle.waitForExistence(timeout: 5))
+    XCTAssertFalse(app.buttons["model.group.opencode"].exists, "No provider groups")
+
+    // Cancel closes without changing the model.
+    app.buttons["model.cancel"].tap()
+    XCTAssertTrue(search.waitForNonExistence(timeout: 5))
+    XCTAssertTrue((model.value as? String)?.hasPrefix("Scripted") == true)
+    model.tap()
+    XCTAssertTrue(search.waitForExistence(timeout: 10))
 
     // Search narrows the list, and picking closes the picker.
     search.tap()
@@ -46,11 +46,11 @@ nonisolated final class ModelSwitchTests: XCTestCase {
     XCTAssertTrue(search.waitForNonExistence(timeout: 5), "The picker closes on a pick")
     await waitFor(timeout: 10) { (model.value as? String)?.hasPrefix("DeepSeek V4.1 Flash Free") == true }
 
-    // Most used now leads the picker; pick Scripted back from it.
+    // The model just used now leads the list; pick Scripted back.
     model.tap()
-    XCTAssertTrue(app.buttons["Most used"].waitForExistence(timeout: 5))
-    let frequent = app.buttons["DeepSeek V4.1 Flash Free, opencode"]
-    XCTAssertTrue(frequent.exists, "The model just used is in Most used")
+    XCTAssertTrue(deepseek.waitForExistence(timeout: 5))
+    XCTAssertLessThan(
+      deepseek.frame.minY, search.frame.maxY + 70, "The most used model is the first row")
     search.tap()
     search.typeText("Scripted")
     let scripted = app.buttons["Scripted, Scripted"]
@@ -59,7 +59,7 @@ nonisolated final class ModelSwitchTests: XCTestCase {
     XCTAssertTrue(search.waitForNonExistence(timeout: 5))
     await waitFor(timeout: 10) { (model.value as? String)?.hasPrefix("Scripted") == true }
 
-    // The thinking level is in the picker's bottom bar.
+    // The thinking level is at the picker's top right.
     model.tap()
     let thinking = app.buttons["composer.thinking"]
     XCTAssertTrue(thinking.waitForExistence(timeout: 10), "Thinking levels are in the picker")
@@ -70,7 +70,7 @@ nonisolated final class ModelSwitchTests: XCTestCase {
     high.tap()
     XCTAssertEqual(thinking.value as? String, "High")
     // Close the picker; the composer reads "Scripted · High".
-    app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
+    app.buttons["model.cancel"].tap()
     XCTAssertTrue(search.waitForNonExistence(timeout: 5))
     XCTAssertEqual(model.value as? String, "Scripted, High")
 

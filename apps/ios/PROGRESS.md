@@ -57,6 +57,9 @@ ENABLE_TESTABILITY=YES`). Release-only crashes have happened (see Known issues).
 - [x] Video preview should be the native player with full screen — `AVPlayerViewController`
       (full screen, scrubbing, ±10 s, speed, AirPlay, Picture in Picture), build 155.
 
+- [x] Model picker like OpenCode's: Cancel / Model / thinking level in the bar, search, one
+      flat list (logo, model, provider), most used first.
+
 ## In progress
 
 - [ ] Notifications: in-app notifications, APNs push from the owner's gateway, and a Live
