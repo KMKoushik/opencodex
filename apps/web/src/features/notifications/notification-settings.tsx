@@ -73,20 +73,6 @@ export function NotificationSettings() {
           />
         </SettingsRow>
       ))}
-      <SettingsRow
-        label="Sound"
-        description="Play the system sound with each notification. Off keeps them silent."
-      >
-        <SegmentedControl
-          label="Sound"
-          value={settings.sound ? 'on' : 'off'}
-          options={[
-            { value: 'off', label: 'Off' },
-            { value: 'on', label: 'On' },
-          ]}
-          onChange={(value) => update('sound', value === 'on')}
-        />
-      </SettingsRow>
     </SettingsGroup>
   );
 }
