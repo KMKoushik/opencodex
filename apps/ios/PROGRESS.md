@@ -69,6 +69,11 @@ ENABLE_TESTABILITY=YES`). Release-only crashes have happened (see Known issues).
   simulator). Build 160 presents both from UIKit's topmost controller after any running
   transition instead of SwiftUI modifiers; awaiting owner confirmation.
 
+- [x] OpenCode-style header: no divider, soft scroll-edge blur, glass title capsule that hugs
+      the title, white "…" with a running ring.
+- [x] Shell pill morphs into a Liquid Glass panel when opened (`GlassEffectContainer`).
+- [x] Usage loading screen: full-width background, centered native spinner after 400 ms.
+
 ## In progress
 
 - [ ] Notifications: in-app notifications, APNs push from the owner's gateway, and a Live

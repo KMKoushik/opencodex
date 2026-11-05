@@ -146,9 +146,12 @@ struct ChatScreen: View {
     ToolbarItem(placement: .principal) {
       if model.sessionID != nil {
         Button { showSheet = true } label: {
-          ChatTitle(project: projectName, title: title, live: model.events.live, running: model.running)
-            .padding(.horizontal, 6)
+          ChatTitle(project: projectName, title: title, live: model.events.live)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 5)
+            .glassEffect(.regular.interactive(), in: .capsule)
         }
+        .buttonStyle(.plain)
         .accessibilityHint("Shows thread actions and details.")
         .accessibilityIdentifier("chat.details")
       } else {
@@ -160,7 +163,10 @@ struct ChatScreen: View {
       ToolbarItem(placement: .topBarTrailing) {
         Button { showSheet = true } label: {
           Image(systemName: "ellipsis")
+            .foregroundStyle(palette.color("text"))
             .frame(width: 30, height: 30)
+            // OpenCode's running indicator: a ring turning around "…" while the reply runs.
+            .background { if model.running { RunningRing().frame(width: 40, height: 40) } }
             .overlay(alignment: .topTrailing) {
               RunningSubagentsBadge(model: model).offset(x: 10, y: -8)
             }

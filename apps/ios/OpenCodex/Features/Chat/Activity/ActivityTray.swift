@@ -86,6 +86,7 @@ private struct TrayBody: View {
   @State private var selected: Tab?
   @State private var moving = false
   @State private var width: CGFloat = 400
+  @Namespace private var glass
   private var preference: ActivityTrayPreference { .shared }
 
   private var blocking: BlockingWork { model.blockingWork }
@@ -105,7 +106,8 @@ private struct TrayBody: View {
   }
 
   var body: some View {
-    Group {
+    // One glass shape that morphs between OpenCode's "4 shells" pill and the open panel.
+    GlassEffectContainer(spacing: 8) {
       if open {
         VStack(spacing: 0) {
           header
@@ -114,10 +116,8 @@ private struct TrayBody: View {
         .padding(.horizontal, 6)
         .padding(.top, 2)
         .padding(.bottom, 2)
-        .background(palette.color("surface-under"), in: .rect(cornerRadius: 14))
-        .overlay {
-          RoundedRectangle(cornerRadius: 14).strokeBorder(palette.color("border"), lineWidth: 1)
-        }
+        .glassEffect(.regular, in: .rect(cornerRadius: 22))
+        .glassEffectID("tray", in: glass)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
       } else {
         pill
@@ -139,7 +139,7 @@ private struct TrayBody: View {
   private var pill: some View {
     HStack(spacing: 8) {
       Button {
-        withAnimation(.snappy(duration: 0.25)) { preference.open = true }
+        withAnimation(.bouncy(duration: 0.4)) { preference.open = true }
       } label: {
         HStack(spacing: 7) {
           RingSpinner(size: 12)
@@ -157,6 +157,7 @@ private struct TrayBody: View {
         .padding(.horizontal, 12)
         .frame(minHeight: 32)
         .glassEffect(.regular.interactive(), in: .capsule)
+        .glassEffectID("tray", in: glass)
         .frame(minHeight: 44)
         .contentShape(.rect)
       }
@@ -254,7 +255,7 @@ private struct TrayBody: View {
         .accessibilityIdentifier("activity.background")
       }
       Button {
-        withAnimation(.snappy(duration: 0.25)) { preference.open.toggle() }
+        withAnimation(.bouncy(duration: 0.4)) { preference.open.toggle() }
       } label: {
         Image(systemName: ActivitySymbol.open)
           .font(.footnote.weight(.medium))
@@ -276,7 +277,7 @@ private struct TrayBody: View {
     let name = value == .subagents ? "Subagents" : "Shell"
     return Button {
       selected = value
-      withAnimation(.snappy(duration: 0.25)) { preference.open = true }
+      withAnimation(.bouncy(duration: 0.4)) { preference.open = true }
     } label: {
       HStack(spacing: 6) {
         if icons {

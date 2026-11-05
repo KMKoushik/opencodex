@@ -28,9 +28,50 @@ struct ChatTitle: View {
           .lineLimit(1)
       }
     }
-    .frame(maxWidth: 260)
+    // Hugs the title like OpenCode's pill, truncating past 240 pt.
+    .modifier(HugWidth(limit: 240))
     .accessibilityElement(children: .combine)
     .accessibilityAddTraits(.isHeader)
     .accessibilityIdentifier("chat.title")
+  }
+}
+
+/// A thin arc turning around the "…" button while a reply runs, like OpenCode's iPhone app.
+struct RunningRing: View {
+  @Environment(\.palette) private var palette
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  var body: some View {
+    TimelineView(.animation(paused: reduceMotion)) { context in
+      let turn = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.1) / 1.1
+      Circle()
+        .trim(from: 0, to: 0.28)
+        .stroke(palette.color("text"), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+        .rotationEffect(.degrees(turn * 360))
+    }
+    .accessibilityHidden(true)
+  }
+}
+
+/// Sizes its content to fit, up to `limit`: a capsule that hugs short titles and truncates
+/// long ones (a plain `maxWidth` frame always takes the whole limit in a toolbar).
+private struct HugWidth: ViewModifier {
+  let limit: CGFloat
+  func body(content: Content) -> some View { HugLayout(limit: limit) { content } }
+}
+
+private struct HugLayout: Layout {
+  let limit: CGFloat
+
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    guard let child = subviews.first else { return .zero }
+    let width = min(proposal.width ?? limit, limit)
+    return child.sizeThatFits(ProposedViewSize(width: width, height: proposal.height))
+  }
+
+  func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    subviews.first?.place(
+      at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center,
+      proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
   }
 }

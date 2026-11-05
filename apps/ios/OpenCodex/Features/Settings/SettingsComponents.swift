@@ -77,6 +77,8 @@ struct SettingsPage<Content: View>: View {
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 16) { content }
+        // Full width, so the page's surface fills the screen even while the content is narrow.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 48)

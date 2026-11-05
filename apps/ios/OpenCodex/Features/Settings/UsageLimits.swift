@@ -125,11 +125,16 @@ struct UsageSettings: View {
             }
           }
         }
-      } else if model.error == nil {
-        HStack(spacing: 8) {
-          ProgressView().controlSize(.small)
-          note("Checking limits…")
+      }
+    }
+    .overlay {
+      // The first load: a centered native spinner, only if it takes a moment.
+      if model.limits == nil, model.error == nil {
+        Delayed {
+          ProgressView("Checking limits…")
+            .foregroundStyle(palette.color("text-secondary"))
         }
+        .accessibilityIdentifier("usage-loading")
       }
     }
     .navigationTitle("Usage")
@@ -150,12 +155,6 @@ struct UsageSettings: View {
         try? await Task.sleep(for: .seconds(300))
       }
     }
-  }
-
-  private func note(_ text: String) -> some View {
-    Text(text)
-      .font(.subheadline)
-      .foregroundStyle(palette.color("text-secondary"))
   }
 }
 

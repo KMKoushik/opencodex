@@ -130,6 +130,9 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     collectionView.alwaysBounceVertical = true
     collectionView.keyboardDismissMode = .interactive
     collectionView.contentInsetAdjustmentBehavior = .always
+    // Like OpenCode's chat: content blurs softly under the glass header and composer.
+    collectionView.topEdgeEffect.style = .soft
+    collectionView.bottomEdgeEffect.style = .soft
     collectionView.delegate = self
     collectionView.prefetchDataSource = self
     collectionView.accessibilityIdentifier = "transcript"
