@@ -11,7 +11,8 @@ import { api } from '../../lib/api';
 import { readStorage, writeStorage } from '../../lib/storage';
 
 export type NotificationKind = 'reply' | 'question' | 'permission';
-type NotificationSettings = Record<NotificationKind, boolean>;
+/** Which events notify, and whether banners play the system sound (off unless chosen). */
+type NotificationSettings = Record<NotificationKind | 'sound', boolean>;
 
 let settings: NotificationSettings | undefined;
 const listeners = new Set<() => void>();
@@ -28,6 +29,7 @@ function getSettings(): NotificationSettings {
       reply: saved?.reply === true,
       question: saved?.question === true,
       permission: saved?.permission === true,
+      sound: saved?.sound === true,
     };
   }
   return settings;
@@ -38,7 +40,7 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-function update(kind: NotificationKind, enabled: boolean) {
+function update(kind: keyof NotificationSettings, enabled: boolean) {
   settings = { ...getSettings(), [kind]: enabled };
   writeStorage('notifications', JSON.stringify(settings));
   for (const listener of listeners) listener();
@@ -129,6 +131,7 @@ export async function notifySession(
     const notification = new Notification(failed ? 'Reply failed' : titles[kind], {
       body: thread.title,
       tag: thread.id,
+      silent: !getSettings().sound,
     });
     shown.set(thread.id, notification);
     notification.onclick = () => {
