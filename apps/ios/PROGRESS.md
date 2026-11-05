@@ -49,9 +49,10 @@ ENABLE_TESTABILITY=YES`). Release-only crashes have happened (see Known issues).
 - [x] Use native UI, e.g. the iOS spinner — `RingSpinner` is now `ProgressView`; the title
       shows the spinner while running.
 - [x] "…" opens a native drawer like OpenCode's — the thread sheet, build 142.
-- [ ] Session details must look like the thread sheet (native inset-grouped list, same
-      header and rows), not the older custom cards.
-- [ ] Test every interaction (QA wave) and prefer native components everywhere.
+- [x] Session details looks like the thread sheet: native inset-grouped list, same header
+      and rows.
+- [x] Test every interaction (QA wave) and prefer native components everywhere: composer,
+      home/settings/pairing, transcript/activity and panels QA merged with tap tests.
 
 ## In progress
 

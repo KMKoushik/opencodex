@@ -62,8 +62,10 @@ nonisolated final class ChromeTests: XCTestCase {
     XCTAssertTrue(app.navigationBars["Changes"].waitForExistence(timeout: 10))
     app.buttons["workspace-close"].tap()
 
-    // The subagents row opens the subagents list.
+    // The subagents row opens the subagents list. Session details opens from the thread sheet.
     info.tap()
+    for _ in 0..<6 where !(row.exists && row.isHittable) { app.collectionViews.firstMatch.swipeUp() }
+    row.tap()
     XCTAssertTrue(header.waitForExistence(timeout: 10))
     header.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
       .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05)))
