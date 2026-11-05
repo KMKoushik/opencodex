@@ -33,12 +33,20 @@ const CODE_TTL = 5 * 60_000;
 const MAX_FAILURES = 20;
 const SEEN_INTERVAL = 10 * 60_000;
 
+const pushSchema = z.object({
+  token: z.string(),
+  environment: z.enum(['development', 'production']),
+  kinds: z.object({ reply: z.boolean(), question: z.boolean(), permission: z.boolean() }),
+});
+/** A native device's APNs registration, as `push.ts` sends to it. */
+export type DevicePush = z.infer<typeof pushSchema>;
 const deviceSchema = z.object({
   id: z.string(),
   name: z.string(),
   hash: z.string(),
   created: z.number(),
   seen: z.number().nullable(),
+  push: pushSchema.optional(),
 });
 const storedSchema = z.object({
   enabled: z.boolean(),
@@ -480,6 +488,7 @@ export class RemoteAccess {
   private writes = Promise.resolve();
   private queue: Promise<unknown> = Promise.resolve();
   private owner = false;
+  private claimed = new Set<() => void>();
   private holder?: number;
   private closed = false;
   private readonly lock: OwnerLock;
@@ -552,7 +561,14 @@ export class RemoteAccess {
       await this.connector.reapOrphan();
       await this.apply();
     }
+    for (const listener of this.claimed) listener();
     return true;
+  }
+
+  /** Called each time this gateway takes ownership, once its devices are loaded. */
+  onClaim(listener: () => void) {
+    this.claimed.add(listener);
+    return () => this.claimed.delete(listener);
   }
 
   private notOwner() {
@@ -662,6 +678,44 @@ export class RemoteAccess {
     this.seenSaved.set(device.id, now);
     await this.save();
     return token;
+  }
+
+  /** The folder holding remote.json; push.json lives beside it. */
+  get directory() {
+    return dirname(this.file);
+  }
+
+  /** Saves or clears a paired device's APNs registration. */
+  setPush(deviceID: string, push: DevicePush | undefined) {
+    return this.run(async () => {
+      await this.owned();
+      const device = [...this.devices.values()].find((item) => item.id === deviceID);
+      if (!device) throw new GatewayError('That device is no longer paired.', 404);
+      // One registration per APNs token: a reinstall or re-pair leaves no duplicate behind.
+      if (push)
+        for (const other of this.devices.values())
+          if (other !== device && other.push?.token === push.token) delete other.push;
+      if (push) device.push = push;
+      else delete device.push;
+      await this.save();
+    });
+  }
+
+  /** Devices to push to. Only the gateway that owns remote access sends, so nothing doubles. */
+  pushDevices(): { id: string; push: DevicePush }[] {
+    if (!this.owner) return [];
+    return [...this.devices.values()].flatMap(({ id, push }) => (push ? [{ id, push }] : []));
+  }
+
+  paired(deviceID: string) {
+    return [...this.devices.values()].some((item) => item.id === deviceID);
+  }
+
+  /** Apple says the token is no longer valid (app removed, or notifications reset). */
+  async dropPushToken(token: string) {
+    const device = [...this.devices.values()].find((item) => item.push?.token === token);
+    if (!device) return;
+    await this.setPush(device.id, undefined).catch(() => undefined);
   }
 
   async revoke(id: string) {

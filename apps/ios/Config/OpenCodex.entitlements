@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- APNs sandbox, for Debug and Release builds installed from Xcode. A TestFlight or App
+	     Store build would use "production", and NotificationCenterModel.apsEnvironment with it. -->
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>

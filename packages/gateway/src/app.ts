@@ -40,12 +40,13 @@ import { CANVAS_ROOT, canvasRoutes, canvasRuntimeRoutes, createCanvasWatcher } f
 import { canvasPluginRoutes } from './canvas-plugin';
 import { Apps } from './apps';
 import { type RemoteAccess, remoteDenial, remoteRequest, remoteRoutes } from './remote';
+import { Push, pushRoutes } from './push';
 import { appModelUpdateSchema, canvasIconUpdateSchema } from '@opencodex/contracts/canvas';
 
 export function createApp(
   backend = new OpenCodeBackend(),
   shutdown = new AbortController().signal,
-  options: { triggers?: boolean; remote?: RemoteAccess } = {},
+  options: { triggers?: boolean; remote?: RemoteAccess; push?: Push } = {},
 ) {
   const app = new Hono();
 
@@ -75,7 +76,13 @@ export function createApp(
     await next();
   });
 
-  if (options.remote) app.route('/api/remote', remoteRoutes(options.remote));
+  if (options.remote) {
+    // push.json lives beside remote.json, so a gateway with a test folder never reads ~/.opencodex.
+    const push = options.push ?? new Push(options.remote, backend);
+    options.remote.onClaim(() => void push.refresh(shutdown));
+    app.route('/api/remote', pushRoutes(push, options.remote, shutdown));
+    app.route('/api/remote', remoteRoutes(options.remote));
+  }
   app.get('/api/connection', async (c) => c.json(await backend.connection()));
   app.post('/api/connection', async (c) => c.json(await backend.connection(true)));
   app.route('/api/terminals', terminalRoutes(backend));
@@ -321,6 +328,13 @@ export function createApp(
       ),
     ),
   );
+  // Native: deletes the thread with its subagents and history.
+  app.delete('/api/sessions/:id', async (c) => {
+    await backend.request(c.req.raw.signal, (client, options) =>
+      client.session.remove({ sessionID: c.req.param('id') }, options),
+    );
+    return c.json({ ok: true });
+  });
   app.use('/api/sessions/:id/view', bodyLimit({ maxSize: 1024 }));
   app.post('/api/sessions/:id/view', async (c) => {
     const input = sessionViewSchema.safeParse(await c.req.json().catch(() => null));

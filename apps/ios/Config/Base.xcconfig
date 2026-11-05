@@ -1,0 +1,2 @@
+// Signing for a real iPhone: put `DEVELOPMENT_TEAM = <your team ID>` in Local.xcconfig (gitignored).
+#include? "Local.xcconfig"

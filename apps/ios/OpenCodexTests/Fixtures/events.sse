@@ -1,0 +1,240 @@
+event: ready
+data: {"id":"evt_1a851f9ff001wl4YeI7fJVVm0D","type":"server.connected","data":{}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a851fe03001074zkvTpQY4U6Q","created":1793825308163,"type":"session.created","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","slug":"curious-circuit","version":"2.2.5","projectID":"b8b18816dd7fe48ff6e9625d7ab3b909b48b0a31","location":{"directory":"/Users/demo/proj"},"subpath":"","agent":"build","model":{"id":"deepseek-v4.1-flash-free","providerID":"opencode"}},"durable":{"aggregateID":"ses_e57ae01feffec92hL50L241AGn","seq":0,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a851fe2c002VGQcTAkXrt06lR","created":1793825308204,"type":"session.inbox.enqueued","location":{"directory":"/Users/demo/proj"},"data":{"inboxID":"msg_1a851fe2c001rw3qMw4btk6lWG","sessionID":"ses_e57ae01feffec92hL50L241AGn","item":{"type":"user","payload":{"text":"Write a 3 paragraph story about a lighthouse."},"delivery":"steer"}},"durable":{"aggregateID":"ses_e57ae01feffec92hL50L241AGn","seq":1,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a851fe2e001wcZIAo04p3pdlA","created":1793825308206,"type":"session.execution.started","data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn"},"durable":{"aggregateID":"ses_e57ae01feffec92hL50L241AGn","seq":2,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a851fe30001i76qItdNnwWeGc","created":1793825308208,"metadata":{"instructions":{"initial":true}},"type":"session.instructions.updated","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","delta":{"core/codemode":"1f1291478accf8b3e4d96a40c150bf844d60557dede4aae56c47ea0043bbdce2","core/skill-guidance":"779e3287cf9533cf6cdfbad0702f4a938a77de62065054306ede31f71490ae12","core/date":"c519a6b0406690edfccbd7dddfabab6bcd61a7aba5e54a9243326fcf8b322070","core/environment":"036644cedb9376e4ef4939131eb52dbf8b94b18f6faf7c2b1be582c6e4cc4394","api/opencodex.reply-format":"d5b2717ffbac03bcef22ef4db7da5f01a09c11074538d313fb5523aa5b1577fc"}},"durable":{"aggregateID":"ses_e57ae01feffec92hL50L241AGn","seq":3,"version":2}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a851fe31001lMpLMp2ZNCCg0S","created":1793825308209,"type":"session.inbox.delivered","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","inboxID":"msg_1a851fe2c001rw3qMw4btk6lWG"},"durable":{"aggregateID":"ses_e57ae01feffec92hL50L241AGn","seq":4,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a852044e001mutqE6LkUUiqoZ","created":1793825309774,"type":"session.step.started","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","agent":"build","model":{"id":"deepseek-v4.1-flash-free","providerID":"opencode","variant":"default"},"assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","snapshot":"fb498ed8d6aa97194e7ad0067185c43d7e0b1ac7","started":1793825308215},"durable":{"aggregateID":"ses_e57ae01feffec92hL50L241AGn","seq":5,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85204520014oV0q4KTRnnRse","created":1793825309778,"type":"session.reasoning.started","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"native":{"reasoningField":"reasoning_content"}},"durable":{"aggregateID":"ses_e57ae01feffec92hL50L241AGn","seq":6,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85204a40014CIT0Z6xJr12Sp","created":1793825309860,"type":"session.reasoning.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"delta":"The user wants a 3-paragraph story about a lighthouse. Simple creative writing task. No tools needed."}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85204a5001oRC3qKB64Umy4W","created":1793825309861,"type":"session.text.started","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0},"durable":{"aggregateID":"ses_e57ae01feffec92hL50L241AGn","seq":7,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a852050d001UzkC2gT3nxNsg3","created":1793825309965,"type":"session.text.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"delta":"The lighthouse at Calder Point had stood for a hundred and forty years, and for most of them it had done its work quietly: a slow sweep of light across black water, a horn that moaned into fog, a keeper who climbed the spiral stairs twice a night and wrote in a log nobody read. Its stone was streaked white with salt, and the iron railing had rusted to the"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85205cb001ONT7s6CGYn1KzV","created":1793825310155,"type":"session.text.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"delta":" color of dried blood. Sailors said the light was the last thing they saw before sleep and the first thing they saw on waking, and some of them, superstitious, would not sail past it without touching their hat.\n\nMara took the keeper's job because the advertisement said \"solitude\" and she had wanted, that year, to be nobody's daughter and nobody's friend. She learned the rhythm of the thing within a week: the oil, the wick, the brass fittings that had to be polished or they"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a852066e001zvXBJsPSF5F2J3","created":1793825310318,"type":"session.text.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"delta":" clouded, the window that had to be wiped of spray before"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8520712001t5gSLGbj6s1T30","created":1793825310482,"type":"session.text.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"delta":" every dusk. On clear nights she would climb to the gallery and stand with her hands on the cold rail while the beam swung out and came back, out and came back, and the sea below her moved like something breathing in its sleep. She"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85207f2001mUJO6xmCAKCLGI","created":1793825310706,"type":"session.text.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"delta":" began to talk to the light. Not aloud, not quite, but she found herself thinking toward it, as though it were a patient animal that had agreed to keep her company.\n\nThe storm came in November"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85208c0001Z8OevkusnOPMx2","created":1793825310912,"type":"session.text.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"delta":", the way they always did—too fast, and worse than the forecast. Mara fought the door"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8520936001txwl3GtoJJYue0","created":1793825311030,"type":"session.text.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"delta":" shut, pumped"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85209e4001e6w6FWEDEpWZrO","created":1793825311204,"type":"session.text.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"delta":" the oil with hands that had gone numb, and watched the glass take the rain in sheets. At the worst of it the great lens shudder"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8520a9b001ZlYF5amSisUedC","created":1793825311387,"type":"session.text.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"delta":"ed in its housing, and for one long moment the light went out, and the dark outside was so"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8520b2b0012b7y8HaF6Qg4yf","created":1793825311531,"type":"session.text.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"delta":" complete that she understood, suddenly and physically, what the tower was for. Then"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8520bf000180406HnosVPp9T","created":1793825311728,"type":"session.text.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"delta":" the filament caught, and the beam swung out again, and somewhere far off in the murk a ship's horn answered her, once, twice, and she stood there in her wet coat"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8520c6c0011anL0WoyXOuXmx","created":1793825311853,"type":"session.text.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"delta":" and wept a little, and kept"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8520d4b001DW6oVfx6Qj6kGK","created":1793825312075,"type":"session.text.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"delta":" the"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8520e13001m7d6wyGns02NDy","created":1793825312275,"type":"session.text.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"delta":" light"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85210eb001g5Ay504vbPSKIn","created":1793825313003,"type":"session.reasoning.ended","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"text":"The user wants a 3-paragraph story about a lighthouse. Simple creative writing task. No tools needed.","native":{"reasoningField":"reasoning_content"}},"durable":{"aggregateID":"ses_e57ae01feffec92hL50L241AGn","seq":8,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85210ef001ttDwZdfBpBwR5n","created":1793825313007,"type":"session.text.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"delta":" burning until morning."}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85210ef002vr6xC5bqiug2rp","created":1793825313007,"type":"session.text.ended","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","ordinal":0,"text":"The lighthouse at Calder Point had stood for a hundred and forty years, and for most of them it had done its work quietly: a slow sweep of light across black water, a horn that moaned into fog, a keeper who climbed the spiral stairs twice a night and wrote in a log nobody read. Its stone was streaked white with salt, and the iron railing had rusted to the color of dried blood. Sailors said the light was the last thing they saw before sleep and the first thing they saw on waking, and some of them, superstitious, would not sail past it without touching their hat.\n\nMara took the keeper's job because the advertisement said \"solitude\" and she had wanted, that year, to be nobody's daughter and nobody's friend. She learned the rhythm of the thing within a week: the oil, the wick, the brass fittings that had to be polished or they clouded, the window that had to be wiped of spray before every dusk. On clear nights she would climb to the gallery and stand with her hands on the cold rail while the beam swung out and came back, out and came back, and the sea below her moved like something breathing in its sleep. She began to talk to the light. Not aloud, not quite, but she found herself thinking toward it, as though it were a patient animal that had agreed to keep her company.\n\nThe storm came in November, the way they always did—too fast, and worse than the forecast. Mara fought the door shut, pumped the oil with hands that had gone numb, and watched the glass take the rain in sheets. At the worst of it the great lens shuddered in its housing, and for one long moment the light went out, and the dark outside was so complete that she understood, suddenly and physically, what the tower was for. Then the filament caught, and the beam swung out again, and somewhere far off in the murk a ship's horn answered her, once, twice, and she stood there in her wet coat and wept a little, and kept the light burning until morning."},"durable":{"aggregateID":"ses_e57ae01feffec92hL50L241AGn","seq":9,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85210f2001MWFIcCNZuqpUoG","created":1793825313010,"type":"session.step.streamed","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY"},"durable":{"aggregateID":"ses_e57ae01feffec92hL50L241AGn","seq":10,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8521110001f69N3YRMvdocVV","created":1793825313040,"type":"session.step.ended","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","assistantMessageID":"msg_1a851fe35001dF2iK02CrQZsyY","finish":"stop","rawFinish":"stop","tokens":{"input":7373,"output":431,"reasoning":22,"cache":{"read":1664,"write":0}},"cost":0,"snapshot":"fb498ed8d6aa97194e7ad0067185c43d7e0b1ac7","files":[]},"durable":{"aggregateID":"ses_e57ae01feffec92hL50L241AGn","seq":11,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8521112001cRkRCiMrpOGzVZ","created":1793825313042,"type":"session.usage.updated","data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","cost":0,"tokens":{"input":7373,"output":431,"reasoning":22,"cache":{"read":1664,"write":0}}}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8521113001GFGj4FWbZzQdPy","created":1793825313043,"type":"session.execution.succeeded","data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn"},"durable":{"aggregateID":"ses_e57ae01feffec92hL50L241AGn","seq":12,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85215370018xEbioZJTaC5o2","created":1793825314103,"type":"session.usage.updated","data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","cost":0,"tokens":{"input":7464,"output":438,"reasoning":100,"cache":{"read":2048,"write":0}}}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8521538001uorcJ3vEYUaRN3","created":1793825314104,"type":"session.renamed","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae01feffec92hL50L241AGn","title":"Three-paragraph lighthouse story"},"durable":{"aggregateID":"ses_e57ae01feffec92hL50L241AGn","seq":14,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8522fa60013G58V6qZ680zDq","created":1793825320870,"type":"session.step.started","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","agent":"build","model":{"id":"deepseek-v4.1-flash-free","providerID":"opencode","variant":"default"},"assistantMessageID":"msg_1a851e10e001EBJqVBAUuXZNw8","snapshot":"fb498ed8d6aa97194e7ad0067185c43d7e0b1ac7","started":1793825300751},"durable":{"aggregateID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","seq":7,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8522faa001H2oa4gQwPefAxl","created":1793825320874,"type":"session.reasoning.started","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","assistantMessageID":"msg_1a851e10e001EBJqVBAUuXZNw8","ordinal":0,"native":{"reasoningField":"reasoning_content"}},"durable":{"aggregateID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","seq":8,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8523011001ud5lejnLv1cI0t","created":1793825320978,"type":"session.reasoning.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","assistantMessageID":"msg_1a851e10e001EBJqVBAUuXZNw8","ordinal":0,"delta":"The"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8523079001Efl0n62BCGPc2u","created":1793825321081,"type":"session.step.started","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae20fdffeG4BE6dcLy2S9aB","agent":"build","model":{"id":"deepseek-v4.1-flash-free","providerID":"opencode","variant":"default"},"assistantMessageID":"msg_1a851e0d40010Zcu1Ej2PFD0Ob","snapshot":"fb498ed8d6aa97194e7ad0067185c43d7e0b1ac7","started":1793825300694},"durable":{"aggregateID":"ses_e57ae20fdffeG4BE6dcLy2S9aB","seq":7,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a852307c001KDgWyz4Id8K5xO","created":1793825321084,"type":"session.text.started","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae20fdffeG4BE6dcLy2S9aB","assistantMessageID":"msg_1a851e0d40010Zcu1Ej2PFD0Ob","ordinal":0},"durable":{"aggregateID":"ses_e57ae20fdffeG4BE6dcLy2S9aB","seq":8,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85230cf001oLCon2Jikq3Yh4","created":1793825321167,"type":"session.reasoning.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","assistantMessageID":"msg_1a851e10e001EBJqVBAUuXZNw8","ordinal":0,"delta":" user wants me to run shell"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85230e40016PBA5oMjwQ9i9S","created":1793825321188,"type":"session.text.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae20fdffeG4BE6dcLy2S9aB","assistantMessageID":"msg_1a851e0d40010Zcu1Ej2PFD0Ob","ordinal":0,"delta":"I'll read both"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8523156001pferwSCC4ORkP8","created":1793825321302,"type":"session.text.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae20fdffeG4BE6dcLy2S9aB","assistantMessageID":"msg_1a851e0d40010Zcu1Ej2PFD0Ob","ordinal":0,"delta":" files first.\n\n"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8523157001UqXWErLOT4n5br","created":1793825321303,"type":"session.reasoning.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","assistantMessageID":"msg_1a851e10e001EBJqVBAUuXZNw8","ordinal":0,"delta":" commands one at a time:"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a852322a001ELE6GGZqY11Chi","created":1793825321514,"type":"session.reasoning.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","assistantMessageID":"msg_1a851e10e001EBJqVBAUuXZNw8","ordinal":0,"delta":" ls -la, then git"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85232a7001Bv3CHK2sAVmMST","created":1793825321640,"type":"session.tool.input.started","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae20fdffeG4BE6dcLy2S9aB","assistantMessageID":"msg_1a851e0d40010Zcu1Ej2PFD0Ob","id":"chatcmpl-tool-a84066b8c751a6b0","name":"read"},"durable":{"aggregateID":"ses_e57ae20fdffeG4BE6dcLy2S9aB","seq":9,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85232db00144BxdPgrKXGWcF","created":1793825321691,"type":"session.reasoning.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","assistantMessageID":"msg_1a851e10e001EBJqVBAUuXZNw8","ordinal":0,"delta":" log --oneline. Then"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85233820010v0c0w63r4mXKf","created":1793825321858,"type":"session.reasoning.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","assistantMessageID":"msg_1a851e10e001EBJqVBAUuXZNw8","ordinal":0,"delta":" summarize."}}
+retry: 3000
+
+: keepalive
+
+event: opencode
+data: {"id":"evt_1a8523532001v2cTtdUTgw7Caf","created":1793825322290,"type":"session.reasoning.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","assistantMessageID":"msg_1a851e10e001EBJqVBAUuXZNw8","ordinal":0,"delta":" Let me do that."}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a852362f001syAgR0tUDB3Owy","created":1793825322543,"type":"session.tool.input.started","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","assistantMessageID":"msg_1a851e10e001EBJqVBAUuXZNw8","id":"chatcmpl-tool-9be82bc28d5f130d","name":"shell"},"durable":{"aggregateID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","seq":9,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85237d7001uAWCRXFn4da26I","created":1793825322967,"type":"session.step.started","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1ee6ffeETjMgCzWdm0Oy0","agent":"build","model":{"id":"deepseek-v4.1-flash-free","providerID":"opencode","variant":"default"},"assistantMessageID":"msg_1a851e13b001f4gIovkO67bETJ","snapshot":"fb498ed8d6aa97194e7ad0067185c43d7e0b1ac7","started":1793825300796},"durable":{"aggregateID":"ses_e57ae1ee6ffeETjMgCzWdm0Oy0","seq":7,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a85237db001hd9p8CFLuIanQl","created":1793825322971,"type":"session.reasoning.started","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1ee6ffeETjMgCzWdm0Oy0","assistantMessageID":"msg_1a851e13b001f4gIovkO67bETJ","ordinal":0,"native":{"reasoningField":"reasoning_content"}},"durable":{"aggregateID":"ses_e57ae1ee6ffeETjMgCzWdm0Oy0","seq":8,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8523843001wzSb9olSBGqO68","created":1793825323075,"type":"session.reasoning.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1ee6ffeETjMgCzWdm0Oy0","assistantMessageID":"msg_1a851e13b001f4gIovkO67bETJ","ordinal":0,"delta":"The"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a852389d001J3e0jJ32mb4Kxr","created":1793825323165,"type":"session.step.started","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1ebbffeFt12NDLYDj0K64","agent":"build","model":{"id":"deepseek-v4.1-flash-free","providerID":"opencode","variant":"default"},"assistantMessageID":"msg_1a851e162001xYK36229zXXrwZ","snapshot":"fb498ed8d6aa97194e7ad0067185c43d7e0b1ac7","started":1793825300835},"durable":{"aggregateID":"ses_e57ae1ebbffeFt12NDLYDj0K64","seq":7,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a852389f0013oo2uBwfUgIOxq","created":1793825323167,"type":"session.tool.input.started","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1ebbffeFt12NDLYDj0K64","assistantMessageID":"msg_1a851e162001xYK36229zXXrwZ","id":"chatcmpl-tool-9fbaa99118a9eec9","name":"read"},"durable":{"aggregateID":"ses_e57ae1ebbffeFt12NDLYDj0K64","seq":8,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8523900001P0UUc2283fPXlp","created":1793825323265,"type":"session.reasoning.delta","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1ee6ffeETjMgCzWdm0Oy0","assistantMessageID":"msg_1a851e13b001f4gIovkO67bETJ","ordinal":0,"delta":" user wants"}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8523961001x3gnTkP3ikdfBP","created":1793825323361,"type":"session.reasoning.ended","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","assistantMessageID":"msg_1a851e10e001EBJqVBAUuXZNw8","ordinal":0,"text":"The user wants me to run shell commands one at a time: ls -la, then git log --oneline. Then summarize. Let me do that.","native":{"reasoningField":"reasoning_content"}},"durable":{"aggregateID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","seq":10,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8523964001sOwduibGhWc2f0","created":1793825323364,"type":"session.tool.input.ended","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","assistantMessageID":"msg_1a851e10e001EBJqVBAUuXZNw8","id":"chatcmpl-tool-9be82bc28d5f130d","text":"{\"command\": \"ls -la\"}"},"durable":{"aggregateID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","seq":11,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8523966001Cs0sWnblk2BZpV","created":1793825323366,"type":"session.tool.called","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","assistantMessageID":"msg_1a851e10e001EBJqVBAUuXZNw8","id":"chatcmpl-tool-9be82bc28d5f130d","input":{"command":"ls -la"},"executed":false},"durable":{"aggregateID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","seq":12,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8523969001t3QmgTqbr44pQm","created":1793825323369,"type":"session.step.streamed","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","assistantMessageID":"msg_1a851e10e001EBJqVBAUuXZNw8"},"durable":{"aggregateID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","seq":13,"version":1}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8523973001EeL6sBSuQBK9zL","created":1793825323379,"type":"shell.created","location":{"directory":"/Users/demo/proj"},"data":{"info":{"id":"sh_1a852396f001CDV2a9IiHpxztB","status":"running","command":"ls -la","cwd":"/Users/demo/proj","shell":"/bin/zsh","file":"/Users/demo/xdg/data/opencode/shell/b8b18816dd7fe48ff6e9625d7ab3b909b48b0a31/sh_1a852396f001CDV2a9IiHpxztB.out","metadata":{"sessionID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs"},"time":{"started":1793825323375}}}}
+retry: 3000
+
+event: opencode
+data: {"id":"evt_1a8523973002fFff4khhg9EVwc","created":1793825323379,"type":"session.tool.progress","location":{"directory":"/Users/demo/proj"},"data":{"sessionID":"ses_e57ae1f1bffeoG7zXR8WlUWtGs","assistantMessageID":"msg_1a851e10e001EBJqVBAUuXZNw8","id":"chatcmpl-tool-9be82bc28d5f130d","metadata":{"shellID":"sh_1a852396f

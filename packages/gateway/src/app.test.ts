@@ -188,6 +188,21 @@ describe('gateway and the real OpenCode client', () => {
     expect((await view({ idle: 200 })).status).toBe(502);
     expect(calls).toEqual([{ idle: 100 }, { idle: 200 }]);
   });
+
+  it('deletes a thread through the native session remove', async () => {
+    const calls: string[] = [];
+    const url = await upstream((req, res) => {
+      calls.push(`${req.method} ${req.url}`);
+      res.writeHead(204).end();
+    });
+    const app = createApp(new OpenCodeBackend(async () => ({ url })));
+    const response = await app.request('http://localhost/api/sessions/ses_gone', {
+      method: 'DELETE',
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+    expect(calls).toEqual(['DELETE /api/session/ses_gone']);
+  });
   it('persists manual unread marks through native metadata without losing other fields or clearing a newer mark', async () => {
     let metadata: Record<string, unknown> = { otherClient: { pinned: true } };
     const writes: unknown[] = [];
