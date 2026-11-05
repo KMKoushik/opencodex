@@ -7,6 +7,8 @@ import SwiftUI
 struct SideChatSheet: View {
   @State private var list: SideChatList
   @State private var confirmDelete: SessionInfo?
+  /// Opens tall: a chat needs room for its transcript and the keyboard.
+  @State private var detent: PresentationDetent = .large
   @Environment(\.palette) private var palette
   @Environment(\.dismiss) private var dismiss
 
@@ -36,6 +38,10 @@ struct SideChatSheet: View {
               ?? "This deletes the side chat and its messages. The main chat isn’t affected.")
         }
     }
+    .tint(palette.color("text"))
+    .presentationDetents([.medium, .large], selection: $detent)
+    .presentationDragIndicator(.visible)
+    .presentationBackground(palette.color("surface"))
     .task { await list.run() }
   }
 
@@ -48,58 +54,38 @@ struct SideChatSheet: View {
       SideChatView(list: list, session: selected)
         .id(selected.id)
     } else if list.creating {
-      notice("Starting a side chat…")
+      PanelLoading("Starting a side chat…")
     } else if let error = list.createError ?? list.listError {
-      VStack(spacing: 12) {
-        Text(error)
-          .font(.subheadline)
-          .foregroundStyle(palette.color("error"))
-          .multilineTextAlignment(.center)
-          .accessibilityIdentifier("sidechat.error")
+      PanelUnavailable(
+        "Couldn’t open side chats", systemImage: "exclamationmark.triangle", message: error,
+        tone: "error"
+      ) {
         Button("Retry") {
           list.createError = nil
           Task { await list.load() }
         }
         .buttonStyle(SideChatSecondaryButton())
       }
-      .padding(32)
+      .accessibilityElement(children: .contain)
+      .accessibilityIdentifier("sidechat.error")
     } else if list.sessions != nil {
       empty
     } else {
-      ProgressView().controlSize(.large)
+      PanelLoading("Loading side chats…")
     }
-  }
-
-  private func notice(_ text: String) -> some View {
-    Text(text)
-      .font(.subheadline)
-      .foregroundStyle(palette.color("text-secondary"))
-      .padding(32)
   }
 
   /// The panel's empty state.
   private var empty: some View {
-    VStack(spacing: 8) {
-      Image(systemName: "questionmark.bubble")
-        .font(.system(size: 26, weight: .light))
-        .foregroundStyle(palette.color("text-tertiary"))
-        .padding(.bottom, 8)
-      Text("Ask on the side")
-        .font(.headline)
-        .foregroundStyle(palette.color("text"))
-      Text(
+    PanelUnavailable(
+      "Ask on the side", systemImage: "questionmark.bubble",
+      message:
         "A side chat starts from this chat’s history, so you can ask questions or explore without interrupting the main chat."
-      )
-      .font(.subheadline)
-      .foregroundStyle(palette.color("text-secondary"))
-      .multilineTextAlignment(.center)
+    ) {
       Button("New side chat") { Task { await list.create() } }
         .buttonStyle(SideChatSecondaryButton())
-        .padding(.top, 8)
         .accessibilityIdentifier("sidechat.new.empty")
     }
-    .frame(maxWidth: 400)
-    .padding(32)
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("sidechat.empty")
   }

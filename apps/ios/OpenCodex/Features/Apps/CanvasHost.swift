@@ -49,6 +49,8 @@ final class CanvasModel {
     async let data: Void = load(.data)
     async let apps: Void = load(.apps)
     _ = await (source, data, apps)
+    // Stay subscribed while the canvas is open; poll while the event stream is down.
+    await events.follow { [weak self] in self?.schedule([.source, .data, .apps]) }
   }
 
   /// `canvas` events from the gateway's stream: `{ type: source | data | list | app, id, … }`.

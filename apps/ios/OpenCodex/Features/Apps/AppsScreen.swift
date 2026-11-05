@@ -33,6 +33,8 @@ final class AppsModel {
       self.projects = projects
     }
     await list
+    // Stay subscribed while the page is open; poll while the event stream is down.
+    await events.follow { [weak self] in await self?.load() }
   }
 
   func load() async {
@@ -85,17 +87,21 @@ struct AppsScreen: View {
     Group {
       if let apps = model.apps {
         if apps.isEmpty { empty } else { index(apps) }
+      } else if let error = model.error {
+        PanelUnavailable(
+          "Couldn’t load apps", systemImage: "exclamationmark.triangle", message: error,
+          tone: "error"
+        ) {
+          Button("Retry") { Task { await model.load() } }.buttonStyle(.bordered)
+        }
       } else {
-        Text(model.error ?? "Loading apps…")
-          .font(.subheadline)
-          .foregroundStyle(palette.color(model.error == nil ? "text-tertiary" : "error"))
-          .multilineTextAlignment(.center)
-          .padding(32)
+        PanelLoading("Loading apps…")
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(palette.color("surface").ignoresSafeArea())
     .navigationTitle("Apps")
+    .navigationSubtitle(subtitle)
     .navigationBarTitleDisplayMode(.inline)
     .navigationDestination(item: $opened) { route in
       AppDetail(model: model, id: route.id, onOpenSession: onOpenSession)
@@ -103,95 +109,45 @@ struct AppsScreen: View {
     .task { await model.run() }
   }
 
+  /// "3 apps · 1 running · 1 failing", the page header's count.
+  private var subtitle: String {
+    guard let apps = model.apps, !apps.isEmpty else { return "" }
+    let running = apps.filter { !$0.running.isEmpty }.count
+    let failing = apps.filter(\.failing).count
+    return "\(apps.count) \(apps.count == 1 ? "app" : "apps")\(running > 0 ? " · \(running) running" : "")\(failing > 0 ? " · \(failing) failing" : "")"
+  }
+
   private var empty: some View {
-    VStack(spacing: 8) {
-      Image(systemName: "square.grid.2x2")
-        .font(.system(size: 22))
-        .foregroundStyle(palette.color("text-tertiary"))
-      Text("No apps yet")
-        .font(.headline)
-        .foregroundStyle(palette.color("text"))
-      Text(
+    PanelUnavailable(
+      "No apps yet", systemImage: "square.grid.2x2",
+      message:
         "An app is a canvas with code behind it that can call OpenCode. Ask for one in any chat, for example: “Every day, check open PRs and issues in my repo, fix the easy ones, and show me a dashboard of what needs my decision.”"
-      )
-      .font(.subheadline)
-      .foregroundStyle(palette.color("text-tertiary"))
-    }
-    .multilineTextAlignment(.center)
-    .frame(maxWidth: 440)
-    .padding(.horizontal, 24)
-    .frame(maxHeight: .infinity, alignment: .top)
-    .padding(.top, 120)
+    )
     .accessibilityElement(children: .combine)
     .accessibilityIdentifier("apps.empty")
   }
 
   private func index(_ apps: [AppInfo]) -> some View {
-    let running = apps.filter { !$0.running.isEmpty }.count
-    let failing = apps.filter(\.failing).count
-    return ScrollView {
-      LazyVStack(alignment: .leading, spacing: 12) {
-        VStack(alignment: .leading, spacing: 2) {
-          Text("Apps")
-            .font(.title2.weight(.semibold))
-            .foregroundStyle(palette.color("text"))
-          Text(
-            "\(apps.count) \(apps.count == 1 ? "app" : "apps")\(running > 0 ? " · \(running) running" : "")\(failing > 0 ? " · \(failing) failing" : "")"
-          )
-          .font(.footnote.monospacedDigit())
-          .foregroundStyle(palette.color("text-tertiary"))
-        }
-        .padding(.bottom, 4)
+    List {
+      Section {
         ForEach(apps) { app in
           Button {
             opened = AppRoute(id: app.id)
           } label: {
             AppTile(app: app, project: model.project(app.projectID))
           }
-          .buttonStyle(AppTileStyle())
+          .tint(palette.color("text"))
+          .panelRow(palette)
           .accessibilityIdentifier("apps.tile")
         }
       }
-      .padding(.horizontal, 16)
-      .padding(.top, 12)
-      .padding(.bottom, 24)
     }
+    .panelList(palette)
     .refreshable { await model.load() }
   }
 }
 
 private struct AppRoute: Hashable { var id: String }
-
-private struct AppTileStyle: ButtonStyle {
-  @Environment(\.palette) private var palette
-  func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .background(palette.gradient("glaze"), in: .rect(cornerRadius: 14, style: .continuous))
-      .overlay {
-        if configuration.isPressed {
-          RoundedRectangle(cornerRadius: 14, style: .continuous).fill(palette.color("hover"))
-        }
-      }
-      .modifier(GlazeShadow(radius: 14))
-  }
-}
-
-/// `--glaze-shadow`'s layers: an inset highlight, a hairline ring and a soft drop.
-private struct GlazeShadow: ViewModifier {
-  let radius: CGFloat
-  @Environment(\.palette) private var palette
-  func body(content: Content) -> some View {
-    let layers = palette.shadows("glaze-shadow")
-    let ring = layers.first { !$0.inset && $0.blur == 0 }
-    let drop = layers.first { !$0.inset && $0.blur > 0 }
-    content
-      .overlay(
-        RoundedRectangle(cornerRadius: radius, style: .continuous)
-          .strokeBorder(Color(uiColor: ring?.color ?? palette.ui("border")), lineWidth: 1)
-      )
-      .shadow(color: Color(uiColor: drop?.color ?? .clear), radius: (drop?.blur ?? 0) / 2, y: drop?.y ?? 0)
-  }
-}
 
 private struct AppTile: View {
   let app: AppInfo
@@ -199,7 +155,7 @@ private struct AppTile: View {
   @Environment(\.palette) private var palette
 
   var body: some View {
-    HStack(alignment: .top, spacing: 12) {
+    HStack(spacing: 12) {
       AppIcon(id: app.id, title: app.title, icon: app.icon, size: 40)
       VStack(alignment: .leading, spacing: 2) {
         Text(app.title)
@@ -222,11 +178,14 @@ private struct AppTile: View {
         }
         .font(.caption)
         .foregroundStyle(palette.color("text-tertiary"))
-        .padding(.top, 4)
+        .padding(.top, 2)
       }
       Spacer(minLength: 0)
+      Image(systemName: "chevron.right")
+        .font(.footnote.weight(.semibold))
+        .foregroundStyle(palette.color("text-tertiary"))
     }
-    .padding(14)
+    .padding(.vertical, 6)
     .frame(maxWidth: .infinity, alignment: .leading)
     .contentShape(.rect)
   }
@@ -340,9 +299,17 @@ private struct AppDetail: View {
         )
       }
     } else {
-      Text(model.apps == nil ? (model.error ?? "Loading apps…") : "This app was deleted.")
-        .font(.subheadline)
-        .foregroundStyle(palette.color("text-tertiary"))
+      Group {
+        if model.apps != nil {
+          PanelUnavailable("This app was deleted.", systemImage: "square.grid.2x2")
+        } else if let error = model.error {
+          PanelUnavailable(
+            "Couldn’t load apps", systemImage: "exclamationmark.triangle", message: error,
+            tone: "error")
+        } else {
+          PanelLoading("Loading apps…")
+        }
+      }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.color("surface").ignoresSafeArea())
         // Opened straight from a link, before the index has loaded.
@@ -373,9 +340,12 @@ private struct AppDetail: View {
         }
         Spacer(minLength: 0)
       }
-      SegmentedControl(
-        label: "Show", value: $tab,
-        options: [.init(value: "app", label: "App"), .init(value: "code", label: "Code")])
+      Picker("Show", selection: $tab) {
+        Text("App").tag("app")
+        Text("Code").tag("code")
+      }
+      .pickerStyle(.segmented)
+      .accessibilityIdentifier("apps.tab")
     }
     .padding(.horizontal, 16)
     .padding(.top, 8)
@@ -399,6 +369,7 @@ private struct AppDetail: View {
           }
         }
         Button("Runs (\(app.runCount))", systemImage: "list.bullet.rectangle") { showRuns = true }
+          .accessibilityIdentifier("apps.runs")
         Divider()
         Button("Delete app…", systemImage: "trash", role: .destructive) {
           deleteError = nil
@@ -448,39 +419,62 @@ private struct AppCode: View {
     VStack(spacing: 0) {
       if let files {
         if files.isEmpty {
-          note("No source files.")
-        } else {
-          ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-              ForEach(files, id: \.name) { file in
-                Button(file.name) { selected = file.name }
-                  .font(.footnote.monospaced())
-                  .foregroundStyle(palette.color(current?.name == file.name ? "text" : "text-secondary"))
-                  .padding(.horizontal, 10)
-                  .frame(height: 32)
-                  .background(
-                    current?.name == file.name ? palette.color("selected") : .clear,
-                    in: .rect(cornerRadius: 8, style: .continuous))
+          PanelUnavailable("No source files", systemImage: "doc.text")
+        } else if let current {
+          HStack(spacing: 8) {
+            Menu {
+              Picker("Source file", selection: selection) {
+                ForEach(files, id: \.name) { file in
+                  Label(file.name, systemImage: "doc.text").tag(file.name)
+                }
               }
+            } label: {
+              HStack(spacing: 6) {
+                Image(systemName: "doc.text")
+                Text(current.name).lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down").font(.caption2)
+              }
+              .font(.footnote.monospaced())
+              .foregroundStyle(palette.color("text"))
+              .frame(minHeight: 44)
+              .contentShape(.rect)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-          }
-          .overlay(alignment: .bottom) { palette.color("border").frame(height: 1) }
-          if let current {
-            ScrollView([.vertical, .horizontal]) {
-              Text(current.text)
-                .font(.caption.monospaced())
-                .foregroundStyle(palette.color("text"))
-                .textSelection(.enabled)
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel("Source file")
+            .accessibilityValue(current.name)
+            .accessibilityIdentifier("apps.code.file")
+            Spacer(minLength: 8)
+            Text("\(current.text.split(separator: "\n", omittingEmptySubsequences: false).count) lines")
+              .font(.caption.monospacedDigit())
+              .foregroundStyle(palette.color("text-tertiary"))
+            ShareLink(item: current.text, subject: Text(current.name)) {
+              Image(systemName: "square.and.arrow.up")
+                .frame(width: 44, height: 44)
+                .contentShape(.rect)
             }
-            .background(palette.color("code-bg"))
+            .foregroundStyle(palette.color("text-secondary"))
+            .accessibilityLabel("Share \(current.name)")
+            .accessibilityIdentifier("apps.code.share")
           }
+          .padding(.leading, 16)
+          .padding(.trailing, 6)
+          .overlay(alignment: .bottom) { palette.color("border").frame(height: 1 / 3) }
+          ScrollView([.vertical, .horizontal]) {
+            Text(current.text)
+              .font(.caption.monospaced())
+              .foregroundStyle(palette.color("text"))
+              .textSelection(.enabled)
+              .padding(16)
+              .frame(maxWidth: .infinity, alignment: .leading)
+          }
+          .background(palette.color("code-bg"))
+          .accessibilityIdentifier("apps.code.text")
         }
+      } else if let error {
+        PanelUnavailable(
+          "Couldn’t load the code", systemImage: "exclamationmark.triangle", message: error,
+          tone: "error")
       } else {
-        note(error ?? "Loading…")
+        PanelLoading("Loading…")
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -495,11 +489,8 @@ private struct AppCode: View {
     files?.first { $0.name == selected } ?? files?.first
   }
 
-  private func note(_ text: String) -> some View {
-    Text(text)
-      .font(.subheadline)
-      .foregroundStyle(palette.color("text-tertiary"))
-      .padding(32)
+  private var selection: Binding<String> {
+    Binding { current?.name ?? "" } set: { selected = $0 }
   }
 }
 
@@ -515,32 +506,39 @@ private struct AppRunsSheet: View {
 
   var body: some View {
     NavigationStack {
-      List {
-        if let runs {
-          if runs.isEmpty {
-            Text("No runs yet.").foregroundStyle(palette.color("text-tertiary"))
-          }
-          ForEach(runs) { run in
-            RunRow(run: run) { session in
-              dismiss()
-              onOpenSession?(session)
+      Group {
+        if let runs, runs.isEmpty {
+          PanelUnavailable("No runs yet", systemImage: "list.bullet.rectangle")
+        } else if let runs {
+          List {
+            ForEach(runs) { run in
+              RunRow(run: run) { session in
+                dismiss()
+                onOpenSession?(session)
+              }
+              .panelRow(palette)
             }
           }
+          .panelList(palette)
+        } else if let error {
+          PanelUnavailable(
+            "Couldn’t load runs", systemImage: "exclamationmark.triangle", message: error,
+            tone: "error")
         } else {
-          Text(error ?? "Loading runs…")
-            .foregroundStyle(palette.color(error == nil ? "text-tertiary" : "error"))
+          PanelLoading("Loading runs…")
         }
       }
-      .listStyle(.plain)
-      .scrollContentBackground(.hidden)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(palette.color("surface"))
       .navigationTitle("Runs")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
-        ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
+        ToolbarItem(placement: .confirmationAction) { Button("Done", role: .confirm) { dismiss() } }
       }
     }
     .presentationDetents([.medium, .large])
+    .presentationDragIndicator(.visible)
+    .presentationBackground(palette.color("surface"))
     .task {
       do { runs = try await client.appRuns(app.id) } catch { self.error = error.localizedDescription }
     }
@@ -618,7 +616,6 @@ private struct RunRow: View {
         }
       }
     }
-    .listRowBackground(palette.color("surface"))
   }
 
   private var dot: String {

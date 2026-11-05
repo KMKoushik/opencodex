@@ -35,7 +35,11 @@ struct WorkspaceView: View {
             Button("Close workspace panel", systemImage: "xmark") { dismiss() }
               .accessibilityIdentifier("workspace-close")
           }
-          ToolbarItem(placement: .topBarTrailing) {
+          ToolbarItemGroup(placement: .topBarTrailing) {
+            Button("Collapse folders", systemImage: "rectangle.compress.vertical") {
+              model.collapseAll()
+            }
+            .accessibilityIdentifier("workspace-collapse")
             Button("Refresh workspace", systemImage: "arrow.clockwise") {
               Task { await model.refresh() }
             }
@@ -71,6 +75,11 @@ private struct WorkspaceExplorer: View {
       footer
     }
     .background(palette.color("surface-under"))
+    .searchable(
+      text: $model.search, placement: .navigationBarDrawer(displayMode: .always),
+      prompt: Text(model.segment == .files ? "Find files" : "Filter changed files"))
+    .textInputAutocapitalization(.never)
+    .autocorrectionDisabled()
     .task(id: SearchKey(text: model.search, segment: model.segment)) {
       if model.segment == .files, !model.search.trimmingCharacters(in: .whitespaces).isEmpty {
         try? await Task.sleep(for: .milliseconds(180))
@@ -90,41 +99,26 @@ private struct WorkspaceExplorer: View {
   }
 
   private var header: some View {
-    VStack(spacing: 10) {
-      WorkspaceSegmented(
-        label: "Workspace view", selection: $model.segment,
-        options: [
-          .init(value: .files, label: "All files", identifier: "workspace-files"),
-          .init(
-            value: .changes, label: "Changes", badge: model.changes.map { "\($0.count)" },
-            identifier: "workspace-changes"),
-        ])
-      if model.segment == .changes {
-        WorkspaceSegmented(
-          label: "Compare changes against", selection: $model.mode,
-          options: CompareMode.allCases.map {
-            .init(value: $0, label: $0.label, identifier: "workspace-mode-\($0.rawValue)")
-          })
+    VStack(spacing: 8) {
+      Picker("Workspace view", selection: $model.segment) {
+        Text("All files").tag(WorkspaceModel.Segment.files)
+        Text(model.changes.map { "Changes \($0.count)" } ?? "Changes")
+          .tag(WorkspaceModel.Segment.changes)
       }
-      HStack(spacing: 6) {
-        FilterField(
-          text: $model.search,
-          label: model.segment == .files ? "Find files" : "Filter changed files")
-        Button {
-          model.collapseAll()
-        } label: {
-          Image(systemName: "minus")
-            .font(.system(size: 14, weight: .medium))
-            .foregroundStyle(palette.color("text-secondary"))
-            .frame(width: 36, height: 36)
-            .contentShape(.rect)
+      .pickerStyle(.segmented)
+      .accessibilityIdentifier("workspace-view")
+      if model.segment == .changes {
+        Picker("Compare changes against", selection: $model.mode) {
+          ForEach(CompareMode.allCases, id: \.self) { mode in
+            Text(mode.label).tag(mode)
+          }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Collapse folders")
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier("workspace-mode")
       }
     }
-    .padding(.horizontal, 12)
-    .padding(.top, 8)
+    .padding(.horizontal, 16)
+    .padding(.top, 4)
     .padding(.bottom, 10)
   }
 
@@ -169,9 +163,15 @@ private struct WorkspaceExplorer: View {
       if let error = model.changesError, model.changes == nil {
         WorkspaceError(message: error) { Task { await model.loadChanges() } }
       } else if model.changes == nil {
-        WorkspaceNotice(text: "Loading changes…")
+        PanelLoading("Loading changes…")
       } else if model.changes?.isEmpty == true {
-        WorkspaceNotice(text: "No changes.")
+        PanelUnavailable(
+          "No changes", systemImage: "checkmark.circle",
+          message: model.mode == .working
+            ? "There are no uncommitted changes." : "Nothing differs from the base branch.")
+        .accessibilityIdentifier("workspace-no-changes")
+      } else if empty, !model.search.isEmpty {
+        PanelUnavailable.search(text: model.search)
       }
     case .files:
       if !model.query.isEmpty, let error = model.findError {
@@ -179,7 +179,9 @@ private struct WorkspaceExplorer: View {
       } else if let error = model.folderError, model.query.isEmpty, error.path.isEmpty || empty {
         WorkspaceError(message: error.message) { Task { await model.loadFolder(error.path) } }
       } else if model.folders[""] == nil, model.query.isEmpty {
-        WorkspaceNotice(text: "Loading files…")
+        PanelLoading("Loading files…")
+      } else if empty, !model.query.isEmpty, model.found != nil {
+        PanelUnavailable.search(text: model.query)
       }
     }
   }
@@ -201,44 +203,6 @@ private struct WorkspaceExplorer: View {
     .padding(.vertical, 10)
     .accessibilityElement(children: .combine)
     .accessibilityIdentifier("workspace-footer")
-  }
-}
-
-/// The desktop tree's text input.
-private struct FilterField: View {
-  @Binding var text: String
-  let label: String
-  @Environment(\.palette) private var palette
-
-  var body: some View {
-    HStack(spacing: 6) {
-      Image(systemName: "magnifyingglass")
-        .font(.system(size: 13))
-        .foregroundStyle(palette.color("text-tertiary"))
-      TextField(
-        label, text: $text,
-        prompt: Text("Filter files…").foregroundStyle(palette.color("text-tertiary")))
-        .font(.subheadline)
-        .foregroundStyle(palette.color("text"))
-        .textInputAutocapitalization(.never)
-        .autocorrectionDisabled()
-        .submitLabel(.search)
-        .accessibilityIdentifier("workspace-filter")
-      if !text.isEmpty {
-        Button("Clear filter", systemImage: "xmark.circle.fill") { text = "" }
-          .labelStyle(.iconOnly)
-          .font(.system(size: 14))
-          .foregroundStyle(palette.color("text-tertiary"))
-          .buttonStyle(.plain)
-      }
-    }
-    .padding(.horizontal, 10)
-    .frame(height: 36)
-    .background(palette.color("control"), in: .rect(cornerRadius: 9, style: .continuous))
-    .overlay {
-      RoundedRectangle(cornerRadius: 9, style: .continuous)
-        .strokeBorder(palette.color("border-heavy"), lineWidth: 0.5)
-    }
   }
 }
 

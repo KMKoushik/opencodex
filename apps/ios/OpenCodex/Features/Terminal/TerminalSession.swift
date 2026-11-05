@@ -189,6 +189,7 @@ final class TerminalSession {
     onDisconnect?()
     if code == 1000 {
       status = "Shell exited"
+      _ = view.resignFirstResponder()
       return
     }
     failures += 1

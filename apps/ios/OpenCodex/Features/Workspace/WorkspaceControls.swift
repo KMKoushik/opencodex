@@ -1,67 +1,5 @@
 import SwiftUI
 
-/// The desktop's `SegmentedControl`: a recessed well with a glazed thumb under the chosen option.
-struct WorkspaceSegmented<Value: Hashable>: View {
-  struct Option {
-    var value: Value
-    var label: String
-    var badge: String? = nil
-    var identifier: String
-  }
-
-  let label: String
-  @Binding var selection: Value
-  let options: [Option]
-  @Environment(\.palette) private var palette
-  @Namespace private var thumb
-
-  var body: some View {
-    HStack(spacing: 2) {
-      ForEach(options, id: \.identifier) { option in
-        let chosen = option.value == selection
-        Button {
-          selection = option.value
-        } label: {
-          HStack(spacing: 6) {
-            Text(option.label)
-            if let badge = option.badge {
-              Text(badge)
-                .font(.system(.caption2, design: .monospaced))
-                .monospacedDigit()
-                .padding(.horizontal, 5)
-                .background(palette.color("secondary"), in: .rect(cornerRadius: 4))
-            }
-          }
-          .font(.footnote.weight(.medium))
-          .foregroundStyle(palette.color(chosen ? "text" : "text-secondary"))
-          .frame(maxWidth: .infinity, minHeight: 30)
-          .contentShape(.rect)
-          .background {
-            if chosen {
-              RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(palette.gradient("glaze"))
-                .workspaceShadow(palette.shadows("glaze-shadow"))
-                .matchedGeometryEffect(id: "thumb", in: thumb)
-            }
-          }
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier(option.identifier)
-        .accessibilityAddTraits(chosen ? .isSelected : [])
-      }
-    }
-    .padding(2)
-    .background(palette.color("well"), in: .rect(cornerRadius: 9, style: .continuous))
-    .overlay {
-      RoundedRectangle(cornerRadius: 9, style: .continuous)
-        .strokeBorder(palette.color("border"), lineWidth: 0.5)
-    }
-    .animation(.snappy(duration: 0.2), value: selection)
-    .accessibilityElement(children: .contain)
-    .accessibilityLabel(label)
-  }
-}
-
 extension View {
   /// Draws a CSS `box-shadow` token's outer layers; inset highlights are left out.
   func workspaceShadow(_ layers: [Palette.Shadow]) -> some View {
@@ -155,33 +93,22 @@ struct FileIcon: View {
   }
 }
 
-/// The desktop's `.wb-empty`: a centered icon, title and note.
+/// The desktop's `.wb-empty`: loading notes get the native spinner; other notes are a
+/// `ContentUnavailableView`.
 struct WorkspaceEmpty: View {
   var symbol: String?
   var title: String?
   var message: String
   var note: String?
-  @Environment(\.palette) private var palette
 
   var body: some View {
-    VStack(spacing: 8) {
-      if let symbol {
-        Image(systemName: symbol)
-          .font(.system(size: 28, weight: .light))
-          .foregroundStyle(palette.color("text-tertiary"))
-          .padding(.bottom, 8)
-      }
-      if let title {
-        Text(title).font(.subheadline.weight(.medium)).foregroundStyle(palette.color("text"))
-      }
-      Text(message).font(.footnote).foregroundStyle(palette.color("text-secondary"))
-      if let note {
-        Text(note).font(.footnote).foregroundStyle(palette.color("text-tertiary"))
-      }
+    if message.hasSuffix("…"), symbol == nil, title == nil {
+      PanelLoading(message)
+    } else {
+      PanelUnavailable(
+        title ?? message, systemImage: symbol ?? "doc",
+        message: title == nil ? note : [message, note].compactMap { $0 }.joined(separator: "\n"))
     }
-    .multilineTextAlignment(.center)
-    .padding(24)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 }
 
@@ -189,19 +116,15 @@ struct WorkspaceEmpty: View {
 struct WorkspaceError: View {
   let message: String
   let retry: () -> Void
-  @Environment(\.palette) private var palette
 
   var body: some View {
-    VStack(spacing: 12) {
-      Text(message)
-        .font(.footnote)
-        .foregroundStyle(palette.color("error"))
-        .multilineTextAlignment(.center)
+    PanelUnavailable(
+      "Couldn’t load this", systemImage: "exclamationmark.triangle", message: message, tone: "error"
+    ) {
       Button("Retry", action: retry)
         .buttonStyle(WorkspaceButtonStyle())
+        .accessibilityIdentifier("workspace-retry")
     }
-    .padding(24)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("workspace-error")
   }

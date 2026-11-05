@@ -12,14 +12,17 @@ struct MarkdownPreview: View {
 
   var body: some View {
     if text.count > Self.limit {
-      VStack(spacing: 12) {
-        WorkspaceEmpty(message: "This document is too large for rendered preview.")
-          .fixedSize(horizontal: false, vertical: true)
-        Button("View source", action: showSource).buttonStyle(WorkspaceButtonStyle())
+      PanelUnavailable(
+        "This document is too large for rendered preview.", systemImage: "doc.richtext"
+      ) {
+        Button("View source", action: showSource)
+          .buttonStyle(WorkspaceButtonStyle())
+          .accessibilityIdentifier("markdown-view-source")
       }
-      .frame(maxHeight: .infinity)
+      .accessibilityElement(children: .contain)
+      .accessibilityIdentifier("markdown-too-large")
     } else {
-      MarkdownBlocksView(text: text).accessibilityIdentifier("markdown-preview")
+      MarkdownBlocksView(text: text)
     }
   }
 }
@@ -28,7 +31,11 @@ private struct MarkdownBlocksView: UIViewRepresentable {
   let text: String
   @Environment(\.palette) private var palette
 
-  func makeUIView(context: Context) -> MarkdownCollection { MarkdownCollection() }
+  func makeUIView(context: Context) -> MarkdownCollection {
+    let view = MarkdownCollection()
+    view.accessibilityIdentifier = "markdown-preview"
+    return view
+  }
 
   func updateUIView(_ view: MarkdownCollection, context: Context) {
     view.update(text: text, palette: palette)
@@ -55,6 +62,7 @@ final class MarkdownCollection: UIView, UICollectionViewDataSource {
     view.register(TableCell.self, forCellWithReuseIdentifier: "table")
     view.register(RuleCell.self, forCellWithReuseIdentifier: "rule")
     view.register(ImageBlockCell.self, forCellWithReuseIdentifier: "image")
+    view.accessibilityIdentifier = "markdown-preview"
     return view
   }()
 

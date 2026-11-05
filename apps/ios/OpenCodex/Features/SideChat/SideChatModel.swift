@@ -45,6 +45,7 @@ final class SideChatList {
     ]
     defer { subscriptions = [] }
     await load()
+    await events.follow { [weak self] in await self?.load() }
   }
 
   func load() async {
@@ -146,6 +147,7 @@ final class MainChatWatcher {
     ]
     defer { subscriptions = [] }
     await load()
+    await events.follow { [weak self] in await self?.load() }
   }
 
   private func load() async {

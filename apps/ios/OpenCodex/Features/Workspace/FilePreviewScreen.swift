@@ -17,6 +17,8 @@ struct FilePreviewScreen: View {
   enum Phase {
     case loading
     case failed(String)
+    /// Over the gateway's 2 MiB preview bound (HTTP 413).
+    case tooLarge(String)
     case loaded(WorkspaceFile, CodeDocument?)
   }
 
@@ -32,6 +34,14 @@ struct FilePreviewScreen: View {
       .navigationSubtitle(parent)
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
+        if case .loaded(.text(let text, _, _), _) = phase {
+          ToolbarItem(placement: .topBarTrailing) {
+            ShareLink(item: text, subject: Text((path as NSString).lastPathComponent)) {
+              Label("Share file", systemImage: "square.and.arrow.up")
+            }
+            .accessibilityIdentifier("file-share")
+          }
+        }
         if isMarkdown, case .loaded(.text, _) = phase {
           ToolbarItem(placement: .topBarTrailing) {
             Picker("Markdown view", selection: $markdownPreview) {
@@ -60,6 +70,10 @@ struct FilePreviewScreen: View {
       WorkspaceEmpty(message: "Loading file…")
     case .failed(let message):
       WorkspaceError(message: message) { Task { await load() } }
+    case .tooLarge(let message):
+      PanelUnavailable("File too large to preview", systemImage: "doc.badge.ellipsis", message: message)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("file-too-large")
     case .loaded(let file, let document):
       switch file {
       case .text(let text, _, _):
@@ -78,8 +92,9 @@ struct FilePreviewScreen: View {
         DocumentPreview(data: data, bytes: bytes, name: (path as NSString).lastPathComponent)
       case .binary(let bytes):
         WorkspaceEmpty(
-          message:
-            "Binary file · \(bytes.formatted()) bytes. Text preview is unavailable.")
+          symbol: "doc.zipper", title: "Binary file",
+          message: "\(bytes.formatted()) bytes. Text preview is unavailable.")
+          .accessibilityIdentifier("binary-file")
       }
     }
   }
@@ -93,6 +108,8 @@ struct FilePreviewScreen: View {
       guard !Task.isCancelled else { return }
       phase = .loaded(file, document)
     } catch is CancellationError {
+    } catch let error as GatewayError where error.status == 413 {
+      phase = .tooLarge(error.message)
     } catch {
       phase = .failed(error.localizedDescription)
     }
@@ -143,14 +160,19 @@ private struct ImagePreview: View {
         Group {
           Button("Zoom out", systemImage: "minus") { zoom.step(-1) }
             .disabled(image == nil)
+            .accessibilityIdentifier("image-zoom-out")
           Button("\(Int((zoom.scale * 100).rounded()))%") { zoom.actual() }
             .accessibilityLabel("Actual size")
+            .accessibilityValue("\(Int((zoom.scale * 100).rounded()))%")
+            .accessibilityIdentifier("image-zoom")
             .font(.caption.monospacedDigit())
             .frame(minWidth: 44)
           Button("Zoom in", systemImage: "plus") { zoom.step(1) }
             .disabled(image == nil)
+            .accessibilityIdentifier("image-zoom-in")
           Button("Fit") { zoom.fit() }
             .font(.caption.weight(.medium))
+            .accessibilityIdentifier("image-fit")
           if let image {
             ShareLink(
               item: Image(uiImage: image), preview: SharePreview(name, image: Image(uiImage: image))

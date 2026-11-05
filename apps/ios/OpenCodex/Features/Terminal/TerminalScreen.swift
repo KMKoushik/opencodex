@@ -141,39 +141,23 @@ private struct TerminalTabs: View {
 /// The desktop's empty panel: shown while loading, or after the last tab is closed.
 private struct TerminalEmpty: View {
   let model: TerminalModel
-  @Environment(\.palette) private var palette
 
   var body: some View {
-    VStack(spacing: 0) {
-      Image(systemName: "apple.terminal")
-        .font(.system(size: 28, weight: .light))
-        .foregroundStyle(palette.color("text-tertiary"))
-        .padding(.bottom, 16)
-      Text(model.loaded ? "Your project terminal" : "Loading terminals…")
-        .font(.subheadline.weight(.medium))
-        .foregroundStyle(palette.color("text"))
-        .padding(.bottom, 8)
-      Text("Open a shell in this project. Add tabs to run commands side by side.")
-        .font(.footnote)
-        .foregroundStyle(palette.color("text-secondary"))
-        .multilineTextAlignment(.center)
-      Button {
-        Task { await model.create() }
-      } label: {
-        Text(model.creating ? "Opening…" : "New terminal")
-          .font(.footnote.weight(.medium))
-          .foregroundStyle(palette.color("text"))
-          .padding(.horizontal, 14)
-          .frame(minHeight: 36)
-          .background(palette.color("secondary"), in: .rect(cornerRadius: 8, style: .continuous))
+    if model.loaded {
+      PanelUnavailable(
+        "Your project terminal", systemImage: "apple.terminal",
+        message: "Open a shell in this project. Add tabs to run commands side by side."
+      ) {
+        Button(model.creating ? "Opening…" : "New terminal") {
+          Task { await model.create() }
+        }
+        .buttonStyle(WorkspaceButtonStyle())
+        .disabled(model.creating)
+        .accessibilityIdentifier("terminal-empty-new")
       }
-      .buttonStyle(.plain)
-      .disabled(model.creating || !model.loaded)
-      .padding(.top, 16)
-      .accessibilityIdentifier("terminal-empty-new")
+    } else {
+      PanelLoading("Loading terminals…")
     }
-    .padding(24)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 }
 
@@ -238,7 +222,11 @@ private struct TerminalPane: View {
       session.start()
     }
     .onDisappear { session?.stop() }
-    .onChange(of: terminal.exited) { _, exited in session?.exited = exited }
+    .onChange(of: terminal.exited) { _, exited in
+      session?.exited = exited
+      // An exited shell takes no input; put the keyboard and key bar away.
+      if exited { _ = session?.view.resignFirstResponder() }
+    }
   }
 
   private var statusText: String {

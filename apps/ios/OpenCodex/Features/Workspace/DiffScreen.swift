@@ -28,11 +28,11 @@ struct DiffScreen: View {
       case .failed(let message):
         WorkspaceError(message: message) { Task { await load() } }
       case .missing:
-        WorkspaceEmpty(message: "No text diff available.")
+        WorkspaceEmpty(symbol: "doc.text.magnifyingglass", message: "No text diff available.")
       case .loaded(let diff, let document):
         header(diff)
         if document.lines.isEmpty {
-          WorkspaceEmpty(message: "No text diff available.")
+          WorkspaceEmpty(symbol: "doc.text.magnifyingglass", message: "No text diff available.")
         } else {
           CodeLines(
             document: document, highlighter: CodeHighlighter(path: path),
@@ -46,6 +46,14 @@ struct DiffScreen: View {
     .navigationSubtitle(mode == .working ? "diff" : "base diff")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
+      if case .loaded(let diff, _) = phase, !diff.patch.isEmpty {
+        ToolbarItem(placement: .topBarTrailing) {
+          ShareLink(item: diff.patch, subject: Text((path as NSString).lastPathComponent + ".diff")) {
+            Label("Share diff", systemImage: "square.and.arrow.up")
+          }
+          .accessibilityIdentifier("diff-share")
+        }
+      }
       if case .loaded(let diff, _) = phase, diff.status != .deleted {
         ToolbarItem(placement: .topBarTrailing) {
           Button("Open file", systemImage: "doc.text", action: openFile)
