@@ -1,5 +1,7 @@
+import PhotosUI
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 nonisolated enum AttachmentEncoder {
   static let maxSide: CGFloat = 2048
@@ -64,37 +66,111 @@ extension DraftAttachment {
   }
 }
 
-/// The system camera, for taking a photo to attach.
-struct CameraPicker: UIViewControllerRepresentable {
-  var onPick: (UIImage) -> Void
-  @Environment(\.dismiss) private var dismiss
+/// The system photo library and camera, presented from UIKit's topmost view controller.
+///
+/// SwiftUI's `.photosPicker` / `.fullScreenCover` silently drop the request when their host is
+/// mid-transition (the "+" menu still closing) or something else is presented, which showed up
+/// on device as "nothing opens". Presenting from the top, after any running transition, can't
+/// be dropped that way.
+@MainActor
+enum MediaPicker {
+  static var cameraAvailable: Bool { UIImagePickerController.isSourceTypeAvailable(.camera) }
 
-  static var available: Bool { UIImagePickerController.isSourceTypeAvailable(.camera) }
+  /// The delegate of the open picker; UIKit holds delegates weakly.
+  private static var delegate: NSObject?
 
-  func makeUIViewController(context: Context) -> UIImagePickerController {
-    let picker = UIImagePickerController()
-    picker.sourceType = .camera
-    picker.delegate = context.coordinator
-    return picker
+  /// Picks up to `limit` photos; `onPick` gets each one's image data (HEIC, JPEG, …).
+  static func pickPhotos(limit: Int, onPick: @escaping ([Data]) -> Void) {
+    var configuration = PHPickerConfiguration()
+    configuration.filter = .images
+    configuration.selectionLimit = max(1, limit)
+    configuration.preferredAssetRepresentationMode = .compatible
+    let picker = PHPickerViewController(configuration: configuration)
+    let library = LibraryDelegate(onPick: onPick)
+    delegate = library
+    picker.delegate = library
+    present(picker)
   }
 
-  func updateUIViewController(_ controller: UIImagePickerController, context: Context) {}
+  static func takePhoto(onPick: @escaping (UIImage) -> Void) {
+    guard cameraAvailable else { return }
+    let picker = UIImagePickerController()
+    picker.sourceType = .camera
+    let camera = CameraDelegate(onPick: onPick)
+    delegate = camera
+    picker.delegate = camera
+    present(picker)
+  }
 
-  func makeCoordinator() -> Coordinator { Coordinator(self) }
+  private static func present(_ controller: UIViewController, attempt: Int = 0) {
+    guard let top = topController() else { return }
+    // Wait out a running transition, such as a menu or sheet still closing.
+    if let coordinator = top.transitionCoordinator, attempt < 10 {
+      coordinator.animate(alongsideTransition: nil) { _ in present(controller, attempt: attempt + 1) }
+      return
+    }
+    if top.isBeingDismissed || top.isBeingPresented, attempt < 10 {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { present(controller, attempt: attempt + 1) }
+      return
+    }
+    top.present(controller, animated: true)
+  }
 
-  final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-    let parent: CameraPicker
-    init(_ parent: CameraPicker) { self.parent = parent }
+  private static func topController() -> UIViewController? {
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    let window =
+      scenes.filter { $0.activationState == .foregroundActive }.flatMap(\.windows).first(where: \.isKeyWindow)
+      ?? scenes.flatMap(\.windows).first(where: \.isKeyWindow)
+    var top = window?.rootViewController
+    while let next = top?.presentedViewController, !next.isBeingDismissed { top = next }
+    return top
+  }
+
+  private final class LibraryDelegate: NSObject, PHPickerViewControllerDelegate {
+    let onPick: ([Data]) -> Void
+    init(onPick: @escaping ([Data]) -> Void) { self.onPick = onPick }
+
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+      picker.dismiss(animated: true)
+      MediaPicker.delegate = nil
+      guard !results.isEmpty else { return }
+      let providers = results.map(\.itemProvider)
+      let onPick = onPick
+      Task {
+        var images: [Data] = []
+        for provider in providers {
+          if let data = await Self.imageData(provider) { images.append(data) }
+        }
+        onPick(images)
+      }
+    }
+
+    private static func imageData(_ provider: NSItemProvider) async -> Data? {
+      await withCheckedContinuation { continuation in
+        provider.loadDataRepresentation(for: .image) { data, _ in continuation.resume(returning: data) }
+      }
+    }
+  }
+
+  private final class CameraDelegate: NSObject, UIImagePickerControllerDelegate,
+    UINavigationControllerDelegate
+  {
+    let onPick: (UIImage) -> Void
+    init(onPick: @escaping (UIImage) -> Void) { self.onPick = onPick }
 
     func imagePickerController(
       _ picker: UIImagePickerController,
       didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
     ) {
-      if let image = info[.originalImage] as? UIImage { parent.onPick(image) }
-      parent.dismiss()
+      if let image = info[.originalImage] as? UIImage { onPick(image) }
+      picker.dismiss(animated: true)
+      MediaPicker.delegate = nil
     }
 
-    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { parent.dismiss() }
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+      picker.dismiss(animated: true)
+      MediaPicker.delegate = nil
+    }
   }
 }
 

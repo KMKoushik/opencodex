@@ -41,9 +41,6 @@ private struct ComposerBody: View {
   @State private var sent = 0
   @State private var picking = false
   @State private var confirmFullAccess = false
-  @State private var showPhotos = false
-  @State private var showCamera = false
-  @State private var photos: [PhotosPickerItem] = []
   @State private var selection: TextSelection?
   @State private var dismissedMenu = false
   @State private var forkDraft: Draft.Snapshot?
@@ -110,19 +107,6 @@ private struct ComposerBody: View {
     .sheet(item: $exported) { file in
       ShareSheet(items: [file.url])
         .presentationDetents([.medium, .large])
-    }
-    .photosPicker(
-      isPresented: $showPhotos, selection: $photos,
-      maxSelectionCount: max(1, AttachmentEncoder.maxCount - draft.attachments.count),
-      matching: .images)
-    .onChange(of: photos) { _, items in
-      guard !items.isEmpty else { return }
-      photos = []
-      Task { await attach(items) }
-    }
-    .fullScreenCover(isPresented: $showCamera) {
-      CameraPicker { image in Task { await attach(image) } }
-        .ignoresSafeArea()
     }
     .confirmationDialog(
       "Fork conversation", isPresented: forkPicking, titleVisibility: .visible
@@ -253,10 +237,16 @@ private struct ComposerBody: View {
   /// "+": attachments, then Full access (the desktop's Permissions control).
   private var plusMenu: some View {
     Menu {
-      Button("Photo Library", systemImage: "photo.on.rectangle") { showPhotos = true }
+      Button("Photo Library", systemImage: "photo.on.rectangle") {
+        MediaPicker.pickPhotos(limit: AttachmentEncoder.maxCount - draft.attachments.count) { photos in
+          Task { await attach(photos) }
+        }
+      }
         .disabled(draft.attachments.count >= AttachmentEncoder.maxCount)
-      if CameraPicker.available {
-        Button("Camera", systemImage: "camera") { showCamera = true }
+      if MediaPicker.cameraAvailable {
+        Button("Camera", systemImage: "camera") {
+          MediaPicker.takePhoto { image in Task { await attach(image) } }
+        }
           .disabled(draft.attachments.count >= AttachmentEncoder.maxCount)
       }
       Divider()
@@ -601,14 +591,11 @@ private struct ComposerBody: View {
     moving = false
   }
 
-  private func attach(_ items: [PhotosPickerItem]) async {
-    for item in items {
+  private func attach(_ photos: [Data]) async {
+    for data in photos {
       encoding += 1
       defer { encoding -= 1 }
       do {
-        guard let data = try await item.loadTransferable(type: Data.self) else {
-          throw AttachmentEncoder.Failure(errorDescription: "This photo couldn’t be loaded.")
-        }
         add(try await AttachmentEncoder.encode(data: data))
       } catch {
         attachError = error.localizedDescription
