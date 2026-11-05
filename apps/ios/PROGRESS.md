@@ -48,8 +48,9 @@ ENABLE_TESTABILITY=YES`). Release-only crashes have happened (see Known issues).
       thinking level in the picker's bottom bar; covered by `ModelSwitchTests`.
 - [x] Use native UI, e.g. the iOS spinner — `RingSpinner` is now `ProgressView`; the title
       shows the spinner while running.
-- [ ] "…" should open a native drawer like OpenCode's: title header, icon actions (Pin,
-      Unread, Mute, Compact, Fork, Export), Model / Context / Cost rows, notify toggle, Delete.
+- [x] "…" opens a native drawer like OpenCode's — the thread sheet, build 142.
+- [ ] Session details must look like the thread sheet (native inset-grouped list, same
+      header and rows), not the older custom cards.
 - [ ] Test every interaction (QA wave) and prefer native components everywhere.
 
 ## In progress
