@@ -94,25 +94,16 @@ private struct ComposerBody: View {
         loading: entry?.loading ?? true,
         error: entry?.error,
         current: current,
+        // The chosen model's thinking levels, in the picker's bottom bar.
+        variants: currentInfo?.variants?.map(\.id) ?? [],
         onSelect: { model.select($0, draft: draft, catalog: entry?.catalog) },
+        onThinking: { variant in
+          if let current {
+            model.select(current.with(variant: variant), draft: draft, catalog: entry?.catalog)
+          }
+        },
         onRetry: { Task { await loadModels(force: true) } }
       )
-      // The thinking level for the chosen model, under the list.
-      .safeAreaInset(edge: .bottom, spacing: 0) {
-        if let variants = currentInfo?.variants?.map(\.id), !variants.isEmpty {
-          HStack {
-            Text("Thinking").foregroundStyle(palette.color("text-secondary"))
-            Spacer()
-            ThinkingControl(variants: variants, selected: current?.thinking) { variant in
-              if let current {
-                model.select(current.with(variant: variant), draft: draft, catalog: entry?.catalog)
-              }
-            }
-          }
-          .padding(.horizontal, 20)
-          .background(.bar)
-        }
-      }
       .presentationDetents([.medium, .large])
       .presentationDragIndicator(.visible)
     }
@@ -145,6 +136,13 @@ private struct ComposerBody: View {
       Button("Cancel", role: .cancel) { forkDraft = nil }
     } message: {
       Text("Continue in a new thread from the latest state, or fork just before an earlier message.")
+    }
+    // On the composer itself, not the expanded row: "+" is also in the one-line layout.
+    .alert("Enable full access?", isPresented: $confirmFullAccess) {
+      Button("Cancel", role: .cancel) {}
+      Button("Enable full access") { setFullAccess(true) }
+    } message: {
+      Text(PermissionControl.warning)
     }
     .onChange(of: draft.wantsFocus, initial: true) { _, wants in
       guard wants else { return }
@@ -192,7 +190,9 @@ private struct ComposerBody: View {
         // The transcript's prose size: the desktop's px scaled 16/14, with Dynamic Type.
         .font(Font(Typography(UITraitCollection.current, chatSize: chatSize).body))
         .foregroundStyle(palette.color("text"))
-        .lineLimit(expanded ? 1...8 : 1...1)
+        // One limit in both layouts: changing it swaps the UIKit view behind the field, which
+        // dropped focus (and the keystrokes after it) as the composer expanded.
+        .lineLimit(1...8)
         .focused($focused)
         .padding(.vertical, expanded ? 6 : 0)
         .padding(.leading, expanded ? 8 : 0)
@@ -247,14 +247,6 @@ private struct ComposerBody: View {
         stopButton
       }
       sendButton
-    }
-    .alert("Enable full access?", isPresented: $confirmFullAccess) {
-      Button("Cancel", role: .cancel) {}
-      Button("Enable full access") { setFullAccess(true) }
-    } message: {
-      Text(
-        "This agent can read and change files outside the project and run commands without approval, including destructive commands and access to secrets. Only enable this for work you trust.\n\nApplies to this thread and new subagents. Existing subagents keep their own permissions. Pending approvals in this thread will be allowed. Your global OpenCode settings stay unchanged; server policies still apply."
-      )
     }
   }
 
@@ -317,7 +309,8 @@ private struct ComposerBody: View {
     .disabled(sending || entry?.catalog == nil)
     .accessibilityIdentifier("composer.model")
     .accessibilityLabel("Model")
-    .accessibilityValue(modelName)
+    .accessibilityValue(
+      variants.isEmpty ? modelName : "\(modelName), \(thinkingLabel(current?.thinking))")
   }
 
   private var fullAccess: Bool {
@@ -344,15 +337,13 @@ private struct ComposerBody: View {
     Button {
       Task { await stop() }
     } label: {
-      Image(systemName: "stop")
-        .font(.system(size: 15, weight: .medium))
+      Image(systemName: "stop.fill")
+        .font(.system(size: 12, weight: .semibold))
         .foregroundStyle(palette.color("text"))
-        .frame(width: 36, height: 36)
-        .ceramic("chip", shadow: "chip-shadow", border: "chip-border", radius: 12)
-        .frame(width: 44, height: 44)
-        .contentShape(.rect)
+        .frame(width: 22, height: 22)
     }
-    .buttonStyle(.plain)
+    .buttonStyle(.glass)
+    .buttonBorderShape(.circle)
     .disabled(stopping)
     .accessibilityShowsLargeContentViewer()
     .accessibilityLabel("Stop")
@@ -369,46 +360,20 @@ private struct ComposerBody: View {
           ProgressView().controlSize(.small).tint(palette.color("on-primary"))
         } else {
           Image(systemName: "arrow.up")
-            .font(.system(size: 16, weight: .medium))
+            .font(.system(size: 15, weight: .semibold))
         }
       }
       .foregroundStyle(palette.color(enabled || sending ? "on-primary" : "text-tertiary"))
-      .frame(width: 36, height: 36)
-      .modifier(SendSurface(glazed: enabled || sending))
-      .frame(width: 44, height: 44)
-      .contentShape(.rect)
+      .frame(width: 22, height: 22)
     }
-    .buttonStyle(.plain)
+    .buttonStyle(.glassProminent)
+    .buttonBorderShape(.circle)
+    .tint(palette.color(enabled || sending ? "primary" : "secondary"))
     .disabled(!enabled)
     .accessibilityShowsLargeContentViewer()
     .accessibilityLabel("Send message")
     .accessibilityHint(model.running ? "Steers the reply that’s running." : "")
     .accessibilityIdentifier("composer.send")
-  }
-
-  /// The glaze with its wet highlight, or an unglazed chip while there's nothing to send.
-  private struct SendSurface: ViewModifier {
-    var glazed: Bool
-    @Environment(\.palette) private var palette
-
-    func body(content: Content) -> some View {
-      if glazed {
-        content
-          .background(alignment: .top) {
-            UnevenRoundedRectangle(
-              topLeadingRadius: 10, bottomLeadingRadius: 6, bottomTrailingRadius: 6,
-              topTrailingRadius: 10, style: .continuous
-            )
-            .fill(palette.gradient("primary-sheen"))
-            .frame(height: 36 * 0.42)
-            .padding(.horizontal, 4)
-            .padding(.top, 2)
-          }
-          .ceramic("primary-glaze", shadow: "primary-shadow", radius: 12)
-      } else {
-        content.ceramic("chip", shadow: "chip-shadow", border: "chip-border", radius: 12)
-      }
-    }
   }
 
   // MARK: Menus

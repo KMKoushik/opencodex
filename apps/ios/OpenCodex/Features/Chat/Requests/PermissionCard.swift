@@ -103,7 +103,11 @@ struct PermissionCard: View {
             .foregroundStyle(palette.color("text"))
             .lineLimit(8)
             .textSelection(.enabled)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
+            // The desktop's `<pre>`.
+            .background(palette.color("code-bg"), in: .rect(cornerRadius: 8))
         }
       } else {
         VStack(spacing: 8) {
@@ -116,8 +120,8 @@ struct PermissionCard: View {
       FlowLayout(spacing: 8) {
         decision(.once, "Allow once", .primary)
         if canAlways { decision(.always, "Always allow", .secondary) }
-        decision(.reject, "Reject", .ghost)
-        PermissionControl(model: model, request: true, disabled: busy != nil)
+        decision(.reject, "Reject", .plain)
+        PermissionControl(model: model, disabled: busy != nil)
       }
       .padding(.top, 12)
       .disabled(busy != nil)
@@ -131,26 +135,58 @@ struct PermissionCard: View {
     }
     .padding(16)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(palette.color("surface"), in: .rect(cornerRadius: 12))
-    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(palette.color("border-heavy")))
+    // The composer's corner, so the card and the capsule under it read as one dock.
+    .background(palette.color("surface"), in: .rect(cornerRadius: 20, style: .continuous))
+    .overlay(
+      RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(palette.color("border-heavy")))
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Permission request")
     .accessibilityIdentifier("request.permission")
   }
 
   private func decision(
-    _ decision: PermissionDecision, _ title: String, _ variant: DesktopButtonStyle.Variant
+    _ decision: PermissionDecision, _ title: String, _ variant: Variant
   ) -> some View {
     Button {
       Task { await reply(decision) }
     } label: {
       ZStack {
         Text(title).opacity(busy == decision ? 0 : 1)
-        if busy == decision { ProgressView().controlSize(.small) }
+        if busy == decision {
+          ProgressView().controlSize(.small)
+            .tint(palette.color(variant == .primary ? "on-primary" : "text"))
+        }
+      }
+      .font(.subheadline.weight(variant == .primary ? .semibold : .medium))
+    }
+    .modifier(DecisionStyle(variant: variant))
+    .accessibilityIdentifier("permission.\(decision.rawValue)")
+  }
+
+  enum Variant { case primary, secondary, plain }
+
+  /// Native capsule buttons in the theme's colors: filled, tinted, then borderless.
+  private struct DecisionStyle: ViewModifier {
+    var variant: Variant
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+      switch variant {
+      case .primary:
+        content.buttonStyle(.borderedProminent)
+          .tint(palette.color("primary"))
+          .foregroundStyle(palette.color("on-primary"))
+          .buttonBorderShape(.capsule)
+      case .secondary:
+        content.buttonStyle(.bordered)
+          .tint(palette.color("text"))
+          .foregroundStyle(palette.color("text"))
+          .buttonBorderShape(.capsule)
+      case .plain:
+        content.buttonStyle(.borderless)
+          .foregroundStyle(palette.color("text-secondary"))
       }
     }
-    .buttonStyle(DesktopButtonStyle(variant: variant, small: true))
-    .accessibilityIdentifier("permission.\(decision.rawValue)")
   }
 
   private func reply(_ decision: PermissionDecision) async {
@@ -217,6 +253,7 @@ struct DiffPreview: View {
   @Environment(\.palette) private var palette
 
   @State private var expanded = false
+  @State private var width: CGFloat = 0
 
   private struct Line: Identifiable {
     enum Kind { case added, removed, hunk, context }
@@ -284,12 +321,14 @@ struct DiffPreview: View {
                 .fixedSize()
                 .padding(.horizontal, 10)
                 .padding(.vertical, 1)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                // At least as wide as the card, so a line's tint spans it, not just its text.
+                .frame(minWidth: width, maxWidth: .infinity, alignment: .leading)
                 .background(background(line.kind))
             }
           }
           .padding(.bottom, 6)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilitySummary)
       }
@@ -303,7 +342,7 @@ struct DiffPreview: View {
             .frame(maxWidth: .infinity, minHeight: 32)
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless)
         .foregroundStyle(palette.color("text-secondary"))
         .overlay(alignment: .top) { Rectangle().fill(palette.color("border")).frame(height: 1) }
       }

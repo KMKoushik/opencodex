@@ -79,10 +79,8 @@ struct QuestionDock: View {
       }
       footer
     }
-    .background(palette.color("surface"), in: .rect(cornerRadius: 18, style: .continuous))
-    .overlay(
-      RoundedRectangle(cornerRadius: 18, style: .continuous)
-        .strokeBorder(palette.color("border-heavy")))
+    // In the composer's place, in the composer's glass.
+    .glassEffect(.regular, in: .rect(cornerRadius: 24, style: .continuous))
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("request.question")
   }
@@ -116,7 +114,7 @@ struct QuestionDock: View {
           .frame(width: 44, height: 44)
           .contentShape(.rect)
       }
-      .buttonStyle(GhostButtonStyle())
+      .buttonStyle(.borderless)
       .accessibilityLabel(collapsed ? "Expand question" : "Collapse question")
     }
     .font(.footnote)
@@ -125,9 +123,10 @@ struct QuestionDock: View {
   }
 
   private var footer: some View {
-    HStack(spacing: 8) {
+    HStack(spacing: 16) {
       Button("Dismiss") { Task { await dismiss() } }
-        .buttonStyle(DesktopButtonStyle(variant: .ghost, small: true))
+        .buttonStyle(.borderless)
+        .foregroundStyle(palette.color("text-secondary"))
         .disabled(busy)
         .accessibilityIdentifier("question.dismiss")
       Spacer(minLength: 0)
@@ -137,23 +136,34 @@ struct QuestionDock: View {
           reviewing = false
           error = nil
         }
-        .buttonStyle(DesktopButtonStyle(variant: .ghost, small: true))
+        .buttonStyle(.borderless)
+        .foregroundStyle(palette.color("text-secondary"))
         .disabled(busy)
+        .accessibilityIdentifier("question.back")
       }
       Button {
         Task { await advance() }
       } label: {
-        Text(
-          busy
-            ? "Sending…"
-            : collapsed ? "Continue" : reviewing ? "Send answers" : last ? "Review answers" : "Next")
+        HStack(spacing: 6) {
+          if busy { ProgressView().controlSize(.mini).tint(palette.color("on-primary")) }
+          Text(
+            busy
+              ? "Sending…"
+              : collapsed ? "Continue" : reviewing ? "Send answers" : last ? "Review answers" : "Next")
+        }
+        .font(.subheadline.weight(.semibold))
       }
-      .buttonStyle(DesktopButtonStyle(variant: .primary, small: true))
+      .buttonStyle(.borderedProminent)
+      .buttonBorderShape(.capsule)
+      .tint(palette.color("primary"))
+      .foregroundStyle(palette.color("on-primary"))
       .disabled(busy)
       .accessibilityIdentifier("question.submit")
     }
-    .padding(.horizontal, 10)
-    .padding(.vertical, 4)
+    .font(.subheadline.weight(.medium))
+    .padding(.leading, 18)
+    .padding(.trailing, 10)
+    .padding(.vertical, 10)
     .overlay(alignment: .top) {
       Rectangle().fill(palette.color("border")).frame(height: 1)
     }
@@ -184,7 +194,8 @@ struct QuestionDock: View {
             reviewing = false
             error = nil
           }
-          .buttonStyle(DesktopButtonStyle(variant: .ghost, small: true))
+          .buttonStyle(.borderless)
+          .foregroundStyle(palette.color("text-secondary"))
           .accessibilityLabel("Edit \(item.title ?? item.key)")
         }
         .font(.subheadline)
@@ -316,6 +327,7 @@ struct QuestionDock: View {
     )
     .lineLimit(multiline ? 2...5 : 1...1)
     .focused($focus, equals: key)
+    .accessibilityIdentifier("question.input.\(key)")
     .foregroundStyle(palette.color("text"))
     .padding(.horizontal, 12)
     .padding(.vertical, 10)
@@ -356,7 +368,7 @@ struct QuestionDock: View {
       .background(selected ? palette.color("selected") : .clear, in: .rect(cornerRadius: 8))
       .contentShape(.rect)
     }
-    .buttonStyle(GhostButtonStyle(radius: 8))
+    .buttonStyle(.plain)
     .sensoryFeedback(.selection, trigger: selected)
     .accessibilityLabel(title)
     .accessibilityHint(detail ?? "")

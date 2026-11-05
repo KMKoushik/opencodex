@@ -1,52 +1,9 @@
 import SwiftUI
 
-/// The glazed model chip in the composer: provider logo, model name, chevron.
-/// Port of the desktop `model-picker.tsx` trigger.
-struct ModelChip: View {
-  let name: String
-  let providerID: String?
-  var canonical: String?
-  var disabled = false
-  var action: () -> Void
-
-  @Environment(\.palette) private var palette
-
-  var body: some View {
-    Button(action: action) {
-      HStack(spacing: 8) {
-        if let providerID {
-          ProviderLogo(providerID: providerID, canonical: canonical, size: 18)
-        }
-        Text(name)
-          .lineLimit(1)
-          .truncationMode(.tail)
-        Image(systemName: "chevron.down")
-          .font(.system(size: 11, weight: .medium))
-          .foregroundStyle(palette.color("text-tertiary"))
-      }
-      .font(.subheadline.weight(.medium))
-      .foregroundStyle(palette.color(disabled ? "text-tertiary" : "text"))
-      .padding(.leading, providerID == nil ? 10 : 7)
-      .padding(.trailing, 10)
-      .frame(height: 34)
-      .ceramic("chip", shadow: "chip-shadow", border: "chip-border", radius: 9)
-      .frame(minHeight: 44)
-      .contentShape(.rect)
-    }
-    .buttonStyle(.plain)
-    .disabled(disabled)
-    .accessibilityShowsLargeContentViewer()
-    .accessibilityIdentifier("composer.model")
-    .accessibilityLabel("Model")
-    .accessibilityValue(name)
-  }
-}
-
-/// The quiet "Default" thinking-level control beside the model chip.
+/// The thinking level for the chosen model: a native menu of the model's variants.
 struct ThinkingControl: View {
   let variants: [String]
   let selected: String?
-  var disabled = false
   var onChange: (String?) -> Void
 
   @Environment(\.palette) private var palette
@@ -60,38 +17,35 @@ struct ThinkingControl: View {
         }
       }
     } label: {
-      HStack(spacing: 8) {
-        Text(variants.isEmpty ? "No thinking options" : thinkingLabel(selected))
-          .lineLimit(1)
-        if !variants.isEmpty {
-          Image(systemName: "chevron.down")
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(palette.color("text-tertiary"))
-        }
+      HStack(spacing: 6) {
+        Text(thinkingLabel(selected)).lineLimit(1)
+        Image(systemName: "chevron.up.chevron.down")
+          .font(.system(size: 11, weight: .medium))
+          .foregroundStyle(palette.color("text-tertiary"))
       }
       .font(.subheadline.weight(.medium))
-      .foregroundStyle(palette.color(variants.isEmpty || disabled ? "text-tertiary" : "text-secondary"))
-      .padding(.horizontal, 8)
-      .frame(minHeight: 44)
-      .contentShape(.rect)
+      .foregroundStyle(palette.color("text"))
     }
-    .disabled(disabled || variants.isEmpty)
     .fixedSize()
     .accessibilityIdentifier("composer.thinking")
     .accessibilityLabel("Thinking level")
-    .accessibilityValue(variants.isEmpty ? "No thinking options" : thinkingLabel(selected))
+    .accessibilityValue(thinkingLabel(selected))
   }
 }
 
 /// The model menu: search, the most-used models, then collapsible provider groups with each
-/// model's context size. Port of the desktop `ModelMenu`, as a sheet.
+/// model's context size, and the thinking level in the bottom bar. Port of the desktop
+/// `ModelMenu`, as a sheet.
 struct ModelPicker: View {
   let catalog: ModelCatalog?
   var canonical: [String: String] = [:]
   let loading: Bool
   let error: String?
   let current: ModelRef?
+  /// The current model's thinking levels; empty hides the bottom bar.
+  var variants: [String] = []
   var onSelect: (ModelRef) -> Void
+  var onThinking: (String?) -> Void = { _ in }
   var onRetry: () -> Void
 
   @Environment(\.dismiss) private var dismiss
@@ -99,7 +53,6 @@ struct ModelPicker: View {
   @State private var query = ""
   @State private var collapsed: Set<String> = []
   @State private var usage = ModelUsage.read()
-  @FocusState private var searching: Bool
 
   private struct Group: Identifiable {
     var id: String
@@ -107,17 +60,6 @@ struct ModelPicker: View {
     var canonical: String?
     var models: [ModelCatalog.Model]
     var frequent = false
-  }
-
-  private enum Row: Identifiable {
-    case provider(Group, expanded: Bool)
-    case model(ModelCatalog.Model, group: Group)
-    var id: String {
-      switch self {
-      case .provider(let group, _): "provider:\(group.id)"
-      case .model(let model, let group): "\(group.frequent ? "frequent:" : "")\(model.ref.key)"
-      }
-    }
   }
 
   private var groups: [Group] {
@@ -135,7 +77,8 @@ struct ModelPicker: View {
     .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
   }
 
-  private var rows: [Row] {
+  /// Most used (or the current model) first, then providers; each filtered by the search.
+  private var sections: [Group] {
     let groups = self.groups
     let terms = query.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
     let all = groups.flatMap(\.models)
@@ -151,160 +94,152 @@ struct ModelPicker: View {
           id: "most-used", name: usage.isEmpty ? "Current model" : "Most used",
           models: Array(frequent.prefix(5)), frequent: true), at: 0)
     }
-    var rows: [Row] = []
-    for group in sections {
-      let models = group.models.filter { model in
+    return sections.compactMap { group in
+      var shown = group
+      shown.models = group.models.filter { model in
         let search = "\(group.name) \(model.providerID) \(model.name) \(model.id)".lowercased()
         return terms.allSatisfy { search.contains($0) }
       }
-      guard !models.isEmpty else { continue }
-      var shown = group
-      shown.models = models
-      let expanded = !collapsed.contains(group.id)
-      rows.append(.provider(shown, expanded: expanded))
-      if expanded { rows += models.map { .model($0, group: shown) } }
+      return shown.models.isEmpty ? nil : shown
     }
-    return rows
   }
 
   var body: some View {
-    VStack(spacing: 0) {
-      HStack(spacing: 10) {
-        Image(systemName: "magnifyingglass")
-          .font(.system(size: 15))
-          .foregroundStyle(palette.color("text-tertiary"))
-        TextField(
-          "", text: $query,
-          prompt: Text("Search models…").foregroundStyle(palette.color("text-tertiary"))
-        )
-        .focused($searching)
-        .textInputAutocapitalization(.never)
-        .autocorrectionDisabled()
-        .foregroundStyle(palette.color("text"))
-        .accessibilityLabel("Search model")
-        .accessibilityIdentifier("model.search")
-        .onChange(of: query) { collapsed = [] }
-      }
-      .padding(.horizontal, 16)
-      .frame(minHeight: 52)
-      .overlay(alignment: .bottom) {
-        Rectangle()
-          .fill(palette.color(searching ? "accent" : "border"))
-          .frame(height: 1)
-      }
-
+    NavigationStack {
       content
+        .navigationTitle("Model")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(
+          text: $query, placement: .navigationBarDrawer(displayMode: .always),
+          prompt: "Search models…")
+        .onChange(of: query) { collapsed = [] }
+        .toolbar {
+          if !variants.isEmpty {
+            ToolbarItem(placement: .bottomBar) {
+              Text("Thinking")
+                .font(.subheadline)
+                .foregroundStyle(palette.color("text-secondary"))
+                .padding(.horizontal, 6)
+            }
+            .sharedBackgroundVisibility(.hidden)
+            ToolbarSpacer(.flexible, placement: .bottomBar)
+            ToolbarItem(placement: .bottomBar) {
+              ThinkingControl(variants: variants, selected: current?.thinking, onChange: onThinking)
+                .padding(.horizontal, 6)
+            }
+          }
+        }
     }
-    .background(palette.color("elevated"))
+    .tint(palette.color("text"))
     .presentationBackground(palette.color("elevated"))
   }
 
   @ViewBuilder private var content: some View {
     if catalog == nil {
-      VStack(spacing: 12) {
-        if loading {
-          ProgressView().tint(palette.color("text-secondary"))
-          Text("Loading models…")
-        } else {
-          Text(error ?? "Models unavailable")
-          Button("Retry", action: onRetry)
-            .buttonStyle(DesktopButtonStyle(variant: .secondary, small: true))
-        }
-      }
-      .font(.subheadline)
-      .foregroundStyle(palette.color("text-secondary"))
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-    } else {
-      let rows = self.rows
-      if rows.isEmpty {
-        Text("No matching models")
-          .font(.subheadline)
+      if loading {
+        ProgressView("Loading models…")
+          .tint(palette.color("text-secondary"))
           .foregroundStyle(palette.color("text-secondary"))
-          .padding(.vertical, 24)
-          .padding(.horizontal, 16)
-          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+      } else {
+        ContentUnavailableView {
+          Label("Models unavailable", systemImage: "exclamationmark.triangle")
+        } description: {
+          Text(error ?? "The gateway didn’t return any models.")
+        } actions: {
+          Button("Retry", action: onRetry).buttonStyle(.bordered)
+        }
+        .foregroundStyle(palette.color("text-secondary"))
+      }
+    } else {
+      let sections = self.sections
+      if sections.isEmpty {
+        ContentUnavailableView.search(text: query)
+          .foregroundStyle(palette.color("text-secondary"))
       } else {
         // Opens at the top, where Most used (or the current model) leads, as on the desktop.
-        ScrollView {
-          LazyVStack(spacing: 0) {
-            ForEach(rows) { row in
-              rowView(row)
+        List {
+          ForEach(sections) { group in
+            let expanded = !collapsed.contains(group.id)
+            Section {
+              if expanded {
+                ForEach(group.models) { model in row(model, group: group) }
+              }
+            } header: {
+              header(group, expanded: expanded)
             }
           }
-          .padding(.vertical, 6)
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.immediately)
       }
     }
   }
 
-  @ViewBuilder private func rowView(_ row: Row) -> some View {
-    switch row {
-    case .provider(let group, let expanded):
-      Button {
-        if collapsed.contains(group.id) { collapsed.remove(group.id) } else { collapsed.insert(group.id) }
-      } label: {
-        HStack(spacing: 8) {
-          if !group.frequent {
-            ProviderLogo(providerID: group.id, canonical: group.canonical)
-          }
-          Text(group.name).lineLimit(1)
-          Spacer(minLength: 8)
-          Text("\(group.models.count)")
+  private func header(_ group: Group, expanded: Bool) -> some View {
+    Button {
+      if expanded { collapsed.insert(group.id) } else { collapsed.remove(group.id) }
+    } label: {
+      HStack(spacing: 8) {
+        if !group.frequent {
+          ProviderLogo(providerID: group.id, canonical: group.canonical)
+        }
+        Text(group.name).lineLimit(1)
+        Spacer(minLength: 8)
+        Text("\(group.models.count)")
+          .font(.caption.monospacedDigit())
+          .foregroundStyle(palette.color("text-tertiary"))
+        Image(systemName: "chevron.down")
+          .font(.system(size: 11, weight: .medium))
+          .rotationEffect(.degrees(expanded ? 0 : -90))
+          .frame(width: 14)
+      }
+      .font(.footnote.weight(.medium))
+      .foregroundStyle(palette.color("text-secondary"))
+      .frame(minHeight: 36)
+      .contentShape(.rect)
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(group.name)
+    .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+    .accessibilityAddTraits(.isHeader)
+    .accessibilityIdentifier("model.group.\(group.id)")
+  }
+
+  private func row(_ model: ModelCatalog.Model, group: Group) -> some View {
+    let selected = model.ref.key == current?.key
+    return Button {
+      ModelUsage.record(model.ref)
+      onSelect(model.ref)
+      dismiss()
+    } label: {
+      HStack(spacing: 10) {
+        if group.frequent {
+          ProviderLogo(providerID: model.providerID, canonical: canonical[model.providerID])
+        }
+        Text(model.name)
+          .lineLimit(1)
+          .foregroundStyle(palette.color("text"))
+        Spacer(minLength: 8)
+        if let context = model.limit?.context, context > 0 {
+          Text(context.formatted(.number.notation(.compactName).precision(.fractionLength(0...1))))
             .font(.caption.monospacedDigit())
             .foregroundStyle(palette.color("text-tertiary"))
-          Image(systemName: expanded ? "chevron.down" : "chevron.right")
-            .font(.system(size: 11, weight: .medium))
-            .frame(width: 14)
         }
-        .font(.footnote.weight(.medium))
-        .foregroundStyle(palette.color("text-secondary"))
-        .padding(.horizontal, 10)
-        .frame(minHeight: 44)
-        .contentShape(.rect)
+        Image(systemName: "checkmark")
+          .font(.system(size: 13, weight: .semibold))
+          .foregroundStyle(palette.color("text-secondary"))
+          .frame(width: 16)
+          .opacity(selected ? 1 : 0)
       }
-      .buttonStyle(GhostButtonStyle(radius: 8))
-      .padding(.horizontal, 6)
-      .accessibilityLabel(group.name)
-      .accessibilityValue(expanded ? "Expanded" : "Collapsed")
-      .accessibilityAddTraits(.isHeader)
-    case .model(let model, let group):
-      let selected = model.ref.key == current?.key
-      Button {
-        ModelUsage.record(model.ref)
-        onSelect(model.ref)
-        dismiss()
-      } label: {
-        HStack(spacing: 8) {
-          if group.frequent {
-            ProviderLogo(providerID: model.providerID, canonical: canonical[model.providerID])
-          }
-          Text(model.name)
-            .lineLimit(1)
-            .foregroundStyle(palette.color("text"))
-          Spacer(minLength: 8)
-          if let context = model.limit?.context, context > 0 {
-            Text(context.formatted(.number.notation(.compactName).precision(.fractionLength(0...1))))
-              .font(.caption.monospacedDigit())
-              .foregroundStyle(palette.color("text-tertiary"))
-          }
-          Image(systemName: "checkmark")
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(palette.color("text-secondary"))
-            .frame(width: 16)
-            .opacity(selected ? 1 : 0)
-        }
-        .font(.subheadline)
-        .padding(.leading, group.frequent ? 10 : 36)
-        .padding(.trailing, 10)
-        .frame(minHeight: 44)
-        .background(selected ? palette.color("selected") : .clear, in: .rect(cornerRadius: 8))
-        .contentShape(.rect)
-      }
-      .buttonStyle(GhostButtonStyle(radius: 8))
-      .padding(.horizontal, 6)
-      .accessibilityLabel("\(model.name), \(group.frequent ? model.providerID : group.name)")
-      .accessibilityAddTraits(selected ? .isSelected : [])
+      .font(.subheadline)
+      .contentShape(.rect)
     }
+    .buttonStyle(.plain)
+    .listRowBackground(selected ? palette.color("selected") : Color.clear)
+    .listRowSeparator(.hidden)
+    .accessibilityLabel("\(model.name), \(group.frequent ? model.providerID : group.name)")
+    .accessibilityAddTraits(selected ? .isSelected : [])
   }
 }

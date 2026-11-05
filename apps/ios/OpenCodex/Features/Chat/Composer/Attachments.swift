@@ -119,13 +119,11 @@ struct AttachmentStrip: View {
               Button {
                 onRemove(attachment)
               } label: {
-                Image(systemName: "xmark")
-                  .font(.system(size: 9, weight: .bold))
-                  .foregroundStyle(.white)
-                  .frame(width: 20, height: 20)
-                  .background(.black.opacity(0.65), in: .circle)
-                  .overlay(Circle().stroke(.white.opacity(0.8), lineWidth: 1))
-                  .padding(4)
+                Image(systemName: "xmark.circle.fill")
+                  .font(.system(size: 20))
+                  .symbolRenderingMode(.palette)
+                  .foregroundStyle(.white, .black.opacity(0.6))
+                  .padding(3)
                   .contentShape(.rect)
               }
               .buttonStyle(.plain)
