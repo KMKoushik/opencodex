@@ -97,6 +97,22 @@ private struct ComposerBody: View {
         onSelect: { model.select($0, draft: draft, catalog: entry?.catalog) },
         onRetry: { Task { await loadModels(force: true) } }
       )
+      // The thinking level for the chosen model, under the list.
+      .safeAreaInset(edge: .bottom, spacing: 0) {
+        if let variants = currentInfo?.variants?.map(\.id), !variants.isEmpty {
+          HStack {
+            Text("Thinking").foregroundStyle(palette.color("text-secondary"))
+            Spacer()
+            ThinkingControl(variants: variants, selected: current?.thinking) { variant in
+              if let current {
+                model.select(current.with(variant: variant), draft: draft, catalog: entry?.catalog)
+              }
+            }
+          }
+          .padding(.horizontal, 20)
+          .background(.bar)
+        }
+      }
       .presentationDetents([.medium, .large])
       .presentationDragIndicator(.visible)
     }
@@ -150,7 +166,8 @@ private struct ComposerBody: View {
   /// Like OpenCode's iPhone composer: a Liquid Glass capsule that's one line ("+ Message ↑")
   /// until you focus it or type; then the model row appears under the input.
   private var expanded: Bool {
-    focused || draft.hasContent || !draft.attachments.isEmpty || encoding > 0
+    // Stays expanded while the picker is up, so closing it returns to the same layout.
+    focused || picking || draft.hasContent || !draft.attachments.isEmpty || encoding > 0
   }
 
   private var composer: some View {
@@ -277,32 +294,11 @@ private struct ComposerBody: View {
     .accessibilityIdentifier("composer.attach")
   }
 
-  /// "Claude Opus 5.5 · High": choose the model, or the thinking level in place.
+  /// "Claude Opus 5.5 · High": opens the model picker, whose bottom bar sets the thinking level.
   private var modelMenu: some View {
     let variants = currentInfo?.variants?.map(\.id) ?? []
-    return Menu {
-      Button("Choose model…", systemImage: "cpu") {
-        // The keyboard would otherwise return over the sheet's menus.
-        focused = false
-        picking = true
-      }
-      .disabled(entry?.catalog == nil)
-      if !variants.isEmpty {
-        Picker(
-          "Thinking",
-          selection: Binding(
-            get: { current?.thinking },
-            set: { variant in
-              if let current {
-                model.select(current.with(variant: variant), draft: draft, catalog: entry?.catalog)
-              }
-            })
-        ) {
-          Text("Default").tag(String?.none)
-          ForEach(variants, id: \.self) { Text(thinkingLabel($0)).tag(Optional($0)) }
-        }
-        .pickerStyle(.inline)
-      }
+    return Button {
+      picking = true
     } label: {
       HStack(spacing: 5) {
         (Text(modelName)
@@ -317,6 +313,7 @@ private struct ComposerBody: View {
       .frame(minHeight: 44)
       .contentShape(.rect)
     }
+    .buttonStyle(.plain)
     .disabled(sending || entry?.catalog == nil)
     .accessibilityIdentifier("composer.model")
     .accessibilityLabel("Model")

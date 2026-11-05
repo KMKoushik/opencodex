@@ -182,6 +182,7 @@ struct ModelPicker: View {
         .autocorrectionDisabled()
         .foregroundStyle(palette.color("text"))
         .accessibilityLabel("Search model")
+        .accessibilityIdentifier("model.search")
         .onChange(of: query) { collapsed = [] }
       }
       .padding(.horizontal, 16)

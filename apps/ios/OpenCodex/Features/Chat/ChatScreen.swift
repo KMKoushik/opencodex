@@ -121,7 +121,7 @@ struct ChatScreen: View {
     ToolbarItem(placement: .principal) {
       if model.sessionID != nil {
         Button { showDetails = true } label: {
-          ChatTitle(project: projectName, title: title, live: model.events.live)
+          ChatTitle(project: projectName, title: title, live: model.events.live, running: model.running)
             .padding(.horizontal, 6)
         }
         .accessibilityHint("Shows session details.")
@@ -150,12 +150,6 @@ struct ChatScreen: View {
         } label: {
           Image(systemName: "ellipsis")
             .frame(width: 30, height: 30)
-            .overlay {
-              if model.running {
-                // OpenCode's running ring around the menu button.
-                RingSpinner(size: 34).allowsHitTesting(false)
-              }
-            }
             .overlay(alignment: .topTrailing) {
               RunningSubagentsBadge(model: model).offset(x: 10, y: -8)
             }
