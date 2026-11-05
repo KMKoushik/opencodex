@@ -124,31 +124,33 @@ struct NotificationPrompt: View {
   }
 }
 
-/// The desktop's Settings → General → Notifications group: Off/On for each kind, turned on only
-/// once iOS allows notifications.
-struct NotificationSettingsGroup: View {
+/// The desktop's Settings → General → Notifications group: a switch for each kind, turned on
+/// only once iOS allows notifications.
+struct NotificationSettingsSection: View {
   @State private var model = NotificationCenterModel.shared
   @State private var error: (kind: NotificationKind, message: String)?
   @State private var requesting = false
+  @Environment(\.palette) private var palette
 
   var body: some View {
-    SettingsGroup("Notifications") {
+    Section {
       ForEach(NotificationKind.allCases, id: \.self) { kind in
         let failed = error?.kind == kind
-        SettingsRow(
-          kind.label, description: failed ? error?.message : kind.description,
-          descriptionColor: failed ? "error" : "text-secondary"
+        Toggle(
+          isOn: Binding(get: { model.settings[kind] }, set: { change(kind, $0) })
         ) {
-          SegmentedControl(
-            label: kind.label,
-            value: Binding(
-              get: { model.settings[kind] },
-              set: { enabled in change(kind, enabled) }),
-            options: [.init(value: false, label: "Off"), .init(value: true, label: "On")])
+          Text(kind.label).foregroundStyle(palette.color("text"))
+          Text(failed ? error?.message ?? "" : kind.description)
+            .foregroundStyle(palette.color(failed ? "error" : "text-secondary"))
         }
+        .tint(palette.color("accent"))
+        .disabled(requesting)
         .accessibilityIdentifier("notifications-\(kind.rawValue)")
       }
+    } header: {
+      SettingsHeader("Notifications")
     }
+    .settingsRows()
   }
 
   private func change(_ kind: NotificationKind, _ enabled: Bool) {

@@ -233,6 +233,8 @@ private struct ThreadActionsHost: ViewModifier {
       ) {
         TextField("Thread title", text: $actions.renameText)
           .submitLabel(.done)
+          // The keyboard's Done renames, like Enter in the desktop's title editor.
+          .onSubmit { actions.commitRename() }
         Button("Cancel", role: .cancel) { actions.renaming = nil }
         Button("Rename") { actions.commitRename() }
       }

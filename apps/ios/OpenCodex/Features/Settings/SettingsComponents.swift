@@ -1,6 +1,74 @@
 import SwiftUI
 import UIKit
 
+/// A native inset-grouped settings form in the theme's colors: `surface` behind, `elevated`
+/// rows split by `border` hairlines, ink labels. Use `SettingsSection`-styled rows inside.
+struct SettingsForm<Content: View>: View {
+  @ViewBuilder let content: Content
+  @Environment(\.palette) private var palette
+
+  var body: some View {
+    Form { content }
+      .formStyle(.grouped)
+      .scrollContentBackground(.hidden)
+      .background(palette.color("surface"))
+      .foregroundStyle(palette.color("text"))
+      .environment(\.defaultMinListRowHeight, 48)
+  }
+}
+
+extension View {
+  /// Rows in a settings form: `elevated` backgrounds and `border` hairlines.
+  func settingsRows() -> some View { modifier(SettingsRows()) }
+}
+
+private struct SettingsRows: ViewModifier {
+  @Environment(\.palette) private var palette
+
+  func body(content: Content) -> some View {
+    content
+      .listRowBackground(palette.color("elevated"))
+      .listRowSeparatorTint(palette.color("border"))
+  }
+}
+
+/// A section header in the form's `text-secondary`, like the desktop's group titles.
+struct SettingsHeader: View {
+  let title: String
+  @Environment(\.palette) private var palette
+
+  init(_ title: String) { self.title = title }
+
+  var body: some View {
+    Text(title)
+      .foregroundStyle(palette.color("text-secondary"))
+      .accessibilityAddTraits(.isHeader)
+  }
+}
+
+/// `LabeledContent` with the value in `text-secondary` and an optional description line.
+struct SettingsValue: View {
+  let label: String
+  let value: String
+  var description: String?
+  var valueColor = "text-secondary"
+  @Environment(\.palette) private var palette
+
+  var body: some View {
+    LabeledContent {
+      Text(value)
+        .foregroundStyle(palette.color(valueColor))
+        .multilineTextAlignment(.trailing)
+        .textSelection(.enabled)
+    } label: {
+      Text(label).foregroundStyle(palette.color("text"))
+      if let description {
+        Text(description).foregroundStyle(palette.color("text-secondary"))
+      }
+    }
+  }
+}
+
 /// The desktop's settings page: groups on `surface`, 16 pt apart.
 struct SettingsPage<Content: View>: View {
   @ViewBuilder let content: Content

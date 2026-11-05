@@ -4,6 +4,7 @@ import SwiftUI
 struct ManualPairingView: View {
   @Environment(ConnectionStore.self) private var connection
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.palette) private var palette
   @State private var host = ""
   @State private var code = ""
   @State private var pairing = false
@@ -18,7 +19,7 @@ struct ManualPairingView: View {
 
   var body: some View {
     NavigationStack {
-      Form {
+      SettingsForm {
         Section {
           TextField("Address", text: $host, prompt: Text(verbatim: "ox.example.com"))
             .keyboardType(.URL)
@@ -30,14 +31,18 @@ struct ManualPairingView: View {
             .onSubmit { focus = .code }
             .accessibilityIdentifier("pairing.host")
         } header: {
-          Text("Computer Address")
+          SettingsHeader("Computer Address")
         } footer: {
-          if !host.isEmpty, !hostValid {
-            problem("Use an https address, like ox.example.com.")
-          } else {
-            Text("The hostname shown in Remote access. You can also paste the whole pairing link.")
+          Group {
+            if !host.isEmpty, !hostValid {
+              problem("Use an https address, like ox.example.com.")
+            } else {
+              hint("The hostname shown in Remote access. You can also paste the whole pairing link.")
+            }
           }
+          .accessibilityIdentifier("pairing.host.hint")
         }
+        .settingsRows()
 
         Section {
           TextField("Code", text: $code, prompt: Text(verbatim: "XXXXX-XXXXX"))
@@ -50,19 +55,22 @@ struct ManualPairingView: View {
             .onSubmit(pair)
             .accessibilityIdentifier("pairing.code")
         } header: {
-          Text("Pairing Code")
+          SettingsHeader("Pairing Code")
         } footer: {
-          codeFooter
+          codeFooter.accessibilityIdentifier("pairing.code.hint")
         }
+        .settingsRows()
 
         if let failure {
           Section {
             Label {
               Text(failure).accessibilityIdentifier("pairing.error")
             } icon: {
-              Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+              Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(palette.color("error"))
             }
           }
+          .settingsRows()
         }
       }
       .disabled(pairing)
@@ -96,9 +104,12 @@ struct ManualPairingView: View {
       }
       .onChange(of: code) { _, value in
         failure = nil
-        if let link = Input(link: value) { return fill(link) }
-        let shown = Input.display(code: value)
-        if shown != value { code = shown }
+        if let link = Input(link: value) { fill(link) }
+      }
+      // Shown as `XXXXX-XXXXX` once typing stops. Rewriting the text on every keystroke
+      // dropped the keystroke typed during the rewrite.
+      .onChange(of: focus) { old, _ in
+        if old == .code { code = Input.display(code: code) }
       }
     }
     .interactiveDismissDisabled(pairing)
@@ -114,14 +125,18 @@ struct ManualPairingView: View {
     case .length(let count) where count > Input.codeLength:
       problem("Codes are \(Input.codeLength) characters long.")
     case .length(let count) where count > 0:
-      Text("\(count) of \(Input.codeLength) characters")
+      hint("\(count) of \(Input.codeLength) characters")
     case .length, nil:
-      Text("The \(Input.codeLength)-character code under the QR code. It works once, for 5 minutes.")
+      hint("The \(Input.codeLength)-character code under the QR code. It works once, for 5 minutes.")
     }
   }
 
+  private func hint(_ text: LocalizedStringKey) -> some View {
+    Text(text).foregroundStyle(palette.color("text-tertiary"))
+  }
+
   private func problem(_ text: LocalizedStringKey) -> some View {
-    Text(text).foregroundStyle(.red)
+    Text(text).foregroundStyle(palette.color("error"))
   }
 
   private func fill(_ link: Input) {

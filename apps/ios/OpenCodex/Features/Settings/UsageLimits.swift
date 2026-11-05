@@ -106,9 +106,16 @@ struct UsageSettings: View {
       }
       if let providers = model.limits?.providers {
         if providers.isEmpty {
-          note(
-            "No plan limits to show. Sign in with ChatGPT or add an OpenCode Go key in OpenCode, or sign in to Claude Code, to see your remaining usage here."
-          )
+          ContentUnavailableView {
+            Label("No Plan Limits", systemImage: "gauge.with.dots.needle.0percent")
+              .foregroundStyle(palette.color("text"))
+          } description: {
+            Text(
+              "Sign in with ChatGPT or add an OpenCode Go key in OpenCode, or sign in to Claude Code, to see your remaining usage here."
+            )
+            .foregroundStyle(palette.color("text-secondary"))
+          }
+          .accessibilityIdentifier("usage-empty")
         }
         TimelineView(.everyMinute) { context in
           let now = context.date.timeIntervalSince1970 * 1000
@@ -119,7 +126,10 @@ struct UsageSettings: View {
           }
         }
       } else if model.error == nil {
-        note("Checking limits…")
+        HStack(spacing: 8) {
+          ProgressView().controlSize(.small)
+          note("Checking limits…")
+        }
       }
     }
     .navigationTitle("Usage")

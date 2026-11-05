@@ -42,23 +42,28 @@ struct SettingsView: View {
 
   var body: some View {
     NavigationStack(path: $path) {
-      SettingsPage {
-        SettingsGroup {
+      SettingsForm {
+        Section {
           ForEach(SettingsSection.allCases, id: \.self) { section in
-            SettingsLinkRow(
-              section.label, systemImage: section.systemImage, value: SettingsRoute.section(section)
-            )
+            NavigationLink(value: SettingsRoute.section(section)) {
+              Label {
+                Text(section.label).foregroundStyle(palette.color("text"))
+              } icon: {
+                Image(systemName: section.systemImage)
+                  .foregroundStyle(palette.color("text-secondary"))
+              }
+            }
             .accessibilityIdentifier("settings-\(section.rawValue)")
           }
         }
-        SettingsGroup("About") {
-          SettingsRow("Version") {
-            Text(Self.appVersion)
-              .font(.subheadline)
-              .monospacedDigit()
-              .foregroundStyle(palette.color("text-secondary"))
-          }
+        .settingsRows()
+        Section {
+          SettingsValue(label: "Version", value: Self.appVersion)
+            .accessibilityIdentifier("settings-version")
+        } header: {
+          SettingsHeader("About")
         }
+        .settingsRows()
       }
       .navigationTitle("Settings")
       .navigationBarTitleDisplayMode(.inline)
@@ -84,6 +89,7 @@ struct SettingsView: View {
     }
   }
 
+  /// "0.1.0 (12)": the marketing version and the build number.
   static var appVersion: String {
     let info = Bundle.main.infoDictionary
     let version = info?["CFBundleShortVersionString"] as? String ?? "–"
@@ -92,7 +98,8 @@ struct SettingsView: View {
   }
 }
 
-/// Settings → General: OpenCode on the computer, live updates, and this phone's pairing.
+/// Settings → General: OpenCode on the computer, live updates, notifications, and this phone's
+/// pairing.
 struct GeneralSettings: View {
   let client: GatewayClient
   @Environment(ConnectionStore.self) private var connection
@@ -102,39 +109,53 @@ struct GeneralSettings: View {
   @State private var confirmForget = false
 
   var body: some View {
-    SettingsPage {
-      SettingsGroup("OpenCode") {
-        SettingsRow(
-          "Service", description: status,
-          descriptionColor: info.map { if case .failure = $0 { "error" } else { "text-secondary" } }
-            ?? "text-secondary"
-        ) {
-          SecondaryButton(title: checking ? "Connecting…" : connected ? "Check" : "Connect") {
-            Task { await load(connect: !connected) }
+    SettingsForm {
+      Section {
+        LabeledContent {
+          if checking {
+            ProgressView().controlSize(.small)
+          } else {
+            Button(connected ? "Check" : "Connect") {
+              Task { await load(connect: !connected) }
+            }
+            .buttonStyle(.bordered)
+            .foregroundStyle(palette.color("text"))
+            .accessibilityIdentifier("service-check")
           }
-          .disabled(checking)
+        } label: {
+          Text("Service").foregroundStyle(palette.color("text"))
+          Text(status)
+            .foregroundStyle(palette.color(failed ? "error" : "text-secondary"))
+            .accessibilityIdentifier("service-status")
         }
-        SettingsRow(
-          "Live updates",
-          description: connected ? (connection.events.live ? "Connected" : "Reconnecting…") : "Unavailable")
+        SettingsValue(
+          label: "Live updates",
+          value: connected ? (connection.events.live ? "Connected" : "Reconnecting…") : "Unavailable"
+        )
+        .accessibilityIdentifier("live-updates")
+      } header: {
+        SettingsHeader("OpenCode")
       }
-      NotificationSettingsGroup()
-      SettingsGroup("Computer") {
-        SettingsRow("Address", description: host)
-        SettingsRow(
-          "Forget this computer",
-          description: "You’ll need a new pairing code to connect again.", stacked: false
-        ) {
-          Button("Forget") { confirmForget = true }
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(palette.color("error"))
-            .padding(.horizontal, 14)
-            .frame(minHeight: 36)
-            .background(palette.color("secondary"), in: .rect(cornerRadius: 8, style: .continuous))
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("forget-computer")
+      .settingsRows()
+
+      NotificationSettingsSection()
+
+      Section {
+        SettingsValue(label: "Address", value: host)
+          .accessibilityIdentifier("computer-address")
+        Button(role: .destructive) {
+          confirmForget = true
+        } label: {
+          Text("Forget This Computer").foregroundStyle(palette.color("error"))
         }
+        .accessibilityIdentifier("forget-computer")
+      } header: {
+        SettingsHeader("Computer")
+      } footer: {
+        Text("You’ll need a new pairing code to connect again.")
+          .foregroundStyle(palette.color("text-tertiary"))
       }
+      .settingsRows()
     }
     .navigationTitle("General")
     .navigationBarTitleDisplayMode(.inline)
@@ -155,6 +176,11 @@ struct GeneralSettings: View {
     return false
   }
 
+  private var failed: Bool {
+    if case .failure = info { return true }
+    return false
+  }
+
   /// The desktop's Service line: "Connected · v2.2.5", OpenCode's message, or the failure.
   private var status: String {
     switch info {
@@ -172,6 +198,7 @@ struct GeneralSettings: View {
     do {
       info = .success(try await connect ? client.connect() : client.connection())
     } catch {
+      if error is CancellationError || (error as? URLError)?.code == .cancelled { return }
       info = .failure(error)
     }
   }

@@ -80,11 +80,19 @@ struct FadingTitle: View {
   let text: String
 
   var body: some View {
+    // The hidden copy sizes the slot to the row (one line tall, as wide as offered); the full
+    // title overflows it and is clipped. A fixed-size title would widen the row instead.
     Text(text)
       .font(.body)
       .lineLimit(1)
-      .fixedSize(horizontal: true, vertical: false)
+      .hidden()
       .frame(maxWidth: .infinity, alignment: .leading)
+      .overlay(alignment: .leading) {
+        Text(text)
+          .font(.body)
+          .lineLimit(1)
+          .fixedSize(horizontal: true, vertical: false)
+      }
       .clipped()
       .mask {
         HStack(spacing: 0) {

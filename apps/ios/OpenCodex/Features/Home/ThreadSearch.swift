@@ -1,7 +1,7 @@
 import Observation
 import SwiftUI
 
-/// Search results for the search sheet: titles and message text, every project.
+/// Search results for the threads screen's search field: titles and message text, every project.
 @Observable
 final class ThreadSearchModel {
   let client: GatewayClient
@@ -34,8 +34,12 @@ final class ThreadSearchModel {
       cursor = page.nextCursor
       hasMore = page.hasMore
     } catch {
-      guard query == self.query, !(error is CancellationError) else { return }
-      if (error as? URLError)?.code == .cancelled { return }
+      guard query == self.query else { return }
+      if error is CancellationError || (error as? URLError)?.code == .cancelled {
+        // Typing cancelled this search; the same text must run again when it comes back.
+        self.query = nil
+        return
+      }
       self.error = error.localizedDescription
       results = []
     }
@@ -60,105 +64,77 @@ final class ThreadSearchModel {
   }
 }
 
-/// The desktop's "Search threads" dialog: a field, then title, excerpt and folder per result.
-struct ThreadSearchSheet: View {
-  let client: GatewayClient
+/// The desktop's "Search threads" results, shown in place of the list while the native search
+/// field is active: title, excerpt and folder per result, newest first.
+struct ThreadSearchResults: View {
+  let model: ThreadSearchModel
   let open: (String) -> Void
-  @State private var model: ThreadSearchModel
-  @FocusState private var focused: Bool
   @Environment(\.palette) private var palette
-  @Environment(\.dismiss) private var dismiss
-
-  init(client: GatewayClient, open: @escaping (String) -> Void) {
-    self.client = client
-    self.open = open
-    _model = State(initialValue: ThreadSearchModel(client: client))
-  }
 
   var body: some View {
-    NavigationStack {
-      List {
-        Group {
-          if let notice = model.notice { note(notice) }
-          if let error = model.error {
-            VStack(alignment: .leading, spacing: 8) {
-              Text(error).foregroundStyle(palette.color("error"))
-              SecondaryButton(title: "Retry") { Task { await model.retry() } }
-            }
-            .font(.subheadline)
-            .padding(.vertical, 6)
-          } else if model.searching, model.results.isEmpty {
-            note("Searching…")
-          } else if model.results.isEmpty {
-            note("No threads match your search.")
+    List {
+      Group {
+        if let notice = model.notice { note(notice) }
+        ForEach(model.results) { session in
+          Button {
+            open(session.id)
+          } label: {
+            result(session)
           }
-          ForEach(model.results) { session in
-            Button {
-              open(session.id)
-            } label: {
-              result(session)
+          .buttonStyle(NavRowStyle())
+          .accessibilityIdentifier("search-\(session.id)")
+        }
+        if model.hasMore {
+          Button {
+            Task { await model.loadMore() }
+          } label: {
+            HStack(spacing: 8) {
+              Text(model.loadingMore ? "Loading…" : "Show more")
+              if model.loadingMore { ProgressView().controlSize(.small) }
             }
-            .buttonStyle(NavRowStyle())
-            .accessibilityIdentifier("search-\(session.id)")
-          }
-          if model.hasMore {
-            Button(model.loadingMore ? "Loading…" : "Show more") {
-              Task { await model.loadMore() }
-            }
-            .buttonStyle(NavRowStyle())
             .font(.subheadline)
             .foregroundStyle(palette.color("text-tertiary"))
-            .frame(minHeight: 44)
-            .disabled(model.loadingMore)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(.rect)
           }
-        }
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
-      }
-      .listStyle(.plain)
-      .scrollContentBackground(.hidden)
-      .background(palette.color("surface"))
-      .safeAreaInset(edge: .top, spacing: 0) { field }
-      .navigationTitle("Search threads")
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Close", systemImage: "xmark", role: .cancel) { dismiss() }
+          .buttonStyle(NavRowStyle())
+          .disabled(model.loadingMore)
         }
       }
-      .task(id: model.text) {
-        // Typing settles for a moment before each search.
-        try? await Task.sleep(for: .milliseconds(250))
-        guard !Task.isCancelled else { return }
-        await model.run()
-      }
-      .onAppear { focused = true }
+      .listRowBackground(Color.clear)
+      .listRowSeparator(.hidden)
+      .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
     }
+    .listStyle(.plain)
+    .scrollContentBackground(.hidden)
+    .scrollDismissesKeyboard(.immediately)
+    .overlay { status }
+    .accessibilityIdentifier("search-results")
   }
 
-  private var field: some View {
-    HStack(spacing: 8) {
-      Image(systemName: "magnifyingglass")
+  @ViewBuilder private var status: some View {
+    if let error = model.error {
+      ContentUnavailableView {
+        Label("Couldn’t Search", systemImage: "exclamationmark.triangle")
+          .foregroundStyle(palette.color("text"))
+      } description: {
+        Text(error).foregroundStyle(palette.color("error"))
+      } actions: {
+        Button("Retry") { Task { await model.retry() } }
+          .buttonStyle(.bordered)
+      }
+    } else if model.searching, model.results.isEmpty {
+      ProgressView("Searching…")
         .foregroundStyle(palette.color("text-tertiary"))
-      TextField("Search titles and messages…", text: $model.text)
-        .focused($focused)
-        .submitLabel(.search)
-        .autocorrectionDisabled()
-        .textInputAutocapitalization(.never)
-        .accessibilityLabel("Search threads")
-        .accessibilityIdentifier("thread-search-field")
+    } else if model.results.isEmpty {
+      ContentUnavailableView {
+        Label("No Results", systemImage: "magnifyingglass")
+          .foregroundStyle(palette.color("text"))
+      } description: {
+        Text("No threads match your search.")
+          .foregroundStyle(palette.color("text-secondary"))
+      }
     }
-    .padding(.horizontal, 12)
-    .frame(minHeight: 44)
-    .background(palette.color("elevated"), in: .rect(cornerRadius: 10, style: .continuous))
-    .overlay {
-      RoundedRectangle(cornerRadius: 10, style: .continuous)
-        .strokeBorder(palette.color("border-heavy"))
-    }
-    .padding(.horizontal, 16)
-    .padding(.vertical, 8)
-    .background(palette.color("surface"))
   }
 
   private func result(_ session: ThreadSession) -> some View {

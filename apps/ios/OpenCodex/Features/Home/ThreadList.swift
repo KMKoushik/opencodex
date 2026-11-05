@@ -82,7 +82,7 @@ struct ThreadList: View {
       ViewToggle(model: model)
     }
     if model.phase == .loading {
-      Note("Loading…")
+      LoadingNote()
     } else if model.phase == .loaded, model.groups.isEmpty {
       Note(model.hidden.isEmpty ? "No threads yet" : "Every project is hidden")
     }
@@ -105,6 +105,7 @@ struct ThreadList: View {
           MoreButton(loading: group.loadingMore, indented: true) {
             Task { await model.showMore(group.canonical) }
           }
+          .accessibilityIdentifier("show-more-\(group.badge.name)")
         }
         SectionGap()
       }
@@ -123,7 +124,7 @@ struct ThreadList: View {
     if let error = model.focusError, model.focusActive.isEmpty {
       ErrorNote(message: error) { Task { await model.retryFocus() } }
     } else if model.phase == .loading {
-      Note("Loading…")
+      LoadingNote()
     } else if model.focusActive.isEmpty {
       Note("Nothing needs focus")
     }
@@ -158,6 +159,7 @@ struct ThreadList: View {
         MoreButton(loading: model.focusLoadingMore) {
           Task { await model.showMoreInactive() }
         }
+        .accessibilityIdentifier("show-more-inactive")
       }
     }
   }
@@ -191,12 +193,10 @@ struct ThreadList: View {
         Button("Done", systemImage: "checkmark") { actions.focus(.done, item.target) }
           .tint(palette.color("success"))
       }
-      Button(
-        "Unread", systemImage: "circlebadge"
-      ) {
-        actions.markUnread(item.target)
+      if !item.markedUnread {
+        Button("Unread", systemImage: "circlebadge") { actions.markUnread(item.target) }
+          .tint(palette.color("accent"))
       }
-      .tint(palette.color("accent"))
     }
     .contextMenu {
       ThreadActionsMenu(actions: actions, target: item.target)
@@ -274,6 +274,22 @@ private struct ErrorNote: View {
   }
 }
 
+/// "Loading…" with the native spinner, while the first snapshots arrive.
+private struct LoadingNote: View {
+  @Environment(\.palette) private var palette
+
+  var body: some View {
+    HStack(spacing: 8) {
+      ProgressView().controlSize(.small)
+      Text("Loading…")
+    }
+    .font(.subheadline)
+    .foregroundStyle(palette.color("text-tertiary"))
+    .padding(.leading, 8)
+    .padding(.vertical, 8)
+  }
+}
+
 /// `.session-more`: "Show more", or "Loading…" while the next page arrives.
 private struct MoreButton: View {
   let loading: Bool
@@ -283,7 +299,10 @@ private struct MoreButton: View {
 
   var body: some View {
     Button(action: action) {
-      Text(loading ? "Loading…" : "Show more")
+      HStack(spacing: 8) {
+        Text(loading ? "Loading…" : "Show more")
+        if loading { ProgressView().controlSize(.small) }
+      }
         .font(.subheadline)
         .foregroundStyle(palette.color("text-tertiary"))
         .padding(.leading, indented ? ProjectHeader.indent : 0)
@@ -336,6 +355,7 @@ private struct ProjectHeader: View {
       }
       .buttonStyle(IconButtonStyle())
       .accessibilityLabel("New chat in \(group.badge.name)")
+      .accessibilityIdentifier("group-new-\(group.badge.name)")
     }
     .contextMenu {
       Button("New thread", systemImage: "square.and.pencil", action: newThread)
@@ -392,6 +412,7 @@ private struct ProjectFilterMenu: View {
     }
     .menuActionDismissBehavior(.disabled)
     .accessibilityLabel("Filter projects")
+    .accessibilityIdentifier("project-filter")
     .accessibilityValue(hidden > 0 ? "\(hidden) hidden" : "")
   }
 }

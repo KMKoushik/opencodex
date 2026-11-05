@@ -10,78 +10,96 @@ struct AppearanceSettings: View {
 
   var body: some View {
     @Bindable var themes = themes
-    SettingsPage {
-      SettingsGroup {
-        SettingsRow("Mode", description: "Follow your system or keep one appearance.", stacked: true) {
-          SegmentedControl(
-            label: "Mode", value: $themes.mode,
-            options: [
-              .init(value: .light, label: "Light", systemImage: "sun.max"),
-              .init(value: .dark, label: "Dark", systemImage: "moon"),
-              .init(value: .system, label: "System", systemImage: "desktopcomputer"),
-            ])
+    SettingsForm {
+      Section {
+        Picker("Mode", selection: $themes.mode) {
+          Text("Light").tag(ThemeStore.Mode.light)
+          Text("Dark").tag(ThemeStore.Mode.dark)
+          Text("System").tag(ThemeStore.Mode.system)
         }
+        .pickerStyle(.segmented)
+        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+        .accessibilityIdentifier("appearance-mode")
+      } header: {
+        SettingsHeader("Mode")
+      } footer: {
+        Text("Follow your system or keep one appearance.")
+          .foregroundStyle(palette.color("text-tertiary"))
       }
+      .settingsRows()
 
-      SettingsGroup("Typography") {
-        Button("Reset") { fontSize = ChatFontSize.standard }
-          .font(.footnote.weight(.medium))
-          .foregroundStyle(palette.color(fontSize == ChatFontSize.standard ? "text-tertiary" : "text"))
-          .disabled(fontSize == ChatFontSize.standard)
-          .accessibilityLabel("Reset chat font size")
-      } content: {
-        SettingsRow(
-          "Chat font size",
-          description: "Messages and the prompt input. Code and sidebar text are unchanged.",
-          stacked: true
-        ) {
-          HStack(spacing: 12) {
-            Slider(
-              value: Binding(
-                get: { Double(ChatFontSize.range.contains(fontSize) ? fontSize : ChatFontSize.standard) },
-                set: { fontSize = Int($0.rounded()) }),
-              in: Double(ChatFontSize.range.lowerBound)...Double(ChatFontSize.range.upperBound),
-              step: 1
-            )
-            .tint(palette.color("accent"))
-            .accessibilityLabel("Chat font size")
-            .accessibilityValue("\(fontSize) pixels")
-            Text("\(fontSize)px")
-              .font(.footnote)
-              .monospacedDigit()
-              .foregroundStyle(palette.color("text-secondary"))
-              .frame(width: 40, alignment: .trailing)
-          }
-        }
-        Text("Good code should be easy to read.")
-          .font(.system(size: ChatFontSize.pointSize(fontSize)))
-          .foregroundStyle(palette.color("text"))
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(16)
-          .accessibilityLabel("Chat font preview")
-      }
-
-      SettingsGroup {
+      Section {
         ForEach([false, true], id: \.self) { dark in
           let current = themes.palette(dark: dark)
-          SettingsLinkRow(dark ? "Dark theme" : "Light theme", value: SettingsRoute.theme(dark: dark)) {
-            HStack(spacing: 8) {
-              ThemeChip(palette: current, size: 24)
-              Text(current.name)
-                .font(.subheadline)
-                .foregroundStyle(palette.color("text-secondary"))
+          NavigationLink(value: SettingsRoute.theme(dark: dark)) {
+            LabeledContent {
+              HStack(spacing: 8) {
+                ThemeChip(palette: current, size: 24)
+                Text(current.name).foregroundStyle(palette.color("text-secondary"))
+              }
+            } label: {
+              Text(dark ? "Dark theme" : "Light theme").foregroundStyle(palette.color("text"))
             }
           }
           .accessibilityIdentifier(dark ? "dark-theme" : "light-theme")
         }
+      } header: {
+        SettingsHeader("Theme")
       }
+      .settingsRows()
+
+      Section {
+        LabeledContent {
+          Text("\(fontSize)px")
+            .monospacedDigit()
+            .foregroundStyle(palette.color("text-secondary"))
+            .accessibilityIdentifier("chat-font-size-value")
+        } label: {
+          Text("Chat font size").foregroundStyle(palette.color("text"))
+        }
+        Slider(
+          value: Binding(
+            get: { Double(ChatFontSize.range.contains(fontSize) ? fontSize : ChatFontSize.standard) },
+            set: { fontSize = Int($0.rounded()) }),
+          in: Double(ChatFontSize.range.lowerBound)...Double(ChatFontSize.range.upperBound),
+          step: 1
+        ) {
+          Text("Chat font size")
+        } minimumValueLabel: {
+          Image(systemName: "textformat.size.smaller")
+            .foregroundStyle(palette.color("text-tertiary"))
+        } maximumValueLabel: {
+          Image(systemName: "textformat.size.larger")
+            .foregroundStyle(palette.color("text-tertiary"))
+        }
+        .tint(palette.color("accent"))
+        .accessibilityValue("\(fontSize) pixels")
+        .accessibilityIdentifier("chat-font-size")
+        Text("Good code should be easy to read.")
+          .font(.system(size: ChatFontSize.pointSize(fontSize)))
+          .foregroundStyle(palette.color("text"))
+          .padding(.vertical, 6)
+          .accessibilityLabel("Chat font preview")
+        Button("Reset") { fontSize = ChatFontSize.standard }
+          .foregroundStyle(
+            palette.color(fontSize == ChatFontSize.standard ? "text-tertiary" : "text"))
+          .disabled(fontSize == ChatFontSize.standard)
+          .accessibilityLabel("Reset chat font size")
+          .accessibilityIdentifier("chat-font-size-reset")
+      } header: {
+        SettingsHeader("Typography")
+      } footer: {
+        Text("Messages and the prompt input. Code and sidebar text are unchanged.")
+          .foregroundStyle(palette.color("text-tertiary"))
+      }
+      .settingsRows()
     }
     .navigationTitle("Appearance")
     .navigationBarTitleDisplayMode(.inline)
   }
 }
 
-/// Every light or dark preset, each with its chip.
+/// Every light or dark preset, each with its chip; the chosen one is checked.
 struct ThemePicker: View {
   let dark: Bool
   @Environment(ThemeStore.self) private var themes
@@ -89,33 +107,29 @@ struct ThemePicker: View {
 
   var body: some View {
     let selected = dark ? themes.darkID : themes.lightID
-    SettingsPage {
-      SettingsGroup {
+    SettingsForm {
+      Section {
         ForEach(themes.options(dark: dark), id: \.id) { option in
           Button {
             if dark { themes.darkID = option.id } else { themes.lightID = option.id }
           } label: {
             HStack(spacing: 12) {
               ThemeChip(palette: option)
-              Text(option.name)
-                .font(.subheadline)
-                .foregroundStyle(palette.color("text"))
+              Text(option.name).foregroundStyle(palette.color("text"))
               Spacer(minLength: 0)
               if option.id == selected {
                 Image(systemName: "checkmark")
-                  .font(.subheadline.weight(.semibold))
-                  .foregroundStyle(palette.color("text"))
+                  .font(.body.weight(.semibold))
+                  .foregroundStyle(palette.color("accent"))
               }
             }
-            .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity, minHeight: 52)
             .contentShape(.rect)
           }
-          .buttonStyle(SettingsRowStyle())
           .accessibilityAddTraits(option.id == selected ? .isSelected : [])
           .accessibilityIdentifier("theme-\(option.id)")
         }
       }
+      .settingsRows()
     }
     .navigationTitle(dark ? "Dark theme" : "Light theme")
     .navigationBarTitleDisplayMode(.inline)

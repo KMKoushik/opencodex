@@ -57,10 +57,14 @@ struct AttentionBadge: View {
 
   var body: some View {
     let permission = kind == .permission
-    Text(permission ? "!" : "?")
-      .font(.system(size: size * 0.7, weight: .bold))
-      .foregroundStyle(palette.color(permission ? "surface" : "on-accent"))
+    Image(systemName: permission ? "exclamationmark.circle.fill" : "questionmark.circle.fill")
+      .symbolRenderingMode(.palette)
+      .foregroundStyle(
+        palette.color(permission ? "surface" : "on-accent"),
+        palette.color(permission ? "warning" : "accent")
+      )
+      .font(.system(size: size, weight: .semibold))
       .frame(width: size, height: size)
-      .background(palette.color(permission ? "warning" : "accent"), in: .circle)
+      .accessibilityHidden(true)
   }
 }

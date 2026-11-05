@@ -4,6 +4,7 @@ import SwiftUI
 /// Once a pairing succeeds the root view switches to Home on its own.
 struct PairingView: View {
   @Environment(ConnectionStore.self) private var connection
+  @Environment(\.palette) private var palette
   @State private var sheet: Sheet?
   @State private var pairing = false
   @State private var failure: String?
@@ -23,6 +24,7 @@ struct PairingView: View {
       }
       .scrollBounceBehavior(.basedOnSize)
     }
+    .background(palette.color("surface"))
     .safeAreaInset(edge: .bottom) { actions }
     .sheet(item: $sheet) { sheet in
       switch sheet {
@@ -54,20 +56,17 @@ struct PairingView: View {
 
   private var welcome: some View {
     VStack(spacing: 24) {
-      Image("PairingIcon")
-        .resizable()
-        .scaledToFit()
-        .frame(width: 112, height: 112)
-        .accessibilityHidden(true)
+      BrandIcon(size: 112)
       VStack(spacing: 12) {
         Text("Pair with Your Computer")
           .font(.largeTitle.bold())
+          .foregroundStyle(palette.color("text"))
           .accessibilityAddTraits(.isHeader)
         Text(
           "On your computer, open OpenCodex → Settings → Remote access → Add device, then scan the code."
         )
         .font(.body)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(palette.color("text-secondary"))
       }
       .multilineTextAlignment(.center)
       .fixedSize(horizontal: false, vertical: true)
@@ -94,6 +93,7 @@ struct PairingView: View {
       .accessibilityIdentifier("pairing.scan")
 
       Button("Enter Code Manually") { sheet = .manual }
+        .foregroundStyle(palette.color("text"))
         .frame(minHeight: 44)
         .accessibilityIdentifier("pairing.manual")
     }
