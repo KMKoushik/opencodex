@@ -3,26 +3,40 @@ import UserNotifications
 
 /// Shows notifications in the foreground by `NotificationCenterModel`'s rules, and opens the
 /// thread a tapped notification belongs to. iOS calls it off the main actor.
+///
+/// These are the completion-handler forms on purpose: with the `async` forms, Swift resumes
+/// iOS's completion off the main thread, and UIKit aborts the app when a tap is handled
+/// ("_performBlockAfterCATransactionCommitSynchronizes"), so tapping a notification crashed.
 nonisolated final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate, Sendable {
   static let shared = NotificationDelegate()
 
   func userNotificationCenter(
-    _ center: UNUserNotificationCenter, willPresent notification: UNNotification
-  ) async -> UNNotificationPresentationOptions {
+    _ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping @Sendable (UNNotificationPresentationOptions) -> Void
+  ) {
     let sessionID = notification.request.content.userInfo["sessionID"] as? String
     let remote = notification.request.trigger is UNPushNotificationTrigger
-    return await MainActor.run {
-      NotificationCenterModel.shared.presentation(sessionID: sessionID, remote: remote)
+    DispatchQueue.main.async {
+      let options = MainActor.assumeIsolated {
+        NotificationCenterModel.shared.presentation(sessionID: sessionID, remote: remote)
+      }
+      completionHandler(options)
     }
   }
 
   func userNotificationCenter(
-    _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse
-  ) async {
-    guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
-      let sessionID = response.notification.request.content.userInfo["sessionID"] as? String
-    else { return }
-    await MainActor.run { NotificationCenterModel.shared.open(sessionID) }
+    _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping @Sendable () -> Void
+  ) {
+    let sessionID =
+      response.actionIdentifier == UNNotificationDefaultActionIdentifier
+      ? response.notification.request.content.userInfo["sessionID"] as? String : nil
+    DispatchQueue.main.async {
+      if let sessionID {
+        MainActor.assumeIsolated { NotificationCenterModel.shared.open(sessionID) }
+      }
+      completionHandler()
+    }
   }
 }
 

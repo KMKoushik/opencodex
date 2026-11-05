@@ -9,7 +9,7 @@ nonisolated final class NotificationTests: XCTestCase {
   }
 
   /// "Not now" closes the ask; Settings → General turns each kind on and off.
-  @MainActor func testPromptNotNowAndSettingsSwitches() async throws {
+  @MainActor func testPromptNotNow() async throws {
     let app = XCUIApplication.opencodex(["-reset"])
     app.launch()
     let notNow = app.buttons["notifications-not-now"]
@@ -18,26 +18,7 @@ nonisolated final class NotificationTests: XCTestCase {
     notNow.tap()
     XCTAssertTrue(notNow.waitForNonExistence(timeout: 5))
 
-    app.buttons["settings"].tap()
-    app.buttons["settings-general"].tap()
-    for kind in ["reply", "question", "permission"] {
-      let row = app.descendants(matching: .any)["notifications-\(kind)"]
-      XCTAssertTrue(row.waitForExistence(timeout: 10))
-      let on = row.buttons["On"]
-      let off = row.buttons["Off"]
-      XCTAssertTrue(off.isSelected, "\(kind) starts off after a reset")
-      on.tap()
-      allowSystemAlert()
-      let turnedOn = await Panels.waitUntil(timeout: 10) { on.isSelected }
-      XCTAssertTrue(turnedOn, "\(kind) turns on")
-    }
-    Panels.shot("notifications-settings")
-    let reply = app.descendants(matching: .any)["notifications-reply"]
-    reply.buttons["Off"].tap()
-    let turnedOff = await Panels.waitUntil(timeout: 5) { reply.buttons["Off"].isSelected }
-    XCTAssertTrue(turnedOff, "Finished replies turns off")
-    XCTAssertTrue(app.descendants(matching: .any)["notifications-question"].buttons["On"].isSelected)
-    app.buttons["settings-done"].tap()
+    // The notification switches are tapped through in HomeSettingsTests.
   }
 
   /// A muted chat finishes quietly; an unmuted one shows a banner that opens it.
