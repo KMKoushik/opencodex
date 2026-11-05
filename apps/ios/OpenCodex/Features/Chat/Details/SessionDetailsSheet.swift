@@ -25,42 +25,32 @@ struct SessionDetailsSheet: View {
   private var directory: String? { chat.session?.location.directory ?? chat.directory }
 
   var body: some View {
-    NavigationStack {
-      ScrollView {
-        VStack(spacing: 0) {
-          ContextSection(
-            reading: ContextUsage.reading(
-              messages: chat.messages, fallback: nil, models: details.models.value),
-            loaded: chat.loaded, error: details.models.error, retry: retry)
-          Hairline()
-          ProjectSection(
-            details: details, name: projectName, directory: directory, retry: retry,
-            open: open.map { open in { open("changes") } })
-          SubagentsSummary(
-            details: details, retry: retry, open: open.map { open in { open("subagents") } })
-          UsageSection(details: details, retry: retry)
-          McpSection(details: details, retry: retry)
-          SkillsSection(details: details, retry: retry)
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 24)
-        .monospacedDigit()
+    List {
+      Section {
+        header
+          .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
       }
-      .scrollContentBackground(.hidden)
-      .background(palette.color("surface"))
-      .refreshable { await details.refresh() }
-      .navigationTitle("Session")
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        ToolbarItem(placement: .topBarTrailing) {
-          Button(role: .close) { dismiss() }
-            .accessibilityLabel("Close session details")
-        }
+      .listRowBackground(Color.clear)
+      .listRowSeparator(.hidden)
+      ContextSection(
+        reading: ContextUsage.reading(
+          messages: chat.messages, fallback: nil, models: details.models.value),
+        loaded: chat.loaded, error: details.models.error, retry: retry)
+      ProjectSection(
+        details: details, retry: retry, open: open.map { open in { open("changes") } })
+      SubagentsSummary(
+        details: details, retry: retry, open: open.map { open in { open("subagents") } })
+      Section {
+        UsageSection(details: details, retry: retry)
+        McpSection(details: details, retry: retry)
+        SkillsSection(details: details, retry: retry)
       }
     }
+    .listStyle(.insetGrouped)
+    .tint(palette.color("accent"))
+    .refreshable { await details.refresh() }
     .presentationDetents([.medium, .large])
-    .presentationContentInteraction(.resizes)
-    .presentationBackground(palette.color("surface"))
+    .presentationDragIndicator(.visible)
     .accessibilityIdentifier("session.details")
     .task(id: directory) {
       guard let directory else { return }
@@ -78,6 +68,44 @@ struct SessionDetailsSheet: View {
     .onDisappear { reconnect = nil }
   }
 
+  /// Like the thread sheet: a large title, then the project and its shortened folder.
+  private var header: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Text("Session details")
+        .font(.title2.bold())
+        .foregroundStyle(palette.color("text"))
+      if let subtitle {
+        Text(subtitle)
+          .font(.subheadline)
+          .foregroundStyle(palette.color("text-secondary"))
+          .lineLimit(1)
+          .truncationMode(.middle)
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .accessibilityElement(children: .combine)
+    .accessibilityAddTraits(.isHeader)
+    .accessibilityIdentifier("details.header")
+  }
+
+  private var subtitle: String? {
+    let name =
+      details.project.value??.displayName ?? projectName
+      ?? directory.map { ($0 as NSString).lastPathComponent }
+    let parts = [name, directory.map(Self.shortPath)].compactMap { $0 }
+    return parts.isEmpty ? nil : parts.joined(separator: " · ")
+  }
+
+  /// The home folder as `~`, as the thread sheet shows folders.
+  static func shortPath(_ path: String) -> String {
+    for prefix in ["/Users/", "/home/"] where path.hasPrefix(prefix) {
+      let rest = path.dropFirst(prefix.count)
+      guard let slash = rest.firstIndex(of: "/") else { return "~" }
+      return "~" + rest[slash...]
+    }
+    return path
+  }
+
   private func retry() { Task { await details.retry() } }
 }
 
@@ -91,82 +119,84 @@ private struct ContextSection: View {
   @Environment(\.palette) private var palette
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      HStack(spacing: 8) {
-        Text("Context")
-        Spacer(minLength: 8)
-        ContextRing(ratio: reading.ratio, size: 18)
-        Text(reading.ratio.map(DetailsFormat.percent) ?? "—")
-          .foregroundStyle(palette.color("text-secondary"))
+    Section {
+      LabeledContent {
+        HStack(spacing: 6) {
+          ContextRing(ratio: reading.ratio, size: 18)
+          Text(reading.ratio.map(DetailsFormat.percent) ?? "—")
+            .foregroundStyle(palette.color("text-secondary"))
+        }
+      } label: {
+        Label("Context", systemImage: "chart.pie")
       }
-      Meter(value: reading.ratio.map { min($0, 1) } ?? 0)
-        .padding(.vertical, 8)
-        .accessibilityLabel("Context used")
-        .accessibilityValue(reading.ratio.map(DetailsFormat.percent) ?? "No usage reported")
-      Note(note)
+      .accessibilityElement(children: .combine)
+      .accessibilityIdentifier("details.context")
+      LabeledContent {
+        Text(tokens).foregroundStyle(palette.color("text-secondary"))
+      } label: {
+        Label("Tokens", systemImage: "number")
+      }
+      .accessibilityElement(children: .combine)
+      .accessibilityIdentifier("details.tokens")
       if let error { SectionError(message: error, retry: retry) }
     }
-    .padding(.top, 4)
-    .padding(.bottom, 12)
-    .accessibilityElement(children: .contain)
-    .accessibilityIdentifier("details.context")
   }
 
-  private var note: String {
+  private var tokens: String {
     if let tokens = reading.tokens {
       let limit = reading.limit.map { " / \(DetailsFormat.number($0))" } ?? ""
-      return "\(DetailsFormat.number(tokens))\(limit) tokens"
+      return "\(DetailsFormat.number(tokens))\(limit)"
     }
-    return loaded ? "Usage appears after the first response." : "Loading context…"
+    return loaded ? "After the first response" : "Loading…"
   }
 }
 
+/// The checkout, its branch and its working-tree changes. The project is in the header.
 private struct ProjectSection: View {
   let details: SessionDetailsModel
-  let name: String?
-  let directory: String?
   let retry: () -> Void
   let open: (() -> Void)?
   @Environment(\.palette) private var palette
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      Row(icon: "folder") {
-        Text(title).fontWeight(.semibold).lineLimit(1)
-        Spacer(minLength: 0)
-      }
+    Section {
       if let checkout = details.checkout, checkout.canonical != nil {
-        Row(icon: checkout.local ? "laptopcomputer" : "square.stack") {
+        LabeledContent {
           Text(
             checkout.local
-              ? "Local checkout" : "\(checkout.folderName)\(checkout.removed ? " (removed)" : "")"
+              ? "Local" : "\(checkout.folderName)\(checkout.removed ? " (removed)" : "")"
           )
           .foregroundStyle(palette.color("text-secondary"))
           .lineLimit(1)
-          Spacer(minLength: 0)
+        } label: {
+          Label("Checkout", systemImage: checkout.local ? "laptopcomputer" : "square.stack")
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("details.checkout")
       }
       if let vcs = details.vcs.value {
-        Row(icon: "arrow.triangle.branch") {
+        LabeledContent {
           Text(branch(vcs))
             .foregroundStyle(palette.color("text-secondary"))
             .lineLimit(1)
-          Spacer(minLength: 0)
+        } label: {
+          Label("Branch", systemImage: "arrow.triangle.branch")
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("details.branch")
         if vcs.info.provider != nil {
           changes(vcs)
         }
+      } else if details.vcs.isLoading {
+        LabeledContent {
+          ProgressView()
+        } label: {
+          Label("Branch", systemImage: "arrow.triangle.branch")
+        }
       }
-      if details.vcs.isLoading { Note("Loading project…") }
       if let error = details.usage.error { SectionError(message: error, retry: retry) }
       if let error = details.vcs.error { SectionError(message: error, retry: retry) }
     }
-    .padding(.vertical, 12)
-  }
-
-  private var title: String {
-    if let name = details.project.value??.displayName ?? name, !name.isEmpty { return name }
-    return directory.map { ($0 as NSString).lastPathComponent } ?? "Project"
   }
 
   private func branch(_ vcs: SessionDetails.Vcs) -> String {
@@ -175,28 +205,41 @@ private struct ProjectSection: View {
   }
 
   @ViewBuilder private func changes(_ vcs: SessionDetails.Vcs) -> some View {
-    let row = Row(icon: "doc.text") {
-      Text(
-        vcs.files.count == 1
-          ? "1 file changed" : "\(DetailsFormat.number(Double(vcs.files.count))) files changed"
-      )
-      .foregroundStyle(palette.color("text-secondary"))
-      Spacer(minLength: 8)
-      HStack(spacing: 0) {
+    let count =
+      vcs.files.count == 1
+      ? "1 file changed" : "\(DetailsFormat.number(Double(vcs.files.count))) files changed"
+    let row = LabeledContent {
+      HStack(spacing: 4) {
         Text("+\(DetailsFormat.number(vcs.additions))").foregroundStyle(palette.color("success"))
-        Text(" / ").foregroundStyle(palette.color("text-secondary"))
         Text("−\(DetailsFormat.number(vcs.deletions))").foregroundStyle(palette.color("error"))
       }
       .lineLimit(1)
       .fixedSize()
+    } label: {
+      Label(count, systemImage: "doc.text")
     }
-    .frame(minHeight: 44)
+    let label =
+      "\(count), \(DetailsFormat.number(vcs.additions)) added, \(DetailsFormat.number(vcs.deletions)) removed"
     if let open {
-      Button(action: open) { row.contentShape(.rect) }
-        .buttonStyle(.plain)
-        .accessibilityHint("Open working-tree changes")
+      Button(action: open) {
+        HStack {
+          row
+          Image(systemName: "chevron.right")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(palette.color("text-tertiary"))
+        }
+        .foregroundStyle(palette.color("text"))
+      }
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(label)
+      .accessibilityAddTraits(.isButton)
+      .accessibilityHint("Open working-tree changes")
+      .accessibilityIdentifier("details.changes")
     } else {
       row
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier("details.changes")
     }
   }
 }
@@ -208,61 +251,42 @@ private struct SubagentsSummary: View {
   let open: (() -> Void)?
   @Environment(\.palette) private var palette
 
-  private static let tints = ["project-pink", "project-orange", "project-purple"]
-
   var body: some View {
-    let items = details.children.value ?? []
     if details.children.value?.isEmpty != true {
-      VStack(alignment: .leading, spacing: 0) {
-        Hairline()
+      Section {
         Group {
           if let open {
-            Button(action: open) { summary(items) }
-              .buttonStyle(.plain)
-              .accessibilityHint("Open subagents")
+            Button(action: open) { summary.foregroundStyle(palette.color("text")) }
           } else {
-            summary(items)
+            summary
           }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Subagents: \(label)")
+        .accessibilityHint(open == nil ? "" : "Open subagents")
         .accessibilityIdentifier("details.subagents")
         if let error = details.children.error { SectionError(message: error, retry: retry) }
       }
-      .padding(.bottom, 4)
     }
   }
 
-  private func summary(_ items: [SessionDetails.SessionUsage]) -> some View {
-    HStack(spacing: 8) {
-      RobotIcon(size: 20)
-        .foregroundStyle(palette.color("text-secondary"))
-        .frame(width: 22)
-      Text("Subagents").fontWeight(.semibold).foregroundStyle(palette.color("text"))
+  private var summary: some View {
+    HStack {
+      LabeledContent {
+        if details.children.isLoading {
+          ProgressView()
+        } else {
+          Text(label).foregroundStyle(palette.color("text-secondary"))
+        }
+      } label: {
+        Label { Text("Subagents") } icon: { Image("Robot") }
+      }
       if open != nil {
         Image(systemName: "chevron.right")
-          .font(.caption2.weight(.semibold))
-          .foregroundStyle(palette.color("text-secondary"))
-      }
-      Spacer(minLength: 8)
-      if !items.isEmpty {
-        HStack(spacing: 4) {
-          ForEach(Array(items.prefix(3).enumerated()), id: \.element.id) { index, _ in
-            RobotIcon(size: 18)
-              .foregroundStyle(palette.color(Self.tints[index % 3]))
-          }
-          if items.count > 3 {
-            Text("+\(DetailsFormat.number(Double(items.count - 3))) more")
-              .font(.footnote)
-              .foregroundStyle(palette.color("text-tertiary"))
-          }
-        }
-      } else {
-        Text(label).foregroundStyle(palette.color("text-secondary"))
+          .font(.footnote.weight(.semibold))
+          .foregroundStyle(palette.color("text-tertiary"))
       }
     }
-    .frame(minHeight: 44)
-    .contentShape(.rect)
   }
 
   private var label: String {
@@ -271,7 +295,7 @@ private struct SubagentsSummary: View {
     case .loading: return "Loading…"
     case .loaded(let items):
       return items.isEmpty
-        ? "None" : "\(DetailsFormat.number(Double(items.count)))\(details.moreChildren ? "+" : "") subagents"
+        ? "None" : "\(DetailsFormat.number(Double(items.count)))\(details.moreChildren ? "+" : "")"
     }
   }
 }
@@ -330,16 +354,19 @@ private struct McpSection: View {
         if servers.isEmpty {
           Note("No MCP servers configured.")
         } else {
-          ResourceList(items: servers, id: \.name) { server in
-            HStack(spacing: 8) {
-              Text(server.name).lineLimit(1)
-              Spacer(minLength: 8)
-              Text(server.label)
-                .foregroundStyle(palette.color(server.connected ? "success" : "text-secondary"))
+          ForEach(servers, id: \.name) { server in
+            VStack(alignment: .leading, spacing: 2) {
+              HStack(spacing: 8) {
+                Text(server.name).foregroundStyle(palette.color("text")).lineLimit(1)
+                Spacer(minLength: 8)
+                Text(server.label)
+                  .foregroundStyle(palette.color(server.connected ? "success" : "text-secondary"))
+              }
+              if let error = server.status.error {
+                Text(error).font(.footnote).foregroundStyle(palette.color("error"))
+              }
             }
-            if let error = server.status.error {
-              Note(error).foregroundStyle(palette.color("error"))
-            }
+            .accessibilityElement(children: .combine)
           }
         }
       }
@@ -369,9 +396,12 @@ private struct SkillsSection: View {
         if skills.isEmpty {
           Note("No skills available.")
         } else {
-          ResourceList(items: skills, id: \.id) { skill in
-            Text(skill.name).foregroundStyle(palette.color("text"))
-            if let description = skill.description, !description.isEmpty { Note(description) }
+          ForEach(skills, id: \.id) { skill in
+            VStack(alignment: .leading, spacing: 2) {
+              Text(skill.name).foregroundStyle(palette.color("text"))
+              if let description = skill.description, !description.isEmpty { Note(description) }
+            }
+            .accessibilityElement(children: .combine)
           }
         }
       }
@@ -390,7 +420,8 @@ private struct SkillsSection: View {
 
 // MARK: - Pieces
 
-/// A collapsible section, closed by default like the desktop's `<details>`.
+/// A native disclosure row, closed by default like the desktop's `<details>`; its rows join
+/// the list when it opens.
 private struct Disclosure<Content: View>: View {
   let label: String
   let icon: String
@@ -400,64 +431,25 @@ private struct Disclosure<Content: View>: View {
   @Environment(\.palette) private var palette
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      Hairline()
-      Button {
-        withAnimation(.snappy(duration: 0.2)) { expanded.toggle() }
-      } label: {
-        HStack(spacing: 8) {
-          Icon(icon)
-          Text(label).fontWeight(.semibold).foregroundStyle(palette.color("text"))
-          Image(systemName: "chevron.right")
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(palette.color("text-secondary"))
-            .rotationEffect(.degrees(expanded ? 90 : 0))
-          Spacer(minLength: 8)
-          if let value {
-            Text(value).foregroundStyle(palette.color("text-secondary")).lineLimit(1)
-          }
-        }
-        .frame(minHeight: 44)
-        .contentShape(.rect)
-      }
-      .buttonStyle(.plain)
-      .accessibilityValue(value ?? "")
-      .accessibilityHint(expanded ? "Collapse" : "Expand")
-      .accessibilityIdentifier("details.\(label.lowercased())")
-      if expanded {
-        VStack(alignment: .leading, spacing: 12) { content }
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(.top, 6)
-          .padding(.bottom, 12)
-      }
-    }
-  }
-}
-
-private struct Row<Content: View>: View {
-  let icon: String
-  @ViewBuilder let content: Content
-
-  var body: some View {
-    HStack(spacing: 8) {
-      Icon(icon)
+    DisclosureGroup(isExpanded: $expanded) {
       content
+    } label: {
+      LabeledContent {
+        if let value {
+          Text(value).foregroundStyle(palette.color("text-secondary")).lineLimit(1)
+        }
+      } label: {
+        Label(label, systemImage: icon).foregroundStyle(palette.color("text"))
+      }
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel(label)
+      .accessibilityValue(value ?? "")
+      .accessibilityIdentifier("details.\(label.lowercased())")
     }
   }
 }
 
-private struct Icon: View {
-  let name: String
-  @Environment(\.palette) private var palette
-  init(_ name: String) { self.name = name }
 
-  var body: some View {
-    Image(systemName: name)
-      .font(.body.weight(.light))
-      .foregroundStyle(palette.color("text-secondary"))
-      .frame(width: 22)
-  }
-}
 
 private struct Note: View {
   let text: String
@@ -472,64 +464,19 @@ private struct Note: View {
   }
 }
 
+/// Label/value rows, one list row each.
 private struct Stats: View {
   let rows: [(String, String)]
   @Environment(\.palette) private var palette
 
   var body: some View {
-    VStack(spacing: 6) {
-      ForEach(rows, id: \.0) { label, value in
-        HStack(spacing: 12) {
-          Text(label).fontWeight(.medium)
-          Spacer(minLength: 12)
-          Text(value).foregroundStyle(palette.color("text-secondary"))
-        }
-        .accessibilityElement(children: .combine)
+    ForEach(rows, id: \.0) { label, value in
+      LabeledContent {
+        Text(value).foregroundStyle(palette.color("text-secondary"))
+      } label: {
+        Text(label).fontWeight(.medium).foregroundStyle(palette.color("text"))
       }
     }
-  }
-}
-
-/// Separated rows. Unlike the desktop's 240px scroller, the sheet itself scrolls, so a phone
-/// never nests one scroll view in another.
-private struct ResourceList<Item, ID: Hashable, Row: View>: View {
-  let items: [Item]
-  let id: KeyPath<Item, ID>
-  @ViewBuilder let row: (Item) -> Row
-
-  var body: some View {
-    LazyVStack(alignment: .leading, spacing: 10) {
-      ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-        if index > 0 { Hairline() }
-        VStack(alignment: .leading, spacing: 2) { row(item) }
-          .frame(maxWidth: .infinity, alignment: .leading)
-      }
-    }
-  }
-}
-
-private struct Meter: View {
-  let value: Double
-  @Environment(\.palette) private var palette
-
-  var body: some View {
-    Capsule()
-      .fill(palette.color("secondary-hover"))
-      .frame(height: 4)
-      .overlay(alignment: .leading) {
-        GeometryReader { proxy in
-          Capsule()
-            .fill(palette.color("success"))
-            .frame(width: proxy.size.width * value)
-        }
-      }
-  }
-}
-
-private struct Hairline: View {
-  @Environment(\.palette) private var palette
-  var body: some View {
-    Rectangle().fill(palette.color("border")).frame(height: 0.5)
   }
 }
 
@@ -540,14 +487,16 @@ private struct SectionError: View {
 
   var body: some View {
     HStack(alignment: .firstTextBaseline) {
-      Text(message)
+      Label(message, systemImage: "exclamationmark.triangle")
         .font(.subheadline)
         .foregroundStyle(palette.color("error"))
         .fixedSize(horizontal: false, vertical: true)
       Spacer(minLength: 8)
       Button("Retry", action: retry)
         .font(.subheadline.weight(.medium))
-        .foregroundStyle(palette.color("text"))
+        .buttonStyle(.bordered)
+        .tint(palette.color("text"))
+        .accessibilityIdentifier("details.retry")
     }
   }
 }

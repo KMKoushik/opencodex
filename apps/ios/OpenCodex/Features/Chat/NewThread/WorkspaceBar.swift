@@ -62,6 +62,8 @@ struct WorkspaceBar: View {
             .frame(minHeight: 30)
           }
           .accessibilityLabel("Starting branch")
+          .accessibilityValue(model.worktree?.branch ?? branch.flatMap { $0.isEmpty ? nil : $0 } ?? "HEAD")
+          .accessibilityIdentifier("newThread.workspace.branch")
           .task { branches = (try? await client.branches(directory: directory)) ?? [] }
         } else if let branch {
           Label {
