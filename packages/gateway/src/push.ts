@@ -1,4 +1,5 @@
 import { createPrivateKey, sign, type KeyObject } from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { connect, type ClientHttp2Session } from 'node:http2';
 import { join } from 'node:path';
@@ -65,6 +66,29 @@ const activitySchema = z.object({
 // Apple accepts a provider token for an hour and throttles refreshes under 20 minutes.
 const JWT_AGE = 45 * 60_000;
 const MAX_ACTIVITIES = 32;
+/**
+ * Like Slack: a push waits this long, and goes out only if the thread wasn't opened, the
+ * request wasn't answered, and the computer running OpenCodex had no input meanwhile.
+ */
+export const PUSH_DELAY = 30_000;
+const MAX_HANDLED = 512;
+
+/** Seconds since the last keyboard, mouse or trackpad input on this Mac; unknown elsewhere. */
+export function macIdleSeconds(): Promise<number | undefined> {
+  if (process.platform !== 'darwin') return Promise.resolve(undefined);
+  return new Promise((resolve) => {
+    execFile(
+      '/usr/sbin/ioreg',
+      ['-c', 'IOHIDSystem', '-d', '4', '-k', 'HIDIdleTime'],
+      { timeout: 5_000 },
+      (error, stdout) => {
+        const nanoseconds = error ? undefined : /"HIDIdleTime" = (\d+)/.exec(stdout)?.[1];
+        resolve(nanoseconds === undefined ? undefined : Number(nanoseconds) / 1e9);
+      },
+    );
+  });
+}
+
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve) => {
     const timer = setTimeout(resolve, ms);
@@ -136,6 +160,20 @@ function http2Sender(): ApnsSend {
 }
 
 type Event = { type: string; data?: unknown };
+
+/** The key an event that settles a waiting push records: a view, a reply, a cancel. */
+function handledKey(type: string, data: EventData) {
+  if (type === 'session.viewed') return `viewed:${data.sessionID}`;
+  if (type === 'permission.replied') return `permission:${data.requestID}`;
+  if (type === 'form.replied' || type === 'form.cancelled') return `form:${data.id}`;
+  return undefined;
+}
+type EventData = {
+  id?: string;
+  sessionID?: string;
+  requestID?: string;
+  form?: { id?: string; sessionID?: string };
+};
 type SessionInfo = {
   id: string;
   title?: string;
@@ -146,6 +184,10 @@ type SessionInfo = {
 export class Push {
   private readonly file: string;
   private readonly send: ApnsSend;
+  private readonly delay: number;
+  private readonly idleSeconds: () => Promise<number | undefined>;
+  /** When each thread was last viewed and each request answered, to cancel waiting pushes. */
+  private readonly handled = new Map<string, number>();
   private config?: Config;
   private jwt?: { value: string; created: number };
   private watching = false;
@@ -158,10 +200,17 @@ export class Push {
   constructor(
     private readonly remote: RemoteAccess,
     private readonly backend: OpenCodeBackend,
-    options: { file?: string; send?: ApnsSend } = {},
+    options: {
+      file?: string;
+      send?: ApnsSend;
+      delay?: number;
+      idleSeconds?: () => Promise<number | undefined>;
+    } = {},
   ) {
     this.file = options.file ?? join(remote.directory, 'push.json');
     this.send = options.send ?? http2Sender();
+    this.delay = options.delay ?? PUSH_DELAY;
+    this.idleSeconds = options.idleSeconds ?? macIdleSeconds;
   }
 
   /** True once push.json names a readable key. */
@@ -217,9 +266,18 @@ export class Push {
 
   /** Same triggers as the desktop's `notifySession` calls in `use-events.ts`. */
   async handle(event: Event, signal: AbortSignal) {
-    const data = (event.data ?? {}) as { sessionID?: string; form?: { sessionID?: string } };
+    const data = (event.data ?? {}) as EventData;
+    const settled = handledKey(event.type, data);
+    if (settled) {
+      this.handled.delete(settled);
+      this.handled.set(settled, Date.now());
+      if (this.handled.size > MAX_HANDLED) this.handled.delete(this.handled.keys().next().value!);
+      return;
+    }
     let kind: PushKind;
     let sessionID: string | undefined;
+    // What opening the thread or answering the request records, which cancels the push.
+    let key: string;
     const ended =
       event.type === 'session.execution.succeeded' ||
       event.type === 'session.execution.failed' ||
@@ -228,16 +286,29 @@ export class Push {
     if (event.type === 'session.execution.succeeded' || event.type === 'session.execution.failed') {
       kind = 'reply';
       sessionID = data.sessionID;
+      key = `viewed:${sessionID}`;
     } else if (event.type === 'form.created') {
       kind = 'question';
       sessionID = data.form?.sessionID;
+      key = `form:${data.form?.id}`;
     } else if (event.type === 'permission.asked') {
       kind = 'permission';
       sessionID = data.sessionID;
+      key = `permission:${data.id}`;
     } else return;
     if (!sessionID || !this.config) return;
+    if (!this.remote.pushDevices().some((device) => device.push.kinds[kind])) return;
+    if (this.delay > 0) {
+      const since = Date.now();
+      await sleep(this.delay, signal);
+      // Opened or answered meanwhile, on the computer or the phone.
+      if (signal.aborted || (this.handled.get(key) ?? 0) >= since) return;
+      // Someone is at the computer, which shows its own notifications.
+      const idle = await this.idleSeconds();
+      if (idle !== undefined && idle * 1000 < this.delay) return;
+    }
     const devices = this.remote.pushDevices().filter((device) => device.push.kinds[kind]);
-    if (!devices.length) return;
+    if (!devices.length || !this.config) return;
     const thread = await this.thread(kind, sessionID, signal);
     if (!thread) return;
     const failed = event.type === 'session.execution.failed';

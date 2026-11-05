@@ -27,7 +27,7 @@ async function freePort() {
 }
 
 /** A gateway whose remote access, push.json and APNs all live in a temp folder. */
-async function setup() {
+async function setup(options: { delay?: number; idle?: number } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'opencodex-push-'));
   const shutdown = new AbortController();
   const remote = new RemoteAccess({ file: join(directory, 'remote.json'), served: false });
@@ -51,6 +51,8 @@ async function setup() {
   } as unknown as OpenCodeBackend;
   const push = new Push(remote, backend, {
     send: async (message) => (sent.push(message), { status: 200 }),
+    delay: options.delay ?? 0,
+    idleSeconds: async () => options.idle,
   });
   const app = createApp(backend, shutdown.signal, { remote, push });
   remote.serve(app.fetch, () => () => undefined);
@@ -229,5 +231,47 @@ describe('push notifications', () => {
         Buffer.from(signature!, 'base64url'),
       ),
     ).toBe(true);
+  });
+
+  it('waits like Slack: a view, an answer or someone at the computer cancels the push', async () => {
+    const run = async (idle: number | undefined, settle?: { type: string; data: unknown }) => {
+      const { directory, push, send, auth, sent, signal } = await setup({ delay: 50, idle });
+      await send('POST', '/api/remote/push-token', auth, {
+        token: TOKEN,
+        environment: 'development',
+      });
+      const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+      await writeFile(
+        join(directory, 'AuthKey.p8'),
+        privateKey.export({ type: 'pkcs8', format: 'pem' }),
+      );
+      await writeFile(
+        join(directory, 'push.json'),
+        JSON.stringify({
+          keyPath: join(directory, 'AuthKey.p8'),
+          keyID: 'KEY1234567',
+          teamID: 'TEAMID1234',
+          topic: 'dev.example.opencodex',
+        }),
+      );
+      await push.refresh(signal);
+      const waiting = push.handle(
+        { type: 'permission.asked', data: { id: 'per_1', sessionID: 'root' } },
+        signal,
+      );
+      if (settle) await push.handle(settle, signal);
+      await waiting;
+      return sent.length;
+    };
+    expect(await run(120)).toBe(1);
+    expect(await run(undefined)).toBe(1);
+    // Input on the computer within the wait: the computer shows it, not the phone.
+    expect(await run(0.01)).toBe(0);
+    expect(
+      await run(120, {
+        type: 'permission.replied',
+        data: { requestID: 'per_1', sessionID: 'root' },
+      }),
+    ).toBe(0);
   });
 });
