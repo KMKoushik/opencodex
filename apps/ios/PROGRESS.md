@@ -39,22 +39,35 @@ ENABLE_TESTABILITY=YES`). Release-only crashes have happened (see Known issues).
 - **Tests:** 22 unit tests and 13 UI tests, including two end-to-end flows (new chat → send →
   approve edit → file exists, and new chat in a worktree).
 
-## In progress (wave 3, separate worktrees)
+## In progress
 
-- [ ] **Terminal:** SwiftTerm on `/api/terminals/:id/connect`, with the desktop's reconnect
-      rules and key bar (`ios/w3-terminal`).
-- [ ] **Side chats, Tasks board, Apps/canvases** (`ios/w3-extras`).
-- [ ] **Polish:** retry and switch notes, the failed-run footer, full question-form logic,
-      mention pills, one shared code highlighter and the annotations chip (`ios/w3-polish`).
-- [ ] **Notifications:** in-app notifications, APNs push from the owner's gateway, and a Live
+- [ ] Notifications: in-app notifications, APNs push from the owner's gateway, and a Live
       Activity while a reply runs (`ios/w3-notify`). Needs the owner's APNs `.p8` key.
+
+## Done in wave 3
+
+- Terminal: SwiftTerm 1.20 on `/api/terminals/:id/connect` with the desktop's replay
+  cursor, reconnect rules, wording, ANSI colours and key bar; in the chat's "…" menu. Builds need
+  `-skipPackagePluginValidation` (SwiftTerm's build plugin) and the Metal Toolchain
+  (`xcodebuild -downloadComponent MetalToolchain`).
+- Side chats (chat "…" menu), Tasks board and Apps/canvases (home, under New thread).
+- Polish: retry and switch notes, the failed-run footer, full question-form logic, mention
+  pills in sent messages, one shared code highlighter, and the annotations chip.
+- OpenCode-style chrome, from the owner's feedback:
+  - a Liquid Glass composer that's one line ("+ Message ↑") until focused, then shows a
+    quiet "Model · Thinking" row; Full access is in "+";
+  - a title pill (tap for Session details) and one "…" menu with a running ring;
+  - a compact activity pill ("1 shell", "Background");
+  - the desktop's robot icon for subagents.
 
 ## Backlog
 
 - Push needs the APNs key: Certificates, Identifiers & Profiles → Keys → + → Apple Push
   Notifications service. Then fill `~/.opencodex/push.json`.
 - Mention pills inside the composer input (currently plain text).
-- `/side` from the composer, once side chats land.
+- `/side` from the composer, and "Ask in side chat" quoting.
+- Apps: Settings tab, model and icon pickers, comment overlay, inline canvas cards in chats.
+- Composer mic button (OpenCode has one; the keyboard's dictation works meanwhile).
 - The desktop's own gaps found while porting:
   - agent edits don't send `filesystem.changed`; the phone refreshes on
     `session.step.ended` instead;

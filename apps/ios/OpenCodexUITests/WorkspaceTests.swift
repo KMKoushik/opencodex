@@ -17,8 +17,12 @@ nonisolated final class WorkspaceTests: XCTestCase {
 
     let app = XCUIApplication.opencodex(["-session", session])
     app.launch()
-    let open = app.buttons["workspace-open"]
-    XCTAssertTrue(open.waitForExistence(timeout: 15))
+    // Files and changes is in the chat's "…" menu, as the desktop's rail is on the phone.
+    let menu = app.buttons["chat.actions"]
+    XCTAssertTrue(menu.waitForExistence(timeout: 15))
+    menu.tap()
+    let open = app.buttons["Files and changes"]
+    XCTAssertTrue(open.waitForExistence(timeout: 5))
     open.tap()
 
     let changes = app.buttons["workspace-changes"]

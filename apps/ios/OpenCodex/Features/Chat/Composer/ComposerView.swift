@@ -147,50 +147,63 @@ private struct ComposerBody: View {
 
   // MARK: Composer
 
+  /// Like OpenCode's iPhone composer: a Liquid Glass capsule that's one line ("+ Message ↑")
+  /// until you focus it or type; then the model row appears under the input.
+  private var expanded: Bool {
+    focused || draft.hasContent || !draft.attachments.isEmpty || encoding > 0
+  }
+
   private var composer: some View {
     VStack(alignment: .leading, spacing: 0) {
       if !draft.attachments.isEmpty || encoding > 0 {
         AttachmentStrip(attachments: draft.attachments, encoding: encoding) { attachment in
           draft.attachments.removeAll { $0.id == attachment.id }
         }
-        .padding(.bottom, 12)
+        .padding(EdgeInsets(top: 4, leading: 6, bottom: 10, trailing: 6))
       }
-      TextField(
-        "Message", text: $draft.text, selection: $selection,
-        prompt: Text("Message")
-          .foregroundStyle(palette.color("text-tertiary")),
-        axis: .vertical
-      )
-      // The transcript's prose size: the desktop's px scaled 16/14, with Dynamic Type.
-      .font(Font(Typography(UITraitCollection.current, chatSize: chatSize).body))
-      .foregroundStyle(palette.color("text"))
-      .lineLimit(1...8)
-      .focused($focused)
-      .padding(2)
-      .accessibilityIdentifier("composer.input")
-      .onChange(of: draft.text) { dismissedMenu = false }
-
-      footer
-        // Compact chrome stops growing past xxxLarge; the controls offer the large content viewer.
-        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-        .padding(.top, 2)
+      // The input keeps one position in both layouts, so it never loses focus as they swap.
+      HStack(alignment: .center, spacing: 2) {
+        if !expanded {
+          plusMenu
+        }
+        TextField(
+          "Message", text: $draft.text, selection: $selection,
+          prompt: Text(model.isSideChat ? "Ask a side question" : "Message")
+            .foregroundStyle(palette.color("text-tertiary")),
+          axis: .vertical
+        )
+        // The transcript's prose size: the desktop's px scaled 16/14, with Dynamic Type.
+        .font(Font(Typography(UITraitCollection.current, chatSize: chatSize).body))
+        .foregroundStyle(palette.color("text"))
+        .lineLimit(expanded ? 1...8 : 1...1)
+        .focused($focused)
+        .padding(.vertical, expanded ? 6 : 0)
+        .padding(.leading, expanded ? 8 : 0)
+        .accessibilityIdentifier("composer.input")
+        .onChange(of: draft.text) { dismissedMenu = false }
+        if !expanded {
+          if model.running { stopButton }
+          sendButton
+        }
+      }
+      if expanded {
+        footer
+          // Compact chrome stops growing past xxxLarge; the controls offer the large content viewer.
+          .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+          .transition(.opacity.combined(with: .move(edge: .bottom)))
+      }
     }
-    .padding(EdgeInsets(top: 12, leading: 16, bottom: 2, trailing: 8))
+    .padding(.horizontal, 8)
+    .padding(.vertical, 4)
+    .frame(minHeight: 52)
     .background {
       // Tapping the composer's empty space focuses the input.
       Color.clear
-        .contentShape(.rect(cornerRadius: 18))
+        .contentShape(.rect(cornerRadius: 26))
         .onTapGesture { focused = true }
     }
-    .ceramic("composer", shadow: "composer-shadow", radius: 18)
-    .overlay {
-      if focused {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-          .inset(by: -0.5)
-          .stroke(palette.color("border-heavy"), lineWidth: 1)
-          .allowsHitTesting(false)
-      }
-    }
+    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: expanded ? 24 : 26))
+    .animation(.snappy(duration: 0.22), value: expanded)
     .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { top in
       // Below the navigation bar, at most the desktop's 320 px.
       menuRoom = min(320, max(132, top - 132))
@@ -205,39 +218,8 @@ private struct ComposerBody: View {
   /// as one quiet menu, then Stop and Send. Context usage lives in Session details.
   private var footer: some View {
     HStack(spacing: 2) {
-      Menu {
-        Button("Photo Library", systemImage: "photo.on.rectangle") { showPhotos = true }
-          .disabled(draft.attachments.count >= AttachmentEncoder.maxCount)
-        if CameraPicker.available {
-          Button("Camera", systemImage: "camera") { showCamera = true }
-            .disabled(draft.attachments.count >= AttachmentEncoder.maxCount)
-        }
-        Divider()
-        // The desktop's Permissions control: turning full access on asks first.
-        Toggle(isOn: fullAccessBinding) {
-          Label("Full access", systemImage: fullAccess ? "bolt.shield" : "shield")
-        }
-        .disabled(sending || (model.session == nil && model.sessionID != nil))
-      } label: {
-        Image(systemName: "plus")
-          .font(.system(size: 18, weight: .regular))
-          .foregroundStyle(palette.color("text-secondary"))
-          .overlay(alignment: .topTrailing) {
-            if fullAccess {
-              // Full access is on: a small reminder, like the desktop's accent Permissions label.
-              Image(systemName: "bolt.shield.fill")
-                .font(.system(size: 10))
-                .foregroundStyle(palette.color("warning"))
-                .offset(x: 8, y: -6)
-            }
-          }
-          .frame(width: 44, height: 44)
-          .contentShape(.rect)
-      }
-      .accessibilityShowsLargeContentViewer()
-      .accessibilityLabel(fullAccess ? "Attach and permissions, full access on" : "Attach and permissions")
-      .accessibilityIdentifier("composer.attach")
-      .padding(.leading, -10)
+      plusMenu
+        .padding(.leading, -10)
 
       modelMenu
         .layoutPriority(-1)
@@ -257,6 +239,42 @@ private struct ComposerBody: View {
         "This agent can read and change files outside the project and run commands without approval, including destructive commands and access to secrets. Only enable this for work you trust.\n\nApplies to this thread and new subagents. Existing subagents keep their own permissions. Pending approvals in this thread will be allowed. Your global OpenCode settings stay unchanged; server policies still apply."
       )
     }
+  }
+
+  /// "+": attachments, then Full access (the desktop's Permissions control).
+  private var plusMenu: some View {
+    Menu {
+      Button("Photo Library", systemImage: "photo.on.rectangle") { showPhotos = true }
+        .disabled(draft.attachments.count >= AttachmentEncoder.maxCount)
+      if CameraPicker.available {
+        Button("Camera", systemImage: "camera") { showCamera = true }
+          .disabled(draft.attachments.count >= AttachmentEncoder.maxCount)
+      }
+      Divider()
+      // The desktop's Permissions control: turning full access on asks first.
+      Toggle(isOn: fullAccessBinding) {
+        Label("Full access", systemImage: fullAccess ? "bolt.shield" : "shield")
+      }
+      .disabled(sending || (model.session == nil && model.sessionID != nil))
+    } label: {
+      Image(systemName: "plus")
+        .font(.system(size: 18, weight: .regular))
+        .foregroundStyle(palette.color("text-secondary"))
+        .overlay(alignment: .topTrailing) {
+          if fullAccess {
+            // Full access is on: a small reminder, like the desktop's accent Permissions label.
+            Image(systemName: "bolt.shield.fill")
+              .font(.system(size: 10))
+              .foregroundStyle(palette.color("warning"))
+              .offset(x: 8, y: -6)
+          }
+        }
+        .frame(width: 44, height: 44)
+        .contentShape(.rect)
+    }
+    .accessibilityShowsLargeContentViewer()
+    .accessibilityLabel(fullAccess ? "Attach and permissions, full access on" : "Attach and permissions")
+    .accessibilityIdentifier("composer.attach")
   }
 
   /// "Claude Opus 5.5 · High": choose the model, or the thinking level in place.
@@ -429,6 +447,7 @@ private struct ComposerBody: View {
         // A new thread can't run thread actions, and /new needs the host to navigate.
         guard SlashCommand.localNames.contains(command.name), command.skill == nil else { return true }
         if model.sessionID == nil { return false }
+        if model.isSideChat && sideChatHiddenCommands.contains(command.name) { return false }
         return command.name != "new" || navigation.newThread != nil
       }
       let commands = SlashCommand.match(available, String(draft.text.dropFirst()))

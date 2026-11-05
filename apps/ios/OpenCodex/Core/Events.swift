@@ -136,6 +136,12 @@ final class EventHub {
               {
                 self.handlers.values.forEach { $0(decoded) }
               }
+            case "canvas":
+              // Canvas folder changes (`{ type: source | data | list | app, id, … }`).
+              if let data = try? JSONDecoder().decode(JSONValue.self, from: Data(event.data.utf8)) {
+                let decoded = GatewayEvent(id: nil, type: "canvas", data: data)
+                self.handlers.values.forEach { $0(decoded) }
+              }
             case "unavailable":
               self.live = false
             default: break

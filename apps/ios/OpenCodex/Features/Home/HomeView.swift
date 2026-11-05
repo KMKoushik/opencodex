@@ -8,7 +8,7 @@ struct HomeView: View {
   @Environment(\.palette) private var palette
   @State private var model: HomeModel
   @State private var actions: ThreadActions
-  @State private var path: [ChatRoute] = []
+  @State private var path = NavigationPath()
   /// `-session` opens its chat once per launch, so Back can leave it.
   @State private var openedLaunchSession = false
   @State private var sheet: Sheet?
@@ -35,9 +35,11 @@ struct HomeView: View {
     NavigationStack(path: $path) {
       ThreadList(
         model: model, actions: actions,
-        open: { path.append(.session($0)) },
+        open: { path.append(ChatRoute.session($0)) },
         newThread: { sheet = .newChat },
-        newThreadIn: { path.append(.new(directory: $0)) }
+        newThreadIn: { path.append(ChatRoute.new(directory: $0)) },
+        tasks: { path.append(HomeRoute.tasks) },
+        apps: { path.append(HomeRoute.apps) }
       )
       .safeAreaInset(edge: .top, spacing: 0) {
         HomeHeader(
@@ -48,14 +50,28 @@ struct HomeView: View {
       .background(palette.color("surface-under"))
       .toolbar(.hidden, for: .navigationBar)
       .navigationTitle("Threads")
+      .extrasDebugLaunch(client: client, events: connection.events)
       .navigationDestination(for: ChatRoute.self) { route in
         ChatScreen(client: client, events: connection.events, route: route) { path.append($0) }
+      }
+      // The desktop sidebar's Tasks and Apps pages.
+      .navigationDestination(for: HomeRoute.self) { route in
+        switch route {
+        case .tasks:
+          TasksScreen(client: client, events: connection.events) {
+            path.append(ChatRoute.session($0))
+          }
+        case .apps:
+          AppsScreen(client: client, events: connection.events) {
+            path.append(ChatRoute.session($0))
+          }
+        }
       }
       .onAppear {
         actions.focusHandler = { [model] action, target in model.perform(action, on: target) }
         actions.onChange = { [model] _ in model.scheduleRefresh(after: .zero) }
         // A fork opens at once, as the desktop's fork dialog does.
-        actions.onOpen = { id in path.append(.session(id)) }
+        actions.onOpen = { id in path.append(ChatRoute.session(id)) }
         model.appear(events: connection.events)
       }
       .onDisappear { model.disappear() }
@@ -63,7 +79,7 @@ struct HomeView: View {
         // Tests can open a chat directly with `-session <id>`.
         if !openedLaunchSession, let id = UserDefaults.standard.string(forKey: "session") {
           openedLaunchSession = true
-          path = [.session(id)]
+          path.append(ChatRoute.session(id))
         }
         if model.phase != .loaded { await model.reload() }
       }
@@ -91,12 +107,12 @@ struct HomeView: View {
         case .newChat:
           NewChatSheet(model: model) { directory in
             self.sheet = nil
-            path.append(.new(directory: directory))
+            path.append(ChatRoute.new(directory: directory))
           }
         case .search:
           ThreadSearchSheet(client: client) { id in
             self.sheet = nil
-            path.append(.session(id))
+            path.append(ChatRoute.session(id))
           }
         case .settings(let section):
           SettingsView(client: client, section: section)
@@ -266,4 +282,9 @@ struct IconButtonStyle: ButtonStyle {
         configuration.isPressed ? palette.color("hover") : .clear,
         in: .rect(cornerRadius: 8, style: .continuous))
   }
+}
+
+/// Pages the sidebar opens besides chats, like the desktop's Tasks and Apps entries.
+enum HomeRoute: Hashable {
+  case tasks, apps
 }

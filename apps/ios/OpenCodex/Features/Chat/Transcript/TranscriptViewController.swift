@@ -378,7 +378,8 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     list += builder.pending(model.inbox, known: Set(model.messages.lazy.map(\.id)))
     if model.undone {
       // The desktop's footer note while an undo is staged.
-      let note = "Conversation undone. Use /redo to restore it, or send a message to continue from here."
+      let note =
+        "\(model.isSideChat ? "Side chat" : "Conversation") undone. Use /redo to restore it, or send a message to continue from here."
       list.append(TranscriptItem(id: "undone", content: .note(note), row: "undone"))
     }
     if !model.running, executionError != nil || model.session?.outcome == "failed" {

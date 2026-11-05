@@ -8,6 +8,8 @@ struct ThreadList: View {
   let open: (String) -> Void
   let newThread: () -> Void
   let newThreadIn: (String) -> Void
+  let tasks: () -> Void
+  let apps: () -> Void
   @Environment(\.palette) private var palette
 
   var body: some View {
@@ -21,6 +23,24 @@ struct ThreadList: View {
         }
         .buttonStyle(NavRowStyle())
         .accessibilityIdentifier("new-chat")
+
+        // The desktop sidebar's Tasks and Apps, under New thread.
+        Button(action: tasks) {
+          Label("Tasks", systemImage: "checklist")
+            .labelStyle(NavLabelStyle())
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(.rect)
+        }
+        .buttonStyle(NavRowStyle())
+        .accessibilityIdentifier("home.tasks")
+        Button(action: apps) {
+          Label("Apps", systemImage: "square.grid.2x2")
+            .labelStyle(NavLabelStyle())
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(.rect)
+        }
+        .buttonStyle(NavRowStyle())
+        .accessibilityIdentifier("home.apps")
         .padding(.bottom, 10)
 
         if case .failed(let message) = model.phase {

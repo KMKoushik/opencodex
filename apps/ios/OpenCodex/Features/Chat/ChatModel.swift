@@ -22,7 +22,11 @@ final class ChatModel {
   let directory: String?
 
   private(set) var session: SessionInfo? {
-    didSet { if oldValue?.revert != session?.revert { updateVisible() } }
+    didSet {
+      if oldValue?.revert != session?.revert || oldValue?.sideChatParent != session?.sideChatParent {
+        updateVisible()
+      }
+    }
   }
   /// The visible history, oldest first: like the desktop, an undo hides the reverted message
   /// and everything after it until it's redone or a new prompt commits it.
@@ -31,7 +35,11 @@ final class ChatModel {
   private var history: [SessionMessage] = [] { didSet { updateVisible() } }
   /// True while an undo is staged.
   var undone: Bool { session?.revert != nil }
-  private(set) var hasOlder = false
+  /// Whether older pages remain to load. A side chat stops paging at its fork.
+  var hasOlder: Bool { olderPages && !reachedFork }
+  private var olderPages = false
+  /// A side chat's loaded history reaches back past the side session's start.
+  private var reachedFork = false
   private(set) var loadingOlder = false
   private(set) var loaded = false
   /// Streamed text that the snapshot may not have yet. Display only.
@@ -114,7 +122,7 @@ final class ChatModel {
       self.session = try await session
       history = first.data.reversed()
       olderCursor = first.cursor?.next ?? nil
-      hasOlder = olderCursor != nil
+      olderPages = olderCursor != nil
       running = try await active[id] != nil
       self.permissions = try await permissions
       self.forms = try await forms
@@ -137,7 +145,7 @@ final class ChatModel {
       let known = Set(history.map(\.id))
       history.insert(contentsOf: page.data.reversed().filter { !known.contains($0.id) }, at: 0)
       olderCursor = page.cursor?.next ?? nil
-      hasOlder = olderCursor != nil
+      olderPages = olderCursor != nil
     } catch {
       self.error = error.localizedDescription
     }
@@ -238,12 +246,20 @@ final class ChatModel {
   }
 
   private func updateVisible() {
-    guard let boundary = session?.revert?.messageID else {
-      messages = history
-      return
+    var visible = history
+    if let boundary = session?.revert?.messageID {
+      let end = history.firstIndex { $0.id == boundary }
+      visible = end.map { Array(history[..<$0]) } ?? []
     }
-    let end = history.firstIndex { $0.id == boundary }
-    messages = end.map { Array(history[..<$0]) } ?? []
+    // Like the desktop, a side chat reads as a fresh chat: forked history keeps its original
+    // times, so hide what's older than the side session, and stop paging there.
+    if isSideChat, let start = session?.time.created {
+      reachedFork = history.contains { $0.created < start }
+      visible = visible.filter { $0.created >= start }
+    } else {
+      reachedFork = false
+    }
+    messages = visible
   }
 
   /// Refetches the thread's info, e.g. after a rename, pin or mute from its menu.
@@ -362,7 +378,7 @@ final class ChatModel {
       // No overlap (a whole page arrived since the last read, or an undo): start over from it.
       history = fresh
       olderCursor = page.cursor?.next ?? nil
-      hasOlder = olderCursor != nil
+      olderPages = olderCursor != nil
     }
     pruneLive()
   }

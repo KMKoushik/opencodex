@@ -136,6 +136,9 @@ extension ChatModel {
   ) async throws -> SendResult {
     let slash = SlashCommand.parse(snapshot.text)
     if let slash, SlashCommand.localNames.contains(slash.name) {
+      if isSideChat && sideChatHiddenCommands.contains(slash.name) {
+        throw ComposerFailure("/\(slash.name) isn’t available in side chats. Use it in the main chat.")
+      }
       guard let id = sessionID else {
         throw ComposerFailure("/\(slash.name) needs a thread. Send a message first.")
       }

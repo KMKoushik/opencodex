@@ -15,6 +15,8 @@ struct ChatScreen: View {
   @State private var projects: [SessionDetails.Project]?
   @State private var showDetails = false
   @State private var showSubagents = false
+  @State private var showTerminal = false
+  @State private var showSideChat = false
   /// The open workspace panel, on Files or Changes.
   @State private var workspace: WorkspaceModel.Segment?
   @Environment(\.palette) private var palette
@@ -58,6 +60,16 @@ struct ChatScreen: View {
         }
       }
       .sheet(isPresented: $showSubagents) { SubagentsSheet(model: model) }
+      .sheet(isPresented: $showSideChat) {
+        if let id = model.sessionID {
+          SideChatSheet(client: model.client, events: model.events, mainID: id)
+        }
+      }
+      .fullScreenCover(isPresented: $showTerminal) {
+        if let directory {
+          TerminalScreen(client: model.client, events: model.events, directory: directory)
+        }
+      }
       .fullScreenCover(item: $workspace) { segment in
         if let directory {
           WorkspaceView(
@@ -103,52 +115,61 @@ struct ChatScreen: View {
     }
   }
 
+  /// Like OpenCode's iPhone app: a title pill (tap for Session details) and one "…" menu, which
+  /// shows a ring while the reply runs. The desktop's rail and toolbar buttons live in the menu.
   @ToolbarContentBuilder private var toolbar: some ToolbarContent {
     ToolbarItem(placement: .principal) {
-      ChatTitle(project: projectName, title: title, live: model.events.live)
+      if model.sessionID != nil {
+        Button { showDetails = true } label: {
+          ChatTitle(project: projectName, title: title, live: model.events.live)
+            .padding(.horizontal, 6)
+        }
+        .accessibilityHint("Shows session details.")
+        .accessibilityIdentifier("chat.details")
+      } else {
+        ChatTitle(project: projectName, title: title, live: model.events.live)
+      }
     }
     // Like the desktop, a thread's actions and details appear once it exists.
     if model.sessionID != nil {
       ToolbarItem(placement: .topBarTrailing) {
         Menu {
-          if let target { ThreadActionsMenu(actions: threadActions, target: target) }
-          Divider()
-          Button { showSubagents = true } label: { Label("Subagents", image: "Robot") }
-        } label: {
-          Label("Thread actions", systemImage: "ellipsis")
-        }
-        .accessibilityIdentifier("chat.actions")
-      }
-      ToolbarItem(placement: .topBarTrailing) {
-        // The desktop rail's Files and Changes.
-        Button("Workspace", systemImage: "folder") { workspace = .files }
-          .disabled(directory == nil)
-          .accessibilityIdentifier("workspace-open")
-      }
-      // The desktop rail's subagents button with its running-count badge, while any run; the
-      // phone's narrow toolbar keeps it in the "…" menu otherwise.
-      if subagentsRunning {
-        ToolbarItem(placement: .topBarTrailing) {
-          Button {
-            showSubagents = true
-          } label: {
-            RobotIcon(size: 22)
-              .overlay(alignment: .topTrailing) {
-                RunningSubagentsBadge(model: model).offset(x: 8, y: -6)
-              }
+          Button("Session details", systemImage: "info.circle") { showDetails = true }
+          Button("Files and changes", systemImage: "folder") { workspace = .files }
+            .disabled(directory == nil)
+            .accessibilityIdentifier("workspace-open")
+          Button { showSubagents = true } label: {
+            Label(subagentsLabel, image: "Robot")
           }
-          .accessibilityLabel("Subagents")
           .accessibilityIdentifier("chat.subagents")
+          Button("Side chat", systemImage: "bubble.left.and.text.bubble.right") { showSideChat = true }
+          Button("Terminal", systemImage: "apple.terminal") { showTerminal = true }
+            .disabled(directory == nil)
+          Divider()
+          if let target { ThreadActionsMenu(actions: threadActions, target: target) }
+        } label: {
+          Image(systemName: "ellipsis")
+            .frame(width: 30, height: 30)
+            .overlay {
+              if model.running {
+                // OpenCode's running ring around the menu button.
+                RingSpinner(size: 34).allowsHitTesting(false)
+              }
+            }
+            .overlay(alignment: .topTrailing) {
+              RunningSubagentsBadge(model: model).offset(x: 10, y: -8)
+            }
         }
-      }
-      ToolbarItem(placement: .topBarTrailing) {
-        Button("Session details", systemImage: "info.circle") { showDetails = true }
-          .accessibilityIdentifier("chat.details")
+        .accessibilityLabel(model.running ? "Thread menu, working" : "Thread menu")
+        .accessibilityIdentifier("chat.actions")
       }
     }
   }
 
-  private var subagentsRunning: Bool { !ActivityModel.shared(for: model).subagents.isEmpty }
+  private var subagentsLabel: String {
+    let running = ActivityModel.shared(for: model).subagents.count
+    return running > 0 ? "Subagents · \(running) running" : "Subagents"
+  }
 
   private var title: String { model.sessionID == nil ? "New thread" : model.title }
 
