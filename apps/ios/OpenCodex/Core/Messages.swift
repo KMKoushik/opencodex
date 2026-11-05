@@ -11,6 +11,8 @@ nonisolated enum SessionMessage: Decodable, Hashable, Identifiable, Sendable {
   case skill(SkillMessage)
   case compaction(CompactionMessage)
   case idle(IdleMessage)
+  /// `agent-switched`, `model-switched` or `location-switched`.
+  case switched(SwitchMessage)
   case other(id: String, type: String, created: Millis)
 
   private enum Key: String, CodingKey { case id, type, time }
@@ -28,6 +30,8 @@ nonisolated enum SessionMessage: Decodable, Hashable, Identifiable, Sendable {
     case "skill": self = .skill(try SkillMessage(from: decoder))
     case "compaction": self = .compaction(try CompactionMessage(from: decoder))
     case "idle": self = .idle(try IdleMessage(from: decoder))
+    case "agent-switched", "model-switched", "location-switched":
+      self = .switched(try SwitchMessage(from: decoder))
     default:
       self = .other(
         id: try container.decode(String.self, forKey: .id),
@@ -45,6 +49,7 @@ nonisolated enum SessionMessage: Decodable, Hashable, Identifiable, Sendable {
     case .skill(let m): m.id
     case .compaction(let m): m.id
     case .idle(let m): m.id
+    case .switched(let m): m.id
     case .other(let id, _, _): id
     }
   }
@@ -58,6 +63,7 @@ nonisolated enum SessionMessage: Decodable, Hashable, Identifiable, Sendable {
     case .skill(let m): m.time.created
     case .compaction(let m): m.time.created
     case .idle(let m): m.time.created
+    case .switched(let m): m.time.created
     case .other(_, _, let created): created
     }
   }
@@ -74,11 +80,26 @@ nonisolated struct UserMessage: Codable, Hashable, Sendable {
     var data: String?
     /// Set for `@` mentions, which show in the text instead of as attachments.
     var mention: JSONValue?
+    /// `uri` for files read from disk (mentioned files), `inline` for sent bytes.
+    struct Source: Codable, Hashable, Sendable {
+      var type: String
+      var uri: String?
+    }
+    var source: Source?
+    /// A mentioned chat's transcript carries the chat ID here.
+    var description: String?
+  }
+  /// A skill the prompt used, with its `@` mention range when it was mentioned.
+  struct Skill: Codable, Hashable, Sendable {
+    var id: String
+    var name: String?
+    var mention: JSONValue?
   }
   var id: String
   var time: Created
   var text: String
   var files: [File]?
+  var skills: [Skill]?
   var metadata: [String: JSONValue]?
 }
 
@@ -107,6 +128,13 @@ nonisolated struct AssistantMessage: Codable, Hashable, Sendable {
   var cost: Double?
   var tokens: Tokens?
   var error: StructuredError?
+  /// Set while OpenCode waits to retry a failed provider call.
+  struct Retry: Codable, Hashable, Sendable {
+    var attempt: Int?
+    var at: Millis?
+    var error: StructuredError
+  }
+  var retry: Retry?
 }
 
 nonisolated struct StructuredError: Codable, Hashable, Sendable {
@@ -211,6 +239,8 @@ nonisolated struct CompactionMessage: Codable, Hashable, Sendable {
   var time: Created
   var status: String
   var reason: String?
+  /// Why a `failed` compaction failed.
+  var error: StructuredError?
 }
 
 nonisolated struct IdleMessage: Codable, Hashable, Sendable {
@@ -218,6 +248,18 @@ nonisolated struct IdleMessage: Codable, Hashable, Sendable {
   var time: Created
   /// `succeeded`, `failed` or `interrupted`.
   var outcome: String
+}
+
+/// A note that the thread's agent, model or directory changed.
+nonisolated struct SwitchMessage: Codable, Hashable, Sendable {
+  struct Location: Codable, Hashable, Sendable { var directory: String }
+  var id: String
+  var time: Created
+  /// `agent-switched`, `model-switched` or `location-switched`.
+  var type: String
+  var agent: String?
+  var model: ModelRef?
+  var location: Location?
 }
 
 /// `/api/sessions/:id/messages`: newest first, with a cursor to older pages.

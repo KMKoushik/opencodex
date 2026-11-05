@@ -476,4 +476,6 @@ extension UIFont {
 extension NSAttributedString.Key {
   /// Inline code: drawn as a rounded background in this color by `ProseLayoutManager`.
   nonisolated static let codeBackground = NSAttributedString.Key("OpenCodexCodeBackground")
+  /// A sent `@` mention: a pill in this color, 2pt wider than its glyphs on every side.
+  nonisolated static let mentionBackground = NSAttributedString.Key("OpenCodexMentionBackground")
 }

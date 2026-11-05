@@ -3,7 +3,9 @@ import UIKit
 
 /// A virtualized, monospaced line view for diffs and code: fixed-height rows in a collection
 /// view that scrolls both ways, with the line-number gutter pinned while scrolling sideways.
-/// Rows are styled as they appear, so a 20,000-line diff costs the same as a short one.
+/// Rows are styled as they appear, so a 20,000-line diff costs the same as a short one; syntax
+/// spans for the whole document are computed once in the background, and rows show plain text
+/// until they arrive.
 struct CodeLines: UIViewRepresentable {
   let document: CodeDocument
   let highlighter: CodeHighlighter
@@ -33,6 +35,9 @@ final class CodeLinesView: UIView, UICollectionViewDataSource, UICollectionViewD
   private var style = LineStyle()
   private let cache = NSCache<NSNumber, NSAttributedString>()
   private var documentID = 0
+  /// Syntax spans per line for `documentID`, once the background pass finishes.
+  private var spans: [[SyntaxHighlighter.Span]] = []
+  private static let highlightQueue = DispatchQueue(label: "opencodex.code-lines", qos: .userInitiated)
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -69,8 +74,35 @@ final class CodeLinesView: UIView, UICollectionViewDataSource, UICollectionViewD
     if newDocument {
       self.document = document
       documentID += 1
+      spans = []
+      highlight()
     }
     restyle()
+  }
+
+  /// Tokenizes the document off the main thread, then restyles the visible rows.
+  private func highlight() {
+    guard highlighter.enabled, !document.lines.isEmpty else { return }
+    let id = documentID
+    let lines = document.lines
+    let highlighter = highlighter
+    Self.highlightQueue.async { [weak self] in
+      let spans = highlighter.spans(lines)
+      DispatchQueue.main.async {
+        MainActor.assumeIsolated { self?.apply(spans, document: id) }
+      }
+    }
+  }
+
+  private func apply(_ spans: [[SyntaxHighlighter.Span]], document id: Int) {
+    guard documentID == id else { return }
+    self.spans = spans
+    cache.removeAllObjects()
+    for path in collection.indexPathsForVisibleItems {
+      guard let cell = collection.cellForItem(at: path) as? LineCell else { continue }
+      let line = document.lines[path.item]
+      cell.configure(line, text: text(for: path.item, line), style: style)
+    }
   }
 
   private func restyle() {
@@ -157,16 +189,23 @@ final class CodeLinesView: UIView, UICollectionViewDataSource, UICollectionViewD
       text = NSAttributedString(
         string: label, attributes: [.font: style.noteFont, .foregroundColor: style.tertiary])
     default:
+      let highlighted = index < spans.count
       let string = NSMutableAttributedString(
-        string: line.text, attributes: [.font: style.font, .foregroundColor: style.text])
-      for span in highlighter.spans(line.text) {
+        string: line.text,
+        attributes: [.font: style.font, .foregroundColor: highlighted ? style.syntax.plain : style.text])
+      let length = string.length
+      for span in highlighted ? spans[index] : [] where span.range.upperBound <= length {
         let range = NSRange(location: span.range.lowerBound, length: span.range.count)
-        switch span.role {
+        let syntax = style.syntax
+        switch span.token {
         case .keyword:
-          string.addAttributes([.foregroundColor: style.keyword, .font: style.keywordFont], range: range)
-        case .string: string.addAttribute(.foregroundColor, value: style.string, range: range)
-        case .comment: string.addAttribute(.foregroundColor, value: style.comment, range: range)
-        case .punctuation: string.addAttribute(.foregroundColor, value: style.punctuation, range: range)
+          string.addAttribute(.foregroundColor, value: syntax.keyword, range: range)
+          if syntax.keywordBold { string.addAttribute(.font, value: style.keywordFont, range: range) }
+        case .string, .constant: string.addAttribute(.foregroundColor, value: syntax.string, range: range)
+        case .comment: string.addAttribute(.foregroundColor, value: syntax.comment, range: range)
+        case .punctuation: string.addAttribute(.foregroundColor, value: syntax.punctuation, range: range)
+        case .function: string.addAttribute(.foregroundColor, value: syntax.function, range: range)
+        case .type: string.addAttribute(.foregroundColor, value: syntax.type, range: range)
         }
       }
       if let changed = line.changed, changed.upperBound <= string.length {
@@ -195,10 +234,10 @@ struct LineStyle {
   var surface = UIColor.clear
   var text = UIColor.clear
   var tertiary = UIColor.clear
-  var keyword = UIColor.clear
-  var string = UIColor.clear
-  var comment = UIColor.clear
-  var punctuation = UIColor.clear
+  /// The shared syntax colors, as chat code blocks use them.
+  var syntax = TranscriptTheme.Syntax(
+    plain: .clear, keyword: .clear, keywordBold: false, string: .clear, comment: .clear, punctuation: .clear,
+    function: .clear, type: .clear)
   var added = UIColor.clear
   var removed = UIColor.clear
   var addedRow = UIColor.clear
@@ -212,10 +251,8 @@ struct LineStyle {
   init(palette: Palette, traits: UITraitCollection, maxNumber: Int) {
     let metrics = UIFontMetrics(forTextStyle: .footnote)
     font = metrics.scaledFont(for: .monospacedSystemFont(ofSize: 12.5, weight: .regular), compatibleWith: traits)
-    let weight = Double(palette.raw("syntax-keyword-weight") ?? "400") ?? 400
     keywordFont = metrics.scaledFont(
-      for: .monospacedSystemFont(ofSize: 12.5, weight: weight >= 600 ? .semibold : .regular),
-      compatibleWith: traits)
+      for: .monospacedSystemFont(ofSize: 12.5, weight: .semibold), compatibleWith: traits)
     noteFont = metrics.scaledFont(for: .systemFont(ofSize: 11.5), compatibleWith: traits)
     numberFont = metrics.scaledFont(for: .monospacedDigitSystemFont(ofSize: 12, weight: .regular), compatibleWith: traits)
     rowHeight = (font.pointSize * 1.6).rounded()
@@ -226,10 +263,7 @@ struct LineStyle {
     surface = palette.ui("surface")
     text = palette.ui("text")
     tertiary = palette.ui("text-tertiary")
-    keyword = palette.ui("syntax-keyword")
-    string = palette.ui("syntax-string")
-    comment = palette.ui("syntax-comment")
-    punctuation = palette.ui("syntax-punctuation")
+    syntax = TranscriptTheme(palette).syntax
     added = palette.ui("success")
     removed = palette.ui("error")
     // Opaque tints, so the pinned gutter covers text scrolled under it.
@@ -238,14 +272,6 @@ struct LineStyle {
     addedWord = added.withAlphaComponent(palette.dark ? 0.28 : 0.2)
     removedWord = removed.withAlphaComponent(palette.dark ? 0.28 : 0.2)
     separatorRow = surface.blended(with: palette.ui("secondary"))
-  }
-}
-
-extension Palette {
-  /// A token's raw CSS value, for non-color tokens like `syntax-keyword-weight`.
-  nonisolated func raw(_ token: String) -> String? {
-    Mirror(reflecting: self).children.first { $0.label == "tokens" }
-      .flatMap { $0.value as? [String: String] }?[token]
   }
 }
 

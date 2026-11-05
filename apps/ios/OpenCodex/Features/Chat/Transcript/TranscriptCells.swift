@@ -88,15 +88,21 @@ final class ProseTextView: UITextView, UITextViewDelegate {
   }
 }
 
-/// Draws inline code backgrounds as rounded rects that hug the glyphs on each line.
+/// Draws inline code and mention backgrounds as rounded rects that hug the glyphs on each line.
 nonisolated final class ProseLayoutManager: NSLayoutManager {
   override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
     super.drawBackground(forGlyphRange: glyphsToShow, at: origin)
-    guard let storage = textStorage, let container = textContainers.first,
-      UIGraphicsGetCurrentContext() != nil
-    else { return }
+    guard textStorage != nil, textContainers.first != nil, UIGraphicsGetCurrentContext() != nil else { return }
+    // `padding: 1px 5px; border-radius: 5px`.
+    fill(.codeBackground, glyphsToShow, origin, outset: CGSize(width: 0, height: 1), radius: 5)
+    // `.mention`: `border-radius: 4px; box-shadow: 0 0 0 2px`.
+    fill(.mentionBackground, glyphsToShow, origin, outset: CGSize(width: 2, height: 2), radius: 6)
+  }
+
+  private func fill(_ key: NSAttributedString.Key, _ glyphsToShow: NSRange, _ origin: CGPoint, outset: CGSize, radius: CGFloat) {
+    guard let storage = textStorage, let container = textContainers.first else { return }
     let characters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
-    storage.enumerateAttribute(.codeBackground, in: characters) { value, range, _ in
+    storage.enumerateAttribute(key, in: characters) { value, range, _ in
       guard let color = value as? UIColor else { return }
       color.setFill()
       let font = storage.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont
@@ -105,7 +111,7 @@ nonisolated final class ProseLayoutManager: NSLayoutManager {
       let glyphs = glyphRange(forCharacterRange: range, actualCharacterRange: nil)
       enumerateLineFragments(forGlyphRange: glyphs) { fragment, _, _, lineGlyphs, _ in
         var line = NSIntersectionRange(lineGlyphs, glyphs)
-        // Trailing spaces where the code wraps get no background.
+        // Trailing spaces where the text wraps get no background.
         while line.length > 0,
           let scalar = (storage.string as NSString).substring(
             with: self.characterRange(forGlyphRange: NSRange(location: NSMaxRange(line) - 1, length: 1), actualGlyphRange: nil)
@@ -117,11 +123,10 @@ nonisolated final class ProseLayoutManager: NSLayoutManager {
         guard line.length > 0 else { return }
         let bounds = self.boundingRect(forGlyphRange: line, in: container)
         let baseline = fragment.minY + self.location(forGlyphAt: line.location).y
-        // `padding: 1px 5px; border-radius: 5px`.
         let rect = CGRect(
-          x: bounds.minX + origin.x, y: baseline - ascender - 1 + origin.y,
-          width: bounds.width, height: ascender - descender + 2)
-        UIBezierPath(roundedRect: rect, cornerRadius: 5).fill()
+          x: bounds.minX + origin.x - outset.width, y: baseline - ascender - outset.height + origin.y,
+          width: bounds.width + outset.width * 2, height: ascender - descender + outset.height * 2)
+        UIBezierPath(roundedRect: rect, cornerRadius: radius).fill()
       }
     }
   }
@@ -689,20 +694,67 @@ final class ImageBlockCell: TranscriptCell {
 
 // MARK: User
 
-/// A sent prompt: the `user-message` bubble, then its attachments, right-aligned.
+/// Static text drawn by its own TextKit 1 stack, so mention pills sit exactly behind their
+/// glyphs and the bubble can shrink to the longest line.
+final class PromptTextView: UIView {
+  private let storage = NSTextStorage()
+  private let layout = ProseLayoutManager()
+  private let container = NSTextContainer(size: .zero)
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    storage.addLayoutManager(layout)
+    layout.addTextContainer(container)
+    container.lineFragmentPadding = 0
+    isOpaque = false
+    contentMode = .redraw
+    isUserInteractionEnabled = false
+  }
+
+  required init?(coder: NSCoder) { fatalError() }
+
+  var attributedText = NSAttributedString() {
+    didSet {
+      guard attributedText != oldValue else { return }
+      storage.setAttributedString(attributedText)
+      setNeedsDisplay()
+    }
+  }
+
+  /// The laid-out text's size within `width`.
+  func size(maxWidth width: CGFloat) -> CGSize {
+    guard storage.length > 0 else { return .zero }
+    container.size = CGSize(width: width, height: .greatestFiniteMagnitude)
+    let used = layout.usedRect(for: container)
+    return CGSize(width: used.width.rounded(.up), height: used.height.rounded(.up))
+  }
+
+  override func draw(_ rect: CGRect) {
+    // A hair wider than measured, so rounding never rewraps the last word.
+    container.size = CGSize(width: bounds.width + 0.5, height: .greatestFiniteMagnitude)
+    let glyphs = layout.glyphRange(for: container)
+    layout.drawBackground(forGlyphRange: glyphs, at: .zero)
+    layout.drawGlyphs(forGlyphRange: glyphs, at: .zero)
+  }
+}
+
+/// A sent prompt: its review comments as one chip, the `user-message` bubble with mention
+/// pills, then its attachments, right-aligned.
 final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
   var onOpen: ((UIImage?, ImageSource, String) -> Void)?
+  /// Opens the annotations list from the chip.
+  var onAnnotations: ((UIView) -> Void)?
 
+  private let chip = UIButton(type: .custom)
   private let bubble = UIView()
-  private let label = UILabel()
+  private let label = PromptTextView()
   private let note = UILabel()
   private var tiles: [AttachmentTile] = []
-  private var text = ""
+  private var prompt: SentPrompt?
   private var files: [Attachment] = []
-  private var pending = false
   /// `padding: 8px 12px; border-radius: 16px`.
   private let padding = UIEdgeInsets(top: 9, left: 14, bottom: 9, right: 14)
-  /// `gap: 8px` between the bubble, attachments and the pending note.
+  /// `gap: 8px` between the chip, the bubble, attachments and the pending note.
   private let gap: CGFloat = 9
   private var typography = Typography.current
   private var theme = TranscriptTheme.fallback
@@ -711,9 +763,19 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
     super.init(frame: frame)
     bubble.layer.cornerRadius = 18
     bubble.layer.cornerCurve = .continuous
-    label.numberOfLines = 0
     note.textAlignment = .right
     note.text = "Pending in OpenCode"
+    var configuration = UIButton.Configuration.plain()
+    configuration.imagePadding = 7
+    configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14)
+    configuration.titleLineBreakMode = .byTruncatingTail
+    chip.configuration = configuration
+    chip.layer.borderWidth = 1
+    chip.layer.cornerCurve = .continuous
+    chip.accessibilityIdentifier = "transcript.annotations"
+    chip.accessibilityHint = "Shows the comments sent with this message."
+    chip.addAction(UIAction { [weak self] _ in self.map { $0.onAnnotations?($0.chip) } }, for: .primaryActionTriggered)
+    contentView.addSubview(chip)
     contentView.addSubview(bubble)
     bubble.addSubview(label)
     contentView.addSubview(note)
@@ -727,28 +789,45 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
   override func prepareForReuse() {
     super.prepareForReuse()
     onOpen = nil
+    onAnnotations = nil
   }
 
-  func configure(
-    text: String, files: [Attachment], pending: Bool, typography: Typography, theme: TranscriptTheme
-  ) {
-    self.text = text
-    self.pending = pending
+  func configure(_ prompt: SentPrompt, typography: Typography, theme: TranscriptTheme) {
+    self.prompt = prompt
     self.typography = typography
     self.theme = theme
     bubble.backgroundColor = theme.userMessage
     let paragraph = NSMutableParagraphStyle()
     paragraph.lineSpacing = typography.spacing(typography.body)
-    label.attributedText = NSAttributedString(
-      string: text, attributes: [.font: typography.body, .foregroundColor: theme.text, .paragraphStyle: paragraph])
+    let text = NSMutableAttributedString(
+      string: prompt.text,
+      attributes: [.font: typography.body, .foregroundColor: theme.text, .paragraphStyle: paragraph])
+    // `.user-message-bubble .mention`: `accent-soft` behind `accent-text`.
+    for mention in prompt.mentions {
+      text.addAttributes(
+        [.mentionBackground: theme.accentSoft, .foregroundColor: theme.accentText],
+        range: NSRange(location: mention.start, length: mention.end - mention.start))
+    }
+    label.attributedText = text
     note.font = typography.small
     note.textColor = theme.textTertiary
-    note.isHidden = !pending
-    bubble.isHidden = text.isEmpty
-    bubble.accessibilityLabel = text
-    bubble.accessibilityIdentifier = pending ? "transcript.pending" : "transcript.user"
-    if files != self.files {
-      self.files = files
+    note.isHidden = !prompt.pending
+    bubble.isHidden = prompt.text.isEmpty
+    bubble.accessibilityLabel = prompt.text
+    bubble.accessibilityIdentifier = prompt.pending ? "transcript.pending" : "transcript.user"
+    chip.isHidden = prompt.annotations.isEmpty
+    if !prompt.annotations.isEmpty {
+      // `.message-annotations-chip`: a pill in the bubble's color with a hairline border.
+      chip.configuration?.attributedTitle = AttributedString(
+        prompt.annotationSummary, attributes: AttributeContainer([.font: typography.body, .foregroundColor: theme.text]))
+      chip.configuration?.image = Symbol.image("text.bubble", typography.body.pointSize * 0.95)
+      chip.configuration?.baseForegroundColor = theme.textSecondary
+      chip.backgroundColor = theme.userMessage
+      chip.layer.borderColor = theme.border.cgColor
+      chip.accessibilityLabel = prompt.annotationSummary
+    }
+    if prompt.files != files {
+      files = prompt.files
       tiles.forEach { $0.removeFromSuperview() }
       tiles = files.map { file in
         let tile = AttachmentTile(file)
@@ -762,7 +841,9 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
   }
 
   private struct Frames {
+    var chip: CGRect
     var bubble: CGRect
+    var label: CGRect
     var tiles: [CGRect]
     var note: CGRect
     var height: CGFloat
@@ -772,16 +853,27 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
     let column = column(width)
     let right = column.x + column.width
     var y: CGFloat = 0
+    var chipFrame = CGRect.zero
+    if let prompt, !prompt.annotations.isEmpty {
+      // `height: 30px`, as wide as its label.
+      let height = typography.px(30)
+      let fitted = chip.sizeThatFits(CGSize(width: column.width, height: height)).width.rounded(.up)
+      let chipWidth = min(column.width, fitted)
+      chipFrame = CGRect(x: right - chipWidth, y: 0, width: chipWidth, height: height)
+      y = height
+    }
     var bubbleFrame = CGRect.zero
-    if !text.isEmpty {
+    var labelFrame = CGRect.zero
+    if let prompt, !prompt.text.isEmpty {
+      if y > 0 { y += gap }
       // `max-width: 90%` on phones.
       let maxBubble = (column.width * 0.9).rounded()
-      let size = label.sizeThatFits(
-        CGSize(width: maxBubble - padding.left - padding.right, height: .greatestFiniteMagnitude))
+      let size = label.size(maxWidth: maxBubble - padding.left - padding.right)
       let bubbleWidth = (size.width + padding.left + padding.right).rounded(.up)
       let bubbleHeight = (size.height + padding.top + padding.bottom).rounded(.up)
-      bubbleFrame = CGRect(x: right - bubbleWidth, y: 0, width: bubbleWidth, height: bubbleHeight)
-      y = bubbleHeight
+      bubbleFrame = CGRect(x: right - bubbleWidth, y: y, width: bubbleWidth, height: bubbleHeight)
+      labelFrame = CGRect(x: padding.left, y: padding.top, width: size.width, height: size.height)
+      y += bubbleHeight
     }
     // `flex-wrap: wrap; justify-content: flex-end`.
     var tileFrames: [CGRect] = []
@@ -810,13 +902,14 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
       }
     }
     var noteFrame = CGRect.zero
-    if pending {
+    if prompt?.pending == true {
       if y > 0 { y += gap }
       let height = note.font.lineHeight.rounded(.up)
       noteFrame = CGRect(x: column.x, y: y, width: column.width, height: height)
       y += height
     }
-    return Frames(bubble: bubbleFrame, tiles: tileFrames, note: noteFrame, height: y)
+    return Frames(
+      chip: chipFrame, bubble: bubbleFrame, label: labelFrame, tiles: tileFrames, note: noteFrame, height: y)
   }
 
   override func measure(width: CGFloat) -> CGFloat { frames(width).height }
@@ -824,16 +917,24 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
   override func layoutSubviews() {
     super.layoutSubviews()
     let frames = frames(bounds.width)
+    chip.frame = frames.chip
+    chip.layer.cornerRadius = frames.chip.height / 2
     bubble.frame = frames.bubble
-    label.frame = bubble.bounds.inset(by: padding)
+    label.frame = frames.label
     for (tile, frame) in zip(tiles, frames.tiles) { tile.frame = frame }
     note.frame = frames.note
+  }
+
+  /// The chip is shorter than a touch target; it takes taps 7pt above and below.
+  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    if !chip.isHidden, chip.frame.insetBy(dx: 0, dy: -7).contains(point) { return chip }
+    return super.hitTest(point, with: event)
   }
 
   func contextMenuInteraction(
     _ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint
   ) -> UIContextMenuConfiguration? {
-    let text = text
+    let text = prompt?.text ?? ""
     return UIContextMenuConfiguration(actionProvider: { _ in
       UIMenu(children: [
         UIAction(title: "Copy", image: UIImage(systemName: "doc.on.doc")) { _ in

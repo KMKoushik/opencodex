@@ -23,7 +23,8 @@ struct QuestionDock: View {
     _answers = State(initialValue: QuestionAnswers(form))
   }
 
-  private var fields: [FormInfo.Field] { form.fields }
+  /// The fields whose conditions hold, without hidden ones, like the desktop's `fields`.
+  private var fields: [FormInfo.Field] { answers.visible }
   private var index: Int { max(0, fields.firstIndex { $0.key == activeKey } ?? 0) }
   private var field: FormInfo.Field? { fields.indices.contains(index) ? fields[index] : nil }
   private var last: Bool { index >= fields.count - 1 }
@@ -55,7 +56,10 @@ struct QuestionDock: View {
             if reviewing {
               review
             } else if let field {
-              fieldView(field).id(field.key)
+              fieldView(field)
+                .id(field.key)
+                // `QuestionField` remounts per field and derives its custom text from the answer.
+                .onAppear { answers.mount(field) }
             }
             if let error {
               Text(error)
@@ -217,6 +221,7 @@ struct QuestionDock: View {
   @ViewBuilder private func fieldView(_ field: FormInfo.Field) -> some View {
     let options = QuestionAnswers.options(field)
     let multiple = QuestionAnswers.multiple(field)
+    let label = field.title ?? field.key
     if !options.isEmpty {
       VStack(alignment: .leading, spacing: 3) {
         Text(multiple ? "Select one or more answers" : "Select one answer")
@@ -247,7 +252,7 @@ struct QuestionDock: View {
               multiple ? "One answer per line…" : "Type your answer…",
               text: Binding(get: { answers.customText(field) }, set: { answers.setCustom(field, $0); error = nil }),
               key: field.key, multiline: true)
-            .accessibilityLabel("Custom answer for \(field.title ?? field.key)")
+            .accessibilityLabel("Custom answer for \(label)")
           }
         }
       }
@@ -262,10 +267,17 @@ struct QuestionDock: View {
         }
       }
     } else if field.type == "external" {
-      Text("Open this request in OpenCode to continue.")
-        .font(.subheadline)
-        .foregroundStyle(palette.color("text-secondary"))
-        .padding(8)
+      Group {
+        if let url = field.url.flatMap(URL.init(string:)), ["http", "https"].contains(url.scheme?.lowercased()) {
+          Link("\(field.title ?? "Open link") ↗", destination: url)
+            .foregroundStyle(palette.color("link"))
+        } else {
+          Text("Open this request in OpenCode to continue.")
+            .foregroundStyle(palette.color("text-secondary"))
+        }
+      }
+      .font(.subheadline)
+      .padding(8)
     } else if field.type == "number" || field.type == "integer" {
       input(
         "Enter a number",
@@ -275,14 +287,24 @@ struct QuestionDock: View {
         key: field.key, multiline: false
       )
       .keyboardType(field.type == "integer" ? .numberPad : .decimalPad)
-      .accessibilityLabel(field.title ?? field.key)
+      .accessibilityLabel(label)
+    } else if multiple {
+      // A multiselect without options: one answer per line.
+      input(
+        "One answer per line…",
+        text: Binding(get: { answers.customText(field) }, set: { answers.setCustom(field, $0); error = nil }),
+        key: field.key, multiline: true
+      )
+      .accessibilityLabel(label)
     } else {
       input(
-        "Type your answer…",
+        field.placeholder.flatMap { $0.isEmpty ? nil : $0 } ?? "Type your answer…",
         text: Binding(get: { answers.value(field)?.string ?? "" }, set: { answers.setText(field, $0); error = nil }),
-        key: field.key, multiline: multiple
+        key: field.key, multiline: false
       )
-      .accessibilityLabel(field.title ?? field.key)
+      .keyboardType(field.format == "email" ? .emailAddress : field.format == "uri" ? .URL : .default)
+      .textInputAutocapitalization(field.format == "email" || field.format == "uri" ? .never : nil)
+      .accessibilityLabel(label)
     }
   }
 
@@ -355,6 +377,11 @@ struct QuestionDock: View {
     guard !busy else { return }
     if collapsed {
       collapsed = false
+      return
+    }
+    // The browser's own check of the field on screen comes first, like `reportValidity`.
+    if !reviewing, let field, let message = answers.validity(field) {
+      error = message
       return
     }
     let checked = reviewing || last ? fields : field.map { [$0] } ?? []

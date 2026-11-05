@@ -46,6 +46,11 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
   private var estimates: [String: CGFloat] = [:]
   private var typography = Typography.current
   private var theme = TranscriptTheme.fallback
+  private var palette: Palette?
+  /// The last run's failure from `session.execution.failed`, until the next run starts, like the
+  /// desktop's `execution-error` query.
+  private var executionError: String?
+  private var executionEvents: Subscription?
   /// One ticker for the list: advances working turn headers each second.
   private var ticker: Timer?
 
@@ -86,6 +91,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
   /// The active theme from the SwiftUI environment. A change re-renders the visible rows;
   /// rendered text is cached per theme, so switching back is free.
   func setPalette(_ palette: Palette) {
+    self.palette = palette
     guard palette.id != theme.id else { return }
     theme = TranscriptTheme(palette)
     guard isViewLoaded else { return }
@@ -141,6 +147,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     observeSnapshot()
     observeLive()
     observeSends()
+    observeExecution()
     liveChanged(reproject: false)
     reproject()
   }
@@ -161,6 +168,22 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
         guard let self else { return }
         self.observeSnapshot()
         self.reproject()
+      }
+    }
+  }
+
+  private func observeExecution() {
+    executionEvents = model.events.subscribe { [weak self] event in
+      guard let self, let id = self.model.sessionID, event.sessionID == id else { return }
+      switch event.type {
+      case "session.execution.failed":
+        self.executionError = event.data?["error"]?["message"]?.string
+        self.assemble(animated: false)
+      case "session.execution.started":
+        guard self.executionError != nil else { return }
+        self.executionError = nil
+        self.assemble(animated: false)
+      default: break
       }
     }
   }
@@ -358,6 +381,12 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
       let note = "Conversation undone. Use /redo to restore it, or send a message to continue from here."
       list.append(TranscriptItem(id: "undone", content: .note(note), row: "undone"))
     }
+    if !model.running, executionError != nil || model.session?.outcome == "failed" {
+      // The desktop's footer alert after a failed run.
+      let message = executionError.flatMap { $0.isEmpty ? nil : $0 }
+        ?? "The run failed. Check OpenCode’s provider configuration and try again."
+      list.append(TranscriptItem(id: "run-failed", content: .failure(message), row: "run-failed"))
+    }
     // Diffable data sources require unique IDs; overlapping pages must never crash.
     var seen = Set<String>()
     list = list.filter { seen.insert($0.id).inserted }
@@ -484,10 +513,11 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
         case .more: ""
         }
       (cell as? NoteCell)?.configure(.history, text: text, typography: typography, theme: theme)
-    case .user(let text, let files, let pending):
+    case .user(let prompt):
       guard let cell = cell as? BubbleCell else { return }
-      cell.configure(text: text, files: files, pending: pending, typography: typography, theme: theme)
+      cell.configure(prompt, typography: typography, theme: theme)
       cell.onOpen = { [weak self] image, source, name in self?.preview(image, source, name) }
+      cell.onAnnotations = { [weak self] chip in self?.showAnnotations(prompt, from: chip) }
     case .block(let block, let style):
       let rendered = MarkdownRenderer.shared.render(block, style: style, typography: typography, theme: theme)
       switch (rendered, cell) {
@@ -728,9 +758,9 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     let line = typography.lineHeight
     let charsPerLine = max(20, (min(view.bounds.width - 36, 720) / (typography.body.pointSize * 0.5)))
     switch item.content {
-    case .user(let text, let files, _):
-      return 18 + line * max(1, (CGFloat(text.count) / (charsPerLine * 0.85)).rounded(.up))
-        + (files.isEmpty ? 0 : 96)
+    case .user(let prompt):
+      return 18 + line * max(1, (CGFloat(prompt.text.count) / (charsPerLine * 0.85)).rounded(.up))
+        + (prompt.files.isEmpty ? 0 : 96) + (prompt.annotations.isEmpty ? 0 : 44)
     case .block(let block, let style):
       switch block.kind {
       case .code: return 34 + CGFloat(Self.newlines(block.source) + 1) * line
@@ -769,6 +799,13 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     let path = src.lowercased().hasPrefix("file:") ? src : (src.removingPercentEncoding ?? src)
     let client = model.client
     return .request(client.request(client.url("/sessions/\(id)/image", ["path": path])))
+  }
+
+  /// The chip's numbered list, in a popover anchored to it like the desktop's.
+  private func showAnnotations(_ prompt: SentPrompt, from chip: UIView) {
+    guard let palette, presentedViewController == nil else { return }
+    let list = AnnotationsPopover(prompt: prompt, palette: palette, from: chip)
+    present(list, animated: true)
   }
 
   private func preview(_ image: UIImage?, _ source: ImageSource, _ name: String) {

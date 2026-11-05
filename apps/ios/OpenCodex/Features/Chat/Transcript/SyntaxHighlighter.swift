@@ -1,9 +1,11 @@
 import UIKit
 
-/// Colors fenced code with the theme's `syntax-*` tokens, like the desktop's code themes ("ink"
+/// The app's one syntax highlighter, for chat code blocks and the workspace's file previews and
+/// diffs. Colors come from the theme's `syntax-*` tokens, like the desktop's code themes ("ink"
 /// for OpenCodex: weight and brightness instead of hue). A small single-pass tokenizer covers
-/// the common languages; anything else stays plain. Work runs on a background queue and results
-/// are cached by theme, size, language and source, so scrolling never tokenizes on the main thread.
+/// the common languages; anything else stays plain. Work runs on background queues and results
+/// are cached (chat blocks here by theme, size, language and source; workspace lines by their
+/// view), so scrolling never tokenizes on the main thread.
 nonisolated final class SyntaxHighlighter: @unchecked Sendable {
   static let shared = SyntaxHighlighter()
 
@@ -81,7 +83,46 @@ nonisolated final class SyntaxHighlighter: @unchecked Sendable {
 
   // MARK: Tokenizing
 
-  enum Token: Equatable { case keyword, string, comment, punctuation, function, type, constant }
+  enum Token: Equatable, Sendable { case keyword, string, comment, punctuation, function, type, constant }
+
+  /// A token in one line, as UTF-16 offsets into that line.
+  struct Span: Equatable, Sendable {
+    var range: Range<Int>
+    var token: Token
+  }
+
+  /// Token spans per line, tokenizing the lines as one source, so block comments and
+  /// multi-line strings carry across lines.
+  static func lineTokens(_ lines: [String], _ grammar: Grammar) -> [[Span]] {
+    var out = [[Span]](repeating: [], count: lines.count)
+    guard !lines.isEmpty else { return out }
+    var starts: [Int] = []
+    var lengths: [Int] = []
+    starts.reserveCapacity(lines.count)
+    var offset = 0
+    for line in lines {
+      let length = line.utf16.count
+      starts.append(offset)
+      lengths.append(length)
+      offset += length + 1
+    }
+    var line = 0
+    for (range, token) in tokens(lines.joined(separator: "\n"), grammar) {
+      var start = range.location
+      let end = range.location + range.length
+      while line + 1 < starts.count && starts[line + 1] <= start { line += 1 }
+      var index = line
+      while start < end && index < starts.count {
+        let lower = start - starts[index]
+        let upper = min(end, starts[index] + lengths[index]) - starts[index]
+        if upper > lower { out[index].append(Span(range: lower..<upper, token: token)) }
+        index += 1
+        guard index < starts.count else { break }
+        start = starts[index]
+      }
+    }
+    return out
+  }
 
   static func render(_ code: String, language: String, style: Style) -> NSAttributedString {
     let out = plain(code, style: style)
@@ -196,7 +237,7 @@ nonisolated final class SyntaxHighlighter: @unchecked Sendable {
         let previous = i > 0 ? chars[i - 1] : 0
         if grammar.shell && previous == 45 {
           // `--flag`: plain.
-        } else if grammar.keywords.contains(word) && previous != 46 {
+        } else if grammar.keywords.contains(grammar.caseInsensitive ? word.lowercased() : word) && previous != 46 {
           add(i, end, .keyword)
         } else if grammar.constants.contains(word) {
           add(i, end, .constant)
@@ -239,7 +280,10 @@ nonisolated final class SyntaxHighlighter: @unchecked Sendable {
     var dollarIdentifiers = false
     var lifetimes = false
     var macros = false
+    /// `#` comments only at a word boundary, and plain words stay plain.
     var shell = false
+    /// SQL: keywords match in any case (the list is lowercase).
+    var caseInsensitive = false
 
     static func `for`(_ language: String) -> Grammar? {
       switch language.lowercased().split(separator: " ").first.map(String.init) ?? "" {
@@ -250,9 +294,35 @@ nonisolated final class SyntaxHighlighter: @unchecked Sendable {
       case "sh", "bash", "zsh", "shell", "console", "shellscript", "fish": shellGrammar
       case "go", "golang": go
       case "rs", "rust": rust
-      case "c", "h", "cpp", "c++", "cc", "hpp", "java", "kotlin", "kt", "cs", "csharp", "dart", "scala", "php":
+      case "c", "h", "cpp", "c++", "cc", "hpp", "java", "kotlin", "kt", "cs", "csharp", "dart", "scala", "php",
+        "objc", "objective-c":
         cLike
+      case "rb", "ruby": ruby
+      case "yaml", "yml", "toml", "ini", "conf", "properties": config
+      case "css": css
+      case "scss", "sass", "less": scss
+      case "sql", "postgres", "postgresql", "mysql", "sqlite": sql
+      case "html", "htm", "xml", "svg", "plist", "vue", "svelte": markup
+      case "dockerfile", "docker", "makefile", "make", "gitignore", "env", "dotenv": hash
       default: nil
+      }
+    }
+
+    /// The grammar for a workspace file, from its extension or well-known name.
+    static func `for`(path: String) -> Grammar? {
+      let name = (path as NSString).lastPathComponent.lowercased()
+      switch name {
+      case "dockerfile", "makefile", ".gitignore", ".env", ".dockerignore", ".npmignore": return hash
+      default: break
+      }
+      if name.hasPrefix(".env.") { return hash }
+      switch (name as NSString).pathExtension {
+      case "vue", "svelte", "astro": return script
+      case "m", "mm", "cxx", "hh", "kts": return cLike
+      case "pyi": return python
+      case "cfg": return config
+      case "": return nil
+      case let ext: return Self.for(ext)
       }
     }
 
@@ -331,5 +401,44 @@ nonisolated final class SyntaxHighlighter: @unchecked Sendable {
         "unsigned", "signed", "bool", "boolean",
       ],
       constants: ["true", "false", "null", "nullptr", "NULL"])
+
+    static let ruby = Grammar(
+      keywords: [
+        "begin", "break", "case", "class", "def", "do", "else", "elsif", "end", "ensure", "for", "if", "in",
+        "module", "next", "raise", "require", "rescue", "return", "self", "then", "unless", "until", "when",
+        "while", "yield",
+      ],
+      constants: ["true", "false", "nil"], lineComments: [Array("#".utf16)], blockComment: nil)
+
+    /// YAML, TOML and INI: comments, strings and literals; keys stay plain.
+    static let config = Grammar(
+      keywords: [], constants: ["true", "false", "null", "yes", "no", "on", "off"],
+      lineComments: [Array("#".utf16)], blockComment: nil, punctuation: Set("{}[]:,=-|>".utf16),
+      capitalTypes: false, shell: true)
+
+    static let css = Grammar(
+      keywords: ["important"], constants: [], lineComments: [], capitalTypes: false)
+
+    static let scss = Grammar(keywords: ["important"], constants: [], capitalTypes: false)
+
+    static let sql = Grammar(
+      keywords: [
+        "add", "alter", "and", "as", "asc", "begin", "by", "case", "commit", "create", "delete", "desc",
+        "distinct", "drop", "else", "end", "exists", "foreign", "from", "group", "having", "in", "index",
+        "inner", "insert", "into", "is", "join", "key", "left", "like", "limit", "not", "null", "offset",
+        "on", "or", "order", "outer", "primary", "references", "right", "select", "set", "table", "then",
+        "union", "update", "values", "when", "where", "with",
+      ],
+      constants: ["true", "false", "TRUE", "FALSE"], lineComments: [Array("--".utf16)], capitalTypes: false,
+      caseInsensitive: true)
+
+    static let markup = Grammar(
+      keywords: [], constants: [], lineComments: [], blockComment: (Array("<!--".utf16), Array("-->".utf16)),
+      quotes: [34], punctuation: Set("<>/=".utf16), capitalTypes: false, shell: true)
+
+    /// Dockerfiles, Makefiles and ignore files: `#` comments and strings.
+    static let hash = Grammar(
+      keywords: [], constants: [], lineComments: [Array("#".utf16)], blockComment: nil,
+      punctuation: Set("=:$(){}".utf16), capitalTypes: false, shell: true)
   }
 }

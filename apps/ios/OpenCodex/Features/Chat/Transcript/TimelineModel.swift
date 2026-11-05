@@ -56,10 +56,10 @@ nonisolated struct TurnRow: Hashable, Sendable {
 }
 
 nonisolated enum TimelineRow: Hashable, Sendable {
-  /// A user, shell, compaction or note message.
+  /// A user, shell, compaction or switch message.
   case message(SessionMessage)
-  /// An assistant message's error, after its parts.
-  case failure(id: String, message: String)
+  /// An assistant message's retry note and error, after its parts.
+  case status(id: String, retry: String?, error: String?)
   case text(TextRow)
   case activity(ActivityRow)
   case turn(TurnRow)
@@ -67,7 +67,7 @@ nonisolated enum TimelineRow: Hashable, Sendable {
   var id: String {
     switch self {
     case .message(let message): message.id
-    case .failure(let id, _): id
+    case .status(let id, _, _): id
     case .text(let row): row.id
     case .activity(let row): row.id
     case .turn(let row): row.id
@@ -176,14 +176,18 @@ nonisolated final class TimelineProjector {
                 id: "\(assistant.id):text:0", messageID: assistant.id, ordinal: 0, text: "",
                 completed: false))))
       }
-      if let error = assistant.error {
-        entries.append(.row(.failure(id: "\(assistant.id):status", message: error.message)))
+      if assistant.error != nil || assistant.retry != nil {
+        entries.append(
+          .row(
+            .status(
+              id: "\(assistant.id):status", retry: assistant.retry?.error.message,
+              error: assistant.error?.message)))
       }
       return entries
     case .skill(let skill): return [.work(.skill(skill))]
     // Like the desktop, injected context (system, synthetic) is not part of the conversation.
     case .idle, .other, .synthetic, .system: return []
-    case .user, .shell, .compaction: return [.row(.message(message))]
+    case .user, .shell, .compaction, .switched: return [.row(.message(message))]
     }
   }
 }

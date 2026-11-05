@@ -81,6 +81,8 @@ nonisolated struct SessionInfo: Codable, Hashable, Identifiable, Sendable {
   /// A staged undo: messages from `messageID` on are hidden until redo or the next prompt.
   struct Revert: Codable, Hashable, Sendable { var messageID: String }
   var revert: Revert?
+  /// How the last run ended: `succeeded`, `failed` or `interrupted`.
+  var outcome: String?
 
   /// A trailing allow-all rule is the thread's Full access override.
   var fullAccess: Bool {
@@ -157,6 +159,12 @@ nonisolated struct FormInfo: Codable, Hashable, Identifiable, Sendable {
     var label: String?
     var description: String?
   }
+  /// Shows a field only while another field's answer equals (`eq`) or differs from (`neq`) a value.
+  struct When: Codable, Hashable, Sendable {
+    var key: String
+    var op: String
+    var value: JSONValue
+  }
   struct Field: Codable, Hashable, Sendable {
     var key: String
     var title: String?
@@ -166,6 +174,23 @@ nonisolated struct FormInfo: Codable, Hashable, Identifiable, Sendable {
     var custom: Bool?
     var multiple: Bool?
     var required: Bool?
+    /// The prefilled answer: a string, number, boolean or (multiselect) string array.
+    var `default`: JSONValue?
+    /// Answered by its default, never shown.
+    var hidden: Bool?
+    var when: [When]?
+    var placeholder: String?
+    var minItems: Int?
+    var maxItems: Int?
+    var minLength: Int?
+    var maxLength: Int?
+    var minimum: Double?
+    var maximum: Double?
+    /// `email`, `uri`, `date` or `date-time`, for string fields.
+    var format: String?
+    var pattern: String?
+    /// An external field's link.
+    var url: String?
   }
   var id: String
   var sessionID: String

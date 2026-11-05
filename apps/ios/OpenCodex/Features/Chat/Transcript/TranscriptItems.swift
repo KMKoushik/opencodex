@@ -25,7 +25,7 @@ nonisolated struct Attachment: Hashable, Sendable {
 nonisolated struct TranscriptItem: Hashable, Sendable {
   enum Content: Hashable, Sendable {
     case history(History)
-    case user(text: String, files: [Attachment], pending: Bool)
+    case user(SentPrompt)
     case block(MarkdownBlock, style: ProseStyle)
     case copy(text: String)
     case turn(TurnRow)
@@ -92,8 +92,12 @@ nonisolated final class TranscriptItemBuilder {
   {
     switch row {
     case .message(let message): return items(for: message)
-    case .failure(let id, let message):
-      return [TranscriptItem(id: id, content: .failure(message), row: id)]
+    case .status(let id, let retry, let error):
+      // `message.tsx`: the retry note, then the error.
+      var items: [TranscriptItem] = []
+      if let retry { items.append(TranscriptItem(id: "\(id)#retry", content: .note("Retrying: \(retry)"), row: id)) }
+      if let error { items.append(TranscriptItem(id: id, content: .failure(error), row: id)) }
+      return items
     case .turn(let turn): return [TranscriptItem(id: turn.id, content: .turn(turn), row: turn.id)]
     case .text(let row):
       let shown = text(row.id, row.text, true)
@@ -182,11 +186,14 @@ nonisolated final class TranscriptItemBuilder {
         return Attachment(
           name: file.name ?? "", mime: file.mime ?? "",
           source: file.data.map { .data(key: key, base64: $0) }
-            ?? file.uri.flatMap { Self.source($0, key: key) })
+            ?? (file.uri ?? file.source?.uri).flatMap { Self.source($0, key: key) })
       }
-      return [
-        TranscriptItem(id: user.id, content: .user(text: user.text, files: files, pending: false), row: user.id)
-      ]
+      let mentions =
+        (user.files ?? []).map { (mention: $0.mention, kind: $0.source?.type == "uri" ? "file" : "chat") }
+        + (user.skills ?? []).map { (mention: $0.mention, kind: "skill") }
+      let prompt = SentPrompt(
+        text: user.text, mentions: mentions, metadata: user.metadata, files: files, pending: false)
+      return [TranscriptItem(id: user.id, content: .user(prompt), row: user.id)]
     case .shell(let shell):
       return [
         TranscriptItem(id: shell.id, content: .shell(shell, open: open.contains(shell.id)), row: shell.id)
@@ -195,10 +202,21 @@ nonisolated final class TranscriptItemBuilder {
       let text =
         switch compaction.status {
         case "running": "Compacting context…"
-        case "failed": compaction.reason.map { "Compaction failed: \($0)" } ?? "Compaction failed"
+        case "failed": compaction.error.map { "Compaction failed: \($0.message)" } ?? "Compaction failed"
         default: "Context compacted"
         }
       return [TranscriptItem(id: compaction.id, content: .note(text), row: compaction.id)]
+    case .switched(let note):
+      // `message.tsx` notes: Agent, Model (its ID) and Directory.
+      let text: String? =
+        switch note.type {
+        case "agent-switched": note.agent.map { "Agent: \($0)" }
+        case "model-switched": note.model.map { "Model: \($0.id)" }
+        case "location-switched": note.location.map { "Directory: \($0.directory)" }
+        default: nil
+        }
+      guard let text else { return [] }
+      return [TranscriptItem(id: note.id, content: .note(text), row: note.id)]
     default: return []
     }
   }
@@ -219,16 +237,22 @@ nonisolated final class TranscriptItemBuilder {
     inbox.compactMap { item in
       guard item.type == nil || item.type == "user", !known.contains(item.id) else { return nil }
       let text = item.payload?["text"]?.string ?? ""
+      let payloadFiles = item.payload?["files"]?.array ?? []
       // Mentioned files show in the text instead, like `MessageAttachments`.
-      let files = (item.payload?["files"]?.array ?? []).enumerated().compactMap { index, file -> Attachment? in
+      let files = payloadFiles.enumerated().compactMap { index, file -> Attachment? in
         guard file["mention"] == nil else { return nil }
         let mime = file["mime"]?.string ?? ""
         return Attachment(
           name: file["name"]?.string ?? file["filename"]?.string ?? "", mime: mime,
           source: file["data"]?.string.map { .data(key: "inbox:\(item.id)#\(index)", base64: $0) })
       }
+      let mentions =
+        payloadFiles.map { (mention: $0["mention"], kind: $0["source"]?["type"]?.string == "uri" ? "file" : "chat") }
+        + (item.payload?["skills"]?.array ?? []).map { (mention: $0["mention"], kind: "skill") }
+      let prompt = SentPrompt(
+        text: text, mentions: mentions, metadata: item.payload?["metadata"]?.object, files: files, pending: true)
       let id = "inbox:\(item.id)"
-      return TranscriptItem(id: id, content: .user(text: text, files: files, pending: true), row: id)
+      return TranscriptItem(id: id, content: .user(prompt), row: id)
     }
   }
 
