@@ -129,7 +129,7 @@ nonisolated final class ThreadSheetTests: XCTestCase {
     XCTAssertTrue(actions.waitForExistence(timeout: 15))
 
     let panels: [(row: String, opened: XCUIElement, close: XCUIElement)] = [
-      ("workspace-open", app.buttons["workspace-files"], app.buttons["workspace-close"]),
+      ("workspace-open", app.buttons["workspace-close"], app.buttons["workspace-close"]),
       ("chat.subagents", app.navigationBars["Subagents"], app.buttons["Close"]),
       ("sheet.sidechat", app.buttons["sidechat.close"], app.buttons["sidechat.close"]),
       ("sheet.terminal", app.buttons["terminal-close"], app.buttons["terminal-close"]),
@@ -145,7 +145,13 @@ nonisolated final class ThreadSheetTests: XCTestCase {
       if panel.row == "sheet.details" { shot(app, "sheet-large") }
       row.tap()
       XCTAssertTrue(panel.opened.waitForExistence(timeout: 15), "\(panel.row) should open its panel")
-      panel.close.tap()
+      if panel.row == "sheet.details" {
+        // A native sheet without a close button: swipe it down.
+        let top = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12))
+        top.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98)))
+      } else {
+        panel.close.tap()
+      }
       XCTAssertTrue(panel.opened.waitForNonExistence(timeout: 10))
     }
   }

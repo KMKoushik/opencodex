@@ -60,6 +60,11 @@ ENABLE_TESTABILITY=YES`). Release-only crashes have happened (see Known issues).
 - [x] Model picker like OpenCode's: Cancel / Model / thinking level in the bar, search, one
       flat list (logo, model, provider), most used first.
 
+- [x] Loading screens everywhere — instant like the desktop: an on-disk cache of the thread
+      list and each thread's newest page (40 threads / ~30 MB), the last 8 chats kept in memory
+      for 5 minutes, progressive loads, prefetch of the top 6 threads, 400 ms spinner delay.
+      Modelled on T3 Code's mobile cache.
+
 ## In progress
 
 - [ ] Notifications: in-app notifications, APNs push from the owner's gateway, and a Live
