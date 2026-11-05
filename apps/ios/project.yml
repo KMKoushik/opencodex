@@ -19,6 +19,10 @@ packages:
   Markdown:
     url: https://github.com/swiftlang/swift-markdown
     from: '0.6.0'
+  SwiftTerm:
+    url: https://github.com/migueldeicaza/SwiftTerm
+    # 1.x only: the 1.99 tags are 2.0 previews with a different API.
+    minorVersion: '1.20.0'
 targets:
   OpenCodex:
     type: application
@@ -27,6 +31,7 @@ targets:
       - path: OpenCodex
     dependencies:
       - package: Markdown
+      - package: SwiftTerm
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.kmkoushik.opencodex
