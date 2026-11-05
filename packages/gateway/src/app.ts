@@ -328,6 +328,13 @@ export function createApp(
       ),
     ),
   );
+  // Native: deletes the thread with its subagents and history.
+  app.delete('/api/sessions/:id', async (c) => {
+    await backend.request(c.req.raw.signal, (client, options) =>
+      client.session.remove({ sessionID: c.req.param('id') }, options),
+    );
+    return c.json({ ok: true });
+  });
   app.use('/api/sessions/:id/view', bodyLimit({ maxSize: 1024 }));
   app.post('/api/sessions/:id/view', async (c) => {
     const input = sessionViewSchema.safeParse(await c.req.json().catch(() => null));

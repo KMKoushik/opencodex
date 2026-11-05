@@ -1,6 +1,6 @@
 import XCTest
 
-/// The chat's chrome: Session details opens from the toolbar, and a new thread's starter fills
+/// The chat's chrome: Session details opens from the thread sheet, and a new thread's starter fills
 /// the draft without sending, then follows the draft to another project.
 /// Set `SCREENSHOTS=<dir>` (as `TEST_RUNNER_SCREENSHOTS`) to save each state as a PNG.
 nonisolated final class ChromeTests: XCTestCase {
@@ -20,7 +20,11 @@ nonisolated final class ChromeTests: XCTestCase {
     let info = app.buttons["chat.details"]
     XCTAssertTrue(info.waitForExistence(timeout: 15))
     shot(app, "chat")
+    // The title pill opens the thread sheet, which lists Session details.
     info.tap()
+    let row = app.buttons["sheet.details"]
+    for _ in 0..<6 where !(row.exists && row.isHittable) { app.collectionViews.firstMatch.swipeUp() }
+    row.tap()
 
     let context = app.descendants(matching: .any)["details.context"]
     XCTAssertTrue(context.waitForExistence(timeout: 10))

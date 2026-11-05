@@ -17,7 +17,7 @@ nonisolated final class WorkspaceTests: XCTestCase {
 
     let app = XCUIApplication.opencodex(["-session", session])
     app.launch()
-    // Files and changes is in the chat's "…" menu, as the desktop's rail is on the phone.
+    // Files and changes is in the chat's thread sheet, as the desktop's rail is on the phone.
     let menu = app.buttons["chat.actions"]
     XCTAssertTrue(menu.waitForExistence(timeout: 15))
     menu.tap()

@@ -8,11 +8,15 @@ enum ChatRoute: Hashable {
 }
 
 /// One chat: the transcript (or, for an unsent draft, the new-thread hero), with pending
-/// requests and the composer docked at the bottom. The toolbar matches the desktop's: the
-/// project / title breadcrumb, the thread actions "…" menu and Session details.
+/// requests and the composer docked at the bottom. Like OpenCode's iPhone app, the toolbar has
+/// a title pill and a "…" button; both open the thread sheet with the desktop's thread actions
+/// and side panels.
 struct ChatScreen: View {
   @State private var model: ChatModel
   @State private var projects: [SessionDetails.Project]?
+  @State private var showSheet = false
+  /// What to do once the thread sheet has closed.
+  @State private var sheetExit: ThreadSheetExit?
   @State private var showDetails = false
   @State private var showSubagents = false
   @State private var showTerminal = false
@@ -20,7 +24,8 @@ struct ChatScreen: View {
   /// The open workspace panel, on Files or Changes.
   @State private var workspace: WorkspaceModel.Segment?
   @Environment(\.palette) private var palette
-  /// The desktop's thread menu, with its rename alert, export sheet and errors on this screen.
+  @Environment(\.dismiss) private var dismiss
+  /// The desktop's thread actions, for the thread sheet, which hosts their alerts and exports.
   @State private var threadActions: ThreadActions
   /// Opens another thread, e.g. a fork just made.
   private let open: ((ChatRoute) -> Void)?
@@ -45,10 +50,17 @@ struct ChatScreen: View {
       .navigationTitle(title)
       .navigationBarTitleDisplayMode(.inline)
       .toolbar { toolbar }
-      .threadActionsHost(threadActions)
       .onAppear {
         threadActions.onChange = { [model] _ in model.refreshSession() }
-        threadActions.onOpen = open.map { open in { open(.session($0)) } }
+        // A fork opens once the sheet has closed.
+        threadActions.onOpen = { id in leaveSheet(.open(id)) }
+      }
+      .sheet(isPresented: $showSheet, onDismiss: afterSheet) {
+        if let target {
+          ThreadSheet(
+            chat: model, actions: threadActions, target: target, projectName: projectName,
+            directory: directory, leave: leaveSheet)
+        }
       }
       .sheet(isPresented: $showDetails) {
         if let id = model.sessionID {
@@ -124,16 +136,16 @@ struct ChatScreen: View {
     }
   }
 
-  /// Like OpenCode's iPhone app: a title pill (tap for Session details) and one "…" menu, which
-  /// shows a ring while the reply runs. The desktop's rail and toolbar buttons live in the menu.
+  /// Like OpenCode's iPhone app: a title pill and one "…" button, which both open the thread
+  /// sheet. The "…" shows the running subagent count, like the desktop's rail.
   @ToolbarContentBuilder private var toolbar: some ToolbarContent {
     ToolbarItem(placement: .principal) {
       if model.sessionID != nil {
-        Button { showDetails = true } label: {
+        Button { showSheet = true } label: {
           ChatTitle(project: projectName, title: title, live: model.events.live, running: model.running)
             .padding(.horizontal, 6)
         }
-        .accessibilityHint("Shows session details.")
+        .accessibilityHint("Shows thread actions and details.")
         .accessibilityIdentifier("chat.details")
       } else {
         ChatTitle(project: projectName, title: title, live: model.events.live)
@@ -142,36 +154,39 @@ struct ChatScreen: View {
     // Like the desktop, a thread's actions and details appear once it exists.
     if model.sessionID != nil {
       ToolbarItem(placement: .topBarTrailing) {
-        Menu {
-          Button("Session details", systemImage: "info.circle") { showDetails = true }
-          Button("Files and changes", systemImage: "folder") { workspace = .files }
-            .disabled(directory == nil)
-            .accessibilityIdentifier("workspace-open")
-          Button { showSubagents = true } label: {
-            Label(subagentsLabel, image: "Robot")
-          }
-          .accessibilityIdentifier("chat.subagents")
-          Button("Side chat", systemImage: "bubble.left.and.text.bubble.right") { showSideChat = true }
-          Button("Terminal", systemImage: "apple.terminal") { showTerminal = true }
-            .disabled(directory == nil)
-          Divider()
-          if let target { ThreadActionsMenu(actions: threadActions, target: target) }
-        } label: {
+        Button { showSheet = true } label: {
           Image(systemName: "ellipsis")
             .frame(width: 30, height: 30)
             .overlay(alignment: .topTrailing) {
               RunningSubagentsBadge(model: model).offset(x: 10, y: -8)
             }
         }
+        .disabled(target == nil)
         .accessibilityLabel(model.running ? "Thread menu, working" : "Thread menu")
         .accessibilityIdentifier("chat.actions")
       }
     }
   }
 
-  private var subagentsLabel: String {
-    let running = ActivityModel.shared(for: model).subagents.count
-    return running > 0 ? "Subagents · \(running) running" : "Subagents"
+  private func leaveSheet(_ exit: ThreadSheetExit) {
+    sheetExit = exit
+    // A fork can finish after the sheet was swiped away.
+    if showSheet { showSheet = false } else { afterSheet() }
+  }
+
+  /// Opens what the sheet asked for once it's gone, so presentations never overlap.
+  private func afterSheet() {
+    guard let exit = sheetExit else { return }
+    sheetExit = nil
+    switch exit {
+    case .panel(.workspace): workspace = .files
+    case .panel(.subagents): showSubagents = true
+    case .panel(.sideChat): showSideChat = true
+    case .panel(.terminal): showTerminal = true
+    case .panel(.details): showDetails = true
+    case .open(let id): open?(.session(id))
+    case .deleted: dismiss()
+    }
   }
 
   private var title: String { model.sessionID == nil ? "New thread" : model.title }

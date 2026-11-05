@@ -51,9 +51,12 @@ nonisolated final class FlowTests: XCTestCase {
       app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Worked for'")).firstMatch
         .waitForExistence(timeout: 90))
 
-    // The chat's "…" menu is the desktop's thread menu.
+    // The chat's "…" opens the thread sheet with the desktop's thread actions.
     app.buttons["chat.actions"].tap()
-    XCTAssertTrue(app.buttons["Rename thread"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.descendants(matching: .any)["sheet.title"].waitForExistence(timeout: 5))
+    let rename = app.buttons["Rename thread"]
+    for _ in 0..<6 where !rename.exists { app.collectionViews.firstMatch.swipeUp() }
+    XCTAssertTrue(rename.waitForExistence(timeout: 5))
     try? FileManager.default.removeItem(at: file)
   }
 
