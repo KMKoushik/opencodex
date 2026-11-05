@@ -235,7 +235,9 @@ private struct SubagentsSummary: View {
 
   private func summary(_ items: [SessionDetails.SessionUsage]) -> some View {
     HStack(spacing: 8) {
-      Icon("cpu")
+      RobotIcon(size: 20)
+        .foregroundStyle(palette.color("text-secondary"))
+        .frame(width: 22)
       Text("Subagents").fontWeight(.semibold).foregroundStyle(palette.color("text"))
       if open != nil {
         Image(systemName: "chevron.right")
@@ -246,7 +248,7 @@ private struct SubagentsSummary: View {
       if !items.isEmpty {
         HStack(spacing: 4) {
           ForEach(Array(items.prefix(3).enumerated()), id: \.element.id) { index, _ in
-            Image(systemName: "cpu")
+            RobotIcon(size: 18)
               .foregroundStyle(palette.color(Self.tints[index % 3]))
           }
           if items.count > 3 {

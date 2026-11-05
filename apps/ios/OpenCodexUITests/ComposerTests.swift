@@ -43,7 +43,7 @@ nonisolated final class ComposerTests: XCTestCase {
     app.buttons["composer.send"].tap()
     let cleared = NSPredicate { _, _ in
       let value = input.value as? String ?? ""
-      return value.isEmpty || value == "Ask anything, or describe what to build"
+      return value.isEmpty || value == "Message"
     }
     await fulfillment(of: [expectation(for: cleared, evaluatedWith: nil)], timeout: 15)
   }

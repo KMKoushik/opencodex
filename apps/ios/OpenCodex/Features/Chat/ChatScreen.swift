@@ -113,7 +113,7 @@ struct ChatScreen: View {
         Menu {
           if let target { ThreadActionsMenu(actions: threadActions, target: target) }
           Divider()
-          Button("Subagents", systemImage: ActivitySymbol.subagent) { showSubagents = true }
+          Button { showSubagents = true } label: { Label("Subagents", image: "Robot") }
         } label: {
           Label("Thread actions", systemImage: "ellipsis")
         }
@@ -132,7 +132,7 @@ struct ChatScreen: View {
           Button {
             showSubagents = true
           } label: {
-            Image(systemName: ActivitySymbol.subagent)
+            RobotIcon(size: 22)
               .overlay(alignment: .topTrailing) {
                 RunningSubagentsBadge(model: model).offset(x: 8, y: -6)
               }

@@ -30,8 +30,13 @@ nonisolated final class ActivityTests: XCTestCase {
 
     let app = XCUIApplication.opencodex(["-session", id])
     app.launch()
+    // Collapsed, the tray is OpenCode's small pill; tapping it opens the tabs.
+    let pill = app.buttons["activity.pill"]
+    XCTAssertTrue(pill.waitForExistence(timeout: 60), "The tray never showed the running shell")
+    XCTAssertTrue(pill.label.contains("Running activity"))
+    if !app.buttons["activity.tab.shell"].exists { pill.tap() }
     let tab = app.buttons["activity.tab.shell"]
-    XCTAssertTrue(tab.waitForExistence(timeout: 60), "The tray never showed the running shell")
+    XCTAssertTrue(tab.waitForExistence(timeout: 5))
     XCTAssertTrue(tab.label.hasPrefix("Shell (1)"))
     tab.tap()
 

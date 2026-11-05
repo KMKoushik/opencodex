@@ -77,18 +77,24 @@ private struct TrayBody: View {
   }
 
   var body: some View {
-    VStack(spacing: 0) {
-      header
-      if open { panel }
+    Group {
+      if open {
+        VStack(spacing: 0) {
+          header
+          panel
+        }
+        .padding(.horizontal, 6)
+        .padding(.top, 2)
+        .padding(.bottom, 2)
+        .background(palette.color("surface-under"), in: .rect(cornerRadius: 14))
+        .overlay {
+          RoundedRectangle(cornerRadius: 14).strokeBorder(palette.color("border"), lineWidth: 1)
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+      } else {
+        pill
+      }
     }
-    .padding(.horizontal, 6)
-    .padding(.top, 2)
-    .padding(.bottom, 2)
-    .background(palette.color("surface-under"), in: .rect(cornerRadius: 14))
-    .overlay {
-      RoundedRectangle(cornerRadius: 14).strokeBorder(palette.color("border"), lineWidth: 1)
-    }
-    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     .padding(.horizontal, 14)
     .padding(.bottom, 6)
     .accessibilityElement(children: .contain)
@@ -111,6 +117,73 @@ private struct TrayBody: View {
       }
       .presentationDragIndicator(.visible)
     }
+  }
+
+  // MARK: Collapsed
+
+  /// Collapsed, the tray is one small pill above the composer, like OpenCode's "5 shells":
+  /// what's running, a dot when something needs you, and Background while the reply waits.
+  private var pill: some View {
+    HStack(spacing: 8) {
+      Button {
+        withAnimation(.snappy(duration: 0.25)) { preference.open = true }
+      } label: {
+        HStack(spacing: 7) {
+          RingSpinner(size: 12)
+          Text(pillText).lineLimit(1)
+          if approvals > 0 || questions > 0 {
+            Text(approvals > 0 ? "!" : "?")
+              .font(.caption2.weight(.bold))
+              .foregroundStyle(palette.color(approvals > 0 ? "on-accent" : "on-primary"))
+              .frame(width: 15, height: 15)
+              .background(palette.color(approvals > 0 ? "warning" : "accent"), in: .circle)
+          }
+        }
+        .font(.subheadline.weight(.medium))
+        .foregroundStyle(palette.color("text-secondary"))
+        .padding(.horizontal, 12)
+        .frame(minHeight: 32)
+        .ceramic("chip", shadow: "chip-shadow", border: "chip-border", radius: 16)
+        .frame(minHeight: 44)
+        .contentShape(.rect)
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("Running activity")
+      .accessibilityValue(summary)
+      .accessibilityHint("Shows the running shells and subagents.")
+      .accessibilityIdentifier("activity.pill")
+
+      if blocked > 0 {
+        Button {
+          Task { await model.moveToBackground() }
+        } label: {
+          Text("Background")
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(palette.color("text-secondary"))
+            .padding(.horizontal, 12)
+            .frame(minHeight: 32)
+            .ceramic("chip", shadow: "chip-shadow", border: "chip-border", radius: 16)
+            .frame(minHeight: 44)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Move to background")
+        .accessibilityIdentifier("activity.background")
+      }
+      Spacer(minLength: 0)
+    }
+  }
+
+  private var pillText: String {
+    var parts: [String] = []
+    let shells = activity.shells.count
+    let subagents = activity.subagents.count
+    if subagents > 0 { parts.append("\(subagents) \(subagents == 1 ? "subagent" : "subagents")") }
+    if shells > 0 { parts.append("\(shells) \(shells == 1 ? "shell" : "shells")") }
+    if activity.subagentStatus == .failed || activity.shellStatus == .failed {
+      parts.append("couldn't check")
+    }
+    return parts.isEmpty ? "Running" : parts.joined(separator: " · ")
   }
 
   // MARK: Header
@@ -194,8 +267,11 @@ private struct TrayBody: View {
     } label: {
       HStack(spacing: 6) {
         if icons {
-          Image(systemName: value == .subagents ? ActivitySymbol.subagent : ActivitySymbol.shell)
-            .font(.caption)
+          if value == .subagents {
+            RobotIcon(size: 14)
+          } else {
+            Image(systemName: ActivitySymbol.shell).font(.caption)
+          }
         }
         (Text(name + " ")
           + Text("(\(count))").foregroundStyle(palette.color("text-tertiary")).monospacedDigit())

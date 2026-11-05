@@ -40,6 +40,7 @@ private struct ComposerBody: View {
   @State private var attachError: String?
   @State private var sent = 0
   @State private var picking = false
+  @State private var confirmFullAccess = false
   @State private var showPhotos = false
   @State private var showCamera = false
   @State private var photos: [PhotosPickerItem] = []
@@ -156,14 +157,14 @@ private struct ComposerBody: View {
       }
       TextField(
         "Message", text: $draft.text, selection: $selection,
-        prompt: Text("Ask anything, or describe what to build")
+        prompt: Text("Message")
           .foregroundStyle(palette.color("text-tertiary")),
         axis: .vertical
       )
       // The transcript's prose size: the desktop's px scaled 16/14, with Dynamic Type.
       .font(Font(Typography(UITraitCollection.current, chatSize: chatSize).body))
       .foregroundStyle(palette.color("text"))
-      .lineLimit(2...8)
+      .lineLimit(1...8)
       .focused($focused)
       .padding(2)
       .accessibilityIdentifier("composer.input")
@@ -172,9 +173,9 @@ private struct ComposerBody: View {
       footer
         // Compact chrome stops growing past xxxLarge; the controls offer the large content viewer.
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-        .padding(.top, 4)
+        .padding(.top, 2)
     }
-    .padding(EdgeInsets(top: 14, leading: 14, bottom: 6, trailing: 10))
+    .padding(EdgeInsets(top: 12, leading: 16, bottom: 2, trailing: 8))
     .background {
       // Tapping the composer's empty space focuses the input.
       Color.clear
@@ -200,65 +201,127 @@ private struct ComposerBody: View {
     }
   }
 
+  /// One row, like OpenCode's composer: attach and access in "+", the model and thinking level
+  /// as one quiet menu, then Stop and Send. Context usage lives in Session details.
   private var footer: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      // The narrow layout's first row: the model controls, in the desktop's order.
-      HStack(spacing: 4) {
-        if model.sessionID != nil {
-          ContextIndicator(model: model, catalog: entry?.catalog, current: current)
-            .padding(.leading, -8)
+    HStack(spacing: 2) {
+      Menu {
+        Button("Photo Library", systemImage: "photo.on.rectangle") { showPhotos = true }
+          .disabled(draft.attachments.count >= AttachmentEncoder.maxCount)
+        if CameraPicker.available {
+          Button("Camera", systemImage: "camera") { showCamera = true }
+            .disabled(draft.attachments.count >= AttachmentEncoder.maxCount)
         }
-        ModelChip(
-          name: modelName, providerID: current?.providerID,
-          canonical: current.flatMap { entry?.canonical[$0.providerID] },
-          disabled: sending || entry?.catalog == nil
-        ) {
-          // The keyboard would otherwise return over the sheet's menus.
-          focused = false
-          picking = true
+        Divider()
+        // The desktop's Permissions control: turning full access on asks first.
+        Toggle(isOn: fullAccessBinding) {
+          Label("Full access", systemImage: fullAccess ? "bolt.shield" : "shield")
         }
-        .layoutPriority(-1)
-        ThinkingControl(
-          variants: currentInfo?.variants?.map(\.id) ?? [],
-          selected: current?.thinking,
-          disabled: sending || current == nil
-        ) { variant in
-          if let current { model.select(current.with(variant: variant), draft: draft, catalog: entry?.catalog) }
-        }
-        Spacer(minLength: 0)
-      }
-      .padding(.leading, model.sessionID == nil ? -4 : 0)
-
-      HStack(spacing: 8) {
-        Menu {
-          Button("Photo Library", systemImage: "photo.on.rectangle") { showPhotos = true }
-          if CameraPicker.available {
-            Button("Camera", systemImage: "camera") { showCamera = true }
+        .disabled(sending || (model.session == nil && model.sessionID != nil))
+      } label: {
+        Image(systemName: "plus")
+          .font(.system(size: 18, weight: .regular))
+          .foregroundStyle(palette.color("text-secondary"))
+          .overlay(alignment: .topTrailing) {
+            if fullAccess {
+              // Full access is on: a small reminder, like the desktop's accent Permissions label.
+              Image(systemName: "bolt.shield.fill")
+                .font(.system(size: 10))
+                .foregroundStyle(palette.color("warning"))
+                .offset(x: 8, y: -6)
+            }
           }
-        } label: {
-          Image(systemName: "plus")
-            .font(.system(size: 18, weight: .regular))
-            .foregroundStyle(palette.color("text-secondary"))
-            .frame(width: 44, height: 44)
-            .contentShape(.rect)
-        }
-        .disabled(draft.attachments.count >= AttachmentEncoder.maxCount)
-        .accessibilityShowsLargeContentViewer()
-        .accessibilityLabel("Attach files")
-        .accessibilityIdentifier("composer.attach")
-        .padding(.leading, -8)
-
-        PermissionControl(
-          model: model, disabled: sending,
-          draft: model.sessionID == nil ? $draft.fullAccess : nil)
-
-        Spacer(minLength: 4)
-
-        if model.running {
-          stopButton
-        }
-        sendButton
+          .frame(width: 44, height: 44)
+          .contentShape(.rect)
       }
+      .accessibilityShowsLargeContentViewer()
+      .accessibilityLabel(fullAccess ? "Attach and permissions, full access on" : "Attach and permissions")
+      .accessibilityIdentifier("composer.attach")
+      .padding(.leading, -10)
+
+      modelMenu
+        .layoutPriority(-1)
+
+      Spacer(minLength: 4)
+
+      if model.running {
+        stopButton
+      }
+      sendButton
+    }
+    .alert("Enable full access?", isPresented: $confirmFullAccess) {
+      Button("Cancel", role: .cancel) {}
+      Button("Enable full access") { setFullAccess(true) }
+    } message: {
+      Text(
+        "This agent can read and change files outside the project and run commands without approval, including destructive commands and access to secrets. Only enable this for work you trust.\n\nApplies to this thread and new subagents. Existing subagents keep their own permissions. Pending approvals in this thread will be allowed. Your global OpenCode settings stay unchanged; server policies still apply."
+      )
+    }
+  }
+
+  /// "Claude Opus 5.5 · High": choose the model, or the thinking level in place.
+  private var modelMenu: some View {
+    let variants = currentInfo?.variants?.map(\.id) ?? []
+    return Menu {
+      Button("Choose model…", systemImage: "cpu") {
+        // The keyboard would otherwise return over the sheet's menus.
+        focused = false
+        picking = true
+      }
+      .disabled(entry?.catalog == nil)
+      if !variants.isEmpty {
+        Picker(
+          "Thinking",
+          selection: Binding(
+            get: { current?.thinking },
+            set: { variant in
+              if let current {
+                model.select(current.with(variant: variant), draft: draft, catalog: entry?.catalog)
+              }
+            })
+        ) {
+          Text("Default").tag(String?.none)
+          ForEach(variants, id: \.self) { Text(thinkingLabel($0)).tag(Optional($0)) }
+        }
+        .pickerStyle(.inline)
+      }
+    } label: {
+      HStack(spacing: 5) {
+        (Text(modelName)
+          + Text(variants.isEmpty ? "" : " · \(thinkingLabel(current?.thinking))"))
+          .lineLimit(1)
+          .truncationMode(.middle)
+        Image(systemName: "chevron.down")
+          .font(.system(size: 11, weight: .medium))
+      }
+      .font(.subheadline)
+      .foregroundStyle(palette.color("text-tertiary"))
+      .frame(minHeight: 44)
+      .contentShape(.rect)
+    }
+    .disabled(sending || entry?.catalog == nil)
+    .accessibilityIdentifier("composer.model")
+    .accessibilityLabel("Model")
+    .accessibilityValue(modelName)
+  }
+
+  private var fullAccess: Bool {
+    model.sessionID == nil ? draft.fullAccess : (model.session?.fullAccess ?? false)
+  }
+
+  private var fullAccessBinding: Binding<Bool> {
+    Binding(
+      get: { fullAccess },
+      set: { on in
+        if on { confirmFullAccess = true } else { setFullAccess(false) }
+      })
+  }
+
+  private func setFullAccess(_ on: Bool) {
+    if model.sessionID == nil {
+      draft.fullAccess = on
+    } else {
+      Task { await model.setFullAccess(on) }
     }
   }
 

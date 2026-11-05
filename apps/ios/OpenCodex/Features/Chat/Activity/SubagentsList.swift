@@ -173,8 +173,7 @@ struct SubagentsList: View {
     .overlay {
       if list.loaded, list.error == nil, list.items.isEmpty {
         VStack(spacing: 8) {
-          Image(systemName: ActivitySymbol.subagent)
-            .font(.system(size: 24, weight: .light))
+          RobotIcon(size: 28)
             .foregroundStyle(palette.color("text-tertiary"))
           Text("No subagents yet")
             .font(.headline)
@@ -218,8 +217,7 @@ private struct SubagentListRow: View {
 
   var body: some View {
     HStack(alignment: .top, spacing: 10) {
-      Image(systemName: ActivitySymbol.subagent)
-        .font(.system(size: 15))
+      RobotIcon(size: 16)
         .foregroundStyle(palette.color("accent-text"))
         .frame(width: 28, height: 28)
         .background(palette.color("accent-soft"), in: .circle)

@@ -3,8 +3,7 @@ import UIKit
 
 /// SF Symbols standing in for the desktop's Hugeicons in the activity views.
 enum ActivitySymbol {
-  /// Hugeicons `BotIcon`; SF Symbols has no robot, so a friendly face.
-  static let subagent = "face.smiling"
+  /// Hugeicons `BotIcon` is the `Robot` asset (`RobotIcon`); SF Symbols has no robot.
   /// Hugeicons `CommandLineIcon`.
   static let shell = "apple.terminal"
   /// Hugeicons `ArrowRight01Icon`.

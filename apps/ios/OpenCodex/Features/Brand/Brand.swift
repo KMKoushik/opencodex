@@ -43,3 +43,19 @@ struct Wordmark: View {
     .accessibilityLabel("OpenCodex")
   }
 }
+
+/// The desktop's subagent icon (Hugeicons `BotIcon`). SF Symbols has no robot.
+struct RobotIcon: View {
+  /// Matches an SF Symbol at this text style's size.
+  var size: CGFloat = 20
+  @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
+
+  var body: some View {
+    Image("Robot")
+      .renderingMode(.template)
+      .resizable()
+      .scaledToFit()
+      .frame(width: size * scale, height: size * scale)
+      .accessibilityHidden(true)
+  }
+}
