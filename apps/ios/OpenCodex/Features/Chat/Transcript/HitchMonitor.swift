@@ -6,7 +6,7 @@ import QuartzCore
 /// summary when the activity ends. Off by default; it costs nothing unless enabled.
 final class HitchMonitor {
   static let enabled = UserDefaults.standard.bool(forKey: "transcriptHitches")
-  private static let log = Logger(subsystem: "com.kmkoushik.opencodex", category: "hitches")
+  private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "opencodex", category: "hitches")
 
   private var link: CADisplayLink?
   private var last: CFTimeInterval = 0

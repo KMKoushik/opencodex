@@ -1,2 +1,5 @@
-// Signing for a real iPhone: put `DEVELOPMENT_TEAM = <your team ID>` in Local.xcconfig (gitignored).
+// Signing for a real iPhone: put your own values in Local.xcconfig (gitignored):
+//   DEVELOPMENT_TEAM = <your team ID>
+//   OPENCODEX_BUNDLE_ID = <a bundle ID you own>  (also the APNs topic in ~/.opencodex/push.json)
+OPENCODEX_BUNDLE_ID = dev.opencodex.ios
 #include? "Local.xcconfig"

@@ -3,7 +3,7 @@ import Security
 
 /// The paired device token, kept in the Keychain and never synced off this iPhone.
 enum Keychain {
-  private static let service = "com.kmkoushik.opencodex.device"
+  private static let service = (Bundle.main.bundleIdentifier ?? "opencodex") + ".device"
 
   static func read(_ account: String) -> String? {
     let query: [String: Any] = [

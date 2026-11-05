@@ -1,6 +1,6 @@
 name: OpenCodex
 options:
-  bundleIdPrefix: com.kmkoushik
+  bundleIdPrefix: dev.opencodex
   deploymentTarget:
     iOS: '26.0'
   createIntermediateGroups: true
@@ -37,7 +37,7 @@ targets:
       - target: OpenCodexActivity
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.kmkoushik.opencodex
+        PRODUCT_BUNDLE_IDENTIFIER: $(OPENCODEX_BUNDLE_ID)
         INFOPLIST_FILE: OpenCodex/Info.plist
         # Push notifications (APNs). The Live Activity needs no App Group: ActivityKit hands the
         # extension its attributes and state.
@@ -55,7 +55,7 @@ targets:
       - path: OpenCodexActivity
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.kmkoushik.opencodex.activity
+        PRODUCT_BUNDLE_IDENTIFIER: $(OPENCODEX_BUNDLE_ID).activity
         INFOPLIST_FILE: OpenCodexActivity/Info.plist
         CODE_SIGN_STYLE: Automatic
         CURRENT_PROJECT_VERSION: 1

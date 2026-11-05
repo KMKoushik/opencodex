@@ -148,8 +148,8 @@ describe('push notifications', () => {
       JSON.stringify({
         keyPath: join(directory, 'AuthKey.p8'),
         keyID: 'KEY1234567',
-        teamID: 'G5MR932BV5',
-        topic: 'com.kmkoushik.opencodex',
+        teamID: 'TEAMID1234',
+        topic: 'dev.example.opencodex',
       }),
     );
     await push.refresh(signal);
@@ -204,14 +204,14 @@ describe('push notifications', () => {
     expect(sent[2]).toMatchObject({
       token: 'cd'.repeat(32),
       headers: {
-        'apns-topic': 'com.kmkoushik.opencodex.push-type.liveactivity',
+        'apns-topic': 'dev.example.opencodex.push-type.liveactivity',
         'apns-push-type': 'liveactivity',
       },
       payload: { aps: { event: 'end', 'content-state': { state: 'stopped' } } },
     });
     const headers = sent[0]!.headers;
     expect(headers).toMatchObject({
-      'apns-topic': 'com.kmkoushik.opencodex',
+      'apns-topic': 'dev.example.opencodex',
       'apns-push-type': 'alert',
       'apns-collapse-id': 'root',
     });
@@ -220,7 +220,7 @@ describe('push notifications', () => {
       alg: 'ES256',
       kid: 'KEY1234567',
     });
-    expect(JSON.parse(Buffer.from(claims!, 'base64url').toString()).iss).toBe('G5MR932BV5');
+    expect(JSON.parse(Buffer.from(claims!, 'base64url').toString()).iss).toBe('TEAMID1234');
     expect(
       verify(
         'sha256',

@@ -13,7 +13,7 @@ xcodegen generate          # OpenCodex.xcodeproj is generated, not committed
 open OpenCodex.xcodeproj
 ```
 
-For a real iPhone, create `Config/Local.xcconfig` (gitignored) with `DEVELOPMENT_TEAM = <team ID>`.
+For a real iPhone, create `Config/Local.xcconfig` (gitignored) with `DEVELOPMENT_TEAM = <team ID>` and `OPENCODEX_BUNDLE_ID = <a bundle ID you own>`. Push notifications need an APNs key from your own developer account; keep the `.p8` outside the repo and point `~/.opencodex/push.json` at it (`{ keyPath, keyID, teamID, topic }`, where `topic` is your bundle ID).
 
 ## Layout
 
