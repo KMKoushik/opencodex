@@ -97,6 +97,7 @@ struct ChatScreen: View {
       // Restarts when the draft moves to another project, which makes a new model.
       .task(id: ObjectIdentifier(model)) { await model.run() }
       .task(id: model.session?.time.idle) { await model.markViewed() }
+      .task(id: model.session?.id) { await clearOpeningUnread() }
       .task { await loadProjects() }
       // The chat on screen raises no notifications of its own.
       .onChange(of: model.sessionID, initial: true) { _, id in
@@ -216,6 +217,18 @@ struct ChatScreen: View {
 }
 
 extension ChatScreen {
+  /// Like the desktop's `SessionUnread`: opening a thread clears a manual unread mark, but only
+  /// the one present when it opened, never one set while reading.
+  fileprivate func clearOpeningUnread() async {
+    guard let id = model.sessionID,
+      let marker = model.session?.metadata?["opencodexUnread"]?.string, !marker.isEmpty
+    else { return }
+    do {
+      try await model.client.clearUnread(id, marker: marker)
+      model.refreshSession()
+    } catch {}
+  }
+
   /// This thread as the shared thread menu sees it.
   fileprivate var target: ThreadActionTarget? {
     guard let info = model.session else { return nil }

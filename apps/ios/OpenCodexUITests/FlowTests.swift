@@ -13,6 +13,7 @@ nonisolated final class FlowTests: XCTestCase {
     let app = XCUIApplication.opencodex()
     app.launch()
 
+    XCTAssertTrue(app.buttons["new-chat"].waitForExistence(timeout: 20))
     app.buttons["new-chat"].tap()
     let project = app.buttons["project-proj"]
     XCTAssertTrue(project.waitForExistence(timeout: 10))
@@ -66,6 +67,7 @@ nonisolated final class FlowTests: XCTestCase {
     let title = "Worktree \(UUID().uuidString.prefix(6))"
     let app = XCUIApplication.opencodex()
     app.launch()
+    XCTAssertTrue(app.buttons["new-chat"].waitForExistence(timeout: 20))
     app.buttons["new-chat"].tap()
     let project = app.buttons["project-long-transcript"]
     XCTAssertTrue(project.waitForExistence(timeout: 10))
