@@ -328,27 +328,15 @@ final class HomeModel {
 
   private func fetchFirstPages(_ folders: [String]) async -> [String: Result<ThreadPage, Error>] {
     let client = client
-    return await withTaskGroup(of: (String, Result<ThreadPage, Error>).self) { group in
-      var results: [String: Result<ThreadPage, Error>] = [:]
-      var queue = folders[...]
-      // A few at a time, so a gateway with many projects isn't flooded.
-      func next() {
-        guard let folder = queue.popFirst() else { return }
-        group.addTask {
-          do {
-            return (folder, .success(try await client.threadSessions(directory: folder)))
-          } catch {
-            return (folder, .failure(error))
-          }
-        }
+    // A few at a time, so a gateway with many projects isn't flooded.
+    let pages = await Concurrently.map(folders, limit: 6) { folder -> Result<ThreadPage, Error> in
+      do {
+        return .success(try await client.threadSessions(directory: folder))
+      } catch {
+        return .failure(error)
       }
-      for _ in 0..<6 { next() }
-      for await (folder, result) in group {
-        results[folder] = result
-        next()
-      }
-      return results
     }
+    return Dictionary(zip(folders, pages), uniquingKeysWith: { first, _ in first })
   }
 
   /// A project's first page, or its next one for Show more.
@@ -426,21 +414,14 @@ final class HomeModel {
     let wanted = pinIndex.ids.filter { sessions[$0] == nil }
     guard !wanted.isEmpty else { return }
     let client = client
-    let results = await withTaskGroup(of: (String, SessionInfo?, Bool).self) { group in
-      for id in wanted {
-        group.addTask {
-          do {
-            return (id, try await client.session(id), false)
-          } catch let error as GatewayError where error.status == 404 {
-            return (id, nil, true)
-          } catch {
-            return (id, nil, false)
-          }
-        }
+    let results = await Concurrently.map(wanted) { id -> (String, SessionInfo?, Bool) in
+      do {
+        return (id, try await client.session(id), false)
+      } catch let error as GatewayError where error.status == 404 {
+        return (id, nil, true)
+      } catch {
+        return (id, nil, false)
       }
-      var results: [(String, SessionInfo?, Bool)] = []
-      for await result in group { results.append(result) }
-      return results
     }
     guard generation == self.generation else { return }
     for (id, info, missing) in results {

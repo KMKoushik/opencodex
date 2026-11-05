@@ -64,13 +64,8 @@ nonisolated enum SessionCost {
       try Task.checkCancellation()
       let batch = Array(pending.prefix(4))
       pending.removeFirst(batch.count)
-      let pages = try await withThrowingTaskGroup(of: [SessionDetails.SessionUsage].self) { group in
-        for parentID in batch {
-          group.addTask { try await children(of: parentID, list: list) }
-        }
-        var all: [[SessionDetails.SessionUsage]] = []
-        for try await children in group { all.append(children) }
-        return all
+      let pages = try await Concurrently.tryMap(batch) { parentID in
+        try await children(of: parentID, list: list)
       }
       for session in pages.joined() where !seen.contains(session.id) {
         if sessions.count >= 5000 {

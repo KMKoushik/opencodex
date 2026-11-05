@@ -180,11 +180,8 @@ final class ActivityModel {
       var failed = false
       if !unknown.isEmpty {
         let client = chat.client
-        let fetched = await withTaskGroup(of: SessionInfo?.self) { group in
-          for child in unknown { group.addTask { try? await client.session(child) } }
-          var results: [SessionInfo?] = []
-          for await result in group { results.append(result) }
-          return results
+        let fetched = await Concurrently.map(Array(unknown)) { child in
+          try? await client.session(child)
         }
         if Task.isCancelled { return }
         for info in fetched {
@@ -221,22 +218,13 @@ final class ActivityModel {
   private func refreshAttention(_ ids: [String]) async {
     guard !ids.isEmpty else { return }
     let client = chat.client
-    let results = await withTaskGroup(of: (String, Attention?).self) { group in
-      for id in ids {
-        group.addTask {
-          do {
-            async let permissions = client.permissions(id)
-            async let forms = client.forms(id)
-            if try await !permissions.isEmpty { return (id, .permission) }
-            return (id, try await !forms.isEmpty ? .question : nil)
-          } catch {
-            return (id, Self.cancelled(error) ? nil : .error)
-          }
-        }
+    let results = await Concurrently.map(ids) { id -> (String, Attention?) in
+      do {
+        if try await !client.permissions(id).isEmpty { return (id, .permission) }
+        return (id, try await !client.forms(id).isEmpty ? .question : nil)
+      } catch {
+        return (id, Self.cancelled(error) ? nil : .error)
       }
-      var results: [(String, Attention?)] = []
-      for await result in group { results.append(result) }
-      return results
     }
     guard !Task.isCancelled else { return }
     var next = attention

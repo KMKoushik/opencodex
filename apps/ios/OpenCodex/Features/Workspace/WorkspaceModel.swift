@@ -203,9 +203,8 @@ final class WorkspaceModel {
     // Only folders on screen; collapsed ones reload when they're opened again.
     let visible = folders.keys.filter { $0.isEmpty || isVisible($0) }
     for key in folders.keys where !visible.contains(key) { folders[key] = nil }
-    await withTaskGroup(of: Void.self) { group in
-      for path in visible { group.addTask { await self.loadFolder(path) } }
-    }
+    // One at a time on the main actor: only expanded folders reload, and each is one request.
+    for path in visible { await loadFolder(path) }
   }
 
   private func refreshSearch() async {
