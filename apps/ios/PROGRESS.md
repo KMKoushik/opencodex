@@ -54,6 +54,9 @@ ENABLE_TESTABILITY=YES`). Release-only crashes have happened (see Known issues).
 - [x] Test every interaction (QA wave) and prefer native components everywhere: composer,
       home/settings/pairing, transcript/activity and panels QA merged with tap tests.
 
+- [x] Video preview should be the native player with full screen — `AVPlayerViewController`
+      (full screen, scrubbing, ±10 s, speed, AirPlay, Picture in Picture), build 152.
+
 ## In progress
 
 - [ ] Notifications: in-app notifications, APNs push from the owner's gateway, and a Live

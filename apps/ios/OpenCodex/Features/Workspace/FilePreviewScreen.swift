@@ -411,9 +411,9 @@ private struct VideoPreview: View {
     VStack(spacing: 0) {
       MediaBar(note: "\(ByteFormat.mebibytes(bytes)) · Video") { EmptyView() }
       ZStack {
-        palette.color("well")
+        if failed { palette.color("well") } else { Color.black }
         if let player, !failed {
-          VideoPlayer(player: player).accessibilityIdentifier("video-preview")
+          SystemPlayer(player: player).accessibilityIdentifier("video-preview")
         }
         if failed {
           VStack(spacing: 12) {
@@ -438,6 +438,8 @@ private struct VideoPreview: View {
 
   private func start() {
     failed = false
+    // Like the system's players: sound plays even with the ring/silent switch on silent.
+    try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
     let url = model.client.workspaceMediaURL(directory: model.directory, path: path)
     let asset = AVURLAsset(
       url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": model.client.authorizationHeaders])
@@ -450,6 +452,27 @@ private struct VideoPreview: View {
         if status != .unknown { break }
       }
     }
+  }
+}
+
+/// The system video player (`AVPlayerViewController`): native controls, scrubbing, full screen,
+/// Picture in Picture and AirPlay. SwiftUI's `VideoPlayer` has no full-screen button on iOS.
+private struct SystemPlayer: UIViewControllerRepresentable {
+  let player: AVPlayer
+
+  func makeUIViewController(context: Context) -> AVPlayerViewController {
+    let controller = AVPlayerViewController()
+    controller.player = player
+    controller.showsPlaybackControls = true
+    controller.allowsPictureInPicturePlayback = true
+    controller.canStartPictureInPictureAutomaticallyFromInline = false
+    controller.exitsFullScreenWhenPlaybackEnds = true
+    controller.videoGravity = .resizeAspect
+    return controller
+  }
+
+  func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
+    if controller.player !== player { controller.player = player }
   }
 }
 
