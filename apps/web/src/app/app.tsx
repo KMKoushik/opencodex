@@ -337,7 +337,7 @@ export function App() {
     main.current?.focus({ preventScroll: true });
   }
 
-  useNotificationTarget(page ? undefined : selectedID, (session) => {
+  useNotificationTarget((session) => {
     openSession(session);
     navigate(null);
   });

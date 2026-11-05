@@ -52,8 +52,8 @@ export function notificationsSupported() {
   return typeof Notification !== 'undefined' && window.isSecureContext;
 }
 
-/** The chat on screen, and how to open a chat when its notification is clicked. */
-let target: { sessionID?: string; open: (session: Session) => void } | undefined;
+/** How to open a chat when its notification is clicked. */
+let target: { open: (session: Session) => void } | undefined;
 const shown = new Map<string, Notification>();
 
 function clearShown() {
@@ -61,12 +61,9 @@ function clearShown() {
   shown.clear();
 }
 
-export function useNotificationTarget(
-  sessionID: string | undefined,
-  open: (session: Session) => void,
-) {
+export function useNotificationTarget(open: (session: Session) => void) {
   useEffect(() => {
-    target = { sessionID, open };
+    target = { open };
     return () => {
       target = undefined;
     };
@@ -81,10 +78,12 @@ export function useNotificationTarget(
   }, []);
 }
 
-function viewing(sessionID: string) {
-  return (
-    document.visibilityState === 'visible' && document.hasFocus() && target?.sessionID === sessionID
-  );
+/**
+ * Like OpenCode's app, notify only while OpenCodex is in the background. macOS hides banners
+ * from the frontmost app but still plays their sound; the sidebar's unread dots cover this case.
+ */
+function inFront() {
+  return document.visibilityState === 'visible' && document.hasFocus();
 }
 
 function info(client: QueryClient, sessionID: string) {
@@ -110,7 +109,7 @@ export async function notifySession(
     !getSettings()[kind] ||
     !notificationsSupported() ||
     Notification.permission !== 'granted' ||
-    viewing(sessionID)
+    inFront()
   )
     return;
   try {
@@ -124,7 +123,7 @@ export async function notifySession(
     // A muted thread stays quiet, including its subagents and side chats.
     if (sessionMuted(root)) return;
     const thread = sessionSummary(root);
-    if (viewing(thread.id)) return;
+    if (inFront()) return;
     shown.get(thread.id)?.close();
     const notification = new Notification(failed ? 'Reply failed' : titles[kind], {
       body: thread.title,
