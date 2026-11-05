@@ -55,7 +55,7 @@ ENABLE_TESTABILITY=YES`). Release-only crashes have happened (see Known issues).
       home/settings/pairing, transcript/activity and panels QA merged with tap tests.
 
 - [x] Video preview should be the native player with full screen — `AVPlayerViewController`
-      (full screen, scrubbing, ±10 s, speed, AirPlay, Picture in Picture), build 152.
+      (full screen, scrubbing, ±10 s, speed, AirPlay, Picture in Picture), build 155.
 
 ## In progress
 
