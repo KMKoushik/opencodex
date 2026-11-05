@@ -4,9 +4,11 @@ import SwiftUI
 struct TranscriptView: View {
   let model: ChatModel
   @Environment(\.palette) private var palette
+  /// A workspace file opened from a link in the transcript.
+  @State private var file: FileLinkTarget?
 
   var body: some View {
-    TranscriptList(model: model)
+    TranscriptList(model: model) { file = $0 }
       // The list scrolls under the navigation bar and ends at the composer, which the
       // screen docks as a safe-area inset (so the keyboard moves both).
       .ignoresSafeArea(.container, edges: .top)
@@ -28,6 +30,9 @@ struct TranscriptView: View {
         }
       }
       .animation(.snappy, value: model.error)
+      .sheet(item: $file) { target in
+        FileLinkSheet(target: target, client: model.client, events: model.events)
+      }
       // The chat's page color, under the navigation bar and composer too.
       .background(palette.color("surface").ignoresSafeArea())
   }
@@ -45,16 +50,19 @@ struct TranscriptView: View {
 
 private struct TranscriptList: UIViewControllerRepresentable {
   let model: ChatModel
+  let openFile: (FileLinkTarget) -> Void
   @Environment(\.palette) private var palette
 
   func makeUIViewController(context: Context) -> TranscriptViewController {
     let controller = TranscriptViewController(model: model)
     controller.setPalette(palette)
+    controller.onOpenFile = openFile
     return controller
   }
 
   func updateUIViewController(_ controller: TranscriptViewController, context: Context) {
     controller.setPalette(palette)
+    controller.onOpenFile = openFile
   }
 }
 

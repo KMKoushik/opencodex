@@ -143,10 +143,15 @@ nonisolated final class MarkdownRenderer: @unchecked Sendable {
         default: .natural
         }
       }
-      // Drawn, not a text view: links keep their look but not the system link color.
+      // Drawn, not a text view: `.link` would draw in the system link color, so the URL moves
+      // to `.tableLink`, which the table hit-tests itself.
       func cell(_ markup: Markup, bold: Bool) -> NSAttributedString {
         let text = NSMutableAttributedString(attributedString: builder.inline(markup, bold: bold))
-        text.removeAttribute(.link, range: NSRange(location: 0, length: text.length))
+        let all = NSRange(location: 0, length: text.length)
+        text.enumerateAttribute(.link, in: all) { value, range, _ in
+          if let value { text.addAttribute(.tableLink, value: value, range: range) }
+        }
+        text.removeAttribute(.link, range: all)
         return text
       }
       let header = table.head.cells.map { cell($0, bold: true) }
@@ -478,4 +483,6 @@ extension NSAttributedString.Key {
   nonisolated static let codeBackground = NSAttributedString.Key("OpenCodexCodeBackground")
   /// A sent `@` mention: a pill in this color, 2pt wider than its glyphs on every side.
   nonisolated static let mentionBackground = NSAttributedString.Key("OpenCodexMentionBackground")
+  /// A link inside a drawn table cell: its URL, opened by the table's own hit testing.
+  nonisolated static let tableLink = NSAttributedString.Key("OpenCodexTableLink")
 }

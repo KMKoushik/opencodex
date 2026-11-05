@@ -254,9 +254,11 @@ struct SubagentsSheet: View {
         .toolbar {
           ToolbarItem(placement: .topBarLeading) {
             Button("Close", systemImage: "xmark") { dismiss() }
+              .accessibilityIdentifier("subagents.close")
           }
         }
     }
+    .presentationDetents([.medium, .large])
     .presentationDragIndicator(.visible)
   }
 }

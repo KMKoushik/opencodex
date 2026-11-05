@@ -27,15 +27,43 @@ struct ActivityTray: View {
   }
 
   private var activity: ActivityModel { .shared(for: model) }
+  /// The open output sheet and reader live here, not in the tray body, so they stay open
+  /// when the work finishes and the tray goes away: the final output is what you came for.
+  @State private var shell: Identified?
+  @State private var subagent: Identified?
+  /// The reader opens tall: a transcript needs the room; drag down to peek at the chat.
+  @State private var readerDetent: PresentationDetent = .large
 
   var body: some View {
     VStack(spacing: 0) {
       if activity.visible {
-        TrayBody(model: model, activity: activity, onOpenSubagent: onOpenSubagent)
-          .transition(.move(edge: .bottom).combined(with: .opacity))
+        TrayBody(
+          model: model, activity: activity, onOpenSubagent: onOpenSubagent, shell: $shell,
+          subagent: $subagent
+        )
+        .transition(.move(edge: .bottom).combined(with: .opacity))
       }
     }
     .frame(maxWidth: .infinity)
+    .sheet(item: $shell) { item in
+      if let directory = model.projectDirectory {
+        ShellOutputSheet(client: model.client, events: model.events, directory: directory, id: item.id)
+      }
+    }
+    .sheet(item: $subagent) { item in
+      NavigationStack {
+        SubagentReader(client: model.client, events: model.events, sessionID: item.id)
+          .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+              Button("Close", systemImage: "xmark") { subagent = nil }
+                .accessibilityIdentifier("subagent.close")
+            }
+          }
+      }
+      .presentationDetents([.medium, .large], selection: $readerDetent)
+      .presentationDragIndicator(.visible)
+      .presentationContentInteraction(.scrolls)
+    }
     .animation(.snappy(duration: 0.25), value: activity.visible)
     .task(id: model.sessionID) { await activity.run() }
     // Shells are listed per project, which a chat knows once its session loads.
@@ -51,13 +79,13 @@ private struct TrayBody: View {
   let model: ChatModel
   let activity: ActivityModel
   let onOpenSubagent: ((String) -> Void)?
+  @Binding var shell: Identified?
+  @Binding var subagent: Identified?
 
   @Environment(\.palette) private var palette
   @State private var selected: Tab?
   @State private var moving = false
   @State private var width: CGFloat = 400
-  @State private var shell: Identified?
-  @State private var subagent: Identified?
   private var preference: ActivityTrayPreference { .shared }
 
   private var blocking: BlockingWork { model.blockingWork }
@@ -101,28 +129,13 @@ private struct TrayBody: View {
     .accessibilityLabel("Running activity")
     .accessibilityValue(summary)
     .accessibilityIdentifier("activity.tray")
-    .sheet(item: $shell) { item in
-      if let directory = model.projectDirectory {
-        ShellOutputSheet(client: model.client, events: model.events, directory: directory, id: item.id)
-      }
-    }
-    .sheet(item: $subagent) { item in
-      NavigationStack {
-        SubagentReader(client: model.client, events: model.events, sessionID: item.id)
-          .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-              Button("Close", systemImage: "xmark") { subagent = nil }
-            }
-          }
-      }
-      .presentationDragIndicator(.visible)
-    }
   }
 
   // MARK: Collapsed
 
-  /// Collapsed, the tray is one small pill above the composer, like OpenCode's "5 shells":
-  /// what's running, a dot when something needs you, and Background while the reply waits.
+  /// Collapsed, the tray is one small Liquid Glass pill above the composer, like OpenCode's
+  /// "5 shells": what's running, a dot when something needs you, and Background while the
+  /// reply waits.
   private var pill: some View {
     HStack(spacing: 8) {
       Button {
@@ -143,12 +156,12 @@ private struct TrayBody: View {
         .foregroundStyle(palette.color("text-secondary"))
         .padding(.horizontal, 12)
         .frame(minHeight: 32)
-        .ceramic("chip", shadow: "chip-shadow", border: "chip-border", radius: 16)
+        .glassEffect(.regular.interactive(), in: .capsule)
         .frame(minHeight: 44)
         .contentShape(.rect)
       }
       .buttonStyle(.plain)
-      .accessibilityLabel("Running activity")
+      .accessibilityLabel(pillText)
       .accessibilityValue(summary)
       .accessibilityHint("Shows the running shells and subagents.")
       .accessibilityIdentifier("activity.pill")
@@ -162,7 +175,7 @@ private struct TrayBody: View {
             .foregroundStyle(palette.color("text-secondary"))
             .padding(.horizontal, 12)
             .frame(minHeight: 32)
-            .ceramic("chip", shadow: "chip-shadow", border: "chip-border", radius: 16)
+            .glassEffect(.regular.interactive(), in: .capsule)
             .frame(minHeight: 44)
             .contentShape(.rect)
         }
@@ -273,8 +286,7 @@ private struct TrayBody: View {
             Image(systemName: ActivitySymbol.shell).font(.caption)
           }
         }
-        (Text(name + " ")
-          + Text("(\(count))").foregroundStyle(palette.color("text-tertiary")).monospacedDigit())
+        Text("\(name) \(Text("(\(count))").foregroundStyle(palette.color("text-tertiary")).monospacedDigit())")
           .lineLimit(1)
           .fixedSize()
         if let alert { AttentionDot(kind: alert) }

@@ -107,6 +107,11 @@ final class EventHub {
   private func restart(refetch: Bool = false) {
     task?.cancel()
     guard let client else { return }
+    #if DEBUG
+      // `-eventsOffline YES` never opens the stream, so UI tests can exercise the screens'
+      // recovery polling, which otherwise runs only while the stream is down.
+      if UserDefaults.standard.bool(forKey: "eventsOffline") { return }
+    #endif
     task = Task { [weak self] in
       var delay: Duration = .milliseconds(500)
       var first = !refetch

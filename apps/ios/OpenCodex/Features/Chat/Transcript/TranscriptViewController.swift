@@ -50,7 +50,15 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
   /// The last run's failure from `session.execution.failed`, until the next run starts, like the
   /// desktop's `execution-error` query.
   private var executionError: String?
+  /// The session's outcome is from before the run that just started, until a session
+  /// snapshot arrives after it ends, so a finished run never re-shows the last failure.
+  private var staleOutcome = false
+  /// The outcome and side-chat state the footer last showed, to reassemble only on change.
+  private var footerState: (failed: Bool, side: Bool) = (false, false)
   private var executionEvents: Subscription?
+  private var reconnects: Subscription?
+  /// Opens a workspace file a link points at; the SwiftUI host shows it in a sheet.
+  var onOpenFile: ((FileLinkTarget) -> Void)?
   /// One ticker for the list: advances working turn headers each second.
   private var ticker: Timer?
 
@@ -148,6 +156,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     observeLive()
     observeSends()
     observeExecution()
+    observeSession()
     liveChanged(reproject: false)
     reproject()
   }
@@ -180,10 +189,37 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
         self.executionError = event.data?["error"]?["message"]?.string
         self.assemble(animated: false)
       case "session.execution.started":
+        self.staleOutcome = true
         guard self.executionError != nil else { return }
         self.executionError = nil
         self.assemble(animated: false)
       default: break
+      }
+    }
+    // Like the desktop, a reconnect forgets the last failure: the refetched session's outcome
+    // still shows the generic footer if the run failed.
+    reconnects = model.events.onReconnect { [weak self] in
+      guard let self, self.executionError != nil else { return }
+      self.executionError = nil
+      self.assemble(animated: false)
+    }
+  }
+
+  /// The footer reads the session's outcome and side-chat state, which change without the
+  /// messages changing (the session refetch lands after the run's last messages).
+  private func observeSession() {
+    withObservationTracking {
+      _ = model.session
+    } onChange: { [weak self] in
+      Task { @MainActor in
+        guard let self else { return }
+        self.observeSession()
+        let wasStale = self.staleOutcome
+        if !self.model.running { self.staleOutcome = false }
+        let state = (failed: self.model.session?.outcome == "failed", side: self.model.isSideChat)
+        guard state != self.footerState || wasStale != self.staleOutcome else { return }
+        self.footerState = state
+        self.assemble(animated: false)
       }
     }
   }
@@ -382,7 +418,8 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
         "\(model.isSideChat ? "Side chat" : "Conversation") undone. Use /redo to restore it, or send a message to continue from here."
       list.append(TranscriptItem(id: "undone", content: .note(note), row: "undone"))
     }
-    if !model.running, executionError != nil || model.session?.outcome == "failed" {
+    footerState = (model.session?.outcome == "failed", model.isSideChat)
+    if !model.running, executionError != nil || (!staleOutcome && model.session?.outcome == "failed") {
       // The desktop's footer alert after a failed run.
       let message = executionError.flatMap { $0.isEmpty ? nil : $0 }
         ?? "The run failed. Check OpenCode’s provider configuration and try again."
@@ -519,15 +556,19 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
       cell.configure(prompt, typography: typography, theme: theme)
       cell.onOpen = { [weak self] image, source, name in self?.preview(image, source, name) }
       cell.onAnnotations = { [weak self] chip in self?.showAnnotations(prompt, from: chip) }
+      cell.onShare = { [weak self] text, view in self?.share(text, from: view) }
     case .block(let block, let style):
       let rendered = MarkdownRenderer.shared.render(block, style: style, typography: typography, theme: theme)
       switch (rendered, cell) {
       case (.text(let text), let cell as TextBlockCell):
         cell.configure(text, quote: block.kind == .quote, panel: item.panel, theme: theme)
+        cell.onOpenFile = { [weak self] href in self?.openFile(href) }
       case (.code(let language, let code), let cell as CodeBlockCell):
         cell.configure(language: language, code: code, typography: typography, theme: theme)
+        cell.onShare = { [weak self] text, view in self?.share(text, from: view) }
       case (.table(let content), let cell as TableCell):
         cell.configure(content)
+        cell.onOpenLink = { [weak self] url in self?.openLink(url) }
       case (.rule, let cell as RuleCell):
         cell.configure(theme: theme)
       case (.image(let source, let alt), let cell as ImageBlockCell):
@@ -546,6 +587,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
       guard let cell = cell as? NoteCell else { return }
       cell.configure(.copy, text: "", typography: typography, theme: theme)
       cell.onCopy = { UIPasteboard.general.string = text }
+      cell.onShare = { [weak self] view in self?.share(text, from: view) }
     case .note(let text):
       (cell as? NoteCell)?.configure(.note, text: text, typography: typography, theme: theme)
     case .failure(let text):
@@ -587,8 +629,12 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
       case .error:
         model.statusIcon = "exclamationmark.circle"
         model.statusTint = theme.error
-      case .running: model.trailing = "Running…"
-      case .streaming: model.trailing = "Preparing…"
+      case .running:
+        model.trailing = "Running…"
+        model.spinning = true
+      case .streaming:
+        model.trailing = "Preparing…"
+        model.spinning = true
       }
       return model
     case .skill(let name, let status, let error):
@@ -809,6 +855,30 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     present(list, animated: true)
   }
 
+  /// The native share sheet for text, anchored to the view that asked (iPad popovers).
+  private func share(_ text: String, from view: UIView) {
+    guard presentedViewController == nil, !text.isEmpty else { return }
+    let sheet = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+    sheet.popoverPresentationController?.sourceView = view
+    sheet.popoverPresentationController?.sourceRect = view.bounds
+    present(sheet, animated: true)
+  }
+
+  /// A link from a drawn table, routed like the text views' links.
+  private func openLink(_ url: URL) {
+    switch url.scheme?.lowercased() {
+    case "http", "https", "mailto": UIApplication.shared.open(url)
+    case nil, "file": openFile(url.absoluteString)
+    default: break
+    }
+  }
+
+  /// A local file link: the chat's folder resolves relative and absolute paths.
+  private func openFile(_ href: String) {
+    guard let directory, let target = FileLinkTarget.resolve(href, directory: directory) else { return }
+    onOpenFile?(target)
+  }
+
   private func preview(_ image: UIImage?, _ source: ImageSource, _ name: String) {
     let preview = ImagePreviewController(image: image, source: source, name: name, theme: theme)
     present(preview, animated: true)
@@ -919,9 +989,11 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
   private func didLayout() {
     #if DEBUG
       // `-transcriptOffset <points>` opens the chat scrolled that far from the top, for screenshots.
+      // Launch arguments arrive as strings, so read it with `double(forKey:)`.
       if !debugScrolled, model.loaded, !order.isEmpty,
-        let offset = UserDefaults.standard.object(forKey: "transcriptOffset") as? Double
+        UserDefaults.standard.object(forKey: "transcriptOffset") != nil
       {
+        let offset = UserDefaults.standard.double(forKey: "transcriptOffset")
         debugScrolled = true
         setFollowing(false)
         collectionView.contentOffset.y = min(endOffset, -collectionView.adjustedContentInset.top + offset)

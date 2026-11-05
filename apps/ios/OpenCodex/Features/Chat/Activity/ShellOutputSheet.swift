@@ -217,24 +217,22 @@ struct ShellOutputSheet: View {
     if model.shell?.running == true {
       HStack(spacing: 8) {
         Spacer(minLength: 0)
-        if confirm {
-          Text("Stop this command?")
-            .font(.footnote)
-            .foregroundStyle(palette.color("text-secondary"))
-          Button("Cancel") { confirm = false }
-            .buttonStyle(ActivityButtonStyle(kind: .ghost))
-            .disabled(model.stopping)
-          Button(model.stopping ? "Stopping…" : "Stop command") {
-            Task { if await model.stop() { dismiss() } }
-          }
-          .buttonStyle(ActivityButtonStyle(kind: .secondary))
+        Button(model.stopping ? "Stopping…" : "Stop command…", role: .destructive) { confirm = true }
+          .buttonStyle(.bordered)
+          .tint(palette.color("error"))
           .disabled(model.stopping)
-          .accessibilityIdentifier("shell.stop.confirm")
-        } else {
-          Button("Stop command…") { confirm = true }
-            .buttonStyle(ActivityButtonStyle(kind: .secondary))
-            .accessibilityIdentifier("shell.stop")
-        }
+          .accessibilityIdentifier("shell.stop")
+          // The desktop asks inline; the phone asks with the native confirmation.
+          .confirmationDialog("Stop this command?", isPresented: $confirm, titleVisibility: .visible) {
+            Button("Stop command", role: .destructive) {
+              Task { if await model.stop() { dismiss() } }
+            }
+            .accessibilityIdentifier("shell.stop.confirm")
+            Button("Cancel", role: .cancel) {}
+              .accessibilityIdentifier("shell.stop.cancel")
+          } message: {
+            Text("It stops this command only, not the chat.")
+          }
       }
     }
   }

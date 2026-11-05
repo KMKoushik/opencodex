@@ -10,7 +10,7 @@ nonisolated final class TranscriptTests: XCTestCase {
 
   @MainActor
   func testMarkdownAnswer() {
-    let app = XCUIApplication.opencodex(["-session", markdownChat])
+    let app = XCUIApplication.chat(markdownChat)
     app.launch()
     // The answer's last paragraph, where the chat opens.
     let answer = app.textViews.matching(
@@ -37,7 +37,7 @@ nonisolated final class TranscriptTests: XCTestCase {
       throw XCTSkip("Set OPENCODEX_LONG_CHAT to a long chat's session ID")
     }
     // The app logs its own frame pacing under the `hitches` category while flinging.
-    let app = XCUIApplication.opencodex(["-session", chat, "-transcriptHitches", "YES"])
+    let app = XCUIApplication.chat(chat, ["-transcriptHitches", "YES"])
     app.launch()
     let list = app.collectionViews["transcript"]
     XCTAssertTrue(list.waitForExistence(timeout: 15))

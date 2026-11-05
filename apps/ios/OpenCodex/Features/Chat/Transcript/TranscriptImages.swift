@@ -112,7 +112,8 @@ final class TranscriptImages {
   }
 }
 
-/// A tapped image, full screen: pinch to zoom, the name and Close, like the desktop's preview.
+/// A tapped image, full screen: pinch to zoom, the name, Share and Close, like the desktop's
+/// preview plus the system share sheet.
 final class ImagePreviewController: UIViewController, UIScrollViewDelegate {
   private let image: UIImage?
   private let source: ImageSource?
@@ -163,7 +164,14 @@ final class ImagePreviewController: UIViewController, UIScrollViewDelegate {
     button.accessibilityLabel = "Close image preview"
     button.accessibilityIdentifier = "transcript.preview.close"
     button.addAction(UIAction { [weak self] _ in self?.dismiss(animated: true) }, for: .primaryActionTriggered)
-    for subview in [title, button] as [UIView] {
+    var shareConfiguration = close
+    shareConfiguration.image = UIImage(
+      systemName: Symbol.share, withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .medium))
+    let share = UIButton(configuration: shareConfiguration)
+    share.accessibilityLabel = "Share image"
+    share.accessibilityIdentifier = "transcript.preview.share"
+    share.addAction(UIAction { [weak self, weak share] _ in self?.share(from: share) }, for: .primaryActionTriggered)
+    for subview in [title, share, button] as [UIView] {
       subview.translatesAutoresizingMaskIntoConstraints = false
       view.addSubview(subview)
     }
@@ -172,8 +180,12 @@ final class ImagePreviewController: UIViewController, UIScrollViewDelegate {
       button.trailingAnchor.constraint(equalTo: view.layoutMarginsGuide.trailingAnchor),
       button.widthAnchor.constraint(equalToConstant: 44),
       button.heightAnchor.constraint(equalToConstant: 44),
+      share.centerYAnchor.constraint(equalTo: button.centerYAnchor),
+      share.trailingAnchor.constraint(equalTo: button.leadingAnchor, constant: -8),
+      share.widthAnchor.constraint(equalToConstant: 44),
+      share.heightAnchor.constraint(equalToConstant: 44),
       title.leadingAnchor.constraint(equalTo: view.layoutMarginsGuide.leadingAnchor),
-      title.trailingAnchor.constraint(lessThanOrEqualTo: button.leadingAnchor, constant: -12),
+      title.trailingAnchor.constraint(lessThanOrEqualTo: share.leadingAnchor, constant: -12),
       title.centerYAnchor.constraint(equalTo: button.centerYAnchor),
     ])
     let doubleTap = UITapGestureRecognizer(target: self, action: #selector(toggleZoom))
@@ -195,6 +207,15 @@ final class ImagePreviewController: UIViewController, UIScrollViewDelegate {
   }
 
   func viewForZooming(in scrollView: UIScrollView) -> UIView? { imageView }
+
+  /// The native share sheet with the shown image (full resolution once it has loaded).
+  private func share(from anchor: UIView?) {
+    guard let image = imageView.image, presentedViewController == nil else { return }
+    let sheet = UIActivityViewController(activityItems: [image], applicationActivities: nil)
+    sheet.popoverPresentationController?.sourceView = anchor ?? view
+    sheet.popoverPresentationController?.sourceRect = anchor?.bounds ?? .zero
+    present(sheet, animated: true)
+  }
 
   @objc private func toggleZoom(_ gesture: UITapGestureRecognizer) {
     if scroll.zoomScale > 1 {

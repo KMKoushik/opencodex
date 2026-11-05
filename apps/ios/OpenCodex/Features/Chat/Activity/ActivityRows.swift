@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 /// SF Symbols standing in for the desktop's Hugeicons in the activity views.
 enum ActivitySymbol {
@@ -10,70 +9,9 @@ enum ActivitySymbol {
   static let open = "chevron.right"
 }
 
-/// The desktop's `.session-activity` spinner: a 10pt ring with a turning half arc. Core
-/// Animation turns it on the render server, so many rows cost the main thread nothing.
-struct SessionActivity: UIViewRepresentable {
-  @Environment(\.palette) private var palette
-
-  func makeUIView(context: Context) -> SpinnerView { SpinnerView() }
-
-  func updateUIView(_ view: SpinnerView, context: Context) {
-    view.track.strokeColor = palette.ui("border-heavy").cgColor
-    view.arc.strokeColor = palette.ui("text-secondary").cgColor
-  }
-
-  func sizeThatFits(_ proposal: ProposedViewSize, uiView: SpinnerView, context: Context) -> CGSize? {
-    CGSize(width: 10, height: 10)
-  }
-
-  final class SpinnerView: UIView {
-    let track = CAShapeLayer()
-    let arc = CAShapeLayer()
-
-    override init(frame: CGRect) {
-      super.init(frame: frame)
-      isUserInteractionEnabled = false
-      for shape in [track, arc] {
-        shape.fillColor = nil
-        shape.lineWidth = 1.5
-        layer.addSublayer(shape)
-      }
-      // The top and right borders of a CSS circle: from 10:30 round to 4:30.
-      arc.strokeStart = 0
-      arc.strokeEnd = 0.5
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    override func layoutSubviews() {
-      super.layoutSubviews()
-      let rect = bounds.insetBy(dx: 0.75, dy: 0.75)
-      track.path = UIBezierPath(ovalIn: rect).cgPath
-      arc.frame = bounds
-      arc.path = UIBezierPath(
-        arcCenter: CGPoint(x: bounds.midX, y: bounds.midY), radius: rect.width / 2,
-        startAngle: -.pi * 3 / 4, endAngle: .pi * 5 / 4, clockwise: true
-      ).cgPath
-      startSpinning()
-    }
-
-    override func didMoveToWindow() {
-      super.didMoveToWindow()
-      startSpinning()
-    }
-
-    private func startSpinning() {
-      guard window != nil, arc.animation(forKey: "spin") == nil else { return }
-      guard !UIAccessibility.isReduceMotionEnabled else { return }
-      let spin = CABasicAnimation(keyPath: "transform.rotation.z")
-      spin.fromValue = 0
-      spin.toValue = 2 * Double.pi
-      spin.duration = 0.9
-      spin.repeatCount = .infinity
-      spin.isRemovedOnCompletion = false
-      arc.add(spin, forKey: "spin")
-    }
-  }
+/// The desktop's `.session-activity` ring, as the native activity indicator (`RingSpinner`).
+struct SessionActivity: View {
+  var body: some View { RingSpinner(size: 12) }
 }
 
 /// Foreground work holds up the reply; background work reports back when it finishes.
@@ -128,7 +66,6 @@ struct ShellRow: View {
     Button(action: open) {
       HStack(spacing: 8) {
         SessionActivity()
-          .frame(width: 10, height: 10)
         Text(shell.command)
           .font(.footnote.monospaced())
           .foregroundStyle(palette.color("text-secondary"))
@@ -196,7 +133,7 @@ struct SubagentRow: View {
           switch attention {
           case .permission: AttentionDot(kind: .approval)
           case .question: AttentionDot(kind: .question)
-          default: SessionActivity().frame(width: 10, height: 10)
+          default: SessionActivity()
           }
         }
         .frame(width: 12, height: 12)

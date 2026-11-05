@@ -42,12 +42,17 @@ enum Symbol {
   /// `Copy01Icon` / `Tick02Icon`.
   static let copy = "square.on.square"
   static let copied = "checkmark"
+  static let share = "square.and.arrow.up"
 }
 
 // MARK: Prose
 
-/// A UITextView for read-only selectable text that opens web links in Safari.
+/// A UITextView for read-only selectable text that opens web links in Safari and workspace
+/// file links through `onOpenFile`.
 final class ProseTextView: UITextView, UITextViewDelegate {
+  /// Opens a local file link's `href`; nil leaves file links inert.
+  var onOpenFile: ((String) -> Void)?
+
   init() {
     // TextKit 1 lays out and measures static text faster and more predictably in cells.
     let storage = NSTextStorage()
@@ -83,8 +88,15 @@ final class ProseTextView: UITextView, UITextViewDelegate {
   ) -> UIAction? {
     guard case .link(let url) = textItem.content else { return defaultAction }
     let scheme = url.scheme?.lowercased()
-    guard scheme == "http" || scheme == "https" || scheme == "mailto" else { return nil }
-    return UIAction { _ in UIApplication.shared.open(url) }
+    if scheme == "http" || scheme == "https" || scheme == "mailto" {
+      return UIAction { _ in UIApplication.shared.open(url) }
+    }
+    // Workspace paths and `file:` URLs open the file, like the desktop's file links.
+    if scheme == nil || scheme == "file", let open = onOpenFile {
+      let href = url.absoluteString
+      return UIAction { _ in open(href) }
+    }
+    return nil
   }
 }
 
@@ -152,6 +164,17 @@ final class TextBlockCell: TranscriptCell {
   }
 
   required init?(coder: NSCoder) { fatalError() }
+
+  /// Opens a workspace file link.
+  var onOpenFile: ((String) -> Void)? {
+    get { textView.onOpenFile }
+    set { textView.onOpenFile = newValue }
+  }
+
+  override func prepareForReuse() {
+    super.prepareForReuse()
+    onOpenFile = nil
+  }
 
   func configure(_ text: NSAttributedString, quote: Bool, panel: TranscriptItem.Panel?, theme: TranscriptTheme) {
     self.quote = quote
@@ -228,7 +251,10 @@ final class TextBlockCell: TranscriptCell {
 
 /// A fenced code block: `.markdown pre` on `surface-under` with a hairline border, highlighted
 /// with the theme's syntax tokens. Copy sits in the corner (the desktop copies by selection).
-final class CodeBlockCell: TranscriptCell {
+final class CodeBlockCell: TranscriptCell, UIContextMenuInteractionDelegate {
+  /// Shares the block's code from a view, the share sheet's anchor.
+  var onShare: ((String, UIView) -> Void)?
+
   nonisolated private static let maxLines = 400
   nonisolated private static let maxLineLength = 400
 
@@ -273,6 +299,29 @@ final class CodeBlockCell: TranscriptCell {
     box.addSubview(scroll)
     scroll.addSubview(code)
     box.addSubview(copy)
+    box.addInteraction(UIContextMenuInteraction(delegate: self))
+  }
+
+  override func prepareForReuse() {
+    super.prepareForReuse()
+    onShare = nil
+  }
+
+  func contextMenuInteraction(
+    _ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint
+  ) -> UIContextMenuConfiguration? {
+    let source = source
+    return UIContextMenuConfiguration(actionProvider: { [weak self] _ in
+      UIMenu(children: [
+        UIAction(title: "Copy code", image: UIImage(systemName: "doc.on.doc")) { _ in
+          UIPasteboard.general.string = source
+        },
+        UIAction(title: "Share", image: UIImage(systemName: Symbol.share)) { _ in
+          guard let self else { return }
+          self.onShare?(source, self.box)
+        },
+      ])
+    })
   }
 
   required init?(coder: NSCoder) { fatalError() }
@@ -375,9 +424,15 @@ final class CodeBlockCell: TranscriptCell {
 /// Draws a Markdown table like `.markdown table`: full width, a heavier rule under the header
 /// and a hairline under each row, no outer box. No subviews, so even wide tables stay cheap.
 final class TableGridView: UIView {
+  /// Opens a link tapped in a cell.
+  var onOpenLink: ((URL) -> Void)?
+
   private var content: TableContent?
   private var widths: [CGFloat] = []
   private var heights: [CGFloat] = []
+  /// True when some cell holds a link: taps and accessibility then look for them.
+  private var hasLinks = false
+  private var linkElements: [UIAccessibilityElement]?
   /// `padding: 10px 12px`.
   private let pad = UIEdgeInsets(top: 11, left: 14, bottom: 11, right: 14)
   private(set) var size = CGSize.zero
@@ -388,18 +443,139 @@ final class TableGridView: UIView {
     backgroundColor = .clear
     contentMode = .redraw
     isOpaque = false
+    addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
   }
 
   required init?(coder: NSCoder) { fatalError() }
 
   func set(_ content: TableContent) {
     self.content = content
-    isAccessibilityElement = true
-    accessibilityIdentifier = "transcript.table"
-    accessibilityLabel = ([content.header] + content.rows).map { $0.map(\.string).joined(separator: ", ") }
+    let label = ([content.header] + content.rows).map { $0.map(\.string).joined(separator: ", ") }
       .joined(separator: "; ")
+    hasLinks = ([content.header] + content.rows).contains { row in
+      row.contains { cell in
+        var found = false
+        cell.enumerateAttribute(.tableLink, in: NSRange(location: 0, length: cell.length)) { value, _, stop in
+          if value != nil {
+            found = true
+            stop.pointee = true
+          }
+        }
+        return found
+      }
+    }
+    // With links the table is a container: its summary, then each link, so VoiceOver (and UI
+    // tests) can reach and open them.
+    isAccessibilityElement = !hasLinks
+    accessibilityIdentifier = hasLinks ? nil : "transcript.table"
+    accessibilityLabel = label
+    linkElements = nil
     laidOutFor = -1
     setNeedsDisplay()
+  }
+
+  // MARK: Links
+
+  /// Where a cell's text is drawn, inside its padding.
+  private func textRect(row: Int, column: Int) -> CGRect {
+    let x = widths.prefix(column).reduce(0, +)
+    let y = heights.prefix(row).reduce(0, +)
+    return CGRect(
+      x: x + pad.left, y: y + pad.top, width: widths[column] - pad.left - pad.right,
+      height: heights[row] - pad.top - pad.bottom)
+  }
+
+  private func cellText(row: Int, column: Int) -> NSAttributedString? {
+    guard let content else { return nil }
+    let all = [content.header] + content.rows
+    guard row < all.count, column < all[row].count else { return nil }
+    let cell = NSMutableAttributedString(attributedString: all[row][column])
+    let alignment = column < content.alignments.count ? content.alignments[column] : .natural
+    if alignment != .natural {
+      let paragraph = NSMutableParagraphStyle()
+      paragraph.alignment = alignment
+      cell.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: cell.length))
+    }
+    return cell
+  }
+
+  /// TextKit for one cell, laid out as `draw` lays it out. The storage owns the layout
+  /// manager (not the reverse), so callers keep it alive while they measure.
+  private static func layout(_ text: NSAttributedString, width: CGFloat)
+    -> (NSLayoutManager, NSTextContainer, NSTextStorage)
+  {
+    let storage = NSTextStorage(attributedString: text)
+    let manager = NSLayoutManager()
+    let container = NSTextContainer(size: CGSize(width: width, height: .greatestFiniteMagnitude))
+    container.lineFragmentPadding = 0
+    manager.addTextContainer(container)
+    storage.addLayoutManager(manager)
+    manager.ensureLayout(for: container)
+    return (manager, container, storage)
+  }
+
+  private func link(at point: CGPoint) -> URL? {
+    guard hasLinks else { return nil }
+    for row in heights.indices {
+      for column in widths.indices {
+        let rect = textRect(row: row, column: column)
+        guard rect.insetBy(dx: -pad.left, dy: -pad.top).contains(point),
+          let text = cellText(row: row, column: column), text.length > 0
+        else { continue }
+        let (manager, container, storage) = Self.layout(text, width: rect.width)
+        defer { withExtendedLifetime(storage) {} }
+        let local = CGPoint(x: point.x - rect.minX, y: point.y - rect.minY)
+        let glyph = manager.glyphIndex(for: local, in: container)
+        let bounds = manager.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: container)
+        guard bounds.insetBy(dx: -8, dy: -8).contains(local) else { return nil }
+        let index = manager.characterIndexForGlyph(at: glyph)
+        return text.attribute(.tableLink, at: index, effectiveRange: nil) as? URL
+      }
+    }
+    return nil
+  }
+
+  @objc private func tapped(_ gesture: UITapGestureRecognizer) {
+    guard let url = link(at: gesture.location(in: self)) else { return }
+    onOpenLink?(url)
+  }
+
+  override var accessibilityElements: [Any]? {
+    get {
+      guard hasLinks, let content else { return nil }
+      if let linkElements { return linkElements }
+      let summary = UIAccessibilityElement(accessibilityContainer: self)
+      summary.accessibilityLabel = accessibilityLabel
+      summary.accessibilityIdentifier = "transcript.table"
+      summary.accessibilityFrameInContainerSpace = bounds
+      var elements = [summary]
+      let all = [content.header] + content.rows
+      for row in all.indices where row < heights.count {
+        for column in all[row].indices where column < widths.count {
+          guard let text = cellText(row: row, column: column) else { continue }
+          let rect = textRect(row: row, column: column)
+          var layout: (NSLayoutManager, NSTextContainer, NSTextStorage)?
+          text.enumerateAttribute(.tableLink, in: NSRange(location: 0, length: text.length)) { value, range, _ in
+            guard let url = value as? URL else { return }
+            let built = layout ?? Self.layout(text, width: rect.width)
+            layout = built
+            let (manager, container, _) = built
+            let glyphs = manager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            let bounds = manager.boundingRect(forGlyphRange: glyphs, in: container)
+            let element = TableLinkElement(accessibilityContainer: self)
+            element.accessibilityLabel = (text.string as NSString).substring(with: range)
+              .replacingOccurrences(of: "\u{FFFC}", with: "").trimmingCharacters(in: .whitespaces)
+            element.accessibilityTraits = .link
+            element.accessibilityFrameInContainerSpace = bounds.offsetBy(dx: rect.minX, dy: rect.minY)
+            element.activate = { [weak self] in self?.onOpenLink?(url) }
+            elements.append(element)
+          }
+        }
+      }
+      linkElements = elements
+      return elements
+    }
+    set {}
   }
 
   /// Column widths fit their content up to a cap; rows wrap within them.
@@ -407,6 +583,7 @@ final class TableGridView: UIView {
   func layout(for available: CGFloat) -> CGSize {
     guard let content, laidOutFor != available else { return size }
     laidOutFor = available
+    linkElements = nil
     let columns = max(content.header.count, content.rows.map(\.count).max() ?? 0)
     let all = [content.header] + content.rows
     let horizontal = pad.left + pad.right
@@ -500,7 +677,22 @@ final class TableGridView: UIView {
   }
 }
 
+/// A table link for VoiceOver: activating it opens the link.
+private final class TableLinkElement: UIAccessibilityElement {
+  var activate: (() -> Void)?
+  override func accessibilityActivate() -> Bool {
+    activate?()
+    return activate != nil
+  }
+}
+
 final class TableCell: TranscriptCell {
+  /// Opens a link tapped in the table.
+  var onOpenLink: ((URL) -> Void)? {
+    get { grid.onOpenLink }
+    set { grid.onOpenLink = newValue }
+  }
+
   private let scroll = UIScrollView()
   private let grid = TableGridView()
 
@@ -515,6 +707,11 @@ final class TableCell: TranscriptCell {
   }
 
   required init?(coder: NSCoder) { fatalError() }
+
+  override func prepareForReuse() {
+    super.prepareForReuse()
+    onOpenLink = nil
+  }
 
   func configure(_ content: TableContent) {
     grid.set(content)
@@ -744,6 +941,8 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
   var onOpen: ((UIImage?, ImageSource, String) -> Void)?
   /// Opens the annotations list from the chip.
   var onAnnotations: ((UIView) -> Void)?
+  /// Shares the prompt's text from the bubble.
+  var onShare: ((String, UIView) -> Void)?
 
   private let chip = UIButton(type: .custom)
   private let bubble = UIView()
@@ -790,6 +989,7 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
     super.prepareForReuse()
     onOpen = nil
     onAnnotations = nil
+    onShare = nil
   }
 
   func configure(_ prompt: SentPrompt, typography: Typography, theme: TranscriptTheme) {
@@ -935,13 +1135,27 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
     _ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint
   ) -> UIContextMenuConfiguration? {
     let text = prompt?.text ?? ""
-    return UIContextMenuConfiguration(actionProvider: { _ in
+    guard !text.isEmpty else { return nil }
+    return UIContextMenuConfiguration(actionProvider: { [weak self] _ in
       UIMenu(children: [
         UIAction(title: "Copy", image: UIImage(systemName: "doc.on.doc")) { _ in
           UIPasteboard.general.string = text
-        }
+        },
+        UIAction(title: "Share", image: UIImage(systemName: Symbol.share)) { _ in
+          guard let self else { return }
+          self.onShare?(text, self.bubble)
+        },
       ])
     })
+  }
+
+  /// The menu lifts the bubble alone, not the whole row.
+  func contextMenuInteraction(
+    _ interaction: UIContextMenuInteraction, previewForHighlightingMenuWithConfiguration configuration: UIContextMenuConfiguration
+  ) -> UITargetedPreview? {
+    let parameters = UIPreviewParameters()
+    parameters.visiblePath = UIBezierPath(roundedRect: bubble.bounds, cornerRadius: bubble.layer.cornerRadius)
+    return UITargetedPreview(view: bubble, parameters: parameters)
   }
 }
 
@@ -969,7 +1183,8 @@ final class AttachmentTile: UIControl {
       accessibilityLabel = "Preview \(file.name.isEmpty ? "Attached image" : file.name)"
       accessibilityTraits = [.image, .button]
       accessibilityIdentifier = "transcript.attachment.image"
-      addAction(UIAction { [weak self] _ in self?.open() }, for: .primaryActionTriggered)
+      // A plain UIControl never sends `.primaryActionTriggered`; only UIButton and friends do.
+      addAction(UIAction { [weak self] _ in self?.open() }, for: .touchUpInside)
       if let source = file.source {
         TranscriptImages.shared.load(source, maxPixels: 330) { [weak self] state in
           if case .loaded(let image) = state { self?.imageView.image = image }
@@ -1051,6 +1266,8 @@ final class DisclosureCell: TranscriptCell {
   private let detail = UILabel()
   private let trailing = UILabel()
   private let statusIcon = UIImageView()
+  /// The native activity indicator for a running tool, in the status icon's slot.
+  private let spinner = UIActivityIndicatorView(style: .medium)
   private let body = UIView()
   private let bodyText = ProseTextView()
   private let footer = UILabel()
@@ -1084,6 +1301,8 @@ final class DisclosureCell: TranscriptCell {
     var trailingFont: UIFont?
     var statusIcon: String?
     var statusTint: UIColor?
+    /// A running tool: the native spinner where the finished check goes.
+    var spinning = false
     var height: CGFloat = 44
     var body: NSAttributedString?
     var footer: String?
@@ -1103,7 +1322,10 @@ final class DisclosureCell: TranscriptCell {
     body.layer.cornerCurve = .continuous
     body.clipsToBounds = true
     below.numberOfLines = 0
-    for view in [chevron, icon, title, detail, trailing, statusIcon] {
+    spinner.hidesWhenStopped = true
+    // The medium indicator is 20pt; the status slot is 16pt.
+    spinner.transform = CGAffineTransform(scaleX: 0.7, y: 0.7)
+    for view in [chevron, icon, title, detail, trailing, statusIcon, spinner] {
       view.isUserInteractionEnabled = false
       header.addSubview(view)
     }
@@ -1153,6 +1375,10 @@ final class DisclosureCell: TranscriptCell {
     trailing.text = model.trailing
     trailing.isHidden = (model.trailing ?? "").isEmpty
     statusIcon.isHidden = model.statusIcon == nil
+    spinner.color = theme.textSecondary
+    if model.spinning != spinner.isAnimating {
+      if model.spinning { spinner.startAnimating() } else { spinner.stopAnimating() }
+    }
     if let name = model.statusIcon {
       statusIcon.image = Symbol.image(name, 13)
       statusIcon.tintColor = model.statusTint ?? theme.textTertiary
@@ -1247,8 +1473,9 @@ final class DisclosureCell: TranscriptCell {
     }
     // `.activity-item .disclosure-trigger { padding-right: 8px }`.
     var right = column.width - (indent > 0 ? 9 : 2)
-    if model.statusIcon != nil {
+    if model.statusIcon != nil || model.spinning {
       statusIcon.frame = CGRect(x: right - 16, y: mid - 8, width: 16, height: 16)
+      spinner.center = CGPoint(x: right - 8, y: mid)
       right -= 16 + gap
     }
     if !trailing.isHidden && model.detailFills {
@@ -1317,9 +1544,12 @@ final class NoteCell: TranscriptCell {
   enum Style { case note, failure, copy, history }
 
   var onCopy: (() -> Void)?
+  /// Shares the answer from the share button, the native share sheet's anchor.
+  var onShare: ((UIView) -> Void)?
 
   private let label = UILabel()
   private let button = UIButton(type: .system)
+  private let share = UIButton(type: .system)
   private let status = UILabel()
   private var style = Style.note
   private var reset: Task<Void, Never>?
@@ -1334,8 +1564,20 @@ final class NoteCell: TranscriptCell {
     button.accessibilityLabel = "Copy response"
     button.accessibilityIdentifier = "transcript.copy"
     button.addAction(UIAction { [weak self] _ in self?.copied() }, for: .primaryActionTriggered)
+    var shareConfiguration = UIButton.Configuration.plain()
+    shareConfiguration.image = Symbol.image(Symbol.share, 15)
+    shareConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+    share.configuration = shareConfiguration
+    share.accessibilityLabel = "Share response"
+    share.accessibilityIdentifier = "transcript.share"
+    share.addAction(
+      UIAction { [weak self] _ in
+        guard let self else { return }
+        self.onShare?(self.share)
+      }, for: .primaryActionTriggered)
     contentView.addSubview(label)
     contentView.addSubview(button)
+    contentView.addSubview(share)
     contentView.addSubview(status)
   }
 
@@ -1344,6 +1586,7 @@ final class NoteCell: TranscriptCell {
   override func prepareForReuse() {
     super.prepareForReuse()
     onCopy = nil
+    onShare = nil
     reset?.cancel()
     showCopied(false)
   }
@@ -1352,8 +1595,11 @@ final class NoteCell: TranscriptCell {
     self.style = style
     label.isHidden = style == .copy
     button.isHidden = style != .copy
+    share.isHidden = style != .copy
     status.isHidden = style != .copy || status.text == nil
     label.textAlignment = .natural
+    // Reused cells change style, so each style sets its own identifier.
+    label.accessibilityIdentifier = nil
     switch style {
     case .note:
       label.attributedText = NSAttributedString(
@@ -1372,6 +1618,7 @@ final class NoteCell: TranscriptCell {
       label.accessibilityIdentifier = "transcript.history"
     case .copy:
       button.configuration?.baseForegroundColor = theme.textTertiary
+      share.configuration?.baseForegroundColor = theme.textTertiary
       status.font = typography.small
       status.textColor = theme.textTertiary
     }
@@ -1393,6 +1640,7 @@ final class NoteCell: TranscriptCell {
   private func showCopied(_ copied: Bool) {
     button.configuration?.image = Symbol.image(copied ? Symbol.copied : Symbol.copy, 15)
     button.isEnabled = !copied
+    button.accessibilityLabel = copied ? "Copied" : "Copy response"
     status.text = copied ? "Copied" : nil
     status.isHidden = !copied
     setNeedsLayout()
@@ -1414,17 +1662,22 @@ final class NoteCell: TranscriptCell {
     label.frame = CGRect(x: column.x, y: 0, width: column.width, height: bounds.height)
     // The ghost button's icon lines up with the text column.
     button.frame = CGRect(x: column.x - 8, y: (bounds.height - 32) / 2, width: 32, height: 32)
-    status.frame = CGRect(x: button.frame.maxX + 2, y: 0, width: 120, height: bounds.height)
+    share.frame = button.frame.offsetBy(dx: 34, dy: 0)
+    status.frame = CGRect(x: share.frame.maxX + 2, y: 0, width: 120, height: bounds.height)
   }
 }
 
 /// Swaps a button's image to a checkmark briefly after copying.
 func flashCopied(_ button: UIButton) {
   let original = button.configuration?.image
+  let label = button.accessibilityLabel
   button.configuration?.image = Symbol.image(Symbol.copied, 14)
+  button.accessibilityLabel = "Copied"
   UIImpactFeedbackGenerator(style: .light).impactOccurred()
+  UIAccessibility.post(notification: .announcement, argument: "Copied")
   Task { @MainActor [weak button] in
     try? await Task.sleep(for: .seconds(2))
     button?.configuration?.image = original
+    button?.accessibilityLabel = label
   }
 }

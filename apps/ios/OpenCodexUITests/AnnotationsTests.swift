@@ -11,7 +11,7 @@ nonisolated final class AnnotationsTests: XCTestCase {
 
   @MainActor
   func testAnnotationsChipOpensItsList() throws {
-    let app = XCUIApplication.opencodex(["-session", chat])
+    let app = XCUIApplication.chat(chat)
     app.launch()
     let chip = app.buttons["transcript.annotations"]
     XCTAssertTrue(chip.waitForExistence(timeout: 15))

@@ -27,7 +27,6 @@ struct SubagentReader: View {
         if chat.running {
           ToolbarItem(placement: .topBarTrailing) {
             SessionActivity()
-              .frame(width: 10, height: 10)
               .accessibilityLabel("Responding")
           }
         }
