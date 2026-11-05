@@ -99,15 +99,17 @@ final class EventHub {
   }
 
   private func resume() {
-    if client != nil { restart() }
+    // Events were missed while suspended, so screens must refetch once the stream is back.
+    if client != nil { restart(refetch: true) }
   }
 
-  private func restart() {
+  /// `refetch` runs the reconnect handlers on the first `ready`, not only on later ones.
+  private func restart(refetch: Bool = false) {
     task?.cancel()
     guard let client else { return }
     task = Task { [weak self] in
       var delay: Duration = .milliseconds(500)
-      var first = true
+      var first = !refetch
       while !Task.isCancelled {
         do {
           let bytes = try await client.events()

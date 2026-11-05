@@ -86,6 +86,15 @@ struct ChatScreen: View {
       .task(id: ObjectIdentifier(model)) { await model.run() }
       .task(id: model.session?.time.idle) { await model.markViewed() }
       .task { await loadProjects() }
+      // The chat on screen raises no notifications of its own.
+      .onChange(of: model.sessionID, initial: true) { _, id in
+        NotificationCenterModel.shared.visibleSessionID = id
+      }
+      .onDisappear {
+        if NotificationCenterModel.shared.visibleSessionID == model.sessionID {
+          NotificationCenterModel.shared.visibleSessionID = nil
+        }
+      }
   }
 
   @ViewBuilder private var content: some View {

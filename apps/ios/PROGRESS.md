@@ -39,6 +39,19 @@ ENABLE_TESTABILITY=YES`). Release-only crashes have happened (see Known issues).
 - **Tests:** 22 unit tests and 13 UI tests, including two end-to-end flows (new chat → send →
   approve edit → file exists, and new chat in a worktree).
 
+## Owner feedback (checklist; newest last)
+
+- [x] App crashed on launch (Release-only task-group crash) — fixed, build 131.
+- [x] Subagent icon should be a robot — the desktop's Hugeicons BotIcon.
+- [x] Composer too clumsy — OpenCode-style one-line Liquid Glass capsule; model row on focus.
+- [x] Model switcher broken after the redesign — the picker opens from "Model · Thinking";
+      thinking level in the picker's bottom bar; covered by `ModelSwitchTests`.
+- [x] Use native UI, e.g. the iOS spinner — `RingSpinner` is now `ProgressView`; the title
+      shows the spinner while running.
+- [ ] "…" should open a native drawer like OpenCode's: title header, icon actions (Pin,
+      Unread, Mute, Compact, Fork, Export), Model / Context / Cost rows, notify toggle, Delete.
+- [ ] Test every interaction (QA wave) and prefer native components everywhere.
+
 ## In progress
 
 - [ ] Notifications: in-app notifications, APNs push from the owner's gateway, and a Live

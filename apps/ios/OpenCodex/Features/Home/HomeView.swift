@@ -73,6 +73,11 @@ struct HomeView: View {
         // A fork opens at once, as the desktop's fork dialog does.
         actions.onOpen = { id in path.append(ChatRoute.session(id)) }
         model.appear(events: connection.events)
+        // A tapped notification or Live Activity opens its thread over whatever is showing.
+        NotificationCenterModel.shared.onOpenSession = { id in
+          sheet = nil
+          path = NavigationPath([ChatRoute.session(id)])
+        }
       }
       .onDisappear { model.disappear() }
       .task {

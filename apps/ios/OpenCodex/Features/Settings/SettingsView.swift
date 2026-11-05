@@ -118,6 +118,7 @@ struct GeneralSettings: View {
           "Live updates",
           description: connected ? (connection.events.live ? "Connected" : "Reconnecting…") : "Unavailable")
       }
+      NotificationSettingsGroup()
       SettingsGroup("Computer") {
         SettingsRow("Address", description: host)
         SettingsRow(

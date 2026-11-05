@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct OpenCodexApp: App {
+  @UIApplicationDelegateAdaptor(NotificationAppDelegate.self) private var notificationDelegate
   @State private var connection = ConnectionStore()
   @State private var themes = ThemeStore()
 
@@ -25,6 +26,7 @@ struct RootView: View {
     case .paired:
       if let client = connection.client {
         HomeView(client: client)
+          .modifier(NotificationsHost(client: client, events: connection.events))
           // A different gateway is a different app state; drop every screen's snapshots.
           .id(client.base)
       }
