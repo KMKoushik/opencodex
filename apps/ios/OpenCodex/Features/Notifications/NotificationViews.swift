@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Connects notifications and Live Activities to the paired gateway, and asks once, after
+/// Connects notifications to the paired gateway, and asks once, after
 /// pairing, whether to turn notifications on. Attach to the paired root view.
 struct NotificationsHost: ViewModifier {
   let client: GatewayClient
@@ -11,17 +11,15 @@ struct NotificationsHost: ViewModifier {
     content
       .task(id: client.base) {
         await model.attach(client: client, events: events)
-        ReplyActivities.shared.attach(client: client, events: events)
         while !Task.isCancelled { try? await Task.sleep(for: .seconds(3600)) }
         model.detach()
-        ReplyActivities.shared.detach()
       }
       .sheet(
         isPresented: $model.promptVisible, onDismiss: { model.dismissPrompt() }
       ) {
         NotificationPrompt(model: model)
       }
-      // A Live Activity's link: `opencodex://session/<id>`.
+      // A link to a thread: `opencodex://session/<id>`.
       .onOpenURL { url in
         guard url.scheme == "opencodex", url.host() == "session" else { return }
         let id = url.lastPathComponent

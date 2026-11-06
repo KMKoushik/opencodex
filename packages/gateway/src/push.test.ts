@@ -251,24 +251,6 @@ describe('push notifications', () => {
         },
       ],
     ]);
-    // A Live Activity the phone started ends by push when its reply ends.
-    await send('POST', '/api/remote/live-activity', auth, {
-      sessionID: 'root',
-      token: 'cd'.repeat(32),
-      environment: 'development',
-    });
-    await push.handle(
-      { type: 'session.execution.interrupted', data: { sessionID: 'root' } },
-      signal,
-    );
-    expect(sent[3]).toMatchObject({
-      token: 'cd'.repeat(32),
-      headers: {
-        'apns-topic': 'dev.example.opencodex.push-type.liveactivity',
-        'apns-push-type': 'liveactivity',
-      },
-      payload: { aps: { event: 'end', 'content-state': { state: 'stopped' } } },
-    });
     const headers = sent[0]!.headers;
     expect(headers).toMatchObject({
       'apns-topic': 'dev.example.opencodex',

@@ -262,19 +262,4 @@ nonisolated extension GatewayClient {
   }
 
   func unregisterPush() async throws -> OK { try await delete("/remote/push-token") }
-
-  struct LiveActivityToken: Encodable {
-    var sessionID: String
-    var token: String
-    var environment: String
-  }
-
-  /// `POST /api/remote/live-activity`: lets the gateway end a reply's Live Activity by push.
-  func registerLiveActivity(sessionID: String, token: String, environment: String) async throws
-    -> OK
-  {
-    try await post(
-      "/remote/live-activity",
-      LiveActivityToken(sessionID: sessionID, token: token, environment: environment))
-  }
 }

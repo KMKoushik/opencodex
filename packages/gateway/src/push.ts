@@ -57,15 +57,9 @@ const registrationSchema = z.object({
   environment: z.enum(['development', 'production']),
   kinds: kindsSchema.default({ reply: true, question: true, permission: true }),
 });
-const activitySchema = z.object({
-  sessionID: z.string().min(1).max(200),
-  token: tokenSchema,
-  environment: z.enum(['development', 'production']),
-});
 
 // Apple accepts a provider token for an hour and throttles refreshes under 20 minutes.
 const JWT_AGE = 45 * 60_000;
-const MAX_ACTIVITIES = 32;
 /**
  * Like Slack: a push waits this long, and goes out only if the thread wasn't opened, the
  * request wasn't answered, and the computer running OpenCodex had no input meanwhile.
@@ -218,11 +212,6 @@ export class Push {
   private config?: Config;
   private jwt?: { value: string; created: number };
   private watching = false;
-  /** Live Activity push tokens for running root chats the phone started, by session. */
-  private activities = new Map<
-    string,
-    { device: string; token: string; environment: Environment }
-  >();
 
   constructor(
     private readonly remote: RemoteAccess,
@@ -269,7 +258,7 @@ export class Push {
   }
 
   private wanted() {
-    return this.remote.pushDevices().length > 0 || this.activities.size > 0;
+    return this.remote.pushDevices().length > 0;
   }
 
   /** OpenCode's live events, like a desktop window's; reconnects while devices are registered. */
@@ -305,11 +294,6 @@ export class Push {
     let sessionID: string | undefined;
     // What opening the thread or answering the request records, which cancels the push.
     let key: string;
-    const ended =
-      event.type === 'session.execution.succeeded' ||
-      event.type === 'session.execution.failed' ||
-      event.type === 'session.execution.interrupted';
-    if (ended && data.sessionID) await this.endActivity(data.sessionID, event.type);
     if (event.type === 'session.execution.succeeded' || event.type === 'session.execution.failed') {
       kind = 'reply';
       sessionID = data.sessionID;
@@ -434,7 +418,7 @@ export class Push {
   private async deliver(
     token: string,
     environment: Environment,
-    message: { headers: Record<string, string>; payload: unknown; topic?: string },
+    message: { headers: Record<string, string>; payload: unknown },
   ) {
     const config = this.config;
     if (!config) return;
@@ -446,7 +430,7 @@ export class Push {
         token,
         headers: {
           authorization: `bearer ${this.jwt.value}`,
-          'apns-topic': message.topic ?? config.topic,
+          'apns-topic': config.topic,
           ...message.headers,
         },
         payload: message.payload,
@@ -455,57 +439,16 @@ export class Push {
         this.jwt = undefined;
         continue;
       }
-      if (response.status === 410 || response.reason === 'BadDeviceToken') {
+      if (response.status === 410 || response.reason === 'BadDeviceToken')
         await this.remote.dropPushToken(token);
-        for (const [id, activity] of this.activities)
-          if (activity.token === token) this.activities.delete(id);
-      } else if (response.status !== 200)
+      else if (response.status !== 200)
         console.warn(`APNs refused a push: ${response.status} ${response.reason ?? ''}`.trim());
       return;
     }
   }
-
-  registerActivity(device: string, input: z.infer<typeof activitySchema>) {
-    this.activities.delete(input.sessionID);
-    while (this.activities.size >= MAX_ACTIVITIES)
-      this.activities.delete(this.activities.keys().next().value!);
-    this.activities.set(input.sessionID, {
-      device,
-      token: input.token,
-      environment: input.environment,
-    });
-  }
-
-  /** Ends the phone's Live Activity for a chat whose reply ended while the app was suspended. */
-  private async endActivity(sessionID: string, type: string) {
-    const activity = this.activities.get(sessionID);
-    if (!activity) return;
-    this.activities.delete(sessionID);
-    if (!this.config || !this.remote.paired(activity.device)) return;
-    const now = Math.floor(Date.now() / 1000);
-    const state =
-      type === 'session.execution.succeeded'
-        ? 'finished'
-        : type === 'session.execution.failed'
-          ? 'failed'
-          : 'stopped';
-    await this.deliver(activity.token, activity.environment, {
-      topic: `${this.config.topic}.push-type.liveactivity`,
-      headers: { 'apns-push-type': 'liveactivity', 'apns-priority': '10' },
-      payload: {
-        aps: {
-          timestamp: now,
-          event: 'end',
-          // ReplyActivityAttributes.ContentState on the phone; its other fields are optional.
-          'content-state': { state },
-          'dismissal-date': now,
-        },
-      },
-    });
-  }
 }
 
-/** `/api/remote/push-token` and `/api/remote/live-activity`, for paired native devices only. */
+/** `/api/remote/push-token`, for paired native devices only. */
 export function pushRoutes(push: Push, remote: RemoteAccess, shutdown: AbortSignal) {
   const app = new Hono();
   const tooLarge = (c: Context) => c.json({ message: 'This request is too large.' }, 413);
@@ -528,17 +471,6 @@ export function pushRoutes(push: Push, remote: RemoteAccess, shutdown: AbortSign
     if (!paired) return notPaired(c);
     await remote.setPush(paired.id, undefined);
     return c.json({ ok: true });
-  });
-  app.use('/live-activity', bodyLimit({ maxSize: 2048, onError: tooLarge }));
-  app.post('/live-activity', async (c) => {
-    const paired = device(c);
-    if (!paired) return notPaired(c);
-    const input = activitySchema.safeParse(await c.req.json().catch(() => null));
-    if (!input.success)
-      return c.json({ message: input.error.issues[0]?.message ?? 'Check the token.' }, 400);
-    push.registerActivity(paired.id, input.data);
-    await push.refresh(shutdown);
-    return c.json({ ok: true, active: push.active });
   });
   return app;
 }

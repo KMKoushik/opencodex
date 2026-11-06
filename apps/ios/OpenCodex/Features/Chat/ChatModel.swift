@@ -245,7 +245,6 @@ final class ChatModel {
     _ = try await client.prompt(
       id, .init(text: text, model: model, files: files.isEmpty ? nil : files))
     running = true
-    startLiveActivity(id)
     schedule([.messages, .inbox, .active, .session])
   }
 
@@ -279,16 +278,7 @@ final class ChatModel {
     sends += 1
     _ = try await client.post("/sessions/\(id)/prompt", body, as: JSONValue.self)
     running = true
-    startLiveActivity(id)
     schedule([.messages, .inbox, .active, .session])
-  }
-
-  /// A root chat's reply started from this phone shows as a Live Activity.
-  private func startLiveActivity(_ id: String) {
-    guard session?.parentID == nil else { return }
-    let folder = session?.location.directory ?? directory ?? ""
-    ReplyActivities.shared.start(
-      sessionID: id, title: title, project: (folder as NSString).lastPathComponent)
   }
 
   func stop() async {
