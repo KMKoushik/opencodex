@@ -109,8 +109,12 @@ private struct TerminalSwitcher: View {
         }
         .frame(maxWidth: 200)
         .padding(.horizontal, 18)
-        .padding(.vertical, 5)
+        // Fits the toolbar's 44 pt slot, which clips the pill while the menu closes.
+        .padding(.vertical, 2)
         .glassEffect(.regular.interactive(), in: .capsule)
+        // The menu opens from and closes into this shape; without it, a rectangle.
+        .contentShape(.contextMenuPreview, .capsule)
+        .contentShape(.interaction, .capsule)
       }
       .buttonStyle(.plain)
       .accessibilityLabel(
