@@ -276,8 +276,11 @@ private struct TrayBody: View {
     let isSelected = tab == value
     let name = value == .subagents ? "Subagents" : "Shell"
     return Button {
-      selected = value
-      withAnimation(.bouncy(duration: 0.4)) { preference.open = true }
+      // The glass selection slides and morphs to the tapped tab.
+      withAnimation(.bouncy(duration: 0.4, extraBounce: 0.1)) {
+        selected = value
+        preference.open = true
+      }
     } label: {
       HStack(spacing: 6) {
         if icons {
@@ -296,8 +299,15 @@ private struct TrayBody: View {
       .foregroundStyle(palette.color(isSelected ? "text" : "text-tertiary"))
       .padding(.horizontal, 8)
       .frame(minHeight: 36)
-      // Concentric with the 22 pt panel: a capsule hugging its rounded top corners.
-      .background(isSelected ? palette.color("selected") : .clear, in: .capsule)
+      // A Liquid Glass capsule, concentric with the 22 pt panel, that moves between tabs.
+      .background {
+        if isSelected {
+          Capsule()
+            .fill(palette.color("selected").opacity(0.55))
+            .glassEffect(.regular.interactive(), in: .capsule)
+            .matchedGeometryEffect(id: "tab.selection", in: glass)
+        }
+      }
       .frame(minHeight: 44)
       .contentShape(.rect)
     }
