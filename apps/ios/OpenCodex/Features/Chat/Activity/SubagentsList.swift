@@ -128,20 +128,17 @@ struct SubagentsList: View {
               .foregroundStyle(palette.color("text-secondary"))
           }
           .font(.footnote)
-          .listRowBackground(palette.color("surface"))
         }
         if !list.loaded {
           Text("Loading subagents…")
             .font(.footnote)
             .foregroundStyle(palette.color("text-tertiary"))
-            .listRowBackground(palette.color("surface"))
-        }
+          }
         let running = running
         ForEach(list.items) { item in
           NavigationLink(value: SubagentRoute(id: item.id)) {
             SubagentListRow(item: item, running: running.contains(item.id))
           }
-          .listRowBackground(palette.color("surface"))
           .accessibilityIdentifier("subagents.row")
         }
         if list.hasMore {
@@ -152,24 +149,22 @@ struct SubagentsList: View {
           .font(.footnote.weight(.medium))
           .foregroundStyle(palette.color("text-secondary"))
           .frame(maxWidth: .infinity, minHeight: 44)
-          .listRowBackground(palette.color("surface"))
         }
       } header: {
         HStack {
           Text("Delegated sessions")
-            .foregroundStyle(palette.color("text"))
           Spacer()
           Text("\(list.items.count)\(list.hasMore ? "+" : "")")
             .foregroundStyle(palette.color("text-tertiary"))
             .monospacedDigit()
         }
-        .font(.subheadline.weight(.medium))
+        .foregroundStyle(palette.color("text-secondary"))
         .textCase(nil)
       }
     }
-    .listStyle(.plain)
-    .scrollContentBackground(.hidden)
-    .background(palette.color("surface"))
+    // Like the thread sheet: a stock inset-grouped list, so the sheet keeps its Liquid Glass.
+    .listStyle(.insetGrouped)
+    .tint(palette.color("accent"))
     .overlay {
       if list.loaded, list.error == nil, list.items.isEmpty {
         VStack(spacing: 8) {
@@ -224,7 +219,7 @@ private struct SubagentListRow: View {
       VStack(alignment: .leading, spacing: 2) {
         Text(item.title.flatMap { $0.isEmpty ? nil : $0 } ?? "Untitled subagent")
           .font(.body)
-          .foregroundStyle(palette.color("text-secondary"))
+          .foregroundStyle(palette.color("text"))
           .lineLimit(1)
         HStack(spacing: 6) {
           Text(item.agent ?? "Subagent").lineLimit(1)
