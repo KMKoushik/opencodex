@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The desktop's Terminal panel as a full-screen view: the project's terminal tabs, + for a new
-/// shell, and the selected tab's emulator. Closing a tab ends its shell; leaving the screen only
+/// The desktop's Terminal panel as a full-screen view: a glass title pill that switches between
+/// the project's terminals, + for a new shell, and the selected terminal's emulator. Closing a tab ends its shell; leaving the screen only
 /// detaches, so shells keep running and reopen with their recent output.
 struct TerminalScreen: View {
   @State private var model: TerminalModel
@@ -16,8 +16,6 @@ struct TerminalScreen: View {
   var body: some View {
     NavigationStack {
       VStack(spacing: 0) {
-        TerminalTabs(model: model)
-        Rectangle().fill(palette.color("border")).frame(height: 0.5)
         if let error = model.actionError ?? model.listError {
           HStack(spacing: 8) {
             Text(error)
@@ -42,10 +40,14 @@ struct TerminalScreen: View {
           TerminalEmpty(model: model)
         }
       }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(palette.color("surface"))
+      // One surface, like the chat: the bar shows the terminal's own background.
+      .toolbarBackground(.hidden, for: .navigationBar)
       .navigationTitle("Terminal")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
+        ToolbarItem(placement: .principal) { TerminalSwitcher(model: model) }
         ToolbarItem(placement: .topBarLeading) {
           Button("Hide terminal", systemImage: "xmark") { dismiss() }
             .accessibilityIdentifier("terminal-close")
@@ -62,78 +64,64 @@ struct TerminalScreen: View {
   }
 }
 
-/// "Terminal 1", "Terminal 2"… with an Exited badge and a close button, like the desktop tabs.
-private struct TerminalTabs: View {
+/// Like the chat's title pill: "Terminal 1" over its folder. Tapping it switches terminals,
+/// opens a new one, or closes this one (ending its shell).
+private struct TerminalSwitcher: View {
   let model: TerminalModel
   @Environment(\.palette) private var palette
 
   var body: some View {
-    ScrollViewReader { proxy in
-      ScrollView(.horizontal) {
-        HStack(spacing: 4) {
-          ForEach(Array(model.terminals.enumerated()), id: \.element.id) { index, terminal in
-            tab(terminal, number: index + 1).id(terminal.id)
+    if let current = model.current,
+      let index = model.terminals.firstIndex(where: { $0.id == current.id })
+    {
+      Menu {
+        Section(current.cwd) {
+          Picker(
+            "Terminal",
+            selection: Binding(get: { model.current?.id }, set: { model.selectedID = $0 })
+          ) {
+            ForEach(Array(model.terminals.enumerated()), id: \.element.id) { number, terminal in
+              Text(terminal.exited ? "Terminal \(number + 1) · Exited" : "Terminal \(number + 1)")
+                .tag(Optional(terminal.id))
+            }
           }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-      }
-      .scrollIndicators(.hidden)
-      .frame(minHeight: 44)
-      .onChange(of: model.current?.id) { _, id in
-        guard let id else { return }
-        withAnimation(.snappy) { proxy.scrollTo(id) }
-      }
-    }
-  }
-
-  private func tab(_ terminal: Pty, number: Int) -> some View {
-    let active = model.current?.id == terminal.id
-    return HStack(spacing: 0) {
-      Button {
-        model.selectedID = terminal.id
+        Button("New terminal", systemImage: "plus") { Task { await model.create() } }
+          .disabled(model.creating)
+        Button("Close Terminal \(index + 1)", systemImage: "xmark", role: .destructive) {
+          Task { await model.remove(current.id) }
+        }
+        .disabled(model.removing == current.id)
       } label: {
-        HStack(spacing: 7) {
-          Image(systemName: "apple.terminal")
-            .font(.system(size: 13))
-          Text("Terminal \(number)")
-            .lineLimit(1)
-          if terminal.exited {
-            Text("Exited")
-              .font(.system(size: 10))
+        VStack(spacing: 0) {
+          HStack(spacing: 4) {
+            Text("Terminal \(index + 1)")
+              .font(.subheadline.weight(.semibold))
+              .foregroundStyle(palette.color("text"))
+            Image(systemName: "chevron.down")
+              .font(.system(size: 9, weight: .bold))
               .foregroundStyle(palette.color("text-tertiary"))
           }
+          Text((current.cwd as NSString).lastPathComponent)
+            .font(.caption)
+            .foregroundStyle(palette.color("text-secondary"))
+            .lineLimit(1)
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 4)
-        .frame(minHeight: 36)
-        .contentShape(.rect)
+        .frame(maxWidth: 200)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 5)
+        .glassEffect(.regular.interactive(), in: .capsule)
       }
-      .accessibilityIdentifier("terminal-tab-\(number)")
-      .accessibilityAddTraits(active ? .isSelected : [])
-      Button {
-        Task { await model.remove(terminal.id) }
-      } label: {
-        Image(systemName: "xmark")
-          .font(.system(size: 10, weight: .semibold))
-          .foregroundStyle(palette.color("text-tertiary"))
-          .frame(width: 32, height: 36)
-          .contentShape(.rect)
-      }
-      .disabled(model.removing == terminal.id)
-      .accessibilityLabel("Close Terminal \(number)")
-      .accessibilityHint("Ends the shell")
-      .accessibilityIdentifier("terminal-tab-close-\(number)")
-    }
-    .buttonStyle(.plain)
-    .font(.footnote)
-    .foregroundStyle(palette.color(active ? "text" : "text-tertiary"))
-    .background {
-      if active {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .fill(palette.gradient("glaze"))
-          .workspaceShadow(palette.shadows("glaze-shadow"))
-      }
+      .buttonStyle(.plain)
+      .accessibilityLabel(
+        "Terminal \(index + 1) of \(model.terminals.count)\(current.exited ? ", exited" : "")")
+      .accessibilityValue((current.cwd as NSString).lastPathComponent)
+      .accessibilityHint("Switches, opens or closes terminals")
+      .accessibilityIdentifier("terminal-switcher")
+    } else {
+      Text("Terminal")
+        .font(.headline)
+        .foregroundStyle(palette.color("text"))
     }
   }
 }
@@ -171,18 +159,16 @@ private struct TerminalPane: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      HStack(spacing: 12) {
-        Text(terminal.cwd)
-          .lineLimit(1)
-        Spacer(minLength: 0)
+      // The folder is in the title pill; only a status worth reading takes a line.
+      if !statusText.isEmpty {
         Text(statusText)
-          .fixedSize()
+          .font(.caption2)
+          .foregroundStyle(palette.color("text-tertiary"))
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.horizontal, 12)
+          .padding(.vertical, 6)
           .accessibilityIdentifier("terminal-status")
       }
-      .font(.caption2)
-      .foregroundStyle(palette.color("text-tertiary"))
-      .padding(.horizontal, 12)
-      .padding(.vertical, 8)
       if let session, let error = session.error {
         HStack(spacing: 8) {
           Text(error)

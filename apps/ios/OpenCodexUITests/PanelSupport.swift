@@ -7,12 +7,17 @@ nonisolated enum Panels {
   /// Runs agent edits and shells without asking.
   static let homeDemo = root + "/home-demo"
 
-  /// Opens one item of the chat's "…" menu.
+  /// Opens one item of the chat's "…" thread sheet, scrolling to it if it's below the fold.
   @MainActor static func openChatMenu(_ app: XCUIApplication, _ item: String) {
     let menu = app.buttons["chat.actions"]
     XCTAssertTrue(menu.waitForExistence(timeout: 20), "The chat should load")
     menu.tap()
+    XCTAssertTrue(app.descendants(matching: .any)["sheet.title"].waitForExistence(timeout: 5))
     let button = app.buttons[item]
+    // The sheet's list makes rows lazily, so a row below the fold exists only once shown.
+    for _ in 0..<6 where !(button.exists && button.isHittable) {
+      app.collectionViews.firstMatch.swipeUp()
+    }
     XCTAssertTrue(button.waitForExistence(timeout: 5), "“\(item)” should be in the chat menu")
     button.tap()
   }

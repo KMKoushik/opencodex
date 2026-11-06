@@ -1,8 +1,8 @@
 import XCTest
 
-/// The project terminal (chat "…" → Terminal) through every control: new tabs, typing, the key
-/// bar (Esc, Tab, Ctrl+C, arrows), switching and closing tabs, a trip to the background and
-/// back without duplicated output, and an exited shell's badge.
+/// The project terminal (chat "…" → Terminal) through every control: new terminals, typing, the
+/// key bar (Esc, Tab, Ctrl+C, arrows), switching and closing from the title pill's menu, a trip
+/// to the background and back without duplicated output, and an exited shell.
 nonisolated final class TerminalTests: XCTestCase {
   static let directory = Panels.homeDemo
 
@@ -29,16 +29,16 @@ nonisolated final class TerminalTests: XCTestCase {
     XCTAssertTrue(new.waitForExistence(timeout: 15))
     await enabled(new)
 
-    // A new shell, so the output isn't confused with an older tab's.
-    let tabs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'terminal-tab-' AND NOT identifier BEGINSWITH 'terminal-tab-close'"))
-    let opened = await Panels.waitUntil { tabs.count > 0 }
+    // A new shell, so the output isn't confused with an older terminal's.
+    let switcher = app.buttons["terminal-switcher"]
+    let opened = await Panels.waitUntil { position(switcher) != nil }
     XCTAssertTrue(opened, "Opening the panel starts a shell when there is none")
-    let start = tabs.count
+    let start = position(switcher)!.total
     new.tap()
-    let added = await Panels.waitUntil { tabs.count == start + 1 }
-    XCTAssertTrue(added, "New terminal adds a tab")
+    let added = await Panels.waitUntil { position(switcher)?.total == start + 1 }
+    XCTAssertTrue(added, "New terminal adds one")
     let mine = start + 1
-    XCTAssertTrue(app.buttons["terminal-tab-\(mine)"].isSelected)
+    XCTAssertEqual(position(switcher)?.current, mine, switcher.label)
 
     let terminal = app.descendants(matching: .any)["terminal-view"]
     XCTAssertTrue(terminal.waitForExistence(timeout: 15))
@@ -107,22 +107,24 @@ nonisolated final class TerminalTests: XCTestCase {
     app.buttons["terminal-key-hide"].tap()
     XCTAssertTrue(app.buttons["terminal-key-esc"].waitForNonExistence(timeout: 5), "The keyboard hides")
 
-    // A second tab, then back to the first, whose output is still there.
+    // A second terminal, then back to the first from the pill's menu, its output still there.
     new.tap()
-    let second = await Panels.waitUntil { tabs.count == mine + 1 }
+    let second = await Panels.waitUntil { position(switcher)?.total == mine + 1 }
     XCTAssertTrue(second)
-    XCTAssertTrue(app.buttons["terminal-tab-\(mine + 1)"].isSelected)
+    XCTAssertEqual(position(switcher)?.current, mine + 1, switcher.label)
     let fresh = await Panels.waitUntil { !text(terminal).isEmpty }
     XCTAssertTrue(fresh)
-    XCTAssertEqual(count(terminal, "out-\(tag)"), 0, "A new tab has its own shell")
-    app.buttons["terminal-tab-\(mine)"].tap()
+    XCTAssertEqual(count(terminal, "out-\(tag)"), 0, "A new terminal has its own shell")
+    choose(app, "Terminal \(mine)")
     let back = await Panels.waitUntil { count(terminal, "aXb") > 0 }
-    XCTAssertTrue(back, "Switching back shows the first tab's output: \(text(terminal))")
-    app.buttons["terminal-tab-close-\(mine + 1)"].tap()
-    let closed = await Panels.waitUntil { tabs.count == mine }
-    XCTAssertTrue(closed, "Closing a tab removes it")
+    XCTAssertTrue(back, "Switching back shows the first terminal's output: \(text(terminal))")
+    choose(app, "Terminal \(mine + 1)")
+    choose(app, "Close Terminal \(mine + 1)")
+    let closed = await Panels.waitUntil { position(switcher)?.total == mine }
+    XCTAssertTrue(closed, "Closing a terminal removes it")
+    XCTAssertEqual(position(switcher)?.current, mine, switcher.label)
 
-    // To the background and back: the tab reconnects from its cursor, nothing repeats.
+    // To the background and back: the terminal reconnects from its cursor, nothing repeats.
     terminal.tap()
     app.typeText("clear\n")
     app.typeText("echo once-\(tag)\n")
@@ -133,8 +135,9 @@ nonisolated final class TerminalTests: XCTestCase {
     app.activate()
     XCTAssertTrue(terminal.waitForExistence(timeout: 10))
     let status = app.staticTexts["terminal-status"]
-    let reconnected = await Panels.waitUntil { (status.label).isEmpty || !status.exists }
-    XCTAssertTrue(reconnected, "The tab reconnects: \(status.label)")
+    // The status line shows only while there's something to say, like "Reconnecting…".
+    let reconnected = await Panels.waitUntil { !status.exists || status.label.isEmpty }
+    XCTAssertTrue(reconnected, "The terminal reconnects")
     try await Task.sleep(for: .seconds(2))
     XCTAssertEqual(count(terminal, "once-\(tag)"), 2, "No duplicated output: \(text(terminal))")
     terminal.tap()
@@ -142,19 +145,17 @@ nonisolated final class TerminalTests: XCTestCase {
     let alive = await Panels.waitUntil { count(terminal, "still-\(tag)") == 2 }
     XCTAssertTrue(alive, "Input works after reconnecting")
 
-    // An exited shell keeps its tab with the Exited badge.
+    // An exited shell stays listed, marked exited.
     app.typeText("exit\n")
-    let exited = await Panels.waitUntil(timeout: 20) {
-      app.buttons["terminal-tab-\(mine)"].label.contains("Exited")
-    }
-    XCTAssertTrue(exited, "The tab shows Exited: \(app.buttons["terminal-tab-\(mine)"].label)")
+    let exited = await Panels.waitUntil(timeout: 20) { switcher.label.contains("exited") }
+    XCTAssertTrue(exited, "The pill says exited: \(switcher.label)")
     XCTAssertTrue(status.label.contains("xited"), status.label)
     XCTAssertTrue(
       app.buttons["terminal-key-esc"].waitForNonExistence(timeout: 5),
       "An exited shell puts the keyboard away")
     Panels.shot("terminal-exited")
-    app.buttons["terminal-tab-close-\(mine)"].tap()
-    let gone = await Panels.waitUntil { tabs.count == mine - 1 }
+    choose(app, "Close Terminal \(mine)")
+    let gone = await Panels.waitUntil { (position(switcher)?.total ?? 0) == mine - 1 }
     XCTAssertTrue(gone)
 
     app.buttons["terminal-close"].tap()
@@ -162,6 +163,23 @@ nonisolated final class TerminalTests: XCTestCase {
   }
 
   // MARK: Helpers
+
+  /// The title pill's "Terminal 2 of 3": the selected terminal and how many there are.
+  @MainActor private func position(_ switcher: XCUIElement) -> (current: Int, total: Int)? {
+    guard switcher.exists,
+      let match = switcher.label.firstMatch(of: /Terminal (\d+) of (\d+)/),
+      let current = Int(match.1), let total = Int(match.2)
+    else { return nil }
+    return (current, total)
+  }
+
+  /// Opens the title pill's menu and taps one of its items.
+  @MainActor private func choose(_ app: XCUIApplication, _ item: String) {
+    app.buttons["terminal-switcher"].tap()
+    let button = app.buttons[item]
+    XCTAssertTrue(button.waitForExistence(timeout: 5), "The menu has \(item)")
+    button.tap()
+  }
 
   @MainActor private func enabled(_ element: XCUIElement) async {
     _ = await Panels.waitUntil(timeout: 15) { element.isEnabled }
