@@ -178,6 +178,7 @@ struct TrayRowStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .background(
-        configuration.isPressed ? palette.color("hover") : .clear, in: .rect(cornerRadius: 8))
+        // The panel's 22 pt corners less its 6 pt inset, so pressed rows sit concentric in it.
+        configuration.isPressed ? palette.color("hover") : .clear, in: .rect(cornerRadius: 16))
   }
 }

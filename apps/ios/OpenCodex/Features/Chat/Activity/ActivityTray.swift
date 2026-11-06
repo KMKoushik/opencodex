@@ -296,7 +296,8 @@ private struct TrayBody: View {
       .foregroundStyle(palette.color(isSelected ? "text" : "text-tertiary"))
       .padding(.horizontal, 8)
       .frame(minHeight: 36)
-      .background(isSelected ? palette.color("selected") : .clear, in: .rect(cornerRadius: 8))
+      // Concentric with the 22 pt panel: a capsule hugging its rounded top corners.
+      .background(isSelected ? palette.color("selected") : .clear, in: .capsule)
       .frame(minHeight: 44)
       .contentShape(.rect)
     }
