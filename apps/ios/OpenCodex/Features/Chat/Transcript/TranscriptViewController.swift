@@ -128,7 +128,9 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     collectionView.backgroundColor = .clear
     collectionView.alwaysBounceVertical = true
-    collectionView.keyboardDismissMode = .interactive
+    // Any drag hides the keyboard. `.interactive` only does once the finger reaches the
+    // keyboard, and the composer (a SwiftUI inset, not an accessory view) sits in the way.
+    collectionView.keyboardDismissMode = .onDrag
     collectionView.contentInsetAdjustmentBehavior = .always
     // Like OpenCode's chat: content blurs softly under the glass header and composer.
     collectionView.topEdgeEffect.style = .soft
