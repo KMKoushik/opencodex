@@ -65,7 +65,7 @@ nonisolated final class HomeSettingsTests: XCTestCase {
 
     // Appearance: mode, themes and the chat font size.
     app.buttons["settings-appearance"].tap()
-    let dark = app.segmentedControls.buttons["Dark"]
+    let dark = app.buttons["appearance-mode-dark"]
     XCTAssertTrue(dark.waitForExistence(timeout: 5))
     dark.tap()
     XCTAssertTrue(dark.isSelected)
@@ -81,7 +81,7 @@ nonisolated final class HomeSettingsTests: XCTestCase {
     app.buttons["theme-opencodex-dark"].tap()
     app.navigationBars.buttons["Appearance"].tap()
 
-    app.segmentedControls.buttons["Light"].tap()
+    app.buttons["appearance-mode-light"].tap()
     app.buttons["light-theme"].tap()
     app.buttons["theme-gruvbox-light"].tap()
     app.navigationBars.buttons["Appearance"].tap()
@@ -89,7 +89,7 @@ nonisolated final class HomeSettingsTests: XCTestCase {
     app.buttons["light-theme"].tap()
     app.buttons["theme-opencodex-light"].tap()
     app.navigationBars.buttons["Appearance"].tap()
-    app.segmentedControls.buttons["System"].tap()
+    app.buttons["appearance-mode-system"].tap()
 
     let size = app.staticTexts["chat-font-size-value"]
     let reset = app.buttons["chat-font-size-reset"]

@@ -80,6 +80,10 @@ struct SettingsView: View {
       }
       .toolbar { done }
     }
+    // The app root's scheme doesn't reach a sheet that's already open, so switching Mode here
+    // would leave this sheet's glass and title in the old one. Always explicit: a sheet doesn't
+    // return to the system's scheme from nil. The palette already follows System.
+    .preferredColorScheme(palette.dark ? .dark : .light)
   }
 
   @ToolbarContentBuilder private var done: some ToolbarContent {

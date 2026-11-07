@@ -317,3 +317,64 @@ extension UIColor {
     return UIColor(red: mix(r1, r2), green: mix(g1, g2), blue: mix(b1, b2), alpha: mix(a1, a2))
   }
 }
+
+/// A Liquid Glass segmented control, like the activity tray's Subagents/Shell tabs: a glass
+/// track whose selection, a glass capsule, slides and morphs to the tapped option.
+struct GlassSegments<Value: Hashable>: View {
+  struct Option: Identifiable {
+    let value: Value
+    let title: String
+    let symbol: String
+    var id: String { title }
+  }
+
+  let label: String
+  /// The control's accessibility identifier; each option's is `<id>-<title>`, lowercased.
+  let id: String
+  @Binding var selection: Value
+  let options: [Option]
+  @Namespace private var glass
+  @Environment(\.palette) private var palette
+
+  init(_ label: String, id: String, selection: Binding<Value>, options: [Option]) {
+    self.label = label
+    self.id = id
+    _selection = selection
+    self.options = options
+  }
+
+  var body: some View {
+    HStack(spacing: 0) {
+      ForEach(options) { option in
+        let selected = option.value == selection
+        Button {
+          withAnimation(.bouncy(duration: 0.4, extraBounce: 0.1)) { selection = option.value }
+        } label: {
+          Label(option.title, systemImage: option.symbol)
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(palette.color(selected ? "text" : "text-tertiary"))
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background {
+              if selected {
+                Capsule()
+                  .fill(palette.color("selected").opacity(0.55))
+                  .glassEffect(.regular.interactive(), in: .capsule)
+                  .matchedGeometryEffect(id: "selection", in: glass)
+              }
+            }
+            .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(option.title)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+        .accessibilityIdentifier("\(id)-\(option.title.lowercased())")
+      }
+    }
+    .padding(4)
+    .glassEffect(.regular, in: .capsule)
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel(label)
+    .accessibilityIdentifier(id)
+  }
+}

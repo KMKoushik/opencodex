@@ -12,21 +12,23 @@ struct AppearanceSettings: View {
     @Bindable var themes = themes
     SettingsForm {
       Section {
-        Picker("Mode", selection: $themes.mode) {
-          Text("Light").tag(ThemeStore.Mode.light)
-          Text("Dark").tag(ThemeStore.Mode.dark)
-          Text("System").tag(ThemeStore.Mode.system)
-        }
-        .pickerStyle(.segmented)
-        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-        .accessibilityIdentifier("appearance-mode")
+        // On the page itself, not in a card: a glass track, not a capsule inside a card.
+        GlassSegments(
+          "Mode", id: "appearance-mode", selection: $themes.mode,
+          options: [
+            .init(value: .light, title: "Light", symbol: "sun.max"),
+            .init(value: .dark, title: "Dark", symbol: "moon"),
+            .init(value: .system, title: "System", symbol: "circle.lefthalf.filled"),
+          ]
+        )
+        .listRowBackground(Color.clear)
+        .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
       } header: {
         SettingsHeader("Mode")
       } footer: {
         Text("Follow your system or keep one appearance.")
           .foregroundStyle(palette.color("text-tertiary"))
       }
-      .settingsRows()
 
       Section {
         ForEach([false, true], id: \.self) { dark in
