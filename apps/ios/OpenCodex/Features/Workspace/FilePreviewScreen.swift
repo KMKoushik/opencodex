@@ -12,6 +12,8 @@ struct FilePreviewScreen: View {
 
   @State private var phase: Phase = .loading
   @State private var markdownPreview = false
+  /// HTML opens rendered, like a local page link on the desktop.
+  @State private var htmlPreview = true
   @Environment(\.palette) private var palette
 
   enum Phase {
@@ -24,6 +26,10 @@ struct FilePreviewScreen: View {
 
   private var isMarkdown: Bool {
     ["md", "markdown", "mdown"].contains((path as NSString).pathExtension.lowercased())
+  }
+
+  private var isHTML: Bool {
+    ["html", "htm"].contains((path as NSString).pathExtension.lowercased())
   }
 
   var body: some View {
@@ -54,6 +60,18 @@ struct FilePreviewScreen: View {
             .accessibilityIdentifier("markdown-mode")
           }
         }
+        if isHTML, case .loaded(.text, _) = phase {
+          ToolbarItem(placement: .topBarTrailing) {
+            Picker("Page view", selection: $htmlPreview) {
+              Image(systemName: "chevron.left.forwardslash.chevron.right")
+                .accessibilityLabel("Show source").tag(false)
+              Image(systemName: "safari").accessibilityLabel("Preview page").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .fixedSize()
+            .accessibilityIdentifier("html-mode")
+          }
+        }
       }
       .task(id: model.revision) { await load() }
   }
@@ -76,8 +94,10 @@ struct FilePreviewScreen: View {
         .accessibilityIdentifier("file-too-large")
     case .loaded(let file, let document):
       switch file {
-      case .text(let text, _, _):
-        if isMarkdown && markdownPreview {
+      case .text(let text, let version, _):
+        if isHTML && htmlPreview {
+          HTMLPreview(client: model.client, directory: model.directory, path: path, version: version)
+        } else if isMarkdown && markdownPreview {
           MarkdownPreview(text: text) { markdownPreview = false }
         } else if let document {
           CodeLines(document: document, highlighter: CodeHighlighter(path: path), identifier: "file-lines")

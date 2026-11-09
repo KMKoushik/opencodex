@@ -1,6 +1,6 @@
 import { Readable } from 'node:stream';
 import { extname } from 'node:path';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { workspaceFileInputSchema } from '@opencodex/contracts';
 import { OpenCodeBackend } from './opencode';
 import { localFile } from './local-files';
@@ -22,6 +22,37 @@ export function mediaMime(path: string) {
   return mediaTypes[extname(path).toLowerCase()];
 }
 
+/** A local web page and the files it loads: markup, styles, scripts, images and fonts. */
+const pageTypes: Record<string, string> = {
+  ...mediaTypes,
+  '.html': 'text/html; charset=utf-8',
+  '.htm': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+  '.xml': 'application/xml; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+  '.ico': 'image/x-icon',
+  '.bmp': 'image/bmp',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.wasm': 'application/wasm',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.m4a': 'audio/mp4',
+};
+
 export function mediaRoutes(backend: OpenCodeBackend, shutdown: AbortSignal) {
   const app = new Hono();
   app.on(['GET', 'HEAD'], '/media', async (c) => {
@@ -29,8 +60,22 @@ export function mediaRoutes(backend: OpenCodeBackend, shutdown: AbortSignal) {
     if (!input.success) return c.json({ message: 'Choose a file within the project.' }, 400);
     const mime = mediaMime(input.data.path);
     if (!mime) return c.json({ message: 'Choose a video or PDF file.' }, 415);
+    return serve(c, input.data, mime);
+  });
+  // The phone renders local HTML previews from these bytes; the desktop's Browser panel reads
+  // them from disk itself. Any file here is already readable through native `file.read`. Opened
+  // directly in a browser, the page runs in a sandbox with an opaque origin, never the app's.
+  app.on(['GET', 'HEAD'], '/page', async (c) => {
+    const input = workspaceFileInputSchema.safeParse(c.req.query());
+    if (!input.success) return c.json({ message: 'Choose a file within the project.' }, 400);
+    c.header('Content-Security-Policy', 'sandbox allow-scripts allow-forms allow-modals');
+    const mime = pageTypes[extname(input.data.path).toLowerCase()] ?? 'application/octet-stream';
+    return serve(c, input.data, mime);
+  });
+
+  async function serve(c: Context, input: { directory: string; path: string }, mime: string) {
     await backend.requireLocalFiles();
-    const { file, info } = await localFile(input.data.directory, input.data.path);
+    const { file, info } = await localFile(input.directory, input.path);
     let handedOff = false;
     try {
       c.header('Content-Type', mime);
@@ -77,7 +122,8 @@ export function mediaRoutes(backend: OpenCodeBackend, shutdown: AbortSignal) {
     } finally {
       if (!handedOff) await file.close();
     }
-  });
+  }
+
   app.get('/file-location', async (c) => {
     const input = workspaceFileInputSchema.safeParse(c.req.query());
     if (!input.success) return c.json({ message: 'Choose a file within the project.' }, 400);

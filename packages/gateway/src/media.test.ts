@@ -74,7 +74,7 @@ it('keeps reads and reveal targets within the canonical directory, including sym
   await symlink(join(directory, 'outside.mp4'), join(directory, 'project', 'escape.mp4'));
   await symlink(join(directory, 'project', 'clip.mp4'), join(directory, 'project', 'inside.mp4'));
   const app = createApp(backend());
-  for (const route of ['file', 'media', 'file-location']) {
+  for (const route of ['file', 'media', 'file-location', 'page']) {
     expect(
       (await app.request(url(route, '../outside.mp4', join(directory, 'project')))).status,
     ).toBe(400);
@@ -100,10 +100,24 @@ it('never substitutes host files for external service files, and requires a conn
     new OpenCodeBackend(async () => undefined),
   ]) {
     const app = createApp(service);
-    for (const route of ['file', 'media', 'file-location']) {
+    for (const route of ['file', 'media', 'file-location', 'page']) {
       const response = await app.request(url(route));
       expect([422, 503]).toContain(response.status);
       expect(await response.json()).toHaveProperty('message');
     }
   }
+});
+
+it('serves a local page and its files, sandboxed if opened directly', async () => {
+  await mkdir(join(directory, 'site'));
+  await writeFile(join(directory, 'site', 'index.html'), '<link rel=stylesheet href=a.css>');
+  await writeFile(join(directory, 'site', 'a.css'), 'body{}');
+  const app = createApp(backend());
+  const page = await app.request(url('page', 'site/index.html'));
+  expect(page.headers.get('content-type')).toBe('text/html; charset=utf-8');
+  expect(page.headers.get('content-security-policy')).toMatch(/^sandbox /);
+  expect(await page.text()).toContain('a.css');
+  const css = await app.request(url('page', 'site/a.css'));
+  expect(css.headers.get('content-type')).toBe('text/css; charset=utf-8');
+  expect(await css.text()).toBe('body{}');
 });
