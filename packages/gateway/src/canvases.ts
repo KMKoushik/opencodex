@@ -20,16 +20,27 @@ import {
   type CanvasSource,
 } from '@opencodex/contracts/canvas';
 import { GatewayError } from './errors';
-import { ALLOWED_IMPORTS, loadTypeScript, testRender, transpile, typeCheck } from './canvas-build';
+import { loadTypeScript, transpile, typeCheck } from './canvas-build';
+import {
+  PREVIEW_THEMES,
+  PREVIEW_TILE,
+  PREVIEW_VARIANTS,
+  previewScript,
+  type PageLog,
+  type PageRenderer,
+} from './canvas-preview';
 import { CANVAS_RUNTIME } from './canvas-runtime.generated';
 import type { Apps } from './apps';
 
 const MANIFEST = 'canvas.json';
-const ENTRY = 'app.tsx';
+/** The page OpenCodex shows: one self-contained HTML document. */
+const PAGE = 'index.html';
 export const SERVER = 'server.ts';
-const SOURCE = /^[A-Za-z0-9][A-Za-z0-9_.-]*\.(tsx|ts)$/;
+/** server.ts and the files it imports. */
+const SOURCE = /^[A-Za-z0-9][A-Za-z0-9_.-]*\.ts$/;
 const MAX_SOURCE_FILES = 40;
 const MAX_SOURCE_BYTES = 512 * 1024;
+const MAX_PAGE_BYTES = 2 * 1024 * 1024;
 const MAX_VALUE_BYTES = 2 * 1024 * 1024;
 const MAX_DATA_BYTES = 16 * 1024 * 1024;
 
@@ -89,7 +100,10 @@ function readIcon(value: unknown): { icon?: CanvasIcon } {
 async function latestChange(directory: string) {
   const entries = await readdir(directory).catch(() => [] as string[]);
   const times = await Promise.all(
-    [...entries.filter((name) => SOURCE.test(name) || name === MANIFEST), 'data'].map((name) =>
+    [
+      ...entries.filter((name) => SOURCE.test(name) || name === PAGE || name === MANIFEST),
+      'data',
+    ].map((name) =>
       stat(join(directory, name)).then(
         (info) => info.mtimeMs,
         () => 0,
@@ -114,16 +128,25 @@ export async function listCanvases(root: string): Promise<CanvasInfo[]> {
     .sort((a, b) => b.updated - a.updated);
 }
 
-const STARTER = (title: string) => `import { Stack, Text, Title } from '@opencodex/canvas';
+const escapeHtml = (text: string) =>
+  text.replace(/[&<>"]/g, (char) => `&${{ '&': 'amp', '<': 'lt', '>': 'gt', '"': 'quot' }[char]};`);
 
-export default function App() {
-  return (
-    <Stack>
-      <Title>{${JSON.stringify(title)}}</Title>
-      <Text muted>Replace this with the canvas.</Text>
-    </Stack>
-  );
-}
+const STARTER = (title: string) => `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${escapeHtml(title)}</title>
+<style>
+  /* Replace this page with the canvas. */
+  h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.01em; }
+  p { margin: 0; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<h1>${escapeHtml(title)}</h1>
+<p>Replace this with the canvas.</p>
+</body>
+</html>
 `;
 
 export async function createCanvas(
@@ -146,7 +169,7 @@ export async function createCanvas(
     `${JSON.stringify({ title: input.title, created: Date.now(), ...(input.sessionID ? { sessionID: input.sessionID } : {}), ...(input.icon ? { icon: input.icon } : {}) }, null, 2)}\n`,
     { flag: 'wx' },
   );
-  await writeFile(join(directory, ENTRY), STARTER(input.title), { flag: 'wx' });
+  await writeFile(join(directory, PAGE), STARTER(input.title), { flag: 'wx' });
   await writeSdk(root);
   return readManifest(directory, id);
 }
@@ -182,6 +205,18 @@ async function readSourceFiles(directory: string) {
   return files;
 }
 
+async function readPage(directory: string) {
+  try {
+    const path = join(directory, PAGE);
+    if ((await stat(path)).size > MAX_PAGE_BYTES)
+      return { html: '', errors: [`${PAGE} is larger than 2 MB. Keep data in data/ values.`] };
+    return { html: await readFile(path, 'utf8'), errors: [] };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    return { html: '', errors: [`${PAGE} is missing. Write the page there.`] };
+  }
+}
+
 const SERVER_IMPORTS = new Set(['@opencodex/canvas/server']);
 
 /** Value imports of a file; `import type` is erased, so a view can type against server.ts. */
@@ -206,16 +241,15 @@ function importsOf(ts: Awaited<ReturnType<typeof loadTypeScript>>, name: string,
 
 const localFile = (files: Record<string, string>, specifier: string) => {
   if (!specifier.startsWith('./') || specifier.slice(2).includes('/')) return undefined;
-  const name = specifier.slice(2);
-  return [`${name}.tsx`, `${name}.ts`].find((candidate) => candidate in files);
+  const name = `${specifier.slice(2).replace(/\.ts$/, '')}.ts`;
+  return name in files ? name : undefined;
 };
 
-/** Files reachable from an entry through value imports, stopping before `stop`. */
+/** Files reachable from an entry through value imports. */
 function reachable(
   files: Record<string, string>,
   imports: Record<string, string[]>,
   entry: string,
-  stop?: (importer: string, file: string) => void,
 ) {
   const seen = new Set<string>();
   const visit = (name: string) => {
@@ -223,80 +257,57 @@ function reachable(
     seen.add(name);
     for (const specifier of imports[name] ?? []) {
       const file = localFile(files, specifier);
-      if (file === SERVER && stop) stop(name, file);
-      else if (file) visit(file);
+      if (file) visit(file);
     }
   };
   visit(entry);
   return seen;
 }
 
-/**
- * Transpiles every file and splits them by where they run: the view (app.tsx and its
- * imports) in the sandboxed frame, server.ts and its imports in the gateway's child process.
- */
-async function buildSource(directory: string) {
+/** server.ts and the files it imports, transpiled for the gateway's child process. */
+async function buildServer(directory: string) {
   const files = await readSourceFiles(directory);
   const errors: string[] = [];
-  if (!files[ENTRY]) errors.push(`${ENTRY} is missing. It must default-export the view.`);
+  if (!files[SERVER])
+    return { files, modules: {} as Record<string, never>, errors, server: new Set<string>() };
   const ts = await loadTypeScript();
-  const modules = Object.fromEntries(
-    await Promise.all(
-      Object.entries(files).map(
-        async ([name, text]) => [name, await transpile(name, text)] as const,
-      ),
-    ),
-  );
   const imports = Object.fromEntries(
     Object.entries(files).map(([name, text]) => [name, importsOf(ts, name, text)]),
   );
-  const server = files[SERVER] ? reachable(files, imports, SERVER) : new Set<string>();
-  const view = new Set(Object.keys(files).filter((name) => !server.has(name)));
-  const viewEntry = reachable(files, imports, ENTRY, (importer) =>
-    errors.push(
-      `${importer}: the view can’t run server.ts. Use \`import type { name } from './server'\` and call it with useFn<typeof name>('name').`,
+  const server = reachable(files, imports, SERVER);
+  const modules = Object.fromEntries(
+    await Promise.all(
+      [...server].map(async (name) => [name, await transpile(name, files[name]!)] as const),
     ),
   );
-  for (const name of viewEntry) view.add(name);
-  for (const [name, module] of Object.entries(modules)) {
-    errors.push(...module.errors);
-    for (const specifier of imports[name]!) {
-      if (localFile(files, specifier)) continue;
-      if (view.has(name) && !ALLOWED_IMPORTS.has(specifier))
-        errors.push(
-          SERVER_IMPORTS.has(specifier)
-            ? `${name}: the view can’t import '${specifier}'. Call server functions with useFn('name'); type them with \`import type { name } from './server'\`.`
-            : `${name}: can’t import '${specifier}'. Views can import react, @opencodex/canvas, and their own files (./name).`,
-        );
-      if (server.has(name) && !SERVER_IMPORTS.has(specifier))
+  for (const name of server) {
+    errors.push(...modules[name]!.errors);
+    for (const specifier of imports[name]!)
+      if (!localFile(files, specifier) && !SERVER_IMPORTS.has(specifier))
         errors.push(
           `${name}: can’t import '${specifier}'. server.ts can import @opencodex/canvas/server and its own files (./name); run other tools with sh().`,
         );
-    }
   }
-  return { files, modules, errors, view, server };
+  return { files, modules, errors, server };
 }
 
 export async function readSource(root: string, id: string): Promise<CanvasSource> {
   const directory = folder(root, id);
   const info = await readManifest(directory, id);
-  const { files, modules, errors, view, server } = await buildSource(directory);
-  const version = createHash('sha256');
-  for (const name of view) version.update(name).update('\0').update(files[name]!);
-  return {
-    ...info,
-    entry: ENTRY,
-    modules: Object.fromEntries([...view].map((name) => [name, modules[name]!.code])),
-    errors,
-    version: version.digest('hex').slice(0, 16),
-    server: server.size > 0,
-  };
+  const [page, server] = await Promise.all([
+    readPage(directory),
+    stat(join(directory, SERVER)).then(
+      () => true,
+      () => false,
+    ),
+  ]);
+  return { ...info, html: page.html, errors: page.errors, version: rev(page.html), server };
 }
 
 /** server.ts and the files it imports, transpiled, with a version that changes with them. */
 export async function readServerSource(root: string, id: string) {
   const directory = folder(root, id);
-  const { files, modules, errors, server } = await buildSource(directory);
+  const { files, modules, errors, server } = await buildServer(directory);
   if (!server.size) return undefined;
   const version = createHash('sha256');
   for (const name of [...server].sort()) version.update(name).update('\0').update(files[name]!);
@@ -304,7 +315,7 @@ export async function readServerSource(root: string, id: string) {
     entry: SERVER,
     modules: Object.fromEntries([...server].map((name) => [name, modules[name]!.code])),
     maps: Object.fromEntries([...server].map((name) => [name, modules[name]!.map])),
-    errors: errors.filter((error) => [...server].some((name) => error.startsWith(`${name}:`))),
+    errors,
     version: version.digest('hex').slice(0, 16),
   };
 }
@@ -401,48 +412,67 @@ export function writeValue(
   return next;
 }
 
-/** Validates, type-checks, transpiles, and test-renders a canvas; a report for the agent. */
+type ServerDescription = {
+  functions: string[];
+  triggers: Record<string, { every: string }>;
+  error?: string;
+};
+
+/**
+ * Checks a canvas for the agent: the page and its data load, server.ts builds, type-checks
+ * and loads, and the page renders cleanly in a real browser. Screenshots of each preview
+ * go to `.preview/` so the agent can look at what it made.
+ */
 export async function checkCanvas(
   root: string,
   id: string,
-  describeServer?: (id: string) => Promise<{
-    functions: string[];
-    triggers: Record<string, { every: string }>;
-    error?: string;
-  }>,
+  options: {
+    describeServer?: (id: string) => Promise<ServerDescription>;
+    renderer?: PageRenderer;
+    /** The gateway's own origin, which serves the frame shell. */
+    origin?: string;
+  } = {},
 ) {
   const directory = folder(root, id);
   const info = await readManifest(directory, id);
   const problems: string[] = [];
-  const { files, modules, errors, view, server } = await buildSource(directory);
-  problems.push(...errors);
-  const data = await readData(root, id);
-  problems.push(...data.errors);
-  const types = files[ENTRY] ? await typeCheck(files) : [];
-  const values = Object.fromEntries(
-    Object.entries(data.values).map(([key, item]) => [key, item.value]),
-  );
-  const viewModules = Object.fromEntries([...view].map((name) => [name, modules[name]!]));
-  const render =
-    !errors.length && files[ENTRY] ? testRender(viewModules, ENTRY, values) : undefined;
+  const [page, built, data] = await Promise.all([
+    readPage(directory),
+    buildServer(directory),
+    readData(root, id),
+  ]);
+  problems.push(...page.errors, ...built.errors, ...data.errors);
+  const types = built.server.size
+    ? await typeCheck(
+        Object.fromEntries([...built.server].map((name) => [name, built.files[name]!])),
+      )
+    : [];
   const loaded =
-    server.size && !errors.length && !types.length && describeServer
-      ? await describeServer(id)
+    built.server.size && !built.errors.length && !types.length && options.describeServer
+      ? await options.describeServer(id)
       : undefined;
   if (loaded?.error) problems.push(`${SERVER} failed to load: ${loaded.error}`);
   for (const [name, trigger] of Object.entries(loaded?.triggers ?? {}))
     if (!parseEvery(trigger.every))
       problems.push(`triggers.${name}.every '${trigger.every}' isn’t like '30m', '6h', or '1d'.`);
+
+  const values = Object.fromEntries(
+    Object.entries(data.values).map(([key, item]) => [key, item.value]),
+  );
+  const previews =
+    page.html && options.renderer && options.origin
+      ? await previewPage(directory, page.html, values, options.renderer, options.origin)
+      : undefined;
   const sections: string[] = [];
   if (problems.length)
     sections.push(`Problems:\n${problems.map((line) => `- ${line}`).join('\n')}`);
   if (types.length)
     sections.push(`Type errors (${types.length}):\n${types.map((line) => `- ${line}`).join('\n')}`);
-  if (render?.error) sections.push(`Render error with the saved data:\n${render.error}`);
-  if (render?.warnings.length)
-    sections.push(`Render warnings:\n${render.warnings.map((line) => `- ${line}`).join('\n')}`);
-  if (render?.html !== undefined && !render.html.trim())
-    sections.push('The view rendered nothing. Return visible content from App.');
+  if (previews) sections.push(...previews.sections);
+  else if (page.html)
+    sections.push(
+      'The page wasn’t rendered: previews need the OpenCodex desktop app (or Chrome in development).',
+    );
   if (loaded && !loaded.error)
     sections.push(
       `${SERVER} loaded. Functions: ${loaded.functions.join(', ') || 'none'}.${
@@ -453,21 +483,122 @@ export async function checkCanvas(
           : ''
       } Try a function with canvas_run.`,
     );
-  const ok = !problems.length && !types.length && Boolean(render?.html?.trim());
+  const ok = !problems.length && !types.length && !previews?.failed;
   const link = `[${info.title.replace(/[[\]]/g, '')}](canvas:${id})`;
   return {
     ok,
     report: ok
       ? [
-          `Canvas check passed: "${info.title}" (${id}). Types, build, and a test render with its saved data all succeeded.`,
+          `Canvas check passed: "${info.title}" (${id}).`,
           ...sections,
-          `Show it to the user by putting this line in your final reply, on its own line:\n${link}`,
+          `Once the screenshots look right, show it by putting this line in your final reply, on its own line:\n${link}`,
         ].join('\n\n')
       : [
           `Canvas check failed for "${info.title}" (${id}). Fix these and run canvas_check again.`,
           ...sections,
         ].join('\n\n'),
   };
+}
+
+/** Renders the page at each preview size and describes what the agent should look at. */
+async function previewPage(
+  directory: string,
+  html: string,
+  data: Record<string, unknown>,
+  renderer: PageRenderer,
+  origin: string,
+) {
+  const output = join(directory, '.preview');
+  await rm(output, { recursive: true, force: true });
+  await mkdir(output, { recursive: true });
+  const url = `${origin}/api/canvas-runtime/frame.html`;
+  const results = await Promise.all(
+    PREVIEW_VARIANTS.map(async ({ width, scheme }) => {
+      const script = previewScript({
+        mode: 'inline',
+        theme: PREVIEW_THEMES[scheme],
+        html,
+        data,
+        running: [],
+      });
+      try {
+        const render = await renderer({ url, script, width, scheme });
+        const files = await Promise.all(
+          render.tiles.map(async (tile, index) => {
+            const file = join(
+              output,
+              `${width}-${scheme}${render.tiles.length > 1 ? `-${index + 1}` : ''}.png`,
+            );
+            await writeFile(file, tile);
+            return file;
+          }),
+        );
+        return { width, scheme, render, files };
+      } catch (error) {
+        return { width, scheme, error: error instanceof Error ? error.message : String(error) };
+      }
+    }),
+  );
+  const errors = new Set<string>();
+  const warnings = new Set<string>();
+  const output_ = new Set<string>();
+  const lines: string[] = [];
+  let failed = false;
+  for (const result of results) {
+    const label = `${result.width}px ${result.scheme}`;
+    if ('error' in result) {
+      failed = true;
+      lines.push(`- ${label}: couldn’t render: ${result.error}`);
+      continue;
+    }
+    const { render, files } = result;
+    collect(render.logs, errors, warnings, output_);
+    const notes = [`${render.contentHeight.toLocaleString('en-US')}px tall`];
+    if (render.scrollWidth > result.width) {
+      failed = true;
+      notes.push(
+        `OVERFLOWS SIDEWAYS: content is ${render.scrollWidth}px wide in a ${result.width}px frame`,
+      );
+    }
+    if (render.contentHeight > files.length * PREVIEW_TILE)
+      notes.push(
+        `screenshots cover the first ${(files.length * PREVIEW_TILE).toLocaleString('en-US')}px`,
+      );
+    lines.push(`- ${label}: ${notes.join('; ')}.\n${files.map((file) => `  ${file}`).join('\n')}`);
+  }
+  if (errors.size) failed = true;
+  const sections = [
+    `Previews, rendered as OpenCodex shows the page in a chat. Read every screenshot (they are PNG files) and fix anything broken, cramped, misaligned, generic or hard to read before you show the canvas:\n${lines.join('\n')}`,
+  ];
+  if (errors.size)
+    sections.push(`Page errors:\n${[...errors].map((line) => `- ${line}`).join('\n')}`);
+  if (warnings.size)
+    sections.push(`Console warnings:\n${[...warnings].map((line) => `- ${line}`).join('\n')}`);
+  if (output_.size)
+    sections.push(`Console output:\n${[...output_].map((line) => `- ${line}`).join('\n')}`);
+  return { sections, failed };
+}
+
+/** The frame shell's URL as Chrome names it in stack traces; inline scripts report it. */
+const SHELL_LOCATION =
+  /\bat (?:\S*?)https?:\/\/[^/\s]+\/api\/canvas-runtime\/frame\.html(?:\?\S*?)?:(\d+):(\d+)\)?/g;
+
+function collect(logs: PageLog[], errors: Set<string>, warnings: Set<string>, output: Set<string>) {
+  for (const { level, text } of logs) {
+    // Every CDN script the page loads triggers this; it only matters on 2G connections.
+    if (text.includes('is invoked via document.write')) continue;
+    const set = level === 'error' ? errors : level === 'warning' ? warnings : output;
+    if (set.size >= 15) continue;
+    // Chrome numbers lines in a written page's inline scripts from their <script> tag.
+    set.add(
+      text
+        .slice(0, 600)
+        .replace(
+          SHELL_LOCATION,
+          (_, line: string) => `at line ${line} of an inline <script> in ${PAGE}`,
+        ),
+    );
+  }
 }
 
 /** Watches the canvases folder and reports changes, while anyone is listening. */
@@ -492,7 +623,10 @@ export function createCanvasWatcher(directory: string) {
       );
       return;
     }
-    if (parts.length === 2 && (SOURCE.test(parts[1]!) || parts[1] === MANIFEST)) {
+    if (
+      parts.length === 2 &&
+      (SOURCE.test(parts[1]!) || parts[1] === PAGE || parts[1] === MANIFEST)
+    ) {
       emit({ type: 'source', id });
       if (parts[1] === MANIFEST) emit({ type: 'list' });
     }
@@ -535,6 +669,10 @@ export function createCanvasWatcher(directory: string) {
   };
 }
 
+/** Public CDNs a page may load libraries, styles and fonts from. */
+const CDNS =
+  'https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://esm.sh';
+
 const FRAME = (version: string) => `<!doctype html>
 <html>
 <head>
@@ -542,7 +680,6 @@ const FRAME = (version: string) => `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
-<div id="root"></div>
 <script src="/api/canvas-runtime/runtime.js?v=${version}"></script>
 </body>
 </html>
@@ -555,7 +692,20 @@ export function canvasRuntimeRoutes() {
     const origin = new URL(c.req.url).origin;
     c.header(
       'Content-Security-Policy',
-      `default-src 'none'; script-src ${origin} 'unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; frame-ancestors ${origin}; base-uri 'none'; form-action 'none'`,
+      [
+        // The page gets an opaque origin even when it's the top-level document (previews, iOS).
+        'sandbox allow-scripts',
+        "default-src 'none'",
+        `script-src ${origin} 'unsafe-inline' 'unsafe-eval' ${CDNS}`,
+        `style-src 'unsafe-inline' ${CDNS} https://fonts.googleapis.com`,
+        `font-src data: ${CDNS} https://fonts.gstatic.com`,
+        `img-src data: blob: ${CDNS}`,
+        `connect-src ${CDNS}`,
+        'worker-src blob:',
+        `frame-ancestors ${origin}`,
+        "base-uri 'none'",
+        "form-action 'none'",
+      ].join('; '),
     );
     return c.html(FRAME(CANVAS_RUNTIME.version));
   });
@@ -568,7 +718,7 @@ export function canvasRuntimeRoutes() {
   return app;
 }
 
-export function canvasRoutes(apps: Apps) {
+export function canvasRoutes(apps: Apps, renderer: () => Promise<PageRenderer | undefined>) {
   const app = new Hono();
   app.get('/', async (c) => {
     return c.json(await listCanvases(CANVAS_ROOT));
@@ -598,8 +748,13 @@ export function canvasRoutes(apps: Apps) {
   app.get('/:id/files', async (c) => {
     const directory = folder(CANVAS_ROOT, c.req.param('id'));
     await readManifest(directory, c.req.param('id'));
-    const files = await readSourceFiles(directory);
-    return c.json({ files: Object.entries(files).map(([name, text]) => ({ name, text })) });
+    const [page, files] = await Promise.all([readPage(directory), readSourceFiles(directory)]);
+    return c.json({
+      files: [
+        ...(page.html ? [{ name: PAGE, text: page.html }] : []),
+        ...Object.entries(files).map(([name, text]) => ({ name, text })),
+      ],
+    });
   });
   app.get('/:id/data', async (c) => c.json(await readData(CANVAS_ROOT, c.req.param('id'))));
   app.get('/:id/data/:key', async (c) => {
@@ -633,7 +788,13 @@ export function canvasRoutes(apps: Apps) {
         );
   });
   app.post('/:id/check', async (c) =>
-    c.json(await checkCanvas(CANVAS_ROOT, c.req.param('id'), (id) => apps.describe(id))),
+    c.json(
+      await checkCanvas(CANVAS_ROOT, c.req.param('id'), {
+        describeServer: (id) => apps.describe(id),
+        renderer: await renderer(),
+        origin: new URL(c.req.url).origin,
+      }),
+    ),
   );
   app.use('/:id/functions/:name', bodyLimit({ maxSize: MAX_VALUE_BYTES + 4096 }));
   app.post('/:id/functions/:name', async (c) => {

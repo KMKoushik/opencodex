@@ -20,6 +20,7 @@
     "zod": "^4.1.0"
   },
   "devDependencies": {
-    "@types/ws": "^8.18.2"
+    "@types/ws": "^8.18.2",
+    "playwright-core": "1.63.0"
   }
 }

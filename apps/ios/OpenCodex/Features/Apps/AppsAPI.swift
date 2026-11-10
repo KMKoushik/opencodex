@@ -68,14 +68,13 @@ nonisolated struct AppInfo: Codable, Hashable, Identifiable, Sendable {
   var failing: Bool { error != nil || lastRun?.status == "error" }
 }
 
-/// The view's transpiled files (`CanvasSource`).
+/// The page the agent wrote, `index.html` (`CanvasSource`).
 nonisolated struct CanvasSource: Codable, Hashable, Sendable {
   var id: String
   var title: String
-  var entry: String
-  var modules: [String: String]
+  var html: String
   var errors: [String]
-  /// Changes whenever any view file changes, so hosts can rerun the view.
+  /// Changes whenever the page changes, so hosts can show it again.
   var version: String
   var server: Bool?
 }

@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 import WebKit
 
-/// One canvas's snapshots, like the desktop `CanvasFrame`'s queries: its transpiled view, its
+/// One canvas's snapshots, like the desktop `CanvasFrame`'s queries: its page, its
 /// data values with revisions, and which of its functions are running. Live `canvas` events
 /// (when the event stream forwards them) and reconnects refetch only what changed.
 @Observable
@@ -18,6 +18,8 @@ final class CanvasModel {
   private(set) var loadError: String?
   /// The last failed write or call bookkeeping, shown above the frame.
   var writeError: String?
+  /// Uncaught errors from the page itself, until it reloads.
+  var pageErrors: [String] = []
 
   /// Opens a chat by session id, for views that link the sessions their server started.
   @ObservationIgnored var openSession: ((String) -> Void)?
@@ -147,8 +149,8 @@ final class CanvasModel {
 }
 
 /// The canvas frame runtime from the gateway (`/api/canvas-runtime/frame.html`) in a web view,
-/// speaking the same `opencodex-canvas` messages the web UI's iframe host does. The page has no
-/// network (its CSP) and no credentials: code, data and theme come from the native client,
+/// speaking the same `opencodex-canvas` messages the web UI's iframe host does. The page reaches
+/// only public CDNs (its CSP) and has no credentials: page, data and theme come from the native client,
 /// and its writes and function calls go back through it, so remote gateways keep the device
 /// token out of the web view.
 struct CanvasFrameView: UIViewRepresentable {
@@ -223,8 +225,8 @@ struct CanvasFrameView: UIViewRepresentable {
 }
 
 /// Relays messages between the frame and the gateway, like `CanvasFrame`'s effects: first
-/// contact sends everything; later only what changed (the view's modules, values whose
-/// revision differs, the theme, running functions).
+/// contact sends everything; later only what changed (values whose revision differs, the
+/// theme, running functions). An edited page reloads the web view, whose next `ready` gets it.
 final class CanvasBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate {
   static let handlerName = "opencodexCanvas"
   static let channel = "opencodex-canvas"
@@ -262,6 +264,8 @@ final class CanvasBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate
   private var shownRevs: [String: String] = [:]
   private var shownTheme: JSONValue?
   private var shownRunning: [String]?
+  /// Where the page was scrolled when it reloaded, for the next init.
+  private var scroll: Double = 0
   private var source: CanvasSource?
   private var data: CanvasData?
   private var running: [String] = []
@@ -295,20 +299,20 @@ final class CanvasBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate
       }
       shownVersion = source.version
       shownTheme = theme
+      shownRunning = running
       post([
-        "type": .string("init"), "mode": .string("panel"), "theme": theme, "entry": .string(source.entry),
-        "modules": .object(source.modules.mapValues { .string($0) }), "data": .object(values),
+        "type": .string("init"), "mode": .string("panel"), "theme": theme, "html": .string(source.html),
+        "data": .object(values), "running": .array(running.map { .string($0) }),
+        "scroll": .number(scroll),
       ])
-      sendRunning()
+      scroll = 0
       return
     }
-    // The agent edited the view: rerun it with the frame's current data.
+    // The agent edited the page: the frame reloads, and its next `ready` gets the new one.
     if version != source.version {
       shownVersion = source.version
-      post([
-        "type": .string("modules"), "entry": .string(source.entry),
-        "modules": .object(source.modules.mapValues { .string($0) }),
-      ])
+      post(["type": .string("reload")])
+      return
     }
     // Values changed elsewhere (the agent, another view, a conflict): send only those.
     for (key, item) in data.values where shownRevs[key] != item.rev {
@@ -362,7 +366,17 @@ final class CanvasBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate
       shownTheme = nil
       shownRunning = nil
       shownRevs = [:]
+      model.pageErrors = []
       flush()
+    case "reload":
+      // A fresh page load shows the page again in a new realm; `ready` then sends the latest.
+      scroll = value["scroll"]?.number ?? 0
+      load()
+    case "error":
+      guard let text = value["message"]?.string, !model.pageErrors.contains(text),
+        model.pageErrors.count < 5
+      else { return }
+      model.pageErrors.append(text)
     case "set":
       guard let key = value["key"]?.string else { return }
       model.set(key, value["value"] ?? .null)
@@ -482,7 +496,7 @@ struct CanvasPanel: View {
 
   private var problem: String? {
     if let error = model.loadError { return error }
-    let problems = (model.source?.errors ?? []) + (model.data?.errors ?? [])
+    let problems = (model.source?.errors ?? []) + (model.data?.errors ?? []) + model.pageErrors
     if !problems.isEmpty { return problems.joined(separator: "\n") }
     return model.writeError
   }

@@ -49,14 +49,13 @@ export type CanvasInfo = {
   updated: number;
 };
 
-/** The view's transpiled files. `errors` are syntax errors that stop it from running. */
+/** The page the agent wrote (`index.html`). `errors` stop it from being shown. */
 export type CanvasSource = CanvasInfo & {
-  entry: string;
-  modules: Record<string, string>;
+  html: string;
   errors: string[];
-  /** Changes whenever any view file changes, so hosts can rerun the view. */
+  /** Changes whenever the page changes, so hosts can show it again. */
   version: string;
-  /** The canvas has a server.ts the view can call. */
+  /** The canvas has a server.ts the page can call. */
   server: boolean;
 };
 
@@ -151,19 +150,29 @@ export type CanvasEvent =
 
 export type CanvasTheme = { scheme: 'light' | 'dark'; vars: Record<string, string> };
 
-/** Messages between the web host and a canvas frame. Frames have an opaque origin. */
+/**
+ * Messages between a host (the web app, the iPhone app, the preview renderer) and a canvas
+ * frame. The frame loads a fixed shell with the bridge, then writes the agent's page into
+ * itself, so the page keeps the shell's opaque origin and Content-Security-Policy. To show
+ * the page again (new data, an edited page) the host reloads the frame: each showing gets a
+ * fresh JavaScript realm, so the page's scripts run exactly as on first load.
+ */
 export const CANVAS_CHANNEL = 'opencodex-canvas';
+export type CanvasInit = {
+  type: 'init';
+  mode: 'inline' | 'panel';
+  theme: CanvasTheme;
+  html: string;
+  data: Record<string, unknown>;
+  running: string[];
+  /** Where the page was scrolled before it reloaded. */
+  scroll?: number;
+};
 export type HostMessage = { channel: typeof CANVAS_CHANNEL } & (
-  | {
-      type: 'init';
-      mode: 'inline' | 'panel';
-      theme: CanvasTheme;
-      entry: string;
-      modules: Record<string, string>;
-      data: Record<string, unknown>;
-    }
+  | CanvasInit
   | { type: 'theme'; theme: CanvasTheme }
-  | { type: 'modules'; entry: string; modules: Record<string, string> }
+  /** The agent changed the page: the frame answers with `reload` and its scroll position. */
+  | { type: 'reload' }
   | { type: 'data'; key: string; value: unknown }
   | { type: 'result'; call: number; value?: unknown; error?: string }
   | { type: 'running'; names: string[] }
@@ -174,10 +183,14 @@ export type HostMessage = { channel: typeof CANVAS_CHANNEL } & (
 );
 export type FrameMessage = { channel: typeof CANVAS_CHANNEL } & (
   | { type: 'ready' }
+  /** Show the page again: the host reloads the frame and sends `scroll` with the next init. */
+  | { type: 'reload'; scroll: number }
   | { type: 'size'; height: number }
   | { type: 'set'; key: string; value: unknown }
   | { type: 'call'; call: number; name: string; args: unknown[] }
   | { type: 'open'; target: string | { session: string } }
+  /** An uncaught error in the page, so the host can say the canvas is broken. */
+  | { type: 'error'; message: string }
   /** The overlay's result; null when cancelled. Marks stay drawn until `annotate-end`. */
   | { type: 'annotation'; result: AnnotationOverlayResult | null }
 );

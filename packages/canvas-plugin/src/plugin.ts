@@ -1,8 +1,9 @@
 /**
- * OpenCode plugin installed by OpenCodex. It teaches agents to make canvases: small React
- * views built from OpenCodex's own components, shown beside the chat and themed with the
- * app. The agent writes the files with its normal tools; these tools ask the running
- * OpenCodex gateway to create a canvas folder and to check one before it's shown.
+ * OpenCode plugin installed by OpenCodex. It teaches agents to make canvases: HTML pages
+ * OpenCodex shows in the chat, themed with the app, with saved data and optional server
+ * code. The agent writes the files with its normal tools; these tools ask the running
+ * OpenCodex gateway to create a canvas folder, and to check and screenshot one before it's
+ * shown.
  *
  * The gateway installs this file verbatim into OpenCode's global plugins folder, so it must
  * stay self-contained: no static imports. Types below describe only the parts of the V2
@@ -71,101 +72,116 @@ class CanvasError extends Error {}
 const SKILL = `<!-- ${MARKER} -->
 # Canvas
 
-A canvas is a small React view that OpenCodex shows beside the chat, built from OpenCodex's
-own components so it always matches the app's theme (light, dark, any preset). Use one when
-a visual or interactive result reads better than text: dashboards, metrics, comparisons,
-charts, audits, reports, architecture or flow diagrams, timelines, checklists, small tools.
-Prefer a canvas over a long markdown table or an ASCII diagram.
+A canvas is a page OpenCodex shows in the chat, where you link it, and full size in a side
+panel. Use one when a visual or interactive result says more than text: reports, dashboards,
+comparisons, charts, audits, architecture or flow diagrams, timelines, checklists, small
+tools. Prefer a canvas over a long markdown table or an ASCII diagram.
 
 ## Workflow
 
-1. \`canvas_create({ title })\` makes a folder and returns its path and id.
-2. Write the view in \`app.tsx\` there with your normal file tools. It must
-   \`export default function App()\`. Other \`.ts\`/\`.tsx\` files in the same folder can be
-   imported with \`./name\`.
-3. Put data the view shows in \`data/<key>.json\` (one JSON value per file) and read it with
-   \`useData('<key>', fallback)\`. Keep large or changing data there rather than in code, so
-   you can update it later without touching the view.
-4. \`canvas_check({ id })\` type-checks, builds, and test-renders the view with its data.
-   Fix every error it reports and check again until it passes.
-5. Put the link it gives you, \`[Title](canvas:<id>)\`, on its own line in your final
-   reply. OpenCodex shows the canvas there. Don't repeat the canvas's content in text;
-   summarize what it shows in a sentence or two.
+1. \`canvas_create({ title })\` makes a folder with a starter \`index.html\` and returns its
+   path and id.
+2. Write the page in \`index.html\` with your normal file tools: one self-contained HTML
+   document with its own \`<style>\` and \`<script>\`. You have full control of the design.
+   Make it look like a polished product page made by a great designer, not an admin
+   template.
+3. Put the data the page shows in \`data/<key>.json\` (one JSON value per file) and read it
+   from \`canvas.data.<key>\`. Don't paste data into the page: the user and the app update
+   values, and the page follows them.
+4. \`canvas_check({ id })\` checks the canvas and renders the page the way OpenCodex shows it:
+   728px wide (the reply column) and 390px (a phone) in dark mode, and 728px in light. It
+   saves screenshots and reports the page's height, sideways overflow, and console errors.
+   Read every screenshot, fix anything broken, cramped, misaligned, generic or hard to read,
+   and check again until it passes and looks right.
+5. Put the link it gives you, \`[Title](canvas:<id>)\`, on its own line in your final reply.
+   The user sees the page there, so don't announce it or restate it; add only what the page
+   doesn't say.
 
-To change an existing canvas, edit its files (\`canvas_list\` finds it), run
-\`canvas_check\`, and link it again. The user sees edits live.
+To change a canvas, edit its files (\`canvas_list\` finds it), run \`canvas_check\`, and link
+it again. Open views update live.
 
-## Rules
+## The page
 
-- The view imports only from \`react\`, \`@opencodex/canvas\`, and the canvas's own files. It
-  has no network access: no fetch, no CDN scripts, no remote images. Put everything in data
-  files, and fetch live data in server.ts (see Apps).
-- Use the components for all standard UI. Don't set colors, fonts, or shadows yourself;
-  the components follow the theme. For custom SVG or small details, use the theme's CSS
-  variables: \`var(--text)\`, \`var(--text-secondary)\`, \`var(--text-tertiary)\`,
-  \`var(--surface)\`, \`var(--elevated)\`, \`var(--border)\`, \`var(--cv-blue)\`, \`--cv-green\`,
-  \`--cv-orange\`, \`--cv-purple\`, \`--cv-pink\`, \`--cv-yellow\`, \`--cv-red\`, \`--cv-gray\`.
-- Lay out with \`Stack\` (vertical, the page default), \`Row\`, and \`Grid\`. Lead with the
-  answer: key numbers or the main chart first, details after. Keep it to one screen of
-  dense, useful content; no decorative headers, emojis, or gradients.
-- Canvases render inline in the chat (about 700 px wide) and full-size in a side panel,
-  so layouts must work at any width: let \`Grid\` and charts size themselves.
-- \`useData\` values are shared: the user's edits in the canvas are saved to the same
-  files you edit, and you see them on your next read.
+- OpenCodex injects its theme as CSS variables on \`:root\`. They follow the user's theme and
+  light/dark mode live, so build colors from them, directly or with \`color-mix()\`:
+  \`--surface\` (the chat background behind the page), \`--elevated\` (raised surfaces),
+  \`--text\`, \`--text-secondary\`, \`--text-tertiary\`, \`--border\`, \`--border-heavy\`, \`--hover\`,
+  \`--primary\` and \`--on-primary\` (solid buttons), \`--accent\`, \`--success\`, \`--warning\`,
+  \`--error\`, \`--code-bg\`, \`--font-sans\`, \`--font-mono\`, and the palette \`--blue\`, \`--green\`,
+  \`--orange\`, \`--purple\`, \`--pink\`, \`--yellow\`, \`--red\`, \`--gray\`, with \`--chart-1\` to
+  \`--chart-6\` for series. \`prefers-color-scheme\` matches too.
+- The base stylesheet only sets the background, the text color, the font at 14px, and
+  \`body { margin: 0 }\`. Everything else is yours.
+- Scripts, styles and fonts load from public CDNs: cdn.jsdelivr.net, unpkg.com,
+  cdnjs.cloudflare.com, esm.sh, and Google Fonts. Use a chart or diagram library when it
+  helps (Chart.js, D3, Mermaid). Nothing else is reachable: no requests to other hosts, no
+  local files, no localStorage. Data comes through \`canvas\`.
+- Links to web pages open in the browser; use \`#anchors\` to move within the page.
+- Build markup from data with \`textContent\`, or escape values you put in \`innerHTML\`.
 
-## Components (import from '@opencodex/canvas')
+## Layout
 
-Exact props are in the \`.sdk\` folder next to the canvases (path in canvas_create's result).
+- In the chat, the page has no border and sits on the chat background, as wide as the reply
+  column (about 728px; 390px on phones). Leave html, body and the outermost element without
+  a background, and add no outer card, border, or banner title: the page is part of the
+  reply.
+- Use a fluid width with no horizontal padding on the outermost element. A box with its own
+  background gets at least 16px of padding and rounded corners.
+- In the side panel the page is full size (often 1100px or more) with the panel's padding.
+  Cap the reading width of wide content (around 1040px) when it reads better.
+- Let content set the height. Give charts fixed pixel heights. Never use \`100vh\` or
+  \`height: 100%\` on html or body. A page taller than about 1000px scrolls inside its frame in
+  the chat, so put what matters first.
 
-Layout: \`Stack gap align\`, \`Row gap align justify wrap\`, \`Grid columns|minWidth gap\`,
-\`Card title subtitle actions padding\`, \`Section title description actions\`, \`Divider label\`,
-\`Tabs\` with \`Tab label\` children.
-Text: \`Title subtitle actions\`, \`Heading level\`, \`Text muted size weight mono\`, \`Code\`,
-\`CodeBlock code title maxHeight\`.
-Display: \`Stat label value format delta deltaFormat invert caption tone\`, \`Badge tone\`,
-\`Callout tone title\`, \`KeyValue items columns\`, \`Progress value max label format tone\`,
-\`List items={[{ title, description, trailing }]}\`, \`Timeline items={[{ title, time,
-description, tone }]}\`, \`TaskList items={[{ id, label, status|done, note }]} onToggle\`,
-\`Table rows columns sortable defaultSort={{ key, descending }} search maxHeight dense
-onRowClick\` (columns: keys or \`{ key, label, align, format, width, render, tone: 'delta',
-filter: true }\`; headers sort, a search box appears past 10 rows, and \`filter\` adds a menu of
-that column's values, so don't build your own filter controls for a table),
-\`DiffView patch|before+after\`,
-\`Empty title\`.
-Inputs (controlled, \`onChange\` gets the value): \`Button variant onClick\`, \`TextInput\`,
-\`TextArea\`, \`NumberInput\`, \`Select options\`, \`SegmentedControl options\`, \`Checkbox\`,
-\`Switch\`, \`Slider min max step\`.
-Charts: \`BarChart data x series stacked horizontal showValues format\`,
-\`LineChart data x series area curve dots zero format\`, \`AreaChart\`,
-\`PieChart data={[{ label, value }]} donut center format\`, \`Sparkline values\`,
-\`ScatterChart data x y group size label\`, \`Heatmap rows columns values format\`.
-\`series\` is a column key, a list of keys, or \`{ key, label, color }\`; it defaults to every
-numeric column.
-Diagrams: \`AsciiDiagram spec\` (see Diagrams below).
-Hooks: \`useData(key, fallback)\` returns \`[value, setValue]\`; \`useColorScheme()\`;
-\`useFn(name)\` and \`useOpen()\` for apps (see Apps below).
-Formats: 'number', 'integer', 'compact', 'percent' (0.25 → 25%), 'currency', 'bytes',
-'duration' (ms), Intl.NumberFormat options, or a function. Tones: neutral, info, success,
-warning, danger. Colors: blue, green, orange, purple, pink, yellow, red, gray.
+## Design
+
+- Decide what the page is for before choosing its form: a verdict to read, a status to scan,
+  decisions to make, or a tool to use. Lead with the answer, in words and numbers.
+- Give each screen one most important thing. Numbers carry a sentence that says what they
+  mean. Color means something (good, watch, bad), not decoration.
+- Use readable type: body text at least 14px, real headings, comfortable line length and
+  spacing. Don't nest boxes inside boxes.
+- Keep long lists usable: important rows first, the rest grouped or collapsed, and search or
+  filters only when they help.
+- Turn raw errors and ids into plain words. Show when the data was last refreshed.
+- It must work at 390px as well as 728px and wider, in light and dark.
+
+## window.canvas
+
+- \`canvas.data\` holds every value by key; \`canvas.get(key, fallback)\` reads one.
+- \`canvas.set(key, value)\` or \`canvas.set(key, (current) => next)\` saves a value: the user's
+  state, like checked items, notes, and choices. It's shared with you and every open view;
+  you see it on your next read of \`data/<key>.json\`.
+- When a value changes outside the page (you, a run, another view), the page is shown again
+  with the new data. To update in place instead, keeping inputs and scroll, handle it with
+  \`canvas.on('data', (key, value) => ...)\`.
+- \`await canvas.call('name', ...args)\` runs an exported function of server.ts (see Apps) and
+  resolves with its JSON result, or rejects with its error. \`canvas.running\` lists the
+  functions running now, from any caller; \`canvas.on('running', (names) => ...)\`.
+- \`canvas.open(url)\` opens a web page; \`canvas.open({ session })\` opens a chat that \`oc.run\`
+  started.
+- \`canvas.scheme\` is \`'light'\` or \`'dark'\`; \`canvas.on('theme', (scheme) => ...)\` is for
+  drawing code that can't use CSS variables.
 
 ## Apps: server.ts
 
 A canvas becomes an app when it needs live data or actions: refresh from GitHub, triage
-issues, a button that does something. Add \`server.ts\` beside \`app.tsx\`. Its exported async
-functions run in a process OpenCodex starts, with \`@opencodex/canvas/server\`:
+issues, a button that does something. Add \`server.ts\` beside \`index.html\`. Its exported async
+functions run in a process OpenCodex starts, with \`@opencodex/canvas/server\` (exact types in
+\`.sdk/server.d.ts\` next to the canvases):
 
 Apps are listed in the sidebar with an icon. Give one to \`canvas_create\` (\`icon: { glyph,
 color }\`) or set \`"icon"\` in \`canvas.json\`; pick the glyph for what the app does.
 
 - \`data.get(key, fallback)\`, \`data.set(key, value)\`, \`data.update(key, fallback, fn)\`: the
-  same \`data/<key>.json\` values the view reads; writes show up in open views live. \`update\`
-  is safe against concurrent edits from the view.
+  same \`data/<key>.json\` values the page reads; writes show up in open views live. \`update\`
+  is safe against concurrent edits from the page.
 - \`sh(command, { cwd })\` runs a shell command and returns stdout; \`sh.json<T>(command)\`
   parses it (\`gh ... --json\`). A nonzero exit throws.
-- \`oc.ask(prompt, { input, schema })\`: one model call without tools for judgment
-  (classify, summarize, decide). With \`schema\` it returns validated, typed JSON. Build
-  schemas with \`s.object\`, \`s.string\`, \`s.number\`, \`s.integer\`, \`s.boolean\`, \`s.enum([...])\`,
-  \`s.array\`, \`s.optional\`; each takes a description. \`Infer<typeof schema>\` gives the type.
+- \`oc.ask(prompt, { input, schema })\`: one model call without tools for judgment (classify,
+  summarize, decide). With \`schema\` it returns validated, typed JSON. Build schemas with
+  \`s.object\`, \`s.string\`, \`s.number\`, \`s.integer\`, \`s.boolean\`, \`s.enum([...])\`, \`s.array\`,
+  \`s.optional\`; each takes a description. \`Infer<typeof schema>\` gives the type.
 - \`oc.run(prompt, { project, title, thread, permissions })\`: a full agent session with tools
   in \`project\` (an absolute folder). Waits and returns \`{ text, sessionID }\`. \`thread\`
   continues the same session on later calls (e.g. \`issue-123\`).
@@ -178,20 +194,18 @@ color }\`) or set \`"icon"\` in \`canvas.json\`; pick the glyph for what the app
 Put deterministic work in code (listing, filtering, diffing, skipping unchanged items, gh
 commands) and use \`oc.ask\`/\`oc.run\` only where judgment is needed, so runs stay cheap. Keep
 state the next run needs (what was seen, decisions) in data values. Functions take and
-return JSON. server.ts can import only \`@opencodex/canvas/server\` and its own files; use
-\`sh\` for everything else. Share types in a \`types.ts\` both sides import.
+return JSON. server.ts can import only \`@opencodex/canvas/server\` and its own \`.ts\` files;
+use \`sh\` for everything else.
 
-In the view, \`const refresh = useFn<typeof refresh>('refresh')\` (with
-\`import type { refresh } from './server'\`) gives \`refresh.call(...args)\`, \`refresh.running\`,
-and \`refresh.error\`. \`useOpen()\` returns \`open(url | { session })\` for links and the chats
-\`oc.run\` started. Show when data was last refreshed.
-
-After canvas_check passes, try each function with \`canvas_run\` before linking the canvas.
+In the page, \`await canvas.call('refresh')\` runs it; disable its button while
+\`canvas.running.includes('refresh')\`, and show when the data was last refreshed. After
+\`canvas_check\` passes, try each function with \`canvas_run\` before linking the canvas.
 
 \`\`\`ts
 // server.ts
 import { data, oc, s, sh, type Triggers } from '@opencodex/canvas/server';
-import type { Issue } from './types';
+
+type Issue = { number: number; title: string; body: string; kind?: string; summary?: string };
 
 export const triggers: Triggers = { refresh: { every: '6h' } };
 
@@ -201,7 +215,7 @@ const verdict = s.object({
 });
 
 export async function refresh() {
-  const issues = await sh.json<{ number: number; title: string; body: string }[]>(
+  const issues = await sh.json<Issue[]>(
     'gh issue list -R owner/repo --json number,title,body --limit 50',
   );
   const known = await data.get<Issue[]>('issues', []);
@@ -215,72 +229,60 @@ export async function refresh() {
 }
 \`\`\`
 
-## Diagrams
+## Example page
 
-Draw architecture, flow, and sequence diagrams with \`<AsciiDiagram spec={...} />\`. The spec
-is the ascii-diagram format: everything sits in whole character cells, x to the right and y
-down from 0,0. About 85 columns fit inline; wider diagrams scroll.
-
-- \`boxes\`: \`{ id, x | centerX, y, width?, height?, title, lines, color, textColor, align }\`.
-  The title sits in the top border. A box grows to fit: at least its longest line + 4 wide
-  and its line count + 2 tall. Boxes can nest but not partly overlap.
-- \`connectors\`: \`{ from: { box, port }, to: { box, port }, via?, route?, color }\` with ports
-  top, right, bottom, left. The arrowhead stops one cell before the target. Without \`via\`
-  the route bends once halfway; give \`via\` points for anything else. Every segment is
-  horizontal or vertical. Connectors into the same port merge into one stem.
-- \`lines\` are connectors without arrowheads; \`texts\` are \`{ x, y, value, anchor, color }\`
-  (omit x to center). Labels go next to a line, never across it.
-- Colors are theme names only: blue, green, orange, purple, pink, yellow, red, gray, the
-  tones, \`text\`, \`muted\` (structure and labels), or \`accent\`.
-- Leave 4 or more empty rows between stacked boxes (room for the connector and its label)
-  and 4 or more columns between side-by-side boxes. Lead the main path top to bottom and
-  bring side inputs in from the right. Keep titles short and in capitals.
-
-canvas_check renders the diagram and reports overlaps, text crossing lines, and arrows
-that don't end a straight stem, with their coordinates.
-
-\`\`\`tsx
-<AsciiDiagram
-  spec={{
-    boxes: [
-      { id: 'ui', centerX: 20, y: 0, width: 26, title: 'WEB UI', lines: ['React'], color: 'blue' },
-      { id: 'api', centerX: 20, y: 7, width: 26, title: 'GATEWAY', lines: ['/api routes'], color: 'green' },
-      { id: 'db', x: 46, y: 7, width: 20, title: 'STORE', lines: ['SQLite'], color: 'orange' },
-    ],
-    connectors: [
-      { from: { box: 'ui', port: 'bottom' }, to: { box: 'api', port: 'top' } },
-      { from: { box: 'api', port: 'right' }, to: { box: 'db', port: 'left' }, color: 'orange' },
-    ],
-    texts: [{ x: 22, y: 4, value: 'HTTP', color: 'muted' }],
-  }}
-/>
-\`\`\`
-
-## Example
-
-\`\`\`tsx
-import { BarChart, Card, Grid, Stack, Stat, Table, Title, useData } from '@opencodex/canvas';
-
-type Run = { suite: string; passed: number; failed: number; ms: number };
-
-export default function App() {
-  const [runs] = useData<Run[]>('runs', []);
-  const failed = runs.reduce((sum, run) => sum + run.failed, 0);
-  return (
-    <Stack>
-      <Title subtitle="Last CI run">Test results</Title>
-      <Grid columns={3}>
-        <Stat label="Suites" value={runs.length} />
-        <Stat label="Failed tests" value={failed} tone={failed ? 'danger' : 'success'} />
-        <Stat label="Slowest" value={Math.max(0, ...runs.map((run) => run.ms))} format="duration" />
-      </Grid>
-      <Card title="By suite">
-        <BarChart data={runs} x="suite" series={['passed', 'failed']} stacked />
-      </Card>
-      <Table rows={runs} columns={['suite', 'passed', 'failed', { key: 'ms', label: 'Time', format: 'duration' }]} />
-    </Stack>
+\`\`\`html
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  h1 { margin: 0 0 6px; font-size: 24px; line-height: 1.2; letter-spacing: -0.015em; }
+  .sub { margin: 0 0 20px; color: var(--text-secondary); font-size: 15px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px;
+    overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--border); }
+  .stat { padding: 14px 16px; background: var(--surface); }
+  .stat b { display: block; font-size: 26px; letter-spacing: -0.02em; }
+  .stat span { color: var(--text-secondary); font-size: 13px; }
+  .bad b { color: var(--red); }
+  ul { margin: 24px 0 0; padding: 0; list-style: none; }
+  li { padding: 12px 0 12px 14px; border-top: 1px solid var(--border); border-left: 3px solid var(--red); }
+  li small { display: block; color: var(--text-tertiary); }
+</style>
+</head>
+<body>
+<h1 id="lead"></h1>
+<p class="sub" id="sub"></p>
+<div class="stats" id="stats"></div>
+<ul id="failures"></ul>
+<script>
+  const suites = canvas.get('suites', []);
+  const failed = suites.filter((suite) => suite.failed > 0);
+  const tests = suites.reduce((sum, suite) => sum + suite.passed + suite.failed, 0);
+  document.getElementById('lead').textContent = failed.length
+    ? \`\${failed.length} of \${suites.length} suites are failing\`
+    : \`All \${suites.length} suites pass\`;
+  document.getElementById('sub').textContent = \`\${tests.toLocaleString()} tests in the last CI run.\`;
+  const stat = (value, label, bad) => {
+    const cell = document.createElement('div');
+    cell.className = bad ? 'stat bad' : 'stat';
+    cell.append(Object.assign(document.createElement('b'), { textContent: value }));
+    cell.append(Object.assign(document.createElement('span'), { textContent: label }));
+    return cell;
+  };
+  document.getElementById('stats').append(
+    stat(failed.reduce((sum, suite) => sum + suite.failed, 0), 'failing tests', failed.length > 0),
+    stat(\`\${Math.max(0, ...suites.map((suite) => suite.seconds))}s\`, 'slowest suite'),
   );
-}
+  for (const suite of failed) {
+    const item = document.createElement('li');
+    item.textContent = suite.name;
+    item.append(Object.assign(document.createElement('small'), { textContent: suite.firstError }));
+    document.getElementById('failures').append(item);
+  }
+</script>
+</body>
+</html>
 \`\`\`
 `;
 
@@ -348,7 +350,7 @@ export default {
         id: 'canvas',
         name: 'canvas',
         description:
-          'Show results as a canvas: an interactive view beside the chat built from themed components. Use for dashboards, metrics, charts, comparisons, reports, audits, architecture or flow diagrams, timelines, checklists, and small tools, instead of long markdown tables or ASCII diagrams. Also use it to build apps: a canvas with server code that runs on demand or on a schedule (every day, every hour) and calls the agent for judgment, for recurring work like triaging issues and PRs, monitors, and daily reports. OpenCodex apps are the way to schedule recurring work; do not use cron, launchd, or other schedulers.',
+          'Show results as a canvas: a polished, interactive HTML page in the chat, themed with the app. Use for dashboards, metrics, charts, comparisons, reports, audits, architecture or flow diagrams, timelines, checklists, and small tools, instead of long markdown tables or ASCII diagrams. Also use it to build apps: a canvas with server code that runs on demand or on a schedule (every day, every hour) and calls the agent for judgment, for recurring work like triaging issues and PRs, monitors, and daily reports. OpenCodex apps are the way to schedule recurring work; do not use cron, launchd, or other schedulers.',
         path: new URL(import.meta.url).pathname,
         content: SKILL,
       });
@@ -389,7 +391,7 @@ export default {
         name: 'canvas_create',
         options: OPTIONS,
         description:
-          'Create a canvas folder with a starter app.tsx. Returns its id and the folder to write the view and data in.',
+          'Create a canvas folder with a starter index.html. Returns its id and the folder to write the page and data in.',
         input: {
           type: 'object',
           additionalProperties: false,
@@ -432,10 +434,10 @@ export default {
           return [
             `Created canvas "${canvas.title}" (id: ${canvas.id}).`,
             `Folder: ${canvas.path}`,
-            `- Write the view in ${canvas.path}/app.tsx (default-export the component).`,
-            `- Write data in ${canvas.path}/data/<key>.json and read it with useData('<key>', fallback).`,
-            `- Component props: ${root}/.sdk/index.d.ts and the files next to it.`,
-            `Then run canvas_check with id "${canvas.id}".`,
+            `- Write the page in ${canvas.path}/index.html: one self-contained HTML document.`,
+            `- Write data in ${canvas.path}/data/<key>.json and read it as canvas.data.<key>.`,
+            `- For an app, server.ts goes beside it; its SDK types are in ${root}/.sdk/server.d.ts.`,
+            `Then run canvas_check with id "${canvas.id}" and read its screenshots.`,
           ].join('\n');
         }),
       });
@@ -443,7 +445,7 @@ export default {
         name: 'canvas_check',
         options: OPTIONS,
         description:
-          'Type-check, build, and test-render a canvas with its saved data. Run after every change and fix what it reports; it gives the link to show the canvas when it passes.',
+          'Check a canvas and render its page with its saved data as OpenCodex shows it, at chat and phone widths in dark and light. Saves screenshots to read, and reports overflow, page errors, and server.ts problems. Run after every change and fix what it reports; it gives the link to show the canvas when it passes.',
         input: {
           type: 'object',
           additionalProperties: false,
@@ -456,6 +458,7 @@ export default {
             `/canvases/${encodeURIComponent(id)}/check`,
             { method: 'POST' },
             context.signal,
+            180_000,
           );
           return result.report;
         }),
@@ -464,7 +467,7 @@ export default {
         name: 'canvas_run',
         options: OPTIONS,
         description:
-          "Run an exported function of a canvas's server.ts, as the view would, and return its result or error. Use it to test functions and to refresh an app on request.",
+          "Run an exported function of a canvas's server.ts, as the page would, and return its result or error. Use it to test functions and to refresh an app on request.",
         input: {
           type: 'object',
           additionalProperties: false,

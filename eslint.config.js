@@ -33,10 +33,8 @@ export default tseslint.config(
     },
   },
   {
-    // The canvas SDK runs in sandboxed frames and the gateway's test render, never under HMR.
-    files: ['packages/canvas/src/**/*.{ts,tsx}'],
+    // The canvas frame runtime and comment overlay run in sandboxed frames.
+    files: ['packages/canvas/src/**/*.ts'],
     languageOptions: { globals: globals.browser },
-    plugins: { 'react-hooks': reactHooks },
-    rules: reactHooks.configs.recommended.rules,
   },
 );

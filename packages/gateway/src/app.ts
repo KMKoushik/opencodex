@@ -42,11 +42,18 @@ import { Apps } from './apps';
 import { type RemoteAccess, remoteDenial, remoteRequest, remoteRoutes } from './remote';
 import { Push, pushRoutes } from './push';
 import { appModelUpdateSchema, canvasIconUpdateSchema } from '@opencodex/contracts/canvas';
+import { playwrightRenderer, type PageRenderer } from './canvas-preview';
 
 export function createApp(
   backend = new OpenCodeBackend(),
   shutdown = new AbortController().signal,
-  options: { triggers?: boolean; remote?: RemoteAccess; push?: Push } = {},
+  options: {
+    triggers?: boolean;
+    remote?: RemoteAccess;
+    push?: Push;
+    /** Renders canvas previews; the desktop app passes Electron's. */
+    renderer?: PageRenderer;
+  } = {},
 ) {
   const app = new Hono();
 
@@ -61,8 +68,9 @@ export function createApp(
         return c.json({ message: 'This gateway accepts local requests only.' }, 403);
       }
       const origin = c.req.header('origin');
-      // Canvas frames have an opaque origin; their only request is the public runtime script.
-      const runtime = c.req.method === 'GET' && url.pathname === '/api/canvas-runtime/runtime.js';
+      // Canvas frames have an opaque origin; they only load (and reload) the public shell and
+      // its runtime script, which carry no user data.
+      const runtime = c.req.method === 'GET' && url.pathname.startsWith('/api/canvas-runtime/');
       if (
         !runtime &&
         ((origin && origin !== url.origin) || c.req.header('sec-fetch-site') === 'cross-site')
@@ -105,7 +113,11 @@ export function createApp(
       apps.close();
     });
   } else shutdown.addEventListener('abort', () => apps.close());
-  app.route('/api/canvases', canvasRoutes(apps));
+  const renderer = options.renderer;
+  app.route(
+    '/api/canvases',
+    canvasRoutes(apps, () => (renderer ? Promise.resolve(renderer) : playwrightRenderer())),
+  );
   app.get('/api/apps', async (c) => c.json(await apps.list()));
   app.get('/api/apps/:id/runs', async (c) => c.json(await apps.runs(c.req.param('id'))));
   app.get('/api/apps/:id/model', async (c) => c.json(await apps.appModel(c.req.param('id'))));

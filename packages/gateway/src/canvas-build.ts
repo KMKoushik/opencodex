@@ -1,7 +1,5 @@
 import { createHash } from 'node:crypto';
-import vm from 'node:vm';
 import type TypeScript from 'typescript';
-import { CANVAS_SSR } from './canvas-runtime.generated';
 
 type TS = typeof TypeScript;
 let typescript: Promise<TS> | undefined;
@@ -9,12 +7,10 @@ let typescript: Promise<TS> | undefined;
 export const loadTypeScript = () =>
   (typescript ??= import('typescript').then((module) => (module.default ?? module) as TS));
 
-export const ALLOWED_IMPORTS = new Set(['react', 'react/jsx-runtime', '@opencodex/canvas']);
-
 type Transpiled = { code: string; map: string; errors: string[] };
 const transpiled = new Map<string, Transpiled>();
 
-/** CommonJS for the frame's module loader. Cached by content, bounded. */
+/** CommonJS for the server host's module loader. Cached by content, bounded. */
 export async function transpile(file: string, source: string): Promise<Transpiled> {
   const key = createHash('sha256').update(file).update('\0').update(source).digest('hex');
   const cached = transpiled.get(key);
@@ -26,7 +22,6 @@ export async function transpile(file: string, source: string): Promise<Transpile
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2022,
-      jsx: ts.JsxEmit.ReactJSX,
       esModuleInterop: true,
       sourceMap: true,
     },
@@ -51,7 +46,7 @@ function formatDiagnostic(ts: TS, diagnostic: TypeScript.Diagnostic) {
 const sourceFiles = new Map<string, TypeScript.SourceFile>();
 let directories: Set<string> | undefined;
 
-/** Type-checks a canvas's files against the SDK, React, and DOM types. */
+/** Type-checks a canvas's server files against the server SDK. */
 export async function typeCheck(files: Record<string, string>) {
   const ts = await loadTypeScript();
   const { CANVAS_TYPES } = await import('./canvas-types.generated');
@@ -67,7 +62,6 @@ export async function typeCheck(files: Record<string, string>) {
   const options: TypeScript.CompilerOptions = {
     strict: true,
     noEmit: true,
-    jsx: ts.JsxEmit.ReactJSX,
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     target: ts.ScriptTarget.ES2022,
@@ -110,94 +104,19 @@ export async function typeCheck(files: Record<string, string>) {
   ].filter((item) => item.category === ts.DiagnosticCategory.Error);
   return diagnostics.slice(0, 30).map((diagnostic) => {
     const text = formatDiagnostic(ts, diagnostic);
-    const hint = hintFor(diagnostic.code, text, CANVAS_TYPES);
+    const hint = hintFor(diagnostic.code);
     return hint ? `${text}\n  Hint: ${hint}` : text;
   });
 }
 
-let exportNames: string | undefined;
-/** Value exports of the SDK, read from its declarations. */
-function sdkExports(types: Record<string, string>) {
-  const index = types['/node_modules/@opencodex/canvas/index.d.ts'] ?? '';
-  return (exportNames ??= [...index.matchAll(/export\s*\{([^}]*)\}/g)]
-    .flatMap((match) => match[1]!.split(','))
-    .map((name) => name.trim())
-    .filter((name) => name && !name.startsWith('type '))
-    .join(', '));
-}
-
-function hintFor(code: number, text: string, types: Record<string, string>) {
-  if (code === 2305 || code === 2724) return `@opencodex/canvas exports: ${sdkExports(types)}.`;
+function hintFor(code: number) {
+  if (code === 2305 || code === 2724)
+    return 'The exports of @opencodex/canvas/server are in .sdk/server.d.ts next to the canvases.';
   if (code === 2307 || code === 2792)
-    return 'Views can import react, @opencodex/canvas, and their own files (./name); server.ts can import @opencodex/canvas/server and its own files, and runs other tools with sh(). Inline anything else.';
-  if (code === 2322 && text.includes('IntrinsicAttributes'))
-    return 'A prop name or type is wrong. The component props are in the .sdk folder next to this canvas.';
+    return 'server.ts can import @opencodex/canvas/server and its own files (./name), and runs other tools with sh().';
   if (code === 7006 || code === 7031)
     return 'Give the parameter a type, e.g. (row: { name: string; value: number }) => …';
   return undefined;
-}
-
-let ssr: vm.Script | undefined;
-
-/**
- * Renders the view once with its data in a fresh vm context, without Node globals and
- * with a time limit, so a broken or looping canvas fails the check instead of the app.
- */
-export function testRender(
-  modules: Record<string, Transpiled>,
-  entry: string,
-  data: Record<string, unknown>,
-) {
-  ssr ??= new vm.Script(CANVAS_SSR, { filename: 'canvas-ssr.js' });
-  const warnings: string[] = [];
-  const log = (...args: unknown[]) => {
-    if (warnings.length < 10) warnings.push(args.map(String).join(' ').slice(0, 500));
-  };
-  const context = vm.createContext(
-    {
-      console: { error: log, warn: log, log() {}, info() {}, debug() {} },
-      TextEncoder,
-      TextDecoder,
-      // React's server build looks these up at load; renderToString itself is synchronous.
-      MessageChannel: class {
-        port1 = { onmessage: null };
-        port2 = { postMessage() {} };
-      },
-      setTimeout: () => 0,
-      clearTimeout() {},
-      __input: JSON.stringify({
-        modules: Object.fromEntries(
-          Object.entries(modules).map(([file, item]) => [file, item.code]),
-        ),
-        entry,
-        data,
-      }),
-    },
-    { codeGeneration: { strings: true, wasm: false }, microtaskMode: 'afterEvaluate' },
-  );
-  try {
-    ssr.runInContext(context, { timeout: 2_000 });
-    const html = String(vm.runInContext('CanvasSSR.render(__input)', context, { timeout: 3_000 }));
-    return { html, warnings };
-  } catch (error) {
-    const value = error as { message?: unknown; stack?: unknown } | undefined;
-    const message = String(value?.message ?? error);
-    const location = String(value?.stack ?? '').match(/canvas:\/\/\/([^:\s)]+):(\d+):(\d+)/);
-    const file = location?.[1];
-    // `new Function` puts two lines of its own before the module's code.
-    const line =
-      file && modules[file]
-        ? originalLine(modules[file].map, Number(location[2]) - 2, Number(location[3]) - 1)
-        : undefined;
-    return {
-      error: line
-        ? `${message}\n  at ${file}:${line}`
-        : file
-          ? `${message}\n  in ${file}`
-          : message,
-      warnings,
-    };
-  }
 }
 
 const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';

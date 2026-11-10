@@ -24,24 +24,21 @@ describe('canvases', () => {
     });
   });
 
-  it('reports type errors and render errors with the saved data', { timeout: 30_000 }, async () => {
+  it('reports server.ts type errors with their line', { timeout: 30_000 }, async () => {
     const { id, path } = await createCanvas(root, { title: 'Report' });
     expect((await checkCanvas(root, id)).ok).toBe(true);
 
     await writeFile(
-      join(path, 'app.tsx'),
-      `import { Stat, useData } from '@opencodex/canvas';
-type Row = { name: string; tags: string[] };
-export default function App() {
-  const [rows] = useData<Row[]>('rows', []);
-  return <Stat label="Tags" value={rows.map((row) => row.tags.join(', ')).join(' ')} tone="loud" />;
+      join(path, 'server.ts'),
+      `import { data } from '@opencodex/canvas/server';
+export async function total() {
+  const rows = await data.get<{ count: number }[]>('rows', []);
+  return rows.reduce((sum, row) => sum + row.count.length, 0);
 }
 `,
     );
-    await writeFile(join(path, 'data', 'rows.json'), '[{ "name": "a" }]');
     const result = await checkCanvas(root, id);
     expect(result.ok).toBe(false);
-    expect(result.report).toMatch(/app\.tsx:5:\d+ .*"loud"/);
-    expect(result.report).toMatch(/Render error[\s\S]*reading 'join'[\s\S]*at app\.tsx:5/);
+    expect(result.report).toMatch(/server\.ts:4:\d+ .*'length'/);
   });
 });

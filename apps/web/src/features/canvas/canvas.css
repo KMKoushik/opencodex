@@ -1,23 +1,19 @@
 .canvas-card {
-  overflow: hidden;
-  margin: 12px 0;
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--border);
+  margin: 14px 0;
 }
+/* The page sits on the chat itself, like the reply around it; only a small title row. */
 .canvas-card-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 6px 0 12px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-secondary);
-  font-size: 12.5px;
+  gap: 6px;
+  height: 28px;
+  margin-bottom: 6px;
+  color: var(--text-tertiary);
+  font-size: 12px;
 }
 .canvas-card-title {
   flex: 1;
-  color: var(--text);
+  color: var(--text-secondary);
   font-weight: 550;
 }
 .canvas-frame {
@@ -43,8 +39,9 @@
 .canvas-frame-error {
   max-height: 160px;
   overflow: auto;
+  margin-bottom: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
+  border-radius: 8px;
   background: color-mix(in srgb, var(--error) 10%, transparent);
   color: var(--error);
   font-family: var(--font-mono);

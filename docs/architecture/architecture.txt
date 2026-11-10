@@ -15,7 +15,7 @@
   │  │  Models + session layout   │     │  Native IPC available      ├───┼──────────────▶│  Pick/reveal; local HTML │
   │  └────────────────────────────┘     └────────────────────────────┘   │               │  OS browser + clipboard  │
   │                                                                      │               │  OS edit + spelling menus│
-  │           Zustand drafts + session layout; Query API state           │               │  Updates + restart       │
+  │           Zustand drafts + session layout; Query API state           │               │  Updates; canvas previews│
   │            Warm session card; small screens use a popover            │               └─────────────┬────────────┘
   │       Workspace, terminal; canvases + apps in sandboxed frames       │               read / write  │
   └────────────────────┬─────────────────────────────────────────────────┘                             │

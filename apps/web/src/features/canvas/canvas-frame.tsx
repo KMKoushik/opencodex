@@ -24,14 +24,15 @@ type Outgoing = HostMessage extends infer M
 
 const FRAME_URL = '/api/canvas-runtime/frame.html';
 const MIN_HEIGHT = 96;
-const MAX_INLINE_HEIGHT = 900;
+const MAX_INLINE_HEIGHT = 1000;
 // Last measured height per canvas, so a remounted inline frame doesn't jump.
 const heights = new Map<string, number>();
 
 /**
- * Hosts one canvas in a sandboxed iframe. The frame has an opaque origin and no network;
- * this component sends it the view's code, its data, and the theme, and saves its writes
- * with compare-and-swap so the agent's and other views' changes are never overwritten.
+ * Hosts one canvas in a sandboxed iframe. The frame has an opaque origin and reaches only
+ * public CDNs; this component sends it the agent's page, its data, and the theme, and saves
+ * its writes with compare-and-swap so the agent's and other views' changes are never
+ * overwritten.
  */
 export function CanvasFrame({
   id,
@@ -66,6 +67,10 @@ export function CanvasFrame({
       [id],
     ),
   }).data;
+  const runningRef = useRef(running);
+  useEffect(() => {
+    runningRef.current = running;
+  }, [running]);
   const openSession = useContext(CanvasSessionContext);
   const openSessionRef = useRef(openSession);
   useEffect(() => {
@@ -73,16 +78,20 @@ export function CanvasFrame({
   }, [openSession]);
   const { preference, systemDark } = useTheme();
   const frame = useRef<HTMLIFrameElement>(null);
+  // Bumped to load a fresh frame, which shows the page again in a new realm.
   const [frameKey, setFrameKey] = useState(0);
   // Counts the frame's ready messages; 0 until the current frame instance is listening.
   const [session, setSession] = useState(0);
   const [height, setHeight] = useState(() => heights.get(id) ?? 240);
   const [error, setError] = useState<string>();
+  // Uncaught errors from the page itself, until the agent changes it.
+  const [pageErrors, setPageErrors] = useState<string[]>([]);
   // What the frame currently shows: the source version, each value's revision, and the theme.
   const shown = useRef<{ version?: string; revs: Map<string, string>; theme?: string }>({
     revs: new Map(),
   });
-  const loads = useRef(0);
+  // Where the page was scrolled when it reloaded, for the next init.
+  const scroll = useRef(0);
   // Whether the frame has an overlay open that this host is waiting on.
   const overlay = useRef(false);
   const annotated = useRef(onAnnotated);
@@ -112,7 +121,18 @@ export function CanvasFrame({
         shown.current.version = undefined;
         shown.current.theme = undefined;
         shown.current.revs.clear();
+        setPageErrors([]);
         setSession((value) => value + 1);
+      } else if (message.type === 'reload') {
+        scroll.current = message.scroll;
+        setSession(0);
+        setFrameKey((key) => key + 1);
+      } else if (message.type === 'error') {
+        setPageErrors((errors) =>
+          errors.includes(message.message) || errors.length >= 5
+            ? errors
+            : [...errors, message.message],
+        );
       } else if (message.type === 'size') {
         const next = Math.max(MIN_HEIGHT, Math.min(MAX_INLINE_HEIGHT, message.height));
         heights.set(id, next);
@@ -171,19 +191,22 @@ export function CanvasFrame({
       type: 'init',
       mode,
       theme,
-      entry: source.data.entry,
-      modules: source.data.modules,
+      html: source.data.html,
       data: values,
+      // Later changes are sent by the running effect below.
+      running: runningRef.current ? runningRef.current.split('\0') : [],
+      scroll: scroll.current,
     });
+    scroll.current = 0;
   }, [session, source.data, data.data, mode, post]);
 
-  // The agent edited the view: rerun it with the frame's current data.
+  // The agent edited the page: the frame asks to reload, and its next `ready` gets the new one.
   useEffect(() => {
     const version = shown.current.version;
     if (!session || !source.data || version === undefined || version === source.data.version)
       return;
     shown.current.version = source.data.version;
-    post({ type: 'modules', entry: source.data.entry, modules: source.data.modules });
+    post({ type: 'reload' });
   }, [session, source.data, post]);
 
   // Values changed elsewhere (the agent, another view, a conflict): send only those.
@@ -232,7 +255,7 @@ export function CanvasFrame({
   }, [annotating, ready, post]);
 
   const failure = source.error ?? data.error;
-  const problems = [...(source.data?.errors ?? []), ...(data.data?.errors ?? [])];
+  const problems = [...(source.data?.errors ?? []), ...(data.data?.errors ?? []), ...pageErrors];
   return (
     <div className="canvas-frame" data-mode={mode}>
       {(failure || problems.length > 0 || error) && (
@@ -247,14 +270,6 @@ export function CanvasFrame({
         src={FRAME_URL}
         sandbox="allow-scripts"
         style={mode === 'inline' ? { height } : undefined}
-        onLoad={() => {
-          // A canvas may navigate its frame away; any load after the first starts over.
-          if (++loads.current > 1) {
-            loads.current = 0;
-            setSession(0);
-            setFrameKey((key) => key + 1);
-          }
-        }}
       />
     </div>
   );

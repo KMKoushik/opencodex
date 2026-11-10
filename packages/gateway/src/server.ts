@@ -10,8 +10,13 @@ import { refreshPlugin } from './plugin-files';
 import { SIDE_CHAT_PLUGIN_FILE } from './side-chats';
 import { TASKS_PLUGIN_FILE } from './tasks';
 import { RemoteAccess, remoteRequest } from './remote';
+export type { PageRenderer, PageRender, PageLog } from './canvas-preview';
+export { PREVIEW_MAX_TILES, PREVIEW_TILE, PREVIEW_TIMEOUT } from './canvas-preview';
+import type { PageRenderer } from './canvas-preview';
 
-export async function startGateway(options: { port?: number; assets?: string } = {}) {
+export async function startGateway(
+  options: { port?: number; assets?: string; renderer?: PageRenderer } = {},
+) {
   const shutdown = new AbortController();
   const url = process.env.OPENCODE_URL;
   if (url && !['http:', 'https:'].includes(new URL(url).protocol)) {
@@ -35,7 +40,11 @@ export async function startGateway(options: { port?: number; assets?: string } =
     !url,
   );
   const remote = new RemoteAccess({ served: Boolean(options.assets) });
-  const app = createApp(backend, shutdown.signal, { triggers: true, remote });
+  const app = createApp(backend, shutdown.signal, {
+    triggers: true,
+    remote,
+    renderer: options.renderer,
+  });
   if (options.assets) {
     app.use('*', async (c, next) => {
       c.header(

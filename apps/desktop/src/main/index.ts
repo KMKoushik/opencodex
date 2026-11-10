@@ -6,6 +6,7 @@ import { registerNativeHandlers } from './ipc';
 import { createPreferences } from './preferences';
 import { registerLinkHandlers } from './links';
 import { registerBrowser } from './browser';
+import { renderCanvasPreview } from './canvas-preview';
 import { loadShellEnvironment } from './shell-env';
 import { createUpdates } from './updates';
 
@@ -86,6 +87,7 @@ app
       await shellEnvironment;
       gateway = await startGateway({
         assets: fileURLToPath(new URL('../renderer/', import.meta.url)),
+        renderer: renderCanvasPreview,
       });
       origin = gateway.url;
     }

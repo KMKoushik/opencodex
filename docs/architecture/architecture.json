@@ -431,7 +431,7 @@
     {
       "x": 92,
       "y": 17,
-      "value": "Updates + restart"
+      "value": "Updates; canvas previews"
     },
     {
       "x": 89,
@@ -692,7 +692,7 @@
     "ELECTRON RENDERER",
     "ELECTRON MAIN",
     "GITHUB RELEASES",
-    "Updates + restart",
+    "Updates; canvas previews",
     "preload IPC",
     "packages/gateway",
     "HTTP /api",
