@@ -442,11 +442,9 @@ export async function checkCanvas(
     readData(root, id),
   ]);
   problems.push(...page.errors, ...built.errors, ...data.errors);
-  const types = built.server.size
-    ? await typeCheck(
-        Object.fromEntries([...built.server].map((name) => [name, built.files[name]!])),
-      )
-    : [];
+  // Every .ts file: `import type` doesn't make a file part of the server's code, but its
+  // types still have to resolve.
+  const types = built.server.size ? await typeCheck(built.files) : [];
   const loaded =
     built.server.size && !built.errors.length && !types.length && options.describeServer
       ? await options.describeServer(id)

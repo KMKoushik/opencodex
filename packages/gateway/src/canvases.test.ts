@@ -28,17 +28,20 @@ describe('canvases', () => {
     const { id, path } = await createCanvas(root, { title: 'Report' });
     expect((await checkCanvas(root, id)).ok).toBe(true);
 
+    // Types shared through \`import type\` aren't server code, but they must still resolve.
+    await writeFile(join(path, 'types.ts'), 'export type Row = { count: number };\n');
     await writeFile(
       join(path, 'server.ts'),
       `import { data } from '@opencodex/canvas/server';
+import type { Row } from './types';
 export async function total() {
-  const rows = await data.get<{ count: number }[]>('rows', []);
+  const rows = await data.get<Row[]>('rows', []);
   return rows.reduce((sum, row) => sum + row.count.length, 0);
 }
 `,
     );
     const result = await checkCanvas(root, id);
     expect(result.ok).toBe(false);
-    expect(result.report).toMatch(/server\.ts:4:\d+ .*'length'/);
+    expect(result.report).toMatch(/Type errors \(1\):\n- server\.ts:5:\d+ .*'length'/);
   });
 });
