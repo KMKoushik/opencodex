@@ -89,7 +89,8 @@ tools. Prefer a canvas over a long markdown table or an ASCII diagram.
    from \`canvas.data.<key>\`. Don't paste data into the page: the user and the app update
    values, and the page follows them.
 4. \`canvas_check({ id })\` checks the canvas and renders the page the way OpenCodex shows it:
-   728px wide (the reply column) and 390px (a phone) in dark mode, and 728px in light. It
+   728px wide (the reply column) and 390px (a phone) in dark mode, 728px in light, and the
+   first screen of the full-size side panel at 1280px. It
    saves screenshots and reports the page's height, sideways overflow, and console errors.
    Read every screenshot, fix anything broken, cramped, misaligned, generic or hard to read,
    and check again until it passes and looks right.
@@ -127,8 +128,10 @@ it again. Open views update live.
   reply.
 - Use a fluid width with no horizontal padding on the outermost element. A box with its own
   background gets at least 16px of padding and rounded corners.
-- In the side panel the page is full size (often 1100px or more) with the panel's padding.
-  Cap the reading width of wide content (around 1040px) when it reads better.
+- In the side panel and an app's own page, the page fills a much wider frame (often 1100 to
+  1600px) with the frame's padding. Fill that width: don't cap or center the whole page. Use
+  the room for side-by-side sections, and cap only the line length of paragraphs (about
+  75 characters) so text stays readable.
 - Let content set the height. Give charts fixed pixel heights. Never use \`100vh\` or
   \`height: 100%\` on html or body. A page taller than about 1000px scrolls inside its frame in
   the chat, so put what matters first.

@@ -30,11 +30,15 @@ export const PREVIEW_MAX_TILES = 4;
 /** How long a page gets to load and settle. */
 export const PREVIEW_TIMEOUT = 20_000;
 
-/** What canvas_check renders: the reply column, a phone, and the light theme. */
+/**
+ * What canvas_check renders: the reply column, a phone, the light theme, and the full-size
+ * side panel or app page (only its first screen, which shows how the page uses the width).
+ */
 export const PREVIEW_VARIANTS = [
-  { width: 728, scheme: 'dark' },
-  { width: 390, scheme: 'dark' },
-  { width: 728, scheme: 'light' },
+  { width: 728, scheme: 'dark', mode: 'inline' },
+  { width: 390, scheme: 'dark', mode: 'inline' },
+  { width: 728, scheme: 'light', mode: 'inline' },
+  { width: 1280, scheme: 'dark', mode: 'panel' },
 ] as const;
 
 const FONTS = {

@@ -511,9 +511,9 @@ async function previewPage(
   await mkdir(output, { recursive: true });
   const url = `${origin}/api/canvas-runtime/frame.html`;
   const results = await Promise.all(
-    PREVIEW_VARIANTS.map(async ({ width, scheme }) => {
+    PREVIEW_VARIANTS.map(async ({ width, scheme, mode }) => {
       const script = previewScript({
-        mode: 'inline',
+        mode,
         theme: PREVIEW_THEMES[scheme],
         html,
         data,
@@ -521,19 +521,23 @@ async function previewPage(
       });
       try {
         const render = await renderer({ url, script, width, scheme });
+        const tiles = mode === 'panel' ? render.tiles.slice(0, 1) : render.tiles;
+        const name = mode === 'panel' ? `${width}-panel` : `${width}-${scheme}`;
         const files = await Promise.all(
-          render.tiles.map(async (tile, index) => {
-            const file = join(
-              output,
-              `${width}-${scheme}${render.tiles.length > 1 ? `-${index + 1}` : ''}.png`,
-            );
+          tiles.map(async (tile, index) => {
+            const file = join(output, `${name}${tiles.length > 1 ? `-${index + 1}` : ''}.png`);
             await writeFile(file, tile);
             return file;
           }),
         );
-        return { width, scheme, render, files };
+        return { width, scheme, mode, render, files };
       } catch (error) {
-        return { width, scheme, error: error instanceof Error ? error.message : String(error) };
+        return {
+          width,
+          scheme,
+          mode,
+          error: error instanceof Error ? error.message : String(error),
+        };
       }
     }),
   );
@@ -543,7 +547,10 @@ async function previewPage(
   const lines: string[] = [];
   let failed = false;
   for (const result of results) {
-    const label = `${result.width}px ${result.scheme}`;
+    const label =
+      result.mode === 'panel'
+        ? `${result.width}px side panel (first screen)`
+        : `${result.width}px ${result.scheme}`;
     if ('error' in result) {
       failed = true;
       lines.push(`- ${label}: couldn’t render: ${result.error}`);
