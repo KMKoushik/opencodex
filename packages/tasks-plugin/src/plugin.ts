@@ -58,14 +58,6 @@ type Context = {
       input: { sessionID: string },
       options?: RequestOptions,
     ): Promise<{ projectID: string; location: { directory: string } }>;
-    hook(
-      name: 'context',
-      callback: (event: {
-        sessionID: string;
-        messages?: unknown[];
-        tools: Record<string, unknown>;
-      }) => Promise<void> | void,
-    ): Promise<unknown>;
   };
   tool: {
     transform(
@@ -97,10 +89,11 @@ const LABELS: Record<TaskBucket, string> = {
   someday: 'Someday',
   done: 'Done',
 };
-// Present only in the skill body, so finding it in a session's context means the skill loaded.
+// Marks the skill body, so a session's context shows whether the skill loaded.
 const MARKER = 'opencodex-tasks-skill';
-const TOOLS = ['tasks_list', 'tasks_add', 'tasks_update', 'tasks_delete'];
-// Direct tools, not Code Mode catalog entries, so the context hook can hide them.
+// Direct tools, not Code Mode catalog entries. They're always offered: a tool set that changes
+// mid-turn (as hiding them until the skill loaded did) makes OpenCode's Claude Agent provider
+// restart Claude Code, which reports the running tool call as stopped by the user.
 const OPTIONS = { codemode: false };
 const ANY: Schema = {
   '~standard': { version: 1, vendor: 'opencodex', validate: (value) => ({ value }) },
@@ -395,28 +388,6 @@ export default {
           return `Deleted "${task.title}".`;
         }),
       });
-    });
-
-    // Sessions that loaded the skill, and how many context messages were already searched.
-    const enabled = new Set<string>();
-    const searched = new Map<string, number>();
-    await ctx.session.hook('context', (event) => {
-      if (!enabled.has(event.sessionID)) {
-        const messages = event.messages ?? [];
-        // Compaction can shorten the context; search it again from the start.
-        let start = searched.get(event.sessionID) ?? 0;
-        if (start > messages.length) start = 0;
-        if (messages.slice(start).some((message) => JSON.stringify(message).includes(MARKER))) {
-          enabled.add(event.sessionID);
-          searched.delete(event.sessionID);
-        } else {
-          if (searched.size >= 500 && !searched.has(event.sessionID))
-            searched.delete(searched.keys().next().value!);
-          searched.set(event.sessionID, messages.length);
-        }
-      }
-      if (enabled.has(event.sessionID)) return;
-      for (const name of TOOLS) delete event.tools[name];
     });
   },
 };

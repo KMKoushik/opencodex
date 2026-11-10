@@ -30,14 +30,6 @@ type Context = {
       input: { sessionID: string },
       options?: { signal?: AbortSignal },
     ): Promise<{ parentID?: string; metadata?: Record<string, unknown> }>;
-    hook(
-      name: 'context',
-      callback: (event: {
-        sessionID: string;
-        messages?: unknown[];
-        tools: Record<string, unknown>;
-      }) => Promise<void> | void,
-    ): Promise<unknown>;
   };
   tool: {
     transform(
@@ -61,10 +53,11 @@ type Canvas = { id: string; title: string; path: string; updated: number };
 /** Icon glyph names; `bun plugins` defines this from packages/contracts/src/canvas-glyphs.ts. */
 declare const CANVAS_GLYPHS: readonly string[];
 
-// Present only in the skill body, so finding it in a session's context means the skill loaded.
+// Marks the skill body, so a session's context shows whether the skill loaded.
 const MARKER = 'opencodex-canvas-skill';
-const TOOLS = ['canvas_create', 'canvas_check', 'canvas_list', 'canvas_run'];
-// Direct tools, not Code Mode catalog entries, so the context hook can hide them.
+// Direct tools, not Code Mode catalog entries. They're always offered: a tool set that changes
+// mid-turn (as hiding them until the skill loaded did) makes OpenCode's Claude Agent provider
+// restart Claude Code, which reports the running tool call as stopped by the user.
 const OPTIONS = { codemode: false };
 
 class CanvasError extends Error {}
@@ -394,7 +387,7 @@ export default {
         name: 'canvas_create',
         options: OPTIONS,
         description:
-          'Create a canvas folder with a starter index.html. Returns its id and the folder to write the page and data in.',
+          'Create a canvas folder with a starter index.html. Returns its id and the folder to write the page and data in. Load the canvas skill first: it explains the page, its theme, data, and server.ts.',
         input: {
           type: 'object',
           additionalProperties: false,
@@ -509,28 +502,6 @@ export default {
             : 'There are no canvases yet.';
         }),
       });
-    });
-
-    // Sessions that loaded the skill, and how many context messages were already searched.
-    const enabled = new Set<string>();
-    const searched = new Map<string, number>();
-    await ctx.session.hook('context', (event) => {
-      if (!enabled.has(event.sessionID)) {
-        const messages = event.messages ?? [];
-        // Compaction can shorten the context; search it again from the start.
-        let start = searched.get(event.sessionID) ?? 0;
-        if (start > messages.length) start = 0;
-        if (messages.slice(start).some((message) => JSON.stringify(message).includes(MARKER))) {
-          enabled.add(event.sessionID);
-          searched.delete(event.sessionID);
-        } else {
-          if (searched.size >= 500 && !searched.has(event.sessionID))
-            searched.delete(searched.keys().next().value!);
-          searched.set(event.sessionID, messages.length);
-        }
-      }
-      if (enabled.has(event.sessionID)) return;
-      for (const name of TOOLS) delete event.tools[name];
     });
   },
 };
