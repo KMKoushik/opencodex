@@ -286,7 +286,7 @@ struct ThreadSheet: View {
     row("Session details", icon: "info.circle", id: "sheet.details") { leave(.panel(.details)) }
   }
 
-  private var running: Int { ActivityModel.shared(for: chat).subagents.count }
+  private var running: Int { chat.activity.subagents.count }
 
   private func row(
     _ title: String, icon: String, id: String, action: @escaping () -> Void

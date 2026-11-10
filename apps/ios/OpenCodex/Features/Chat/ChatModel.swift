@@ -18,6 +18,8 @@ final class ChatModel {
 
   let client: GatewayClient
   let events: EventHub
+  /// Running shells and subagents. Owned here so every view observes the one that loads.
+  @ObservationIgnored private(set) lazy var activity = ActivityModel(chat: self)
   private(set) var sessionID: String?
   let directory: String?
 

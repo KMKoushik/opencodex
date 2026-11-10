@@ -6,8 +6,9 @@ import Observation
 /// `subagent-attention.ts`.
 ///
 /// Snapshots are authoritative; events only schedule coalesced refetches of the part they
-/// affect, and streamed text is ignored. One instance per chat is shared by the tray, the
-/// subagents badge and the list (`ActivityModel.shared(for:)`).
+/// affect, and streamed text is ignored. The chat owns one instance (`ChatModel.activity`),
+/// shared by the tray, the subagents badge and the list, so they all observe the object that
+/// loads.
 @Observable
 final class ActivityModel {
   nonisolated struct RunningSubagent: Identifiable, Equatable, Sendable {
@@ -27,7 +28,10 @@ final class ActivityModel {
   /// Load state of one part, like a Query's pending/error/success.
   nonisolated enum Status: Equatable, Sendable { case pending, failed, loaded }
 
-  let chat: ChatModel
+  /// Weak: the chat owns this model.
+  @ObservationIgnored private weak var chat: ChatModel?
+  @ObservationIgnored private let client: GatewayClient
+  @ObservationIgnored private let events: EventHub
 
   /// The chat's running shell commands, in the server's order.
   private(set) var shells: [ShellInfo] = []
@@ -46,23 +50,15 @@ final class ActivityModel {
   /// Running sessions' immutable identity (parent, agent, creation), fetched once per ID and
   /// shared by every chat, like the desktop's `['chat', id, 'info']` cache.
   private static var identities: [String: SessionInfo] = [:]
-  private static var instances: [ObjectIdentifier: Weak] = [:]
-  private struct Weak { weak var model: ActivityModel? }
 
-  private init(chat: ChatModel) { self.chat = chat }
-
-  /// The chat's shared activity, created on first use.
-  static func shared(for chat: ChatModel) -> ActivityModel {
-    let key = ObjectIdentifier(chat)
-    if let model = instances[key]?.model, model.chat === chat { return model }
-    instances = instances.filter { $0.value.model != nil }
-    let model = ActivityModel(chat: chat)
-    instances[key] = Weak(model: model)
-    return model
+  init(chat: ChatModel) {
+    self.chat = chat
+    client = chat.client
+    events = chat.events
   }
 
-  private var sessionID: String? { chat.sessionID }
-  private var directory: String? { chat.session?.location.directory ?? chat.directory }
+  private var sessionID: String? { chat?.sessionID }
+  private var directory: String? { chat?.session?.location.directory ?? chat?.directory }
 
   var visible: Bool {
     subagentStatus == .failed || shellStatus == .failed || !subagents.isEmpty || !shells.isEmpty
@@ -76,8 +72,8 @@ final class ActivityModel {
     let first = runners == 1
     if first {
       subscriptions = [
-        chat.events.subscribe { [weak self] event in self?.handle(event) },
-        chat.events.onReconnect { [weak self] in self?.schedule(Set(Part.allCases)) },
+        events.subscribe { [weak self] event in self?.handle(event) },
+        events.onReconnect { [weak self] in self?.schedule(Set(Part.allCases)) },
       ]
     }
     defer {
@@ -97,7 +93,7 @@ final class ActivityModel {
     }
     while !Task.isCancelled {
       try? await Task.sleep(for: .seconds(5))
-      if !chat.events.live, sessionID != nil { schedule(Set(Part.allCases)) }
+      if !events.live, sessionID != nil { schedule(Set(Part.allCases)) }
     }
   }
 
@@ -161,7 +157,7 @@ final class ActivityModel {
   private func refreshShells() async {
     guard let id = sessionID, let directory else { return }
     do {
-      let all = try await chat.client.shells(directory: directory)
+      let all = try await client.shells(directory: directory)
       let mine = all.filter { $0.running && $0.sessionID == id }
       if mine != shells { shells = mine }
       shellStatus = .loaded
@@ -175,11 +171,11 @@ final class ActivityModel {
   private func refreshSubagents(attention all: Bool) async {
     guard let id = sessionID else { return }
     do {
-      let running = try await chat.client.active().keys.filter { $0 != id }
+      let running = try await client.active().keys.filter { $0 != id }
       let unknown = running.filter { Self.identities[$0] == nil }
       var failed = false
       if !unknown.isEmpty {
-        let client = chat.client
+        let client = client
         let fetched = await Concurrently.map(Array(unknown)) { child in
           try? await client.session(child)
         }
@@ -217,7 +213,7 @@ final class ActivityModel {
 
   private func refreshAttention(_ ids: [String]) async {
     guard !ids.isEmpty else { return }
-    let client = chat.client
+    let client = client
     let results = await Concurrently.map(ids) { id -> (String, Attention?) in
       do {
         if try await !client.permissions(id).isEmpty { return (id, .permission) }

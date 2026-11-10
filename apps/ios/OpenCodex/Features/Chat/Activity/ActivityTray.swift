@@ -26,7 +26,7 @@ struct ActivityTray: View {
     self.onOpenSubagent = onOpenSubagent
   }
 
-  private var activity: ActivityModel { .shared(for: model) }
+  private var activity: ActivityModel { model.activity }
   /// The open output sheet and reader live here, not in the tray body, so they stay open
   /// when the work finishes and the tray goes away: the final output is what you came for.
   @State private var shell: Identified?

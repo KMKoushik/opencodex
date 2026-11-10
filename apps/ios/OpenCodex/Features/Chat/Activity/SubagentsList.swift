@@ -115,7 +115,7 @@ struct SubagentsList: View {
     _list = State(initialValue: SubagentListModel(chat: model))
   }
 
-  private var running: Set<String> { Set(ActivityModel.shared(for: model).subagents.map(\.id)) }
+  private var running: Set<String> { Set(model.activity.subagents.map(\.id)) }
 
   var body: some View {
     List {
@@ -265,7 +265,7 @@ struct RunningSubagentsBadge: View {
   @Environment(\.palette) private var palette
 
   var body: some View {
-    let activity = ActivityModel.shared(for: model)
+    let activity = model.activity
     let count = activity.subagents.count
     if activity.subagentStatus == .failed {
       badge("!", background: "surface", foreground: "error")
