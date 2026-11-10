@@ -1,7 +1,7 @@
 /**
  * @opencodex/canvas/server: what a canvas's `server.ts` can use. Its exported async
- * functions run in a separate process started by OpenCodex. The view calls them with
- * `useFn`, the agent with `canvas_run`, and `triggers` on a schedule. Code does the
+ * functions run in a separate process started by OpenCodex. The page calls them with
+ * `canvas.call`, the agent with `canvas_run`, and `triggers` on a schedule. Code does the
  * deterministic work; `oc.ask` and `oc.run` bring in OpenCode where judgment is needed.
  */
 
@@ -16,9 +16,8 @@ function bridge(): Bridge {
 type Update<T> = (current: T) => T | Promise<T>;
 
 /**
- * The canvas's data values, the same `data/<key>.json` files the view reads with
- * `useData`. Writes reach every open view live. Share a `types.ts` between `server.ts` and
- * the view so both sides agree on each value's shape.
+ * The canvas's data values, the same `data/<key>.json` files the page reads as
+ * `canvas.data`. Writes reach every open page live.
  */
 export const data = {
   /** The stored value, or `fallback` when it doesn't exist yet. */
@@ -31,7 +30,7 @@ export const data = {
     await bridge().request('data.write', { key, value });
   },
   /**
-   * Reads, changes, and writes the value without losing a concurrent change from the view
+   * Reads, changes, and writes the value without losing a concurrent change from the page
    * or another function: on a conflict it reruns `change` with the newer value.
    */
   async update<T>(key: string, fallback: T, change: Update<T>): Promise<T> {
