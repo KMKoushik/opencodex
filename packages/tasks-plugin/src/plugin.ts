@@ -8,7 +8,7 @@
  * plugin context this file uses.
  */
 
-import type { Task, TaskBucket, TaskProject } from '@opencodex/contracts';
+import type { Task, TaskAssignee, TaskBucket, TaskProject } from '@opencodex/contracts';
 
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 type RequestOptions = { signal?: AbortSignal };
@@ -164,6 +164,7 @@ export default {
         bucket,
         order: last(tasks, bucket) + 1,
         ...(input.project ? { project: project(input.project) } : {}),
+        ...(assignee(input.assignee) === 'agent' ? { assignee: 'agent' as const } : {}),
         source: origin.source,
         ...(origin.sessionID ? { sessionID: origin.sessionID } : {}),
         time: { created: now, updated: now, moved: now },
@@ -182,6 +183,15 @@ export default {
       if (input.project !== undefined) {
         if (input.project === null) delete task.project;
         else task.project = project(input.project);
+      }
+      if (input.assignee !== undefined) {
+        if (assignee(input.assignee) === 'agent') task.assignee = 'agent';
+        else delete task.assignee;
+      }
+      if (input.workSessionID !== undefined) {
+        if (typeof input.workSessionID === 'string' && input.workSessionID)
+          task.workSessionID = input.workSessionID;
+        else delete task.workSessionID;
       }
       const bucket = input.bucket === undefined ? task.bucket : bucketOf(input.bucket);
       if (bucket !== task.bucket) {
@@ -286,6 +296,12 @@ export default {
       description:
         "'current' links the task to this chat's project; 'none' leaves it without a project.",
     };
+    const assigneeField = {
+      type: 'string',
+      enum: ['user', 'agent'],
+      description:
+        "'user' (the default) for the user to do; 'agent' for an agent to do when the user starts it or asks you to work on it.",
+    };
     const bucketField = {
       type: 'string',
       enum: ['today', 'week', 'someday'],
@@ -322,6 +338,7 @@ export default {
             notes: { type: 'string', description: 'Optional details.' },
             list: bucketField,
             project: projectField,
+            assignee: assigneeField,
           },
         },
         execute: tool(async (input, context) => {
@@ -331,6 +348,7 @@ export default {
               notes: input.notes,
               bucket: input.list,
               project: await projectInput(input.project, context.sessionID, context.signal),
+              assignee: input.assignee,
             },
             { source: 'agent', sessionID: context.sessionID },
           );
@@ -359,6 +377,7 @@ export default {
               description: `${bucketField.description} Use 'done' to complete it.`,
             },
             project: projectField,
+            assignee: assigneeField,
           },
         },
         execute: tool(async (input, context) => {
@@ -367,6 +386,7 @@ export default {
             notes: input.notes,
             bucket: input.list,
             project: await projectInput(input.project, context.sessionID, context.signal),
+            assignee: input.assignee,
           });
           return `Updated "${task.title}" (${LABELS[task.bucket]}).`;
         }),
@@ -410,6 +430,12 @@ function bucketOf(value: unknown): TaskBucket {
   throw new TaskError('invalid', "Choose 'today', 'week', 'someday', or 'done'.");
 }
 
+function assignee(value: unknown): TaskAssignee | undefined {
+  if (value === undefined) return undefined;
+  if (value === 'user' || value === 'agent') return value;
+  throw new TaskError('invalid', "Assign the task to 'user' or 'agent'.");
+}
+
 function openBucket(value: unknown) {
   if (value === undefined) return undefined;
   const bucket = bucketOf(value);
@@ -436,7 +462,7 @@ function describe(tasks: Task[], done: boolean) {
       );
     lines.push(`${LABELS[bucket]} (${items.length})`);
     for (const task of items) {
-      const details = [`id: ${task.id}`];
+      const details = [`id: ${task.id}`, `for: ${task.assignee === 'agent' ? 'agent' : 'user'}`];
       if (task.project)
         details.push(`project: ${task.project.directory.split(/[\\/]/).filter(Boolean).at(-1)}`);
       const late = Math.round(
@@ -444,6 +470,7 @@ function describe(tasks: Task[], done: boolean) {
       );
       if (bucket === 'today' && late > 0)
         details.push(`delayed ${late} day${late === 1 ? '' : 's'}`);
+      if (task.workSessionID) details.push(`agent chat: ${task.workSessionID}`);
       lines.push(`- ${task.title} (${details.join(', ')})`);
       if (task.notes) lines.push(`  Notes: ${task.notes.replace(/\s+/g, ' ').slice(0, 300)}`);
     }
@@ -463,10 +490,12 @@ The user keeps a personal task board in OpenCodex with three open lists and a Do
 
 Tasks may belong to a project. Use \`project: "current"\` only when the task is about the project this chat is working in, or when the user asks for it.
 
-Tools (available once this skill is loaded):
+Each task is for the user (\`for: user\`, the default) or for an agent (\`for: agent\`). The user starts an agent on an agent task from the board, which opens a chat with the task as its first message. When you're asked to work on an agent task, do the work, then complete it with \`tasks_update\` (\`list: "done"\`). Leave it open if you're blocked, and say why. Never work on the user's own tasks unless they ask.
+
+Tools:
 
 - \`tasks_list\` shows tasks with their IDs. Call it before updating or deleting so you use the right ID.
-- \`tasks_add\` adds a task. If the user doesn't say when, use \`someday\`.
+- \`tasks_add\` adds a task. If the user doesn't say when, use \`someday\`. Use \`assignee: "agent"\` only when the user wants an agent to do it.
 - \`tasks_update\` renames, edits notes, moves between lists, or completes a task (\`list: "done"\`). Moving a done task to an open list reopens it.
 - \`tasks_delete\` deletes a task. Prefer completing a task unless the user asks to delete it.
 

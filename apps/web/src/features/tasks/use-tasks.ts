@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Task, TaskUpdate } from '@opencodex/contracts';
 import { api } from '../../lib/api';
+import { useDraftStore } from '../chat/draft-context';
 
 const key = ['tasks'];
 
@@ -42,11 +43,37 @@ export function useTaskMutations() {
   return { create, update, remove };
 }
 
+/** Starts an agent on a task, with the model last used in its project like a new chat. */
+export function useStartTask() {
+  const client = useQueryClient();
+  const drafts = useDraftStore();
+  return useMutation({
+    mutationFn: (task: Task) =>
+      api.startTask(
+        task.id,
+        task.project ? drafts.getState().projectModels[task.project.directory] : undefined,
+      ),
+    onSuccess: ({ task, session }) => {
+      client.setQueryData<Task[]>(key, (tasks) =>
+        tasks?.map((item) => (item.id === task.id ? task : item)),
+      );
+      client.setQueryData(['chat', session.id, 'info'], session);
+      void client.invalidateQueries({ queryKey: ['sessions'] });
+      void client.invalidateQueries({ queryKey: ['active'] });
+    },
+    onError: () => client.invalidateQueries({ queryKey: key }),
+  });
+}
+
 function preview(task: Task, input: TaskUpdate, now: number): Task {
   const next: Task = { ...task, time: { ...task.time, updated: now } };
   if (input.title !== undefined) next.title = input.title.trim();
   if (input.notes !== undefined) next.notes = input.notes.trim() || undefined;
-  if (input.project !== undefined) next.project = input.project ?? undefined;
+  if (input.project !== undefined && typeof input.project !== 'string')
+    next.project = input.project ?? undefined;
+  if (input.assignee !== undefined)
+    next.assignee = input.assignee === 'agent' ? 'agent' : undefined;
+  if (input.workSessionID !== undefined) next.workSessionID = input.workSessionID ?? undefined;
   if (input.order !== undefined) next.order = input.order;
   if (input.bucket && input.bucket !== task.bucket) {
     next.bucket = input.bucket;

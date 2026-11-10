@@ -1,4 +1,4 @@
-import type { Task, TaskBucket } from '@opencodex/contracts';
+import type { Task, TaskAssignee, TaskBucket } from '@opencodex/contracts';
 
 export const columns: { bucket: TaskBucket; label: string }[] = [
   { bucket: 'today', label: 'Today' },
@@ -9,12 +9,16 @@ export const columns: { bucket: TaskBucket; label: string }[] = [
 
 /** `all`, `none` (tasks without a project), or a project's canonical directory. */
 export type ProjectFilter = string;
+export type AssigneeFilter = 'all' | TaskAssignee;
 
-export function groupTasks(tasks: Task[], filter: ProjectFilter) {
+export const assigneeOf = (task: Task): TaskAssignee => task.assignee ?? 'user';
+
+export function groupTasks(tasks: Task[], filter: ProjectFilter, assignee: AssigneeFilter = 'all') {
   const groups: Record<TaskBucket, Task[]> = { today: [], week: [], someday: [], done: [] };
   for (const task of tasks) {
     if (filter === 'none' ? task.project : filter !== 'all' && task.project?.directory !== filter)
       continue;
+    if (assignee !== 'all' && assigneeOf(task) !== assignee) continue;
     groups[task.bucket].push(task);
   }
   for (const [bucket, items] of Object.entries(groups))

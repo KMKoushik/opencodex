@@ -1,4 +1,6 @@
 import { Hono } from 'hono';
+import type { OpenCodeClient } from '@opencode/client';
+import type { z } from 'zod';
 import { streamSSE } from 'hono/streaming';
 import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
@@ -30,7 +32,7 @@ import { sessionAccessRoutes } from './session-access';
 import { attention } from './attention';
 import { usageRoutes } from './usage';
 import { worktreeRoutes } from './worktrees';
-import { taskRoutes } from './tasks';
+import { createTaskService, taskRoutes } from './tasks';
 import { prepareAttachments } from './attachments';
 import { resolveMentions } from './mentions';
 import { searchSessions } from './session-search';
@@ -103,9 +105,19 @@ export function createApp(
   app.route('/api/usage', usageRoutes(backend));
   app.route('/api/sessions', sessionAccessRoutes(backend));
   app.route('/api', worktreeRoutes(backend));
-  app.route('/api/tasks', taskRoutes(backend));
+  const tasks = createTaskService(backend, {
+    create: (signal, directory, model) =>
+      backend.request(signal, (client, options) =>
+        client.session.create({ location: { directory }, agent: 'build', model }, options),
+      ),
+    prompt: (signal, sessionID, text, model) =>
+      backend.request(signal, (client, options) =>
+        sendPrompt(client, sessionID, { text, model }, options),
+      ),
+  });
+  app.route('/api/tasks', taskRoutes(backend, tasks));
   const canvasWatcher = createCanvasWatcher(CANVAS_ROOT);
-  const apps = new Apps(backend, CANVAS_ROOT, canvasWatcher.publish);
+  const apps = new Apps(backend, CANVAS_ROOT, canvasWatcher.publish, tasks);
   if (options.triggers) {
     const stop = apps.schedule(canvasWatcher.subscribe);
     shutdown.addEventListener('abort', () => {
@@ -415,67 +427,72 @@ export function createApp(
     if (!input.success)
       return c.json({ message: input.error.issues[0]?.message ?? 'Invalid message.' }, 400);
     return c.json(
-      await backend.request(c.req.raw.signal, async (client, options) => {
-        const sessionID = c.req.param('id');
-        const session = await client.session.get({ sessionID }, options);
-        await ensureReplyFormat(client, sessionID, options);
-        const mentioned = input.data.mentions?.length
-          ? await resolveMentions(client, session, input.data.mentions, options)
-          : { files: [], skills: [] };
-        const prompt = await prepareAttachments(client, session, input.data, options);
-        const files = [...(prompt.files ?? []), ...mentioned.files];
-        const skills = [
-          ...(input.data.skill && !mentioned.skills.some((item) => item.id === input.data.skill)
-            ? [{ id: input.data.skill }]
-            : []),
-          ...mentioned.skills,
-        ];
-        const admission = {
-          text: prompt.text,
-          files: files.length ? files : undefined,
-          skills: skills.length ? skills : undefined,
-        };
-        // V2 stages undo until the next explicit send; redo clears that stage.
-        if (session.revert) await client.session.revert.commit({ sessionID }, options);
-        if (session.agent !== 'build')
-          await client.session.switchAgent({ sessionID, agent: 'build' }, options);
-        const model = input.data.model;
-        if (
-          model &&
-          (session.model?.id !== model.id ||
-            session.model?.providerID !== model.providerID ||
-            (session.model?.variant ?? 'default') !== (model.variant ?? 'default'))
-        ) {
-          await client.session.switchModel({ sessionID, model }, options);
-        }
-        try {
-          if (input.data.command) {
-            await client.session.command(
-              { sessionID, name: input.data.command, ...admission },
-              options,
-            );
-            return null;
-          }
-          return await client.session.prompt(
-            {
-              sessionID,
-              ...admission,
-              // Native commands take no metadata, so expanded commands show their plain text.
-              metadata: input.data.annotations
-                ? { [MESSAGE_ANNOTATIONS_KEY]: input.data.annotations }
-                : undefined,
-            },
-            options,
-          );
-        } catch (error) {
-          // Admission explains what it rejected, such as a missing skill or unreadable file.
-          if (error instanceof Error && (error as { _tag?: string })._tag === 'InvalidRequestError')
-            throw new GatewayError(error.message, 400);
-          throw error;
-        }
-      }),
+      await backend.request(c.req.raw.signal, (client, options) =>
+        sendPrompt(client, c.req.param('id'), input.data, options),
+      ),
     );
   });
+  /** Sends a message the way the composer does: native admission, the build agent, the model. */
+  async function sendPrompt(
+    client: OpenCodeClient,
+    sessionID: string,
+    input: z.infer<typeof promptInputSchema>,
+    options: { signal: AbortSignal },
+  ) {
+    const session = await client.session.get({ sessionID }, options);
+    await ensureReplyFormat(client, sessionID, options);
+    const mentioned = input.mentions?.length
+      ? await resolveMentions(client, session, input.mentions, options)
+      : { files: [], skills: [] };
+    const prompt = await prepareAttachments(client, session, input, options);
+    const files = [...(prompt.files ?? []), ...mentioned.files];
+    const skills = [
+      ...(input.skill && !mentioned.skills.some((item) => item.id === input.skill)
+        ? [{ id: input.skill }]
+        : []),
+      ...mentioned.skills,
+    ];
+    const admission = {
+      text: prompt.text,
+      files: files.length ? files : undefined,
+      skills: skills.length ? skills : undefined,
+    };
+    // V2 stages undo until the next explicit send; redo clears that stage.
+    if (session.revert) await client.session.revert.commit({ sessionID }, options);
+    if (session.agent !== 'build')
+      await client.session.switchAgent({ sessionID, agent: 'build' }, options);
+    const model = input.model;
+    if (
+      model &&
+      (session.model?.id !== model.id ||
+        session.model?.providerID !== model.providerID ||
+        (session.model?.variant ?? 'default') !== (model.variant ?? 'default'))
+    ) {
+      await client.session.switchModel({ sessionID, model }, options);
+    }
+    try {
+      if (input.command) {
+        await client.session.command({ sessionID, name: input.command, ...admission }, options);
+        return null;
+      }
+      return await client.session.prompt(
+        {
+          sessionID,
+          ...admission,
+          // Native commands take no metadata, so expanded commands show their plain text.
+          metadata: input.annotations
+            ? { [MESSAGE_ANNOTATIONS_KEY]: input.annotations }
+            : undefined,
+        },
+        options,
+      );
+    } catch (error) {
+      // Admission explains what it rejected, such as a missing skill or unreadable file.
+      if (error instanceof Error && (error as { _tag?: string })._tag === 'InvalidRequestError')
+        throw new GatewayError(error.message, 400);
+      throw error;
+    }
+  }
   app.post('/api/sessions/:id/interrupt', async (c) =>
     c.json(
       await backend.request(c.req.raw.signal, (client, options) =>

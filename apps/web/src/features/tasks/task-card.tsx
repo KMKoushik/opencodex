@@ -1,16 +1,29 @@
 import { useEffect, useLayoutEffect, useRef, useState, type DragEvent } from 'react';
-import { BubbleChatIcon, Clock01Icon, Delete02Icon, Tick02Icon } from '@hugeicons/core-free-icons';
+import {
+  BubbleChatIcon,
+  Clock01Icon,
+  Delete02Icon,
+  PlayIcon,
+  RoboticIcon,
+  Tick02Icon,
+} from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { OpenCodeProject, Task, TaskProject, TaskUpdate } from '@opencodex/contracts';
+import type {
+  OpenCodeProject,
+  Task,
+  TaskAssignee,
+  TaskProject,
+  TaskUpdate,
+} from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { Select } from '../../components/ui/select';
 import { markdownUrl } from '../../lib/markdown-url';
 import { MarkdownLink } from '../chat/markdown-link';
 import { ProjectIcon } from '../projects/project-icon';
 import { projectName } from '../projects/project-metadata';
-import { columns, delayedDays, shortDate } from './task-model';
+import { assigneeOf, columns, delayedDays, shortDate } from './task-model';
 
 const remarkPlugins = [remarkGfm];
 const noteComponents: Components = { a: MarkdownLink };
@@ -26,6 +39,8 @@ export function TaskCard({
   onUpdate,
   onDelete,
   onOpenSession,
+  starting,
+  onStart,
   onDragStart,
   onDragEnd,
 }: {
@@ -36,6 +51,9 @@ export function TaskCard({
   onUpdate: (input: TaskUpdate) => void;
   onDelete: () => void;
   onOpenSession: (sessionID: string) => void;
+  starting: boolean;
+  /** Missing while another task is starting. */
+  onStart?: () => void;
   onDragStart: (event: DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
 }) {
@@ -52,6 +70,7 @@ export function TaskCard({
     setEditing(false);
   };
   const done = task.bucket === 'done';
+  const agent = assigneeOf(task) === 'agent';
   const delayed = delayedDays(task, now);
   const project = task.project ? projects.get(task.project.directory) : undefined;
   const projectLabel = task.project
@@ -119,8 +138,35 @@ export function TaskCard({
             </Markdown>
           </div>
         )}
-        {(projectLabel || delayed > 0 || task.sessionID || done) && (
+        {(projectLabel || delayed > 0 || task.sessionID || done || agent) && (
           <div className="task-meta">
+            {agent && !task.workSessionID && !done && (
+              <button
+                type="button"
+                className="task-chip task-start"
+                disabled={!task.project || !onStart}
+                title={
+                  task.project
+                    ? 'Start a chat in this project with the task as its first message'
+                    : 'Choose a project for the agent to work in'
+                }
+                onClick={onStart}
+              >
+                <HugeiconsIcon icon={starting ? RoboticIcon : PlayIcon} size={12} />
+                {starting ? 'Starting…' : task.project ? 'Start agent' : 'Agent · needs a project'}
+              </button>
+            )}
+            {task.workSessionID && (
+              <button
+                type="button"
+                className="task-chip task-link task-agent"
+                title="Open the chat the agent is working in"
+                onClick={() => onOpenSession(task.workSessionID!)}
+              >
+                <HugeiconsIcon icon={RoboticIcon} size={12} />
+                Agent chat
+              </button>
+            )}
             {delayed > 0 && (
               <span
                 className="task-chip"
@@ -140,7 +186,7 @@ export function TaskCard({
                 <span className="truncate">{projectLabel}</span>
               </span>
             )}
-            {task.sessionID && (
+            {task.sessionID && task.sessionID !== task.workSessionID && (
               <button
                 type="button"
                 className="task-chip task-link"
@@ -189,6 +235,7 @@ function TaskEditor({
   const [notes, setNotes] = useState(task.notes ?? '');
   const [directory, setDirectory] = useState(task.project?.directory ?? '');
   const [bucket, setBucket] = useState(task.bucket);
+  const [assignee, setAssignee] = useState<TaskAssignee>(assigneeOf(task));
   const options = [
     { value: '', label: 'No project', project: undefined as OpenCodeProject | undefined },
     ...[...projects.values()].map((project) => ({
@@ -218,6 +265,7 @@ function TaskEditor({
         : null;
     }
     if (bucket !== task.bucket) input.bucket = bucket;
+    if (assignee !== assigneeOf(task)) input.assignee = assignee;
     onSave(input, focus);
   }
   function cancel() {
@@ -314,6 +362,17 @@ function TaskEditor({
           value={bucket}
           options={columns.map(({ bucket, label }) => ({ value: bucket, label }))}
           onChange={(value) => setBucket(value as Task['bucket'])}
+          renderOption={(option) => option.label}
+          floating
+        />
+        <Select
+          label="Assignee"
+          value={assignee}
+          options={[
+            { value: 'user', label: 'For me' },
+            { value: 'agent', label: 'For an agent' },
+          ]}
+          onChange={(value) => setAssignee(value as TaskAssignee)}
           renderOption={(option) => option.label}
           floating
         />

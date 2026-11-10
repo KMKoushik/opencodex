@@ -3,10 +3,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CANVAS_CHANNEL,
   type CanvasData,
+  type CanvasTaskOp,
   type FrameMessage,
   type HostMessage,
 } from '@opencodex/contracts/canvas';
+import type { Task, TaskCreate, TaskUpdate } from '@opencodex/contracts';
 import { api } from '../../lib/api';
+import { useStartTask } from '../tasks/use-tasks';
 import { useTheme } from '../theme/use-theme';
 import { readCanvasTheme } from './canvas-theme';
 import { appsKey, CanvasSessionContext, canvasDataKey, canvasSourceKey } from './canvas-context';
@@ -76,6 +79,30 @@ export function CanvasFrame({
   useEffect(() => {
     openSessionRef.current = openSession;
   }, [openSession]);
+  // The page reads the task board: bumped on each request, so a reloaded page gets it again.
+  const [tasksWatch, setTasksWatch] = useState(0);
+  const tasks = useQuery({
+    queryKey: ['tasks'],
+    queryFn: ({ signal }) => api.tasks(signal),
+    enabled: tasksWatch > 0,
+  });
+  const startTask = useStartTask();
+  const taskOp = useRef<(op: CanvasTaskOp) => Promise<unknown>>(undefined);
+  useEffect(() => {
+    taskOp.current = async (op) => {
+      try {
+        if (op.op === 'start') {
+          const task = client.getQueryData<Task[]>(['tasks'])?.find((item) => item.id === op.id);
+          return await startTask.mutateAsync(task ?? ({ id: op.id } as Task));
+        }
+        if (op.op === 'remove') return await api.deleteTask(op.id);
+        if (op.op === 'add') return await api.createTask(op.input as TaskCreate);
+        return await api.updateTask(op.id, op.input as TaskUpdate);
+      } finally {
+        void client.invalidateQueries({ queryKey: ['tasks'] });
+      }
+    };
+  });
   const { preference, systemDark } = useTheme();
   const frame = useRef<HTMLIFrameElement>(null);
   // Bumped to load a fresh frame, which shows the page again in a new realm.
@@ -150,6 +177,19 @@ export function CanvasFrame({
           (error: unknown) =>
             reply({ error: error instanceof Error ? error.message : String(error) }),
         );
+      } else if (message.type === 'tasks-watch') {
+        setTasksWatch((value) => value + 1);
+      } else if (message.type === 'task') {
+        const call = message.call;
+        void taskOp.current!(message).then(
+          (value) => post({ type: 'result', call, value }),
+          (error: unknown) =>
+            post({
+              type: 'result',
+              call,
+              error: error instanceof Error ? error.message : String(error),
+            }),
+        );
       } else if (message.type === 'annotation') {
         if (!overlay.current) return;
         overlay.current = false;
@@ -172,7 +212,7 @@ export function CanvasFrame({
     };
     window.addEventListener('message', receive);
     return () => window.removeEventListener('message', receive);
-  }, [id, client]);
+  }, [id, client, post]);
 
   // First contact: send everything once the frame is listening and the snapshots are loaded.
   useEffect(() => {
@@ -238,6 +278,12 @@ export function CanvasFrame({
     if (!session || shown.current.version === undefined || running === undefined) return;
     post({ type: 'running', names: running ? running.split('\0') : [] });
   }, [session, running, post, source.data, data.data]);
+
+  useEffect(() => {
+    if (!session || !tasksWatch) return;
+    if (tasks.data) post({ type: 'tasks', tasks: tasks.data });
+    else if (tasks.error) post({ type: 'tasks', error: tasks.error.message });
+  }, [session, tasksWatch, tasks.data, tasks.error, post]);
 
   // The overlay opens once the view is shown; turning `annotating` off cancels an open one.
   const ready = Boolean(session && source.data && data.data);

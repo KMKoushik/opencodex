@@ -159,6 +159,28 @@ it again. Open views update live.
 - \`canvas.scheme\` is \`'light'\` or \`'dark'\`; \`canvas.on('theme', (scheme) => ...)\` is for
   drawing code that can't use CSS variables.
 
+## The user's tasks
+
+The user's OpenCodex task board (Today, This week, Someday, Done; each task for the user or
+for an agent) can live inside a page. To show it, drop in the element; it is themed, live,
+and lets the user complete tasks, add them, and start an agent on agent tasks:
+
+\`\`\`html
+<opencodex-tasks heading="Agent queue" assignee="agent" list="today,week" project="opencodex" add></opencodex-tasks>
+\`\`\`
+
+All attributes are optional: \`assignee\` (\`me\` or \`agent\`), \`list\` (\`today\`, \`week\`,
+\`someday\`, \`done\`, \`open\` for the three open lists (the default), or \`all\`; comma separated),
+\`project\` (a folder or folder name), \`heading\`, \`add\` (a New task field that files tasks
+under the filters), \`limit\`, and \`empty\` (text when nothing matches). Prefer the element
+over rebuilding a task list. For a custom view, \`canvas.tasks.list\` holds the tasks (null
+while loading; \`canvas.tasks.error\` says why it can't load), \`canvas.on('tasks', (list) =>
+...)\` follows changes, and \`canvas.tasks.add({ title, bucket, assignee, project })\`,
+\`update(id, fields)\`, \`complete(id)\`, \`remove(id)\`, and \`start(id)\` (opens an agent chat
+for the task; resolves with \`{ task, session }\`) edit it. In server.ts, \`tasks\` has the same
+operations, so an app can file work for an agent: \`tasks.add({ title, notes, assignee:
+'agent', project })\`.
+
 ## Apps: server.ts
 
 A canvas becomes an app when it needs live data or actions: refresh from GitHub, triage
@@ -184,6 +206,9 @@ color }\`) or set \`"icon"\` in \`canvas.json\`; pick the glyph for what the app
 - Leave out \`model\` on both. The user picks the app's model in its header (until then it
   follows this chat's model). Name one (\`model: 'providerID/modelID'\`) only when the user
   asks for a specific model for that call; it then overrides the user's pick.
+- \`tasks.list()\`, \`tasks.add(...)\`, \`tasks.update(id, ...)\`, \`tasks.complete(id)\`,
+  \`tasks.start(id)\`: the user's task board (see The user's tasks). Start agents only when the
+  user asked the app to.
 - \`export const triggers: Triggers = { refresh: { every: '1d' } }\` runs a function on a
   schedule while OpenCodex is open. Only add one when the user asks for recurring work.
 

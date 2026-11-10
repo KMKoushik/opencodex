@@ -20,6 +20,7 @@ export const preferenceInputSchema = z.object({
     'sessionWorkbench',
     'notifications',
     'activityTrayOpen',
+    'taskAssignee',
   ]),
   value: z.string().max(16_384).nullable(),
 });
@@ -47,6 +48,7 @@ export function createPreferences() {
       sessionWorkbench: { type: ['string', 'null'] },
       notifications: { type: ['string', 'null'] },
       activityTrayOpen: { enum: ['true', 'false', null] },
+      taskAssignee: { enum: ['all', 'user', 'agent', null] },
     },
     accessPropertiesByDotNotation: false,
     clearInvalidConfig: true,

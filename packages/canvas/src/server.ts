@@ -287,6 +287,77 @@ function stripFence(text: string) {
   return fenced ? fenced[1]! : trimmed;
 }
 
+/** A list on the user's task board. */
+export type TaskList = 'today' | 'week' | 'someday' | 'done';
+/** A task on the user's OpenCodex task board. */
+export type BoardTask = {
+  id: string;
+  title: string;
+  notes?: string;
+  bucket: TaskList;
+  /** Ascending position within its list. */
+  order: number;
+  project?: { id: string; directory: string };
+  /** Missing means the user. */
+  assignee?: 'user' | 'agent';
+  /** The chat an agent was started in to do the task. */
+  workSessionID?: string;
+  time: { created: number; updated: number; moved: number; completed?: number };
+};
+export type TaskInput = {
+  title?: string;
+  notes?: string;
+  /** Default for new tasks: `today`. */
+  bucket?: TaskList;
+  /** `agent` for work an agent should do; the user starts it, or `tasks.start` does. */
+  assignee?: 'user' | 'agent';
+  /** A project folder or its name; `null` clears it. */
+  project?: string | null;
+};
+
+/**
+ * The user's task board, the same one the Tasks page and `<opencodex-tasks>` show. Changes
+ * reach every open view live. Done tasks are deleted two weeks after completion.
+ */
+export const tasks = {
+  async list(): Promise<BoardTask[]> {
+    return (await bridge().request('tasks', { op: 'list' })) as BoardTask[];
+  },
+  async add(input: TaskInput & { title: string }): Promise<BoardTask> {
+    return (await bridge().request('tasks', { op: 'add', input })) as BoardTask;
+  },
+  async update(id: string, input: TaskInput): Promise<BoardTask> {
+    return (await bridge().request('tasks', { op: 'update', id, input })) as BoardTask;
+  },
+  complete(id: string): Promise<BoardTask> {
+    return tasks.update(id, { bucket: 'done' });
+  },
+  async remove(id: string): Promise<void> {
+    await bridge().request('tasks', { op: 'remove', id });
+  },
+  /**
+   * Starts an agent on a task with a project: a new chat in that project whose first message
+   * is the task. The agent marks the task done when it finishes. Only start agents the user
+   * asked this app to start.
+   */
+  async start(
+    id: string,
+    options: { model?: Model } = {},
+  ): Promise<{ task: BoardTask; sessionID: string }> {
+    const model = options.model?.includes('/')
+      ? {
+          providerID: options.model.split('/')[0]!,
+          id: options.model.split('/').slice(1).join('/'),
+        }
+      : undefined;
+    const result = (await bridge().request('tasks', { op: 'start', id, input: { model } })) as {
+      task: BoardTask;
+      session: { id: string };
+    };
+    return { task: result.task, sessionID: result.session.id };
+  },
+};
+
 /** When OpenCodex runs functions on its own, while it's open. Missed runs catch up once. */
 export type Trigger = {
   /** Interval like `30m`, `6h`, or `1d`. */

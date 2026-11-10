@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { AnnotationOverlayResult, BrowserAnnotationTheme } from './desktop';
+import type { Task, TaskAssignee, TaskBucket } from './index';
 import { CANVAS_GLYPH_GROUPS } from './canvas-glyphs';
 
 export { CANVAS_GLYPH_GROUPS };
@@ -167,6 +168,29 @@ export type CanvasInit = {
   running: string[];
   /** Where the page was scrolled before it reloaded. */
   scroll?: number;
+  /** The task board, sent up front only by the preview renderer; hosts send it on `tasks-watch`. */
+  tasks?: CanvasTasks;
+};
+/** The task board as a page sees it: the tasks, or why they can't be shown. */
+export type CanvasTasks = { tasks: Task[] } | { error: string };
+/** Task board operations a page can run; each is answered with `result`. */
+export type CanvasTaskOp =
+  | { op: 'add'; input: CanvasTaskInput }
+  | { op: 'update'; id: string; input: CanvasTaskInput }
+  | { op: 'remove'; id: string }
+  /** Starts an agent on the task; resolves with `{ task, session }`. */
+  | { op: 'start'; id: string };
+/**
+ * A page's task fields. `project` is a project's folder, its name, or `null` for none;
+ * the gateway resolves it to the native project.
+ */
+export type CanvasTaskInput = {
+  title?: string;
+  notes?: string;
+  bucket?: TaskBucket;
+  order?: number;
+  assignee?: TaskAssignee;
+  project?: string | null;
 };
 export type HostMessage = { channel: typeof CANVAS_CHANNEL } & (
   | CanvasInit
@@ -176,6 +200,8 @@ export type HostMessage = { channel: typeof CANVAS_CHANNEL } & (
   | { type: 'data'; key: string; value: unknown }
   | { type: 'result'; call: number; value?: unknown; error?: string }
   | { type: 'running'; names: string[] }
+  /** The task board, after `tasks-watch` and whenever it changes. */
+  | ({ type: 'tasks' } & CanvasTasks)
   /** Shows the comment overlay; the frame answers with `annotation`. */
   | { type: 'annotate'; theme: BrowserAnnotationTheme }
   /** `cancel` drops an open overlay; `close` removes the marks left for the screenshot. */
@@ -188,6 +214,9 @@ export type FrameMessage = { channel: typeof CANVAS_CHANNEL } & (
   | { type: 'size'; height: number }
   | { type: 'set'; key: string; value: unknown }
   | { type: 'call'; call: number; name: string; args: unknown[] }
+  /** The page reads the task board: the host sends `tasks` now and on every change. */
+  | { type: 'tasks-watch' }
+  | ({ type: 'task'; call: number } & CanvasTaskOp)
   | { type: 'open'; target: string | { session: string } }
   /** An uncaught error in the page, so the host can say the canvas is broken. */
   | { type: 'error'; message: string }

@@ -30,6 +30,11 @@
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
+.tasks-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .tasks-filter .select-trigger {
   width: 200px;
 }
@@ -290,6 +295,21 @@
 .task-link {
   cursor: pointer;
 }
+.task-start {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 550;
+  cursor: pointer;
+}
+.task-start:disabled {
+  background: var(--secondary);
+  color: var(--text-tertiary);
+  font-weight: inherit;
+  cursor: default;
+}
+.task-agent {
+  color: var(--accent-text);
+}
 .task-delete {
   width: 24px;
   height: 24px;
@@ -433,6 +453,9 @@
     border-color: var(--success);
     color: var(--success);
   }
+  .task-start:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+  }
   .task-add:hover,
   .task-link:hover {
     background: var(--hover);
@@ -456,6 +479,9 @@
   .tasks-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .tasks-filter {
+    flex-wrap: wrap;
   }
   .task-columns {
     grid-template-columns: minmax(0, 1fr);

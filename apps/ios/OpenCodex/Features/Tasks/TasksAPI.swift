@@ -10,6 +10,8 @@ nonisolated struct BoardTask: Codable, Hashable, Identifiable, Sendable {
     var id: String
     var directory: String
   }
+  /// Who does the task; missing means the user.
+  enum Assignee: String, Codable, Sendable { case user, agent }
   struct Times: Codable, Hashable, Sendable {
     var created: Millis
     var updated: Millis
@@ -30,6 +32,11 @@ nonisolated struct BoardTask: Codable, Hashable, Identifiable, Sendable {
   /// Where the task returns when it's reopened from Done.
   var reopen: Bucket?
   var time: Times
+  var assignee: Assignee?
+  /// The chat an agent was started in to do the task.
+  var workSessionID: String?
+
+  var forAgent: Bool { assignee == .agent }
 }
 
 /// Installation and load state of an OpenCodex plugin (`TasksPluginStatus`).
@@ -51,12 +58,14 @@ nonisolated struct TaskUpdate: Encodable, Sendable {
   var order: Double?
   /// `.some(nil)` clears the project.
   var project: BoardTask.Project??
+  var assignee: BoardTask.Assignee?
 
   var isEmpty: Bool {
     title == nil && notes == nil && bucket == nil && order == nil && project == nil
+      && assignee == nil
   }
 
-  private enum Key: String, CodingKey { case title, notes, bucket, order, project }
+  private enum Key: String, CodingKey { case title, notes, bucket, order, project, assignee }
 
   func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: Key.self)
@@ -64,6 +73,7 @@ nonisolated struct TaskUpdate: Encodable, Sendable {
     try container.encodeIfPresent(notes, forKey: .notes)
     try container.encodeIfPresent(bucket, forKey: .bucket)
     try container.encodeIfPresent(order, forKey: .order)
+    try container.encodeIfPresent(assignee, forKey: .assignee)
     if let project {
       if let project { try container.encode(project, forKey: .project) } else {
         try container.encodeNil(forKey: .project)
@@ -76,6 +86,17 @@ nonisolated struct TaskCreate: Encodable, Sendable {
   var title: String
   var bucket: BoardTask.Bucket
   var project: BoardTask.Project?
+  var assignee: BoardTask.Assignee?
+}
+
+/// `POST /api/tasks/:id/start`: the agent's chat, linked on the task.
+nonisolated struct TaskStart: Decodable, Sendable {
+  var task: BoardTask
+  var session: SessionInfo
+}
+
+nonisolated struct TaskStartInput: Encodable, Sendable {
+  var model: ModelRef?
 }
 
 nonisolated extension GatewayClient {
@@ -86,6 +107,10 @@ nonisolated extension GatewayClient {
     try await send(
       request(
         url("/tasks/\(id)"), method: "PATCH", body: JSONEncoder().encode(input)))
+  }
+  /// Starts an agent on the task in a new chat in its project.
+  func startTask(_ id: String, model: ModelRef?) async throws -> TaskStart {
+    try await post("/tasks/\(id)/start", TaskStartInput(model: model))
   }
   func deleteTask(_ id: String) async throws -> OK {
     try await delete("/tasks/\(id)")

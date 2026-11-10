@@ -11,13 +11,22 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { OpenCodeProject, TaskBucket, TasksPluginStatus } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
+import { SegmentedControl } from '../../components/ui/segmented-control';
 import { Select } from '../../components/ui/select';
 import { api } from '../../lib/api';
+import { readStorage, writeStorage } from '../../lib/storage';
 import { ProjectIcon } from '../projects/project-icon';
 import { projectFolders, projectName } from '../projects/project-metadata';
 import { TaskCard, type TaskProjects } from './task-card';
-import { columns, delayedDays, groupTasks, orderBetween, type ProjectFilter } from './task-model';
-import { useTaskMutations } from './use-tasks';
+import {
+  columns,
+  delayedDays,
+  groupTasks,
+  orderBetween,
+  type AssigneeFilter,
+  type ProjectFilter,
+} from './task-model';
+import { useStartTask, useTaskMutations } from './use-tasks';
 import './tasks.css';
 
 const icons = {
@@ -26,6 +35,16 @@ const icons = {
   someday: Archive03Icon,
   done: CheckmarkCircle02Icon,
 };
+const assigneeOptions: { value: AssigneeFilter; label: string }[] = [
+  { value: 'all', label: 'Everyone' },
+  { value: 'user', label: 'Me' },
+  { value: 'agent', label: 'Agent' },
+];
+const storedAssignee = (): AssigneeFilter => {
+  const value = readStorage('taskAssignee');
+  return value === 'user' || value === 'agent' ? value : 'all';
+};
+
 const empty: Record<TaskBucket, string> = {
   today: 'Nothing planned for today.',
   week: 'Nothing else this week.',
@@ -149,6 +168,7 @@ function Board({
   });
   const { create, update, remove } = useTaskMutations();
   const [filter, setFilter] = useState<ProjectFilter>('all');
+  const [assignee, setAssignee] = useState<AssigneeFilter>(storedAssignee);
   const [adding, setAdding] = useState<TaskBucket | null>(null);
   const [dragged, setDragged] = useState<string | null>(null);
   const [drop, setDrop] = useState<{ bucket: TaskBucket; index: number } | null>(null);
@@ -163,7 +183,10 @@ function Board({
     () => projectFolders(nativeProjects.data ?? []),
     [nativeProjects.data],
   );
-  const groups = useMemo(() => groupTasks(tasks.data ?? [], filter), [tasks.data, filter]);
+  const groups = useMemo(
+    () => groupTasks(tasks.data ?? [], filter, assignee),
+    [tasks.data, filter, assignee],
+  );
   const filterOptions = useMemo(() => {
     const used = new Set((tasks.data ?? []).flatMap((task) => task.project?.directory ?? []));
     // Projects with tasks first, then the rest in the service's recency order.
@@ -184,6 +207,7 @@ function Board({
   const open = groups.today.length + groups.week.length + groups.someday.length;
   const delayed = groups.today.filter((task) => delayedDays(task, now) > 0).length;
 
+  const start = useStartTask();
   function dropAt(event: DragEvent<HTMLElement>) {
     const cards = Array.from(
       event.currentTarget.querySelectorAll<HTMLElement>('[data-task-id]'),
@@ -221,6 +245,15 @@ function Board({
           </p>
         </div>
         <div className="tasks-filter">
+          <SegmentedControl
+            label="Filter by assignee"
+            value={assignee}
+            options={assigneeOptions}
+            onChange={(value) => {
+              setAssignee(value);
+              writeStorage('taskAssignee', value === 'all' ? null : value);
+            }}
+          />
           <Select
             label="Filter by project"
             value={filter}
@@ -243,9 +276,9 @@ function Board({
           </Button>
         </p>
       )}
-      {(create.error || update.error || remove.error) && (
+      {(create.error || update.error || remove.error || start.error) && (
         <p className="tasks-banner text-error" role="alert">
-          {(create.error ?? update.error ?? remove.error)?.message}
+          {(start.error ?? create.error ?? update.error ?? remove.error)?.message}
         </p>
       )}
       <div className="task-columns">
@@ -305,6 +338,15 @@ function Board({
                       onUpdate={(input) => update.mutate({ id: task.id, input })}
                       onDelete={() => remove.mutate(task.id)}
                       onOpenSession={onOpenSession}
+                      starting={start.isPending && start.variables?.id === task.id}
+                      onStart={
+                        start.isPending
+                          ? undefined
+                          : () =>
+                              start.mutate(task, {
+                                onSuccess: ({ session }) => onOpenSession(session.id),
+                              })
+                      }
                       onDragStart={(event) => {
                         event.dataTransfer.effectAllowed = 'move';
                         event.dataTransfer.setData('text/plain', task.title);
@@ -329,6 +371,7 @@ function Board({
                         project: filterProject
                           ? { id: filterProject.id, directory: filterProject.canonical }
                           : undefined,
+                        assignee: assignee === 'agent' ? 'agent' : undefined,
                       })
                     }
                     onClose={() => setAdding(null)}

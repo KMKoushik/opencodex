@@ -19,6 +19,7 @@ import {
 } from '@opencodex/contracts/canvas';
 import { GatewayError } from './errors';
 import type { OpenCodeBackend } from './opencode';
+import type { TaskService } from './tasks';
 import { folder, listCanvases, readServerSource, readValue, SERVER, writeValue } from './canvases';
 import { CANVAS_SERVER_HOST } from './canvas-runtime.generated';
 import { originalLine } from './canvas-build';
@@ -33,6 +34,7 @@ const MAX_LOG_LINES = 100;
 const MAX_CALLS = 50;
 const RUN_TIMEOUT = 6 * 60 * 60_000;
 const ASK_TIMEOUT = 5 * 60_000;
+const TASK_TIMEOUT = 60_000;
 const MAX_DELAY = 2 ** 31 - 1;
 
 /** One running `server.ts`: a child process that loads the files and runs calls. */
@@ -161,6 +163,8 @@ export class Apps {
     private readonly backend: OpenCodeBackend,
     private readonly root: string,
     private readonly publish: (event: CanvasEvent) => void,
+    /** The task board, for `tasks` in server.ts and the page previews. */
+    readonly tasks?: TaskService,
   ) {}
 
   private async source(id: string) {
@@ -378,6 +382,25 @@ export class Apps {
       case 'oc.run': {
         const track = this.track(id, request.call, 'run');
         return track.settle(this.ocRun(id, worker, request.call, input, track.model));
+      }
+      case 'tasks': {
+        if (!this.tasks) throw new Error('The task board isn’t available here.');
+        const signal = AbortSignal.timeout(TASK_TIMEOUT);
+        const taskID = String(input.id ?? '');
+        switch (input.op) {
+          case 'list':
+            return this.tasks.list(signal);
+          case 'add':
+            return this.tasks.create(signal, input.input);
+          case 'update':
+            return this.tasks.update(signal, taskID, input.input);
+          case 'remove':
+            return this.tasks.remove(signal, taskID);
+          case 'start':
+            return this.tasks.start(signal, taskID, input.input);
+          default:
+            throw new Error(`Unknown tasks operation ${String(input.op)}.`);
+        }
       }
       default:
         throw new Error(`Unknown request ${request.op}.`);

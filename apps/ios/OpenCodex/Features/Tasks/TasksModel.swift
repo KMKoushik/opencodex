@@ -21,6 +21,12 @@ final class TasksModel {
   var editError: String?
   /// `all`, `none` (tasks without a project), or a project's canonical directory.
   var filter = "all"
+  /// Whose tasks show: `all`, `user` or `agent`, remembered like the desktop's `taskAssignee`.
+  var assignee = UserDefaults.standard.string(forKey: "taskAssignee") ?? "all" {
+    didSet { UserDefaults.standard.set(assignee == "all" ? nil : assignee, forKey: "taskAssignee") }
+  }
+  /// The task an agent is being started on.
+  private(set) var starting: String?
   /// Delayed labels change at midnight; a minute's lag is fine.
   private(set) var now = Date()
 
@@ -124,7 +130,9 @@ final class TasksModel {
     projects.first { $0.canonical == directory }
   }
 
-  var groups: [BoardTask.Bucket: [BoardTask]] { TaskBoardLogic.group(tasks ?? [], filter: filter) }
+  var groups: [BoardTask.Bucket: [BoardTask]] {
+    TaskBoardLogic.group(tasks ?? [], filter: filter, assignee: assignee)
+  }
 
   /// Projects with tasks first, then the rest in recency order.
   var filterProjects: [ThreadProject] {
@@ -161,7 +169,11 @@ final class TasksModel {
     }
     Task {
       do {
-        replace(try await client.createTask(TaskCreate(title: title, bucket: bucket, project: project)))
+        replace(
+          try await client.createTask(
+            TaskCreate(
+              title: title, bucket: bucket, project: project,
+              assignee: assignee == "agent" ? .agent : nil)))
         editError = nil
       } catch { editError = error.localizedDescription }
     }
@@ -206,6 +218,26 @@ final class TasksModel {
     let order = TaskBoardLogic.orderBetween(
       target > 0 ? siblings[target - 1] : nil, target < siblings.count ? siblings[target] : nil)
     update(task, TaskUpdate(order: order))
+  }
+
+  /// Starts an agent on the task: a new chat in its project, with the model last used there.
+  /// Calls `opened` with the chat when it's ready.
+  func start(_ task: BoardTask, opened: @escaping (String) -> Void) {
+    guard starting == nil, let project = task.project, !demo else { return }
+    starting = task.id
+    Task {
+      defer { starting = nil }
+      do {
+        let result = try await client.startTask(
+          task.id, model: ModelPreferences.shared.model(directory: project.directory))
+        replace(result.task)
+        editError = nil
+        opened(result.session.id)
+      } catch {
+        editError = error.localizedDescription
+        await loadTasks()
+      }
+    }
   }
 
   func delete(_ task: BoardTask) {
@@ -270,12 +302,15 @@ enum TaskBoardLogic {
     columns.first { $0.bucket == bucket }!.label
   }
 
-  static func group(_ tasks: [BoardTask], filter: String) -> [BoardTask.Bucket: [BoardTask]] {
+  static func group(_ tasks: [BoardTask], filter: String, assignee: String = "all")
+    -> [BoardTask.Bucket: [BoardTask]]
+  {
     var groups: [BoardTask.Bucket: [BoardTask]] = [.today: [], .week: [], .someday: [], .done: []]
     for task in tasks {
       if filter == "none" ? task.project != nil : filter != "all" && task.project?.directory != filter {
         continue
       }
+      if assignee != "all" && (task.assignee ?? .user).rawValue != assignee { continue }
       groups[task.bucket, default: []].append(task)
     }
     for (bucket, items) in groups {
@@ -328,6 +363,7 @@ enum TaskBoardLogic {
       next.notes = trimmed.isEmpty ? nil : trimmed
     }
     if let project = input.project { next.project = project }
+    if let assignee = input.assignee { next.assignee = assignee == .agent ? .agent : nil }
     if let order = input.order { next.order = order }
     if let bucket = input.bucket, bucket != task.bucket {
       next.bucket = bucket

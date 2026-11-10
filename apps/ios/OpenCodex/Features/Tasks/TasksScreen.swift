@@ -142,6 +142,18 @@ private struct TaskBoardView: View {
   var body: some View {
     let groups = model.groups
     List {
+      Section {
+        Picker("Show tasks for", selection: Bindable(model).assignee) {
+          Text("Everyone").tag("all")
+          Text("Me").tag("user")
+          Text("Agent").tag("agent")
+        }
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier("tasks.assignee")
+        .listRowBackground(Color.clear)
+        .listRowInsets(.init(top: 0, leading: 0, bottom: 0, trailing: 0))
+      }
+      .listSectionSpacing(.compact)
       if model.tasks == nil {
         Section {
           if let error = model.tasksError {
@@ -335,7 +347,9 @@ private struct TaskRow: View {
               .multilineTextAlignment(.leading)
               .lineLimit(6)
           }
-          if delayed > 0 || done || task.project != nil || task.sessionID != nil {
+          if delayed > 0 || done || task.project != nil || task.sessionID != nil || task.forAgent
+            || task.workSessionID != nil
+          {
             meta(delayed: delayed)
           }
         }
@@ -382,15 +396,60 @@ private struct TaskRow: View {
         Button("Move down", systemImage: "arrow.down") { model.shift(task, by: 1) }
       }
     }
-    if let session = task.sessionID, let onOpenSession {
+    if task.forAgent && !done && task.workSessionID == nil && task.project != nil {
+      Button("Start agent", systemImage: "play.fill") { start() }
+    }
+    if let session = task.workSessionID, let onOpenSession {
+      Button("Open agent chat", systemImage: "cpu") { onOpenSession(session) }
+    }
+    if let session = task.sessionID, session != task.workSessionID, let onOpenSession {
       Button("Open chat", systemImage: "bubble.left") { onOpenSession(session) }
     }
     Divider()
     Button("Delete", systemImage: "trash", role: .destructive) { model.delete(task) }
   }
 
+  private func start() {
+    model.start(task) { session in onOpenSession?(session) }
+  }
+
   private func meta(delayed: Int) -> some View {
     TaskChipFlow(spacing: 4) {
+      if task.forAgent && !done && task.workSessionID == nil {
+        if task.project != nil {
+          let starting = model.starting == task.id
+          Button(action: start) {
+            chip(tone: "accent") {
+              Image(systemName: starting ? "ellipsis" : "play.fill")
+              Text(starting ? "Starting…" : "Start agent").fontWeight(.medium)
+            }
+          }
+          .buttonStyle(.borderless)
+          .disabled(model.starting != nil)
+          .accessibilityHint("Starts a chat in this project with the task as its first message")
+          .accessibilityIdentifier("tasks.start")
+        } else {
+          chip {
+            Image(systemName: "cpu")
+            Text("Agent · needs a project")
+          }
+          .accessibilityHint("Choose a project for the agent to work in")
+        }
+      }
+      if let session = task.workSessionID {
+        Button {
+          onOpenSession?(session)
+        } label: {
+          chip(tone: "accent") {
+            Image(systemName: "cpu")
+            Text("Agent chat")
+          }
+        }
+        .buttonStyle(.borderless)
+        .disabled(onOpenSession == nil)
+        .accessibilityHint("Open the chat the agent is working in")
+        .accessibilityIdentifier("tasks.agentChat")
+      }
       if delayed > 0 {
         chip(tone: "warning") {
           Image(systemName: "clock")
@@ -411,7 +470,7 @@ private struct TaskRow: View {
           Text(name).lineLimit(1)
         }
       }
-      if let session = task.sessionID {
+      if let session = task.sessionID, session != task.workSessionID {
         Button {
           onOpenSession?(session)
         } label: {
@@ -493,6 +552,7 @@ private struct TaskEditor: View {
   @State private var notes: String
   @State private var directory: String
   @State private var bucket: BoardTask.Bucket
+  @State private var assignee: BoardTask.Assignee
   @State private var confirmDelete = false
   @FocusState private var titleFocused: Bool
   @Environment(\.palette) private var palette
@@ -505,6 +565,7 @@ private struct TaskEditor: View {
     _notes = State(initialValue: task.notes ?? "")
     _directory = State(initialValue: task.project?.directory ?? "")
     _bucket = State(initialValue: task.bucket)
+    _assignee = State(initialValue: task.assignee ?? .user)
   }
 
   var body: some View {
@@ -538,6 +599,13 @@ private struct TaskEditor: View {
             Label("List", systemImage: "list.bullet").foregroundStyle(palette.color("text"))
           }
           .accessibilityIdentifier("tasks.editor.list")
+          Picker(selection: $assignee) {
+            Label("Me", systemImage: "person").tag(BoardTask.Assignee.user)
+            Label("An agent", systemImage: "cpu").tag(BoardTask.Assignee.agent)
+          } label: {
+            Label("For", systemImage: "person.crop.circle").foregroundStyle(palette.color("text"))
+          }
+          .accessibilityIdentifier("tasks.editor.assignee")
           Picker(selection: $directory) {
             Text("No project").tag("")
             ForEach(model.projects) { Text($0.displayName).tag($0.canonical) }
@@ -595,6 +663,7 @@ private struct TaskEditor: View {
     if directory != (task.project?.directory ?? "") {
       input.project = .some(model.project(directory).map { .init(id: $0.id, directory: $0.canonical) })
     }
+    if assignee != (task.assignee ?? .user) { input.assignee = assignee }
     if bucket != task.bucket {
       // Into another list goes to its end, like dropping it below the last card.
       if bucket == .done {

@@ -321,6 +321,12 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(input),
     }),
+  /** Starts an agent on the task in a new chat in its project; the task links the chat. */
+  startTask: (id: string, model?: ModelRef) =>
+    nativeRequest<{ task: Task; session: SessionInfo }>(
+      `/tasks/${encodeURIComponent(id)}/start`,
+      post({ model }),
+    ),
   deleteTask: (id: string) =>
     nativeRequest<{ ok: true }>(`/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   usageLimits: (signal: AbortSignal) => nativeRequest<UsageLimits>('/usage/limits', { signal }),

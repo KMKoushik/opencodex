@@ -20,6 +20,9 @@ final class CanvasModel {
   var writeError: String?
   /// Uncaught errors from the page itself, until it reloads.
   var pageErrors: [String] = []
+  /// The task board as the page sees it (`{ tasks }` or `{ error }`), once the page reads it.
+  private(set) var tasks: JSONValue?
+  @ObservationIgnored private var tasksWatched = false
 
   /// Opens a chat by session id, for views that link the sessions their server started.
   @ObservationIgnored var openSession: ((String) -> Void)?
@@ -33,7 +36,7 @@ final class CanvasModel {
   /// Called after a write is saved, so the host records the revision the frame already shows.
   @ObservationIgnored var onSaved: ((String, String) -> Void)?
 
-  private enum Refresh { case source, data, apps }
+  private enum Refresh { case source, data, apps, tasks }
 
   init(client: GatewayClient, events: EventHub, id: String) {
     self.client = client
@@ -44,7 +47,7 @@ final class CanvasModel {
   func run() async {
     subscriptions = [
       events.subscribe { [weak self] event in self?.handle(event) },
-      events.onReconnect { [weak self] in self?.schedule([.source, .data, .apps]) },
+      events.onReconnect { [weak self] in self?.schedule([.source, .data, .apps, .tasks]) },
     ]
     defer { subscriptions = [] }
     async let source: Void = load(.source)
@@ -57,6 +60,7 @@ final class CanvasModel {
 
   /// `canvas` events from the gateway's stream: `{ type: source | data | list | app, id, … }`.
   private func handle(_ event: GatewayEvent) {
+    if event.type.hasPrefix("rpc.opencodex.tasks.") { return schedule([.tasks]) }
     guard event.type == "canvas", let data = event.data else { return }
     let kind = data["type"]?.string
     if kind == "list" { return schedule([.apps]) }
@@ -96,12 +100,55 @@ final class CanvasModel {
       case .apps:
         let names = try await client.apps().first { $0.id == id }?.running ?? []
         if names != running { running = names }
+      case .tasks:
+        guard tasksWatched else { return }
+        let next: JSONValue
+        do {
+          next = .object(["tasks": try await client.get("/tasks", as: JSONValue.self)])
+        } catch {
+          next = .object(["error": .string((error as? GatewayError)?.message ?? error.localizedDescription)])
+        }
+        if next != tasks { tasks = next }
+        return
       }
       loadError = nil
     } catch let error as GatewayError {
       loadError = error.message
     } catch {
       if source == nil || data == nil { loadError = error.localizedDescription }
+    }
+  }
+
+  // MARK: Tasks
+
+  /// The page reads the task board: load it now and follow its changes.
+  func watchTasks() {
+    tasksWatched = true
+    schedule([.tasks])
+  }
+
+  /// A page's task board operation (`CanvasTaskOp`), answered with the gateway's result.
+  func taskOp(_ message: JSONValue) async throws -> JSONValue {
+    defer { schedule([.tasks]) }
+    let id = message["id"]?.string ?? ""
+    let input = message["input"] ?? .object([:])
+    switch message["op"]?.string {
+    case "add":
+      return try await client.post("/tasks", input, as: JSONValue.self)
+    case "update":
+      return try await client.send(
+        client.request(
+          client.url("/tasks/\(id)"), method: "PATCH", body: JSONEncoder().encode(input)))
+    case "remove":
+      return try await client.delete("/tasks/\(id)", as: JSONValue.self)
+    case "start":
+      let directory = tasks?["tasks"]?.array?.first { $0["id"]?.string == id }?["project"]?["directory"]?
+        .string
+      let model = directory.flatMap { ModelPreferences.shared.model(directory: $0) }
+      return try await client.post(
+        "/tasks/\(id)/start", TaskStartInput(model: model), as: JSONValue.self)
+    default:
+      throw GatewayError(status: 400, message: "Unknown task operation.")
     }
   }
 
@@ -193,7 +240,7 @@ struct CanvasFrameView: UIViewRepresentable {
     webView.scrollView.backgroundColor = palette.ui("surface")
     let bridge = context.coordinator
     bridge.theme = Self.theme(palette)
-    bridge.sync(source: model.source, data: model.data, running: model.running)
+    bridge.sync(source: model.source, data: model.data, running: model.running, tasks: model.tasks)
   }
 
   static func dismantleUIView(_ webView: WKWebView, coordinator: CanvasBridge) {
@@ -264,11 +311,15 @@ final class CanvasBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate
   private var shownRevs: [String: String] = [:]
   private var shownTheme: JSONValue?
   private var shownRunning: [String]?
+  /// The board the frame shows, once it asked for it.
+  private var shownTasks: JSONValue?
+  private var tasksWanted = false
   /// Where the page was scrolled when it reloaded, for the next init.
   private var scroll: Double = 0
   private var source: CanvasSource?
   private var data: CanvasData?
   private var running: [String] = []
+  private var tasks: JSONValue?
 
   init(model: CanvasModel) {
     self.model = model
@@ -281,10 +332,11 @@ final class CanvasBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate
     webView?.load(URLRequest(url: model.client.canvasFrameURL))
   }
 
-  func sync(source: CanvasSource?, data: CanvasData?, running: [String]) {
+  func sync(source: CanvasSource?, data: CanvasData?, running: [String], tasks: JSONValue?) {
     self.source = source
     self.data = data
     self.running = running
+    self.tasks = tasks
     flush()
   }
 
@@ -324,6 +376,16 @@ final class CanvasBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate
       post(["type": .string("data"), "key": .string(key)])
     }
     sendRunning()
+    sendTasks()
+  }
+
+  private func sendTasks() {
+    guard ready, tasksWanted, shownVersion != nil, let tasks, tasks != shownTasks,
+      case .object(var message) = tasks
+    else { return }
+    shownTasks = tasks
+    message["type"] = .string("tasks")
+    post(message)
   }
 
   private func sendTheme() {
@@ -365,6 +427,8 @@ final class CanvasBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate
       shownVersion = nil
       shownTheme = nil
       shownRunning = nil
+      shownTasks = nil
+      tasksWanted = false
       shownRevs = [:]
       model.pageErrors = []
       flush()
@@ -393,6 +457,24 @@ final class CanvasBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate
         self?.post(reply)
         // Without live canvas events, pick up what the function wrote.
         model.refreshAfterCall()
+      }
+    case "tasks-watch":
+      tasksWanted = true
+      shownTasks = nil
+      model.watchTasks()
+      sendTasks()
+    case "task":
+      guard let call = value["call"]?.number else { return }
+      Task { [weak self, model] in
+        var reply: [String: JSONValue] = ["type": .string("result"), "call": .number(call)]
+        do {
+          reply["value"] = try await model.taskOp(value)
+        } catch let error as GatewayError {
+          reply["error"] = .string(error.message)
+        } catch {
+          reply["error"] = .string(error.localizedDescription)
+        }
+        self?.post(reply)
       }
     case "open":
       if let target = value["target"]?.string {

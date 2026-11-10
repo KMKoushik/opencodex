@@ -12,11 +12,16 @@
  */
 import type {
   CanvasInit,
+  CanvasTaskInput,
+  CanvasTaskOp,
+  CanvasTasks,
   CanvasTheme,
   FrameMessage,
   HostMessage,
 } from '@opencodex/contracts/canvas';
+import type { Task } from '@opencodex/contracts';
 import { annotationOverlay } from './annotation-overlay';
+import { defineTaskElement } from './tasks-element';
 
 const CHANNEL = 'opencodex-canvas';
 const HOST_STYLE = 'opencodex-canvas-host';
@@ -32,11 +37,13 @@ type Events = {
   data: (key: string, value: unknown) => void;
   running: (names: readonly string[]) => void;
   theme: (scheme: 'light' | 'dark') => void;
+  tasks: (tasks: readonly Task[]) => void;
 };
 const listeners: { [K in keyof Events]: Set<Events[K]> } = {
   data: new Set(),
   running: new Set(),
   theme: new Set(),
+  tasks: new Set(),
 };
 
 let mode: CanvasInit['mode'] = 'panel';
@@ -51,6 +58,41 @@ let sizes: ResizeObserver | undefined;
 let nextCall = 0;
 const calls = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>();
 const reported = new Set<string>();
+// The task board, once the page asks for it; the element listens here too.
+let tasks: CanvasTasks | undefined;
+let watching = false;
+const taskListeners = new Set<() => void>();
+
+function watchTasks() {
+  if (watching) return;
+  watching = true;
+  if (!tasks) post({ type: 'tasks-watch' });
+}
+
+function taskOp(op: CanvasTaskOp) {
+  const call = ++nextCall;
+  post({ type: 'task', call, ...op });
+  return new Promise<unknown>((resolve, reject) => calls.set(call, { resolve, reject }));
+}
+
+const taskApi = Object.freeze({
+  /** The board's tasks, or null while loading or when the board can't be read. */
+  get list(): readonly Task[] | null {
+    watchTasks();
+    return tasks && 'tasks' in tasks ? tasks.tasks : null;
+  },
+  /** Why the board can't be read, such as Tasks not being turned on. */
+  get error(): string | undefined {
+    watchTasks();
+    return tasks && 'error' in tasks ? tasks.error : undefined;
+  },
+  add: (input: CanvasTaskInput) => taskOp({ op: 'add', input }),
+  update: (id: string, input: CanvasTaskInput) => taskOp({ op: 'update', id, input }),
+  complete: (id: string) => taskOp({ op: 'update', id, input: { bucket: 'done' } }),
+  remove: (id: string) => taskOp({ op: 'remove', id }),
+  /** Starts an agent on the task in a new chat; resolves with `{ task, session }`. */
+  start: (id: string) => taskOp({ op: 'start', id }),
+});
 
 function emit<K extends keyof Events>(event: K, ...args: Parameters<Events[K]>) {
   for (const listener of listeners[event])
@@ -89,6 +131,8 @@ const canvas = Object.freeze({
   get scheme() {
     return theme.scheme;
   },
+  /** The user's task board: read `tasks.list`, listen with `on('tasks')`, and edit it. */
+  tasks: taskApi,
   /** Opens a web link in the browser, or `{ session }` (from `oc.run`) as a chat. */
   open(target: string | { session: string }) {
     post({ type: 'open', target });
@@ -98,11 +142,41 @@ const canvas = Object.freeze({
    * reloads with the new values, which suits pages that read `canvas.data` once.
    */
   on<K extends keyof Events>(event: K, listener: Events[K]) {
+    if (event === 'tasks') watchTasks();
     listeners[event].add(listener);
     return () => listeners[event].delete(listener);
   },
 });
 Object.defineProperty(window, 'canvas', { value: canvas, enumerable: true });
+
+function defineElements() {
+  defineTaskElement({
+    state: () => {
+      watchTasks();
+      return tasks;
+    },
+    subscribe(listener) {
+      watchTasks();
+      taskListeners.add(listener);
+      return () => taskListeners.delete(listener);
+    },
+    add: taskApi.add,
+    update: taskApi.update,
+    start: taskApi.start,
+    open: (session) => canvas.open({ session }),
+  });
+}
+
+function receiveTasks(next: CanvasTasks) {
+  tasks = 'tasks' in next ? { tasks: Object.freeze([...next.tasks]) as Task[] } : next;
+  for (const listener of taskListeners)
+    try {
+      listener();
+    } catch (error) {
+      report(error);
+    }
+  if ('tasks' in tasks) emit('tasks', tasks.tasks);
+}
 
 /** Theme variables, palette aliases, and a minimal base the page's own CSS overrides. */
 function hostCss() {
@@ -152,6 +226,8 @@ function compose(page: string) {
 
 function render(scroll = 0) {
   sizes?.disconnect();
+  // Defined before the page's markup is parsed, so its elements upgrade as they appear.
+  defineElements();
   document.open();
   document.write(compose(html));
   document.close();
@@ -218,6 +294,7 @@ function receive(event: MessageEvent<HostMessage>) {
       html = message.html;
       Object.assign(data, message.data);
       running = message.running;
+      if (message.tasks) tasks = message.tasks;
       render(message.scroll);
       break;
     case 'theme':
@@ -242,6 +319,9 @@ function receive(event: MessageEvent<HostMessage>) {
     case 'running':
       running = Object.freeze([...message.names]);
       emit('running', running);
+      break;
+    case 'tasks':
+      receiveTasks('error' in message ? { error: message.error } : { tasks: message.tasks });
       break;
     case 'annotate':
       void annotationOverlay(message.theme).then(

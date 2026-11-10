@@ -259,6 +259,9 @@ export const taskProjectSchema = z.object({
   directory: z.string().min(1).max(4096),
 });
 export type TaskProject = z.infer<typeof taskProjectSchema>;
+/** Who does the task: the user, or an agent the user starts on it. */
+export const taskAssignees = ['user', 'agent'] as const;
+export type TaskAssignee = (typeof taskAssignees)[number];
 /** A task on the board, stored by the OpenCodex tasks plugin in OpenCode's plugin storage. */
 export type Task = {
   id: string;
@@ -271,6 +274,10 @@ export type Task = {
   /** The chat whose agent created the task. */
   sessionID?: string;
   source: 'user' | 'agent';
+  /** Missing means the user. */
+  assignee?: TaskAssignee;
+  /** The chat an agent was started in to do the task. */
+  workSessionID?: string;
   /** Where the task returns when it is reopened from Done. */
   reopen?: Exclude<TaskBucket, 'done'>;
   time: { created: number; updated: number; moved: number; completed?: number };
@@ -283,7 +290,9 @@ export const taskCreateSchema = z.object({
   title: taskTitleSchema,
   notes: taskNotesSchema.optional(),
   bucket: z.enum(taskBuckets).exclude(['done']).default('today'),
-  project: taskProjectSchema.nullish(),
+  /** A native project, or (from canvas pages) its folder or name. */
+  project: z.union([taskProjectSchema, z.string().min(1).max(4096)]).nullish(),
+  assignee: z.enum(taskAssignees).optional(),
 });
 export type TaskCreate = z.input<typeof taskCreateSchema>;
 export const taskUpdateSchema = z.object({
@@ -291,9 +300,26 @@ export const taskUpdateSchema = z.object({
   notes: taskNotesSchema.optional(),
   bucket: z.enum(taskBuckets).optional(),
   order: z.number().finite().optional(),
-  project: taskProjectSchema.nullable().optional(),
+  project: z
+    .union([taskProjectSchema, z.string().min(1).max(4096)])
+    .nullable()
+    .optional(),
+  assignee: z.enum(taskAssignees).optional(),
+  workSessionID: z.string().min(1).max(256).nullable().optional(),
 });
 export type TaskUpdate = z.input<typeof taskUpdateSchema>;
+export const taskStartSchema = z.object({ model: modelInputSchema.shape.model.optional() });
+
+/** The first message of a chat started on a task assigned to the agent. */
+export function taskPrompt(task: Pick<Task, 'id' | 'title' | 'notes'>) {
+  return [
+    task.title,
+    task.notes?.trim(),
+    `This is task ${task.id} from my OpenCodex task board, assigned to you. Do the work it describes. When it's finished, mark it done with tasks_update (id: ${task.id}, list: "done") and summarize what you did. If you're blocked or need a decision from me, say so and leave the task open.`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
 
 export const sessionFocusSchema = z.object({
   action: z.enum(['pin', 'unpin', 'done', 'undone']),

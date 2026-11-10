@@ -18,6 +18,7 @@ import {
   type CanvasEvent,
   type CanvasInfo,
   type CanvasSource,
+  type CanvasTasks,
 } from '@opencodex/contracts/canvas';
 import { GatewayError } from './errors';
 import { loadTypeScript, transpile, typeCheck } from './canvas-build';
@@ -431,6 +432,8 @@ export async function checkCanvas(
     renderer?: PageRenderer;
     /** The gateway's own origin, which serves the frame shell. */
     origin?: string;
+    /** The task board, for pages that show it. */
+    tasks?: () => Promise<CanvasTasks>;
   } = {},
 ) {
   const directory = folder(root, id);
@@ -459,7 +462,14 @@ export async function checkCanvas(
   );
   const previews =
     page.html && options.renderer && options.origin
-      ? await previewPage(directory, page.html, values, options.renderer, options.origin)
+      ? await previewPage(
+          directory,
+          page.html,
+          values,
+          options.renderer,
+          options.origin,
+          options.tasks && USES_TASKS.test(page.html) ? await options.tasks() : undefined,
+        )
       : undefined;
   const sections: string[] = [];
   if (problems.length)
@@ -498,6 +508,9 @@ export async function checkCanvas(
   };
 }
 
+/** Pages that read the task board, which previews then render with the real tasks. */
+const USES_TASKS = /<opencodex-tasks\b|canvas\.tasks\b|\.on\(\s*['"]tasks['"]/;
+
 /** Renders the page at each preview size and describes what the agent should look at. */
 async function previewPage(
   directory: string,
@@ -505,6 +518,7 @@ async function previewPage(
   data: Record<string, unknown>,
   renderer: PageRenderer,
   origin: string,
+  tasks: CanvasTasks | undefined,
 ) {
   const output = join(directory, '.preview');
   await rm(output, { recursive: true, force: true });
@@ -518,6 +532,7 @@ async function previewPage(
         html,
         data,
         running: [],
+        tasks,
       });
       try {
         const render = await renderer({ url, script, width, scheme });
@@ -798,6 +813,7 @@ export function canvasRoutes(apps: Apps, renderer: () => Promise<PageRenderer | 
         describeServer: (id) => apps.describe(id),
         renderer: await renderer(),
         origin: new URL(c.req.url).origin,
+        tasks: apps.tasks && (() => apps.tasks!.snapshot(AbortSignal.timeout(10_000))),
       }),
     ),
   );
