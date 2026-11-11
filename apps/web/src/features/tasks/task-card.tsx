@@ -6,6 +6,7 @@ import {
   PlayIcon,
   RoboticIcon,
   Tick02Icon,
+  UserIcon,
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import Markdown, { type Components } from 'react-markdown';
@@ -138,67 +139,73 @@ export function TaskCard({
             </Markdown>
           </div>
         )}
-        {(projectLabel || delayed > 0 || task.sessionID || done || agent) && (
-          <div className="task-meta">
-            {agent && !task.workSessionID && !done && (
-              <button
-                type="button"
-                className="task-chip task-start"
-                disabled={!task.project || !onStart}
-                title={
-                  task.project
-                    ? 'Start a chat in this project with the task as its first message'
-                    : 'Choose a project for the agent to work in'
-                }
-                onClick={onStart}
-              >
-                <HugeiconsIcon icon={starting ? RoboticIcon : PlayIcon} size={12} />
-                {starting ? 'Starting…' : task.project ? 'Start agent' : 'Agent · needs a project'}
-              </button>
-            )}
-            {task.workSessionID && (
-              <button
-                type="button"
-                className="task-chip task-link task-agent"
-                title="Open the chat the agent is working in"
-                onClick={() => onOpenSession(task.workSessionID!)}
-              >
-                <HugeiconsIcon icon={RoboticIcon} size={12} />
-                Agent chat
-              </button>
-            )}
-            {delayed > 0 && (
-              <span
-                className="task-chip"
-                data-tone="warning"
-                title={`In Today since ${new Date(task.time.moved).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}`}
-              >
-                <HugeiconsIcon icon={Clock01Icon} size={12} />
-                {delayed === 1 ? 'From yesterday' : `Delayed ${delayed} days`}
-              </span>
-            )}
-            {done && task.time.completed && (
-              <span className="task-chip">{shortDate(task.time.completed, now)}</span>
-            )}
-            {projectLabel && (
-              <span className="task-chip task-project" title={task.project?.directory}>
-                <ProjectIcon name={projectLabel} icon={project?.icon} />
-                <span className="truncate">{projectLabel}</span>
-              </span>
-            )}
-            {task.sessionID && task.sessionID !== task.workSessionID && (
-              <button
-                type="button"
-                className="task-chip task-link"
-                title="Open the chat that added this task"
-                onClick={() => onOpenSession(task.sessionID!)}
-              >
-                <HugeiconsIcon icon={BubbleChatIcon} size={12} />
-                From chat
-              </button>
-            )}
-          </div>
-        )}
+        <div className="task-meta">
+          <span
+            className="task-chip task-assignee"
+            data-agent={agent || undefined}
+            title={agent ? 'For an agent' : 'For you'}
+          >
+            <HugeiconsIcon icon={agent ? RoboticIcon : UserIcon} size={12} />
+            {agent ? 'Agent' : 'Me'}
+          </span>
+          {agent && !task.workSessionID && !done && (
+            <button
+              type="button"
+              className="task-chip task-start"
+              disabled={!task.project || !onStart}
+              title={
+                task.project
+                  ? 'Start a chat in this project with the task as its first message'
+                  : 'Choose a project for the agent to work in'
+              }
+              onClick={onStart}
+            >
+              <HugeiconsIcon icon={PlayIcon} size={12} />
+              {starting ? 'Starting…' : task.project ? 'Start' : 'Needs a project'}
+            </button>
+          )}
+          {task.workSessionID && (
+            <button
+              type="button"
+              className="task-chip task-link task-agent"
+              title="Open the chat the agent is working in"
+              onClick={() => onOpenSession(task.workSessionID!)}
+            >
+              <HugeiconsIcon icon={RoboticIcon} size={12} />
+              Agent chat
+            </button>
+          )}
+          {delayed > 0 && (
+            <span
+              className="task-chip"
+              data-tone="warning"
+              title={`In Today since ${new Date(task.time.moved).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}`}
+            >
+              <HugeiconsIcon icon={Clock01Icon} size={12} />
+              {delayed === 1 ? 'From yesterday' : `Delayed ${delayed} days`}
+            </span>
+          )}
+          {done && task.time.completed && (
+            <span className="task-chip">{shortDate(task.time.completed, now)}</span>
+          )}
+          {projectLabel && (
+            <span className="task-chip task-project" title={task.project?.directory}>
+              <ProjectIcon name={projectLabel} icon={project?.icon} />
+              <span className="truncate">{projectLabel}</span>
+            </span>
+          )}
+          {task.sessionID && task.sessionID !== task.workSessionID && (
+            <button
+              type="button"
+              className="task-chip task-link"
+              title="Open the chat that added this task"
+              onClick={() => onOpenSession(task.sessionID!)}
+            >
+              <HugeiconsIcon icon={BubbleChatIcon} size={12} />
+              From chat
+            </button>
+          )}
+        </div>
       </div>
       <Button
         className="task-delete"

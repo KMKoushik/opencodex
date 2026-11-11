@@ -56,14 +56,14 @@ li[data-done] .title{color:var(--text-tertiary);text-decoration:line-through;tex
 .meta{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
 .meta:empty{display:none}
 .chip{display:inline-flex;align-items:center;gap:4px;height:19px;max-width:100%;padding:0 7px;border-radius:6px;background:color-mix(in srgb,var(--text) 7%,transparent);color:var(--text-secondary);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.chip.agent{background:color-mix(in srgb,var(--accent) 16%,transparent);color:color-mix(in srgb,var(--accent) 70%,var(--text))}
+.chip.agent{background:color-mix(in srgb,var(--purple) 18%,transparent);color:color-mix(in srgb,var(--purple) 60%,var(--text))}
 .chip.late{background:color-mix(in srgb,var(--warning) 15%,transparent);color:var(--warning)}
 .chip svg{width:11px;height:11px;flex:none}
 .actions{display:flex;align-items:center;gap:6px;padding-top:1px}
 .action{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border:0;border-radius:999px;font:inherit;font-size:12px;font-weight:550;white-space:nowrap;cursor:pointer}
 .action svg{width:11px;height:11px}
-.start{background:color-mix(in srgb,var(--accent) 16%,transparent);color:color-mix(in srgb,var(--accent) 70%,var(--text))}
-.start:hover{background:color-mix(in srgb,var(--accent) 24%,transparent)}
+.start{background:color-mix(in srgb,var(--purple) 18%,transparent);color:color-mix(in srgb,var(--purple) 60%,var(--text))}
+.start:hover{background:color-mix(in srgb,var(--purple) 28%,transparent)}
 .start:disabled{opacity:.6;cursor:default}
 .chat{background:transparent;color:var(--text-secondary);box-shadow:inset 0 0 0 1px var(--border-heavy)}
 .chat:hover{background:var(--hover);color:var(--text)}
@@ -83,6 +83,9 @@ const ICONS = {
   play: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.8v14.4a1 1 0 0 0 1.5.86l12-7.2a1 1 0 0 0 0-1.72l-12-7.2A1 1 0 0 0 7 4.8z"/></svg>',
   bot: svg('<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 13v1M15 13v1"/>'),
   arrow: svg('<path d="M7 17L17 7M9 7h8v8"/>'),
+  person: svg(
+    '<circle cx="12" cy="8" r="3.6"/><path d="M5 20c.8-3.6 3.5-5.5 7-5.5s6.2 1.9 7 5.5"/>',
+  ),
 };
 
 const folderName = (path: string) => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
@@ -251,10 +254,12 @@ export function defineTaskElement(bridge: TaskBridge) {
         );
       if (task.project && !this.getAttribute('project'))
         meta.append(text('span', 'chip', folderName(task.project.directory)));
-      if (task.assignee === 'agent' && this.#assignee !== 'agent') {
-        const chip = text('span', 'chip agent', 'Agent');
-        chip.insertAdjacentHTML('afterbegin', ICONS.bot);
-        meta.append(chip);
+      // Who it's for, unless the list already shows only one side.
+      if (!this.#assignee) {
+        const agent = task.assignee === 'agent';
+        const chip = text('span', agent ? 'chip agent' : 'chip', agent ? 'Agent' : 'Me');
+        chip.insertAdjacentHTML('afterbegin', agent ? ICONS.bot : ICONS.person);
+        meta.prepend(chip);
       }
       if (task.assignee === 'agent' && !done && !task.project && !task.workSessionID) {
         const chip = text('span', 'chip', 'Needs a project');

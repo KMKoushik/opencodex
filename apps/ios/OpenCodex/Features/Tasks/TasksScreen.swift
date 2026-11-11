@@ -347,11 +347,7 @@ private struct TaskRow: View {
               .multilineTextAlignment(.leading)
               .lineLimit(6)
           }
-          if delayed > 0 || done || task.project != nil || task.sessionID != nil || task.forAgent
-            || task.workSessionID != nil
-          {
-            meta(delayed: delayed)
-          }
+          meta(delayed: delayed)
         }
         .contentShape(.rect)
       }
@@ -415,13 +411,19 @@ private struct TaskRow: View {
 
   private func meta(delayed: Int) -> some View {
     TaskChipFlow(spacing: 4) {
+      chip(tone: task.forAgent ? "project-purple" : nil) {
+        Image(systemName: task.forAgent ? "cpu" : "person.fill")
+        Text(task.forAgent ? "Agent" : "Me")
+      }
+      .accessibilityLabel(task.forAgent ? "For an agent" : "For you")
+      .accessibilityIdentifier("tasks.assignee.chip")
       if task.forAgent && !done && task.workSessionID == nil {
         if task.project != nil {
           let starting = model.starting == task.id
           Button(action: start) {
-            chip(tone: "accent") {
+            chip(tone: "project-purple") {
               Image(systemName: starting ? "ellipsis" : "play.fill")
-              Text(starting ? "Starting…" : "Start agent").fontWeight(.medium)
+              Text(starting ? "Starting…" : "Start").fontWeight(.medium)
             }
           }
           .buttonStyle(.borderless)
@@ -429,10 +431,7 @@ private struct TaskRow: View {
           .accessibilityHint("Starts a chat in this project with the task as its first message")
           .accessibilityIdentifier("tasks.start")
         } else {
-          chip {
-            Image(systemName: "cpu")
-            Text("Agent · needs a project")
-          }
+          chip { Text("Needs a project") }
           .accessibilityHint("Choose a project for the agent to work in")
         }
       }
@@ -440,7 +439,7 @@ private struct TaskRow: View {
         Button {
           onOpenSession?(session)
         } label: {
-          chip(tone: "accent") {
+          chip(tone: "project-purple") {
             Image(systemName: "cpu")
             Text("Agent chat")
           }
