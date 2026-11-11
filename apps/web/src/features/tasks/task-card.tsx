@@ -140,14 +140,48 @@ export function TaskCard({
           </div>
         )}
         <div className="task-meta">
+          {/* Who, where, and which chat as icons; their names are in the tooltips. */}
           <span
-            className="task-chip task-assignee"
+            className="task-chip task-icon task-assignee"
             data-agent={agent || undefined}
-            title={agent ? 'For an agent' : 'For you'}
+            role="img"
+            aria-label={agent ? 'For an agent' : 'For you'}
+            data-tooltip={agent ? 'For an agent' : 'For you'}
           >
             <HugeiconsIcon icon={agent ? RoboticIcon : UserIcon} size={12} />
-            {agent ? 'Agent' : 'Me'}
           </span>
+          {projectLabel && (
+            <span
+              className="task-chip task-icon task-project"
+              role="img"
+              aria-label={projectLabel}
+              data-tooltip={projectLabel}
+            >
+              <ProjectIcon name={projectLabel} icon={project?.icon} />
+            </span>
+          )}
+          {task.workSessionID && (
+            <button
+              type="button"
+              className="task-chip task-icon task-link task-agent"
+              aria-label="Open the agent’s chat"
+              data-tooltip="Open the agent’s chat"
+              onClick={() => onOpenSession(task.workSessionID!)}
+            >
+              <HugeiconsIcon icon={BubbleChatIcon} size={12} />
+            </button>
+          )}
+          {task.sessionID && task.sessionID !== task.workSessionID && (
+            <button
+              type="button"
+              className="task-chip task-icon task-link"
+              aria-label="Open the chat that added this task"
+              data-tooltip="Open the chat that added this task"
+              onClick={() => onOpenSession(task.sessionID!)}
+            >
+              <HugeiconsIcon icon={BubbleChatIcon} size={12} />
+            </button>
+          )}
           {agent && !task.workSessionID && !done && (
             <button
               type="button"
@@ -164,17 +198,6 @@ export function TaskCard({
               {starting ? 'Starting…' : task.project ? 'Start' : 'Needs a project'}
             </button>
           )}
-          {task.workSessionID && (
-            <button
-              type="button"
-              className="task-chip task-link task-agent"
-              title="Open the chat the agent is working in"
-              onClick={() => onOpenSession(task.workSessionID!)}
-            >
-              <HugeiconsIcon icon={RoboticIcon} size={12} />
-              Agent chat
-            </button>
-          )}
           {delayed > 0 && (
             <span
               className="task-chip"
@@ -187,23 +210,6 @@ export function TaskCard({
           )}
           {done && task.time.completed && (
             <span className="task-chip">{shortDate(task.time.completed, now)}</span>
-          )}
-          {projectLabel && (
-            <span className="task-chip task-project" title={task.project?.directory}>
-              <ProjectIcon name={projectLabel} icon={project?.icon} />
-              <span className="truncate">{projectLabel}</span>
-            </span>
-          )}
-          {task.sessionID && task.sessionID !== task.workSessionID && (
-            <button
-              type="button"
-              className="task-chip task-link"
-              title="Open the chat that added this task"
-              onClick={() => onOpenSession(task.sessionID!)}
-            >
-              <HugeiconsIcon icon={BubbleChatIcon} size={12} />
-              From chat
-            </button>
           )}
         </div>
       </div>

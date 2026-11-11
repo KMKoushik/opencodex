@@ -409,14 +409,42 @@ private struct TaskRow: View {
     model.start(task) { session in onOpenSession?(session) }
   }
 
+  /// Who, where, and which chat as icon chips (their names are the accessibility labels),
+  /// then the chips that need words: Start, delayed, and the completion date.
   private func meta(delayed: Int) -> some View {
     TaskChipFlow(spacing: 4) {
-      chip(tone: task.forAgent ? "project-purple" : nil) {
+      iconChip(tone: task.forAgent ? "project-purple" : nil) {
         Image(systemName: task.forAgent ? "cpu" : "person.fill")
-        Text(task.forAgent ? "Agent" : "Me")
       }
       .accessibilityLabel(task.forAgent ? "For an agent" : "For you")
       .accessibilityIdentifier("tasks.assignee.chip")
+      if let project = task.project {
+        let native = model.project(project.directory)
+        let name = native?.displayName ?? folderName(project.directory)
+        iconChip { ProjectIcon(badge: ProjectBadge(name: name, icon: native?.icon), size: 13) }
+          .accessibilityLabel(name)
+      }
+      if let session = task.workSessionID {
+        Button {
+          onOpenSession?(session)
+        } label: {
+          iconChip(tone: "project-purple") { Image(systemName: "bubble.left") }
+        }
+        .buttonStyle(.borderless)
+        .disabled(onOpenSession == nil)
+        .accessibilityLabel("Open the agent’s chat")
+        .accessibilityIdentifier("tasks.agentChat")
+      }
+      if let session = task.sessionID, session != task.workSessionID {
+        Button {
+          onOpenSession?(session)
+        } label: {
+          iconChip { Image(systemName: "bubble.left") }
+        }
+        .buttonStyle(.borderless)
+        .disabled(onOpenSession == nil)
+        .accessibilityLabel("Open the chat that added this task")
+      }
       if task.forAgent && !done && task.workSessionID == nil {
         if task.project != nil {
           let starting = model.starting == task.id
@@ -432,22 +460,8 @@ private struct TaskRow: View {
           .accessibilityIdentifier("tasks.start")
         } else {
           chip { Text("Needs a project") }
-          .accessibilityHint("Choose a project for the agent to work in")
+            .accessibilityHint("Choose a project for the agent to work in")
         }
-      }
-      if let session = task.workSessionID {
-        Button {
-          onOpenSession?(session)
-        } label: {
-          chip(tone: "project-purple") {
-            Image(systemName: "cpu")
-            Text("Agent chat")
-          }
-        }
-        .buttonStyle(.borderless)
-        .disabled(onOpenSession == nil)
-        .accessibilityHint("Open the chat the agent is working in")
-        .accessibilityIdentifier("tasks.agentChat")
       }
       if delayed > 0 {
         chip(tone: "warning") {
@@ -461,28 +475,18 @@ private struct TaskRow: View {
       if done, let completed = task.time.completed {
         chip { Text(TaskBoardLogic.shortDate(completed, now: model.now)) }
       }
-      if let project = task.project {
-        let native = model.project(project.directory)
-        let name = native?.displayName ?? folderName(project.directory)
-        chip {
-          ProjectIcon(badge: ProjectBadge(name: name, icon: native?.icon), size: 13)
-          Text(name).lineLimit(1)
-        }
-      }
-      if let session = task.sessionID, session != task.workSessionID {
-        Button {
-          onOpenSession?(session)
-        } label: {
-          chip {
-            Image(systemName: "bubble.left")
-            Text("From chat")
-          }
-        }
-        .buttonStyle(.borderless)
-        .disabled(onOpenSession == nil)
-        .accessibilityHint("Open the chat that added this task")
-      }
     }
+  }
+
+  private func iconChip(tone: String? = nil, @ViewBuilder content: () -> some View) -> some View {
+    content()
+      .font(.caption)
+      .foregroundStyle(palette.color(tone ?? "text-secondary"))
+      .frame(width: 24, height: 22)
+      .background(
+        tone.map { palette.color($0).opacity(0.14) } ?? palette.color("secondary"),
+        in: .rect(cornerRadius: 6, style: .continuous))
+      .accessibilityElement(children: .ignore)
   }
 
   private func chip(tone: String? = nil, @ViewBuilder content: () -> some View) -> some View {

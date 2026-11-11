@@ -59,6 +59,7 @@ li[data-done] .title{color:var(--text-tertiary);text-decoration:line-through;tex
 .chip.agent{background:color-mix(in srgb,var(--purple) 18%,transparent);color:color-mix(in srgb,var(--purple) 60%,var(--text))}
 .chip.late{background:color-mix(in srgb,var(--warning) 15%,transparent);color:var(--warning)}
 .chip svg{width:11px;height:11px;flex:none}
+.chip.icon{justify-content:center;width:22px;padding:0}
 .actions{display:flex;align-items:center;gap:6px;padding-top:1px}
 .action{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border:0;border-radius:999px;font:inherit;font-size:12px;font-weight:550;white-space:nowrap;cursor:pointer}
 .action svg{width:11px;height:11px}
@@ -257,8 +258,11 @@ export function defineTaskElement(bridge: TaskBridge) {
       // Who it's for, unless the list already shows only one side.
       if (!this.#assignee) {
         const agent = task.assignee === 'agent';
-        const chip = text('span', agent ? 'chip agent' : 'chip', agent ? 'Agent' : 'Me');
-        chip.insertAdjacentHTML('afterbegin', agent ? ICONS.bot : ICONS.person);
+        const chip = text('span', agent ? 'chip icon agent' : 'chip icon', '');
+        chip.innerHTML = agent ? ICONS.bot : ICONS.person;
+        chip.title = agent ? 'For an agent' : 'For you';
+        chip.setAttribute('role', 'img');
+        chip.setAttribute('aria-label', chip.title);
         meta.prepend(chip);
       }
       if (task.assignee === 'agent' && !done && !task.project && !task.workSessionID) {

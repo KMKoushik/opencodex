@@ -289,9 +289,6 @@
   background: color-mix(in srgb, var(--warning) 14%, transparent);
   color: var(--warning);
 }
-.task-project {
-  padding-left: 4px;
-}
 .task-link {
   cursor: pointer;
 }
@@ -310,8 +307,10 @@
 .task-agent {
   color: color-mix(in srgb, var(--project-purple) 60%, var(--text));
 }
-.task-assignee {
-  padding-left: 5px;
+.task-icon {
+  justify-content: center;
+  width: 22px;
+  padding: 0;
 }
 .task-assignee[data-agent] {
   background: color-mix(in srgb, var(--project-purple) 18%, transparent);
