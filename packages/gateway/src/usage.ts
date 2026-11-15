@@ -27,6 +27,9 @@ class UsageError extends Error {}
  * active credential; the secret comes from OpenCode's local store (Claude Code's for Claude).
  * Tokens stay in the gateway and are never refreshed here, since their owners rotate them.
  */
+/** How long to wait for OpenCode's provider plugins to register an integration. */
+const INTEGRATION_WAIT = 8_000;
+
 export function usageRoutes(backend: OpenCodeBackend) {
   const app = new Hono();
   app.get('/limits', async (c) => {
@@ -38,10 +41,7 @@ export function usageRoutes(backend: OpenCodeBackend) {
     const signal = AbortSignal.any([c.req.raw.signal, AbortSignal.timeout(20_000)]);
     const [openai, go] = await Promise.all(
       ['openai', 'opencode-go'].map((integrationID) =>
-        backend
-          .request(signal, (client, options) => client.integration.get({ integrationID }, options))
-          .then((result) => result.data.connections[0])
-          .catch(() => undefined),
+        activeConnection(backend, integrationID, signal),
       ),
     );
     const providers = await Promise.all([
@@ -54,6 +54,29 @@ export function usageRoutes(backend: OpenCodeBackend) {
     } satisfies UsageLimits);
   });
   return app;
+}
+
+/**
+ * The integration's active connection, or undefined when it has none. OpenCode registers
+ * integrations from provider plugins that boot in the background, so a location that just
+ * loaded (OpenCode started, or the gateway's first request) briefly has none registered.
+ * Wait for the integration to appear rather than reading that as "not connected".
+ */
+async function activeConnection(
+  backend: OpenCodeBackend,
+  integrationID: string,
+  signal: AbortSignal,
+): Promise<ConnectionInfo | undefined> {
+  const deadline = Date.now() + INTEGRATION_WAIT;
+  for (;;) {
+    const integration = await backend
+      .request(signal, (client, options) => client.integration.get({ integrationID }, options))
+      .then((result) => result.data as typeof result.data | undefined)
+      .catch(() => undefined);
+    if (integration) return integration.connections[0];
+    if (signal.aborted || Date.now() >= deadline) return undefined;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
 }
 
 async function codex(connection: ConnectionInfo | undefined, signal: AbortSignal) {
