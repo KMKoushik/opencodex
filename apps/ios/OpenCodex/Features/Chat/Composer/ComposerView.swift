@@ -40,6 +40,8 @@ private struct ComposerBody: View {
   @State private var attachError: String?
   @State private var sent = 0
   @State private var picking = false
+  /// An image is being dragged over the composer.
+  @State private var dropTargeted = false
   @State private var confirmFullAccess = false
   @State private var selection: TextSelection?
   @State private var dismissedMenu = false
@@ -84,6 +86,7 @@ private struct ComposerBody: View {
     .animation(.snappy(duration: 0.2), value: model.forms.first?.id)
     .sensoryFeedback(.impact(weight: .medium), trigger: sent)
     .task(id: model.projectDirectory) { await loadModels() }
+    .onAppear { MediaPicker.trackKeyboard() }
     .sheet(isPresented: $picking) {
       ModelPicker(
         catalog: entry?.catalog,
@@ -204,6 +207,17 @@ private struct ComposerBody: View {
         .onTapGesture { focused = true }
     }
     .glassEffect(.regular.interactive(), in: .rect(cornerRadius: expanded ? 24 : 26))
+    // Drop a screenshot (its thumbnail), a photo, or an image file to attach it.
+    .overlay {
+      if dropTargeted {
+        RoundedRectangle(cornerRadius: expanded ? 24 : 26, style: .continuous)
+          .strokeBorder(palette.color("accent"), lineWidth: 2)
+          .allowsHitTesting(false)
+      }
+    }
+    .onDrop(of: [.image], isTargeted: $dropTargeted) { providers in
+      dropImages(providers)
+    }
     .animation(.snappy(duration: 0.22), value: expanded)
     .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { top in
       // Below the navigation bar, at most the desktop's 320 px.
@@ -589,6 +603,24 @@ private struct ComposerBody: View {
     moving = true
     await model.moveToBackground()
     moving = false
+  }
+
+  /// Attaches dropped images, up to the attachment limit.
+  private func dropImages(_ providers: [NSItemProvider]) -> Bool {
+    let room = AttachmentEncoder.maxCount - draft.attachments.count
+    let images = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.image.identifier) }
+    guard room > 0, !images.isEmpty else { return false }
+    Task {
+      var photos: [Data] = []
+      for provider in images.prefix(room) {
+        let data: Data? = await withCheckedContinuation { continuation in
+          provider.loadDataRepresentation(for: .image) { data, _ in continuation.resume(returning: data) }
+        }
+        if let data { photos.append(data) }
+      }
+      await attach(photos)
+    }
+    return true
   }
 
   private func attach(_ photos: [Data]) async {

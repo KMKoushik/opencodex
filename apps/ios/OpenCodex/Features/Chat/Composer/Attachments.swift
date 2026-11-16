@@ -74,6 +74,9 @@ extension DraftAttachment {
 /// be dropped that way.
 @MainActor
 enum MediaPicker {
+  /// Starts following the keyboard; call once at launch, before the first picker.
+  static func trackKeyboard() { _ = KeyboardTracker.shared }
+
   static var cameraAvailable: Bool { UIImagePickerController.isSourceTypeAvailable(.camera) }
 
   /// The delegate of the open picker; UIKit holds delegates weakly.
@@ -103,6 +106,15 @@ enum MediaPicker {
   }
 
   private static func present(_ controller: UIViewController, attempt: Int = 0) {
+    // Typing: put the keyboard away first. A picker presented while the keyboard was still
+    // up and animating out was dropped on device (it opened fine once the keyboard was down).
+    if attempt == 0, UIApplication.shared.sendAction(
+      #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil),
+      keyboardVisible
+    {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { present(controller, attempt: 1) }
+      return
+    }
     guard let top = topController() else { return }
     // Wait out a running transition, such as a menu or sheet still closing.
     if let coordinator = top.transitionCoordinator, attempt < 10 {
@@ -114,7 +126,17 @@ enum MediaPicker {
       return
     }
     top.present(controller, animated: true)
+    // A presentation UIKit refused (something else took the screen first) leaves no trace;
+    // check that the picker is up and try again if it isn't.
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+      if controller.presentingViewController == nil, controller.view.window == nil, attempt < 10 {
+        present(controller, attempt: attempt + 1)
+      }
+    }
   }
+
+  /// Whether the software keyboard is on screen, from the last keyboard notification.
+  private static var keyboardVisible: Bool { KeyboardTracker.shared.visible }
 
   private static func topController() -> UIViewController? {
     let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
@@ -218,5 +240,25 @@ struct AttachmentStrip: View {
 
     }
     .scrollClipDisabled()
+  }
+}
+
+/// Follows the software keyboard, so the photo picker can wait for it to go away.
+@MainActor
+private final class KeyboardTracker {
+  static let shared = KeyboardTracker()
+  private(set) var visible = false
+  private var observers: [NSObjectProtocol] = []
+
+  private init() {
+    let center = NotificationCenter.default
+    observers = [
+      center.addObserver(forName: UIResponder.keyboardDidShowNotification, object: nil, queue: .main) {
+        _ in MainActor.assumeIsolated { KeyboardTracker.shared.visible = true }
+      },
+      center.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) {
+        _ in MainActor.assumeIsolated { KeyboardTracker.shared.visible = false }
+      },
+    ]
   }
 }
