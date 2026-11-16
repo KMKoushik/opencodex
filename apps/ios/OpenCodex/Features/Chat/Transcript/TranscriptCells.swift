@@ -78,6 +78,12 @@ final class ProseTextView: UITextView, UITextViewDelegate {
 
   required init?(coder: NSCoder) { fatalError() }
 
+  /// A reply's text can't take focus while a photo or camera picker is opening or open: the
+  /// out-of-process photo picker cancels itself when the app has a focused text view.
+  override var canBecomeFirstResponder: Bool {
+    MediaPicker.blocksTextFocus ? false : super.canBecomeFirstResponder
+  }
+
   func height(for width: CGFloat) -> CGFloat {
     guard attributedText.length > 0 else { return 0 }
     return sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height

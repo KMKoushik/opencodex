@@ -1,6 +1,7 @@
 import XCTest
 
-/// The composer's "+" menu: attach a photo, the camera (hidden without one), and Full access.
+/// The composer's "+" sheet ("Add to Chat"): attach a photo, the camera (hidden without one),
+/// and Full access.
 nonisolated final class ComposerPlusMenuTests: XCTestCase {
   override func setUp() {
     continueAfterFailure = false
@@ -13,9 +14,9 @@ nonisolated final class ComposerPlusMenuTests: XCTestCase {
     XCTAssertTrue(app.composerInput.waitForExistence(timeout: 15))
 
     app.openPlusMenu()
-    let library = app.buttons["Photo Library"]
+    let library = app.buttons["attach.photos"]
     XCTAssertTrue(library.waitForExistence(timeout: 5))
-    XCTAssertFalse(app.buttons["Camera"].exists, "The simulator has no camera")
+    XCTAssertFalse(app.buttons["attach.camera"].exists, "The simulator has no camera")
     library.tap()
 
     // The system photo picker: pick the first photo and add it.
@@ -64,9 +65,10 @@ nonisolated final class ComposerPlusMenuTests: XCTestCase {
 
     app.openPlusMenu()
     let item = fullAccessItem(app)
-    XCTAssertTrue(item.isSelected || item.value as? String == "1", "The menu shows it on")
+    XCTAssertTrue(item.isSelected || item.value as? String == "1", "The sheet shows it on")
     item.tap()
     XCTAssertFalse(alert.waitForExistence(timeout: 2), "Turning it off doesn't ask")
+    app.buttons["attach.close"].tap()
     await waitFor(timeout: 10) { plus.label == "Attach and permissions" }
     try await gateway.waitFor { try await !gateway.fullAccess(session) }
   }

@@ -42,6 +42,14 @@ private struct ComposerBody: View {
   @State private var picking = false
   /// An image is being dragged over the composer.
   @State private var dropTargeted = false
+  /// The photo library or camera is open. The input is disabled meanwhile: as the "+" menu
+  /// closes, UIKit hands the keyboard back to it, and the keyboard coming up over the photo
+  /// picker (which runs in another process) makes the picker cancel itself on device.
+  @State private var mediaOpen = false
+  /// The "Add to Chat" sheet, and what was chosen in it (acted on once it has gone).
+  @State private var attachSheet = false
+  @State private var attachChoice: AttachSheet.Choice?
+  @State private var importingFiles = false
   @State private var confirmFullAccess = false
   @State private var selection: TextSelection?
   @State private var dismissedMenu = false
@@ -86,7 +94,6 @@ private struct ComposerBody: View {
     .animation(.snappy(duration: 0.2), value: model.forms.first?.id)
     .sensoryFeedback(.impact(weight: .medium), trigger: sent)
     .task(id: model.projectDirectory) { await loadModels() }
-    .onAppear { MediaPicker.trackKeyboard() }
     .sheet(isPresented: $picking) {
       ModelPicker(
         catalog: entry?.catalog,
@@ -125,6 +132,24 @@ private struct ComposerBody: View {
       Text("Continue in a new thread from the latest state, or fork just before an earlier message.")
     }
     // On the composer itself, not the expanded row: "+" is also in the one-line layout.
+    .sheet(isPresented: $attachSheet, onDismiss: attachChosen) {
+      AttachSheet(
+        cameraAvailable: MediaPicker.cameraAvailable,
+        canAttach: draft.attachments.count < AttachmentEncoder.maxCount,
+        fullAccess: fullAccess,
+        fullAccessLocked: fullAccessLocked,
+        onChoose: { choice in
+          attachChoice = choice
+          attachSheet = false
+        },
+        onFullAccessOff: { setFullAccess(false) })
+    }
+    .fileImporter(
+      isPresented: $importingFiles, allowedContentTypes: [.image], allowsMultipleSelection: true
+    ) { result in
+      guard case .success(let urls) = result else { return }
+      Task { await attach(files: urls) }
+    }
     .alert("Enable full access?", isPresented: $confirmFullAccess) {
       Button("Cancel", role: .cancel) {}
       Button("Enable full access") { setFullAccess(true) }
@@ -181,6 +206,7 @@ private struct ComposerBody: View {
         // dropped focus (and the keystrokes after it) as the composer expanded.
         .lineLimit(1...8)
         .focused($focused)
+        .disabled(mediaOpen)
         .padding(.vertical, expanded ? 6 : 0)
         .padding(.leading, expanded ? 8 : 0)
         .accessibilityIdentifier("composer.input")
@@ -248,46 +274,86 @@ private struct ComposerBody: View {
     }
   }
 
-  /// "+": attachments, then Full access (the desktop's Permissions control).
+  /// "+": the "Add to Chat" sheet (`AttachSheet`). While typing, the keyboard goes down first.
   private var plusMenu: some View {
-    Menu {
-      Button("Photo Library", systemImage: "photo.on.rectangle") {
-        MediaPicker.pickPhotos(limit: AttachmentEncoder.maxCount - draft.attachments.count) { photos in
-          Task { await attach(photos) }
+    Button(action: openAttachSheet) { plusLabel }
+      .buttonStyle(.plain)
+      .accessibilityShowsLargeContentViewer()
+      .accessibilityLabel(plusAccessibilityLabel)
+      .accessibilityIdentifier("composer.attach")
+  }
+
+  private var plusLabel: some View {
+    Image(systemName: "plus")
+      .font(.system(size: 18, weight: .regular))
+      .foregroundStyle(palette.color("text-secondary"))
+      .overlay(alignment: .topTrailing) {
+        if fullAccess {
+          // Full access is on: a small reminder, like the desktop's accent Permissions label.
+          Image(systemName: "bolt.shield.fill")
+            .font(.system(size: 10))
+            .foregroundStyle(palette.color("warning"))
+            .offset(x: 8, y: -6)
         }
       }
-        .disabled(draft.attachments.count >= AttachmentEncoder.maxCount)
-      if MediaPicker.cameraAvailable {
-        Button("Camera", systemImage: "camera") {
-          MediaPicker.takePhoto { image in Task { await attach(image) } }
-        }
-          .disabled(draft.attachments.count >= AttachmentEncoder.maxCount)
-      }
-      Divider()
-      // The desktop's Permissions control: turning full access on asks first.
-      Toggle(isOn: fullAccessBinding) {
-        Label("Full access", systemImage: fullAccess ? "bolt.shield" : "shield")
-      }
-      .disabled(sending || (model.session == nil && model.sessionID != nil))
-    } label: {
-      Image(systemName: "plus")
-        .font(.system(size: 18, weight: .regular))
-        .foregroundStyle(palette.color("text-secondary"))
-        .overlay(alignment: .topTrailing) {
-          if fullAccess {
-            // Full access is on: a small reminder, like the desktop's accent Permissions label.
-            Image(systemName: "bolt.shield.fill")
-              .font(.system(size: 10))
-              .foregroundStyle(palette.color("warning"))
-              .offset(x: 8, y: -6)
-          }
-        }
-        .frame(width: 44, height: 44)
-        .contentShape(.rect)
+      .frame(width: 44, height: 44)
+      .contentShape(.rect)
+  }
+
+  private var plusAccessibilityLabel: String {
+    fullAccess ? "Attach and permissions, full access on" : "Attach and permissions"
+  }
+
+  private var fullAccessLocked: Bool { sending || (model.session == nil && model.sessionID != nil) }
+
+  private func openAttachSheet() {
+    guard focused else { return attachSheet = true }
+    focused = false
+    MediaPicker.afterKeyboardHides(timeout: 1.0) { attachSheet = true }
+  }
+
+  /// Runs the sheet's choice once it has fully gone, so a picker never opens over it.
+  private func attachChosen() {
+    guard let choice = attachChoice else { return }
+    attachChoice = nil
+    switch choice {
+    case .camera: takePhoto()
+    case .photos: pickFromLibrary()
+    case .files: importingFiles = true
+    case .fullAccessOn: confirmFullAccess = true
     }
-    .accessibilityShowsLargeContentViewer()
-    .accessibilityLabel(fullAccess ? "Attach and permissions, full access on" : "Attach and permissions")
-    .accessibilityIdentifier("composer.attach")
+  }
+
+  /// Image files from the Files app, up to the attachment limit.
+  private func attach(files urls: [URL]) async {
+    let room = AttachmentEncoder.maxCount - draft.attachments.count
+    var photos: [Data] = []
+    for url in urls.prefix(max(0, room)) {
+      let scoped = url.startAccessingSecurityScopedResource()
+      defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+      if let data = try? Data(contentsOf: url) { photos.append(data) }
+    }
+    await attach(photos)
+  }
+
+  private func pickFromLibrary() {
+    openMedia {
+      MediaPicker.pickPhotos(
+        limit: AttachmentEncoder.maxCount - draft.attachments.count,
+        onPick: { photos in Task { await attach(photos) } },
+        onClose: mediaClosed)
+    }
+  }
+
+  private func takePhoto() {
+    openMedia {
+      MediaPicker.takePhoto(onPick: { image in Task { await attach(image) } }, onClose: mediaClosed)
+    }
+  }
+
+  private func mediaClosed() {
+    mediaOpen = false
+    MediaPicker.blocksTextFocus = false
   }
 
   /// "Claude Opus 5.5 · High": opens the model picker, whose bottom bar sets the thinking level.
@@ -319,14 +385,6 @@ private struct ComposerBody: View {
 
   private var fullAccess: Bool {
     model.sessionID == nil ? draft.fullAccess : (model.session?.fullAccess ?? false)
-  }
-
-  private var fullAccessBinding: Binding<Bool> {
-    Binding(
-      get: { fullAccess },
-      set: { on in
-        if on { confirmFullAccess = true } else { setFullAccess(false) }
-      })
   }
 
   private func setFullAccess(_ on: Bool) {
@@ -603,6 +661,21 @@ private struct ComposerBody: View {
     moving = true
     await model.moveToBackground()
     moving = false
+  }
+
+  /// Opens a picker (from the "Add to Chat" sheet, once it has gone) with the input disabled
+  /// and no text able to take focus until it closes: the photo picker runs in another process
+  /// and cancels itself on device if the keyboard or a focused text view comes back over it.
+  private func openMedia(_ open: @escaping @MainActor () -> Void) {
+    let typing = focused
+    focused = false
+    mediaOpen = true
+    MediaPicker.blocksTextFocus = true
+    if typing {
+      MediaPicker.afterKeyboardHides(timeout: 1.5, open)
+    } else {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { open() }
+    }
   }
 
   /// Attaches dropped images, up to the attachment limit.

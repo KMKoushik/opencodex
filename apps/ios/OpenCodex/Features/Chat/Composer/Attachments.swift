@@ -74,47 +74,63 @@ extension DraftAttachment {
 /// be dropped that way.
 @MainActor
 enum MediaPicker {
-  /// Starts following the keyboard; call once at launch, before the first picker.
-  static func trackKeyboard() { _ = KeyboardTracker.shared }
-
   static var cameraAvailable: Bool { UIImagePickerController.isSourceTypeAvailable(.camera) }
+
+  /// From choosing Photo Library or Camera until the picker closes, no reply text in the
+  /// transcript may take focus (see `ProseTextView.canBecomeFirstResponder`).
+  static var blocksTextFocus = false
+
+  /// Runs `action` once the keyboard has finished hiding, or after `timeout`.
+  static func afterKeyboardHides(timeout: TimeInterval, _ action: @escaping @MainActor () -> Void) {
+    keyboardWaiter = action
+    keyboardObserver = NotificationCenter.default.addObserver(
+      forName: UIResponder.keyboardDidHideNotification, object: nil, queue: .main
+    ) { _ in MainActor.assumeIsolated { MediaPicker.keyboardWaitEnded() } }
+    DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { MediaPicker.keyboardWaitEnded() }
+  }
+
+  private static var keyboardWaiter: (@MainActor () -> Void)?
+  private static var keyboardObserver: NSObjectProtocol?
+
+  private static func keyboardWaitEnded() {
+    guard let action = keyboardWaiter else { return }
+    keyboardWaiter = nil
+    if let observer = keyboardObserver { NotificationCenter.default.removeObserver(observer) }
+    keyboardObserver = nil
+    // Let the hide animation's last frame land.
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { action() }
+  }
 
   /// The delegate of the open picker; UIKit holds delegates weakly.
   private static var delegate: NSObject?
 
   /// Picks up to `limit` photos; `onPick` gets each one's image data (HEIC, JPEG, …).
-  static func pickPhotos(limit: Int, onPick: @escaping ([Data]) -> Void) {
+  /// `onClose` runs once the picker is gone, picked or not.
+  static func pickPhotos(
+    limit: Int, onPick: @escaping ([Data]) -> Void, onClose: @escaping () -> Void = {}
+  ) {
     var configuration = PHPickerConfiguration()
     configuration.filter = .images
     configuration.selectionLimit = max(1, limit)
     configuration.preferredAssetRepresentationMode = .compatible
     let picker = PHPickerViewController(configuration: configuration)
-    let library = LibraryDelegate(onPick: onPick)
+    let library = LibraryDelegate(onPick: onPick, onClose: onClose)
     delegate = library
     picker.delegate = library
     present(picker)
   }
 
-  static func takePhoto(onPick: @escaping (UIImage) -> Void) {
+  static func takePhoto(onPick: @escaping (UIImage) -> Void, onClose: @escaping () -> Void = {}) {
     guard cameraAvailable else { return }
     let picker = UIImagePickerController()
     picker.sourceType = .camera
-    let camera = CameraDelegate(onPick: onPick)
+    let camera = CameraDelegate(onPick: onPick, onClose: onClose)
     delegate = camera
     picker.delegate = camera
     present(picker)
   }
 
   private static func present(_ controller: UIViewController, attempt: Int = 0) {
-    // Typing: put the keyboard away first. A picker presented while the keyboard was still
-    // up and animating out was dropped on device (it opened fine once the keyboard was down).
-    if attempt == 0, UIApplication.shared.sendAction(
-      #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil),
-      keyboardVisible
-    {
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { present(controller, attempt: 1) }
-      return
-    }
     guard let top = topController() else { return }
     // Wait out a running transition, such as a menu or sheet still closing.
     if let coordinator = top.transitionCoordinator, attempt < 10 {
@@ -125,18 +141,12 @@ enum MediaPicker {
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { present(controller, attempt: attempt + 1) }
       return
     }
+    // Whatever holds focus gives it up first: the photo picker runs in another process and
+    // cancels itself at once on device if it opens while the app has a focused text view or
+    // the keyboard is still up.
+    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     top.present(controller, animated: true)
-    // A presentation UIKit refused (something else took the screen first) leaves no trace;
-    // check that the picker is up and try again if it isn't.
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-      if controller.presentingViewController == nil, controller.view.window == nil, attempt < 10 {
-        present(controller, attempt: attempt + 1)
-      }
-    }
   }
-
-  /// Whether the software keyboard is on screen, from the last keyboard notification.
-  private static var keyboardVisible: Bool { KeyboardTracker.shared.visible }
 
   private static func topController() -> UIViewController? {
     let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
@@ -150,10 +160,14 @@ enum MediaPicker {
 
   private final class LibraryDelegate: NSObject, PHPickerViewControllerDelegate {
     let onPick: ([Data]) -> Void
-    init(onPick: @escaping ([Data]) -> Void) { self.onPick = onPick }
+    let onClose: () -> Void
+    init(onPick: @escaping ([Data]) -> Void, onClose: @escaping () -> Void) {
+      self.onPick = onPick
+      self.onClose = onClose
+    }
 
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-      picker.dismiss(animated: true)
+      picker.dismiss(animated: true, completion: onClose)
       MediaPicker.delegate = nil
       guard !results.isEmpty else { return }
       let providers = results.map(\.itemProvider)
@@ -178,19 +192,23 @@ enum MediaPicker {
     UINavigationControllerDelegate
   {
     let onPick: (UIImage) -> Void
-    init(onPick: @escaping (UIImage) -> Void) { self.onPick = onPick }
+    let onClose: () -> Void
+    init(onPick: @escaping (UIImage) -> Void, onClose: @escaping () -> Void) {
+      self.onPick = onPick
+      self.onClose = onClose
+    }
 
     func imagePickerController(
       _ picker: UIImagePickerController,
       didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
     ) {
       if let image = info[.originalImage] as? UIImage { onPick(image) }
-      picker.dismiss(animated: true)
+      picker.dismiss(animated: true, completion: onClose)
       MediaPicker.delegate = nil
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-      picker.dismiss(animated: true)
+      picker.dismiss(animated: true, completion: onClose)
       MediaPicker.delegate = nil
     }
   }
@@ -240,25 +258,5 @@ struct AttachmentStrip: View {
 
     }
     .scrollClipDisabled()
-  }
-}
-
-/// Follows the software keyboard, so the photo picker can wait for it to go away.
-@MainActor
-private final class KeyboardTracker {
-  static let shared = KeyboardTracker()
-  private(set) var visible = false
-  private var observers: [NSObjectProtocol] = []
-
-  private init() {
-    let center = NotificationCenter.default
-    observers = [
-      center.addObserver(forName: UIResponder.keyboardDidShowNotification, object: nil, queue: .main) {
-        _ in MainActor.assumeIsolated { KeyboardTracker.shared.visible = true }
-      },
-      center.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) {
-        _ in MainActor.assumeIsolated { KeyboardTracker.shared.visible = false }
-      },
-    ]
   }
 }

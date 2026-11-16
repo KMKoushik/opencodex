@@ -91,8 +91,8 @@ nonisolated final class ComposerScreenshotTests: XCTestCase {
       app.dismissKeyboard()
       app.openPlusMenu()
       sleep(1)
-      shot(app, "7-plus-menu")
-      app.buttons["Photo Library"].tap()
+      shot(app, "7-plus-sheet")
+      app.buttons["attach.photos"].tap()
       let photo = app.images.matching(NSPredicate(format: "label BEGINSWITH 'Photo'")).firstMatch
       if photo.waitForExistence(timeout: 10) {
         photo.tap()
