@@ -441,7 +441,7 @@ describe('gateway and the real OpenCode client', () => {
         expect(path.searchParams.has('directory')).toBe(false);
         const cursor = path.searchParams.get('cursor');
         limits.push(Number(path.searchParams.get('limit')));
-        expect(path.searchParams.get('order')).toBe(cursor ? null : 'asc');
+        expect(path.searchParams.get('order')).toBeNull();
         if (cursor) expect(cursor).toBe('after-hundred');
         const data = cursor ? (total > 100 ? [child] : []) : fullPage.slice(0, total);
         return res.end(

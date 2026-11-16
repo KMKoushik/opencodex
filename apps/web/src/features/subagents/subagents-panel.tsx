@@ -5,6 +5,7 @@ import { ArrowRight01Icon, BotIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import type { SessionInfo } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
+import { SegmentedControl } from '../../components/ui/segmented-control';
 import { api } from '../../lib/api';
 import { QueryError } from '../workbench/query-error';
 import type { PanelContext } from '../workbench/panels';
@@ -54,7 +55,10 @@ function SubagentsList({
     queryFn: ({ signal }) => api.active(signal),
     refetchOnMount: false,
   });
-  const items = sessions.data ?? noSubagents;
+  const [filter, setFilter] = useState<'all' | 'running'>('all');
+  const loaded = sessions.data ?? noSubagents;
+  const runningCount = loaded.filter((item) => active.data?.[item.id]).length;
+  const items = filter === 'running' ? loaded.filter((item) => active.data?.[item.id]) : loaded;
   return (
     <section className="subagents-panel" aria-label="Subagents">
       <div className="subagents-list-pane">
@@ -62,10 +66,21 @@ function SubagentsList({
           <h2 ref={heading} tabIndex={-1}>
             Delegated sessions
           </h2>
-          <p className="wb-note">
-            {items.length}
-            {sessions.hasNextPage ? '+' : ''}
-          </p>
+          <div className="subagents-filter">
+            <SegmentedControl
+              label="Show subagents"
+              value={filter}
+              options={[
+                {
+                  value: 'all',
+                  label: 'All',
+                  badge: `${loaded.length}${sessions.hasNextPage ? '+' : ''}`,
+                },
+                { value: 'running', label: 'Running', badge: runningCount },
+              ]}
+              onChange={setFilter}
+            />
+          </div>
         </div>
         <QueryError query={sessions} />
         {sessions.isPending && (
@@ -73,7 +88,14 @@ function SubagentsList({
             Loading subagents…
           </p>
         )}
-        {sessions.isSuccess && !items.length && (
+        {sessions.isSuccess && loaded.length > 0 && !items.length && (
+          <div className="wb-empty">
+            <HugeiconsIcon icon={BotIcon} size={24} />
+            <h3>No subagents running</h3>
+            <p>Subagents the agent is running now will appear here.</p>
+          </div>
+        )}
+        {sessions.isSuccess && !loaded.length && (
           <div className="wb-empty">
             <HugeiconsIcon icon={BotIcon} size={24} />
             <h3>No subagents yet</h3>
@@ -103,17 +125,24 @@ function SubagentsList({
                     <p className="subagent-meta">
                       <span className="truncate">{item.agent || 'Subagent'}</span>
                       <span aria-hidden="true">·</span>
-                      <span data-status={running ? 'running' : item.outcome}>
-                        {running
-                          ? 'Working'
-                          : item.outcome === 'succeeded'
+                      {running ? (
+                        <span
+                          className="session-activity"
+                          role="img"
+                          aria-label="Running"
+                          data-tooltip="Running"
+                        />
+                      ) : (
+                        <span data-status={item.outcome}>
+                          {item.outcome === 'succeeded'
                             ? 'Completed'
                             : item.outcome === 'failed'
                               ? 'Failed'
                               : item.outcome === 'interrupted'
                                 ? 'Stopped'
                                 : 'Idle'}
-                      </span>
+                        </span>
+                      )}
                     </p>
                   </div>
                   <HugeiconsIcon icon={ArrowRight01Icon} size={16} />

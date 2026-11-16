@@ -385,12 +385,9 @@ export function createApp(
         const cursor = c.req.query('cursor');
         const parentID = c.req.param('id');
         const pageSize = 100;
+        // Newest first (OpenCode's default order), so recent and running subagents lead.
         const page = await client.session.list(
-          {
-            parentID,
-            limit: pageSize,
-            ...(cursor ? { cursor } : { order: 'asc' as const }),
-          },
+          { parentID, limit: pageSize, ...(cursor ? { cursor } : {}) },
           options,
         );
         // Native cursors mark an anchor, not whether another page exists.

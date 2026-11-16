@@ -108,6 +108,8 @@ final class SubagentListModel {
 struct SubagentsList: View {
   let model: ChatModel
   @State private var list: SubagentListModel
+  /// `all` or `running`, like the desktop panel's filter.
+  @State private var filter = "all"
   @Environment(\.palette) private var palette
 
   init(model: ChatModel) {
@@ -118,7 +120,20 @@ struct SubagentsList: View {
   private var running: Set<String> { Set(model.activity.subagents.map(\.id)) }
 
   var body: some View {
+    let running = running
+    let shown = filter == "running" ? list.items.filter { running.contains($0.id) } : list.items
     List {
+      Section {
+        Picker("Show subagents", selection: $filter) {
+          Text("All").tag("all")
+          Text("Running · \(list.items.filter { running.contains($0.id) }.count)").tag("running")
+        }
+        .pickerStyle(.segmented)
+        .listRowBackground(Color.clear)
+        .listRowInsets(.init(top: 0, leading: 0, bottom: 0, trailing: 0))
+        .accessibilityIdentifier("subagents.filter")
+      }
+      .listSectionSpacing(.compact)
       Section {
         if let error = list.error {
           HStack {
@@ -134,8 +149,13 @@ struct SubagentsList: View {
             .font(.footnote)
             .foregroundStyle(palette.color("text-tertiary"))
           }
-        let running = running
-        ForEach(list.items) { item in
+        if list.loaded, !list.items.isEmpty, shown.isEmpty {
+          Text("No subagents running.")
+            .font(.footnote)
+            .foregroundStyle(palette.color("text-tertiary"))
+            .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        ForEach(shown) { item in
           NavigationLink(value: SubagentRoute(id: item.id)) {
             SubagentListRow(item: item, running: running.contains(item.id))
           }
@@ -224,9 +244,14 @@ private struct SubagentListRow: View {
         HStack(spacing: 6) {
           Text(item.agent ?? "Subagent").lineLimit(1)
           Text("·").accessibilityHidden(true)
-          Text(status.text)
-            .foregroundStyle(palette.color(status.color))
-            .fixedSize()
+          if running {
+            ProgressView().controlSize(.mini)
+              .accessibilityLabel("Running")
+          } else {
+            Text(status.text)
+              .foregroundStyle(palette.color(status.color))
+              .fixedSize()
+          }
         }
         .font(.caption)
         .foregroundStyle(palette.color("text-tertiary"))

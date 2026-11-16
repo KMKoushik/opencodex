@@ -74,8 +74,10 @@
 .subagent-meta > span:last-child {
   flex: none;
 }
-.subagent-meta [data-status='running'] {
-  color: var(--text-secondary);
+.subagents-filter {
+  display: flex;
+  align-items: center;
+  flex: none;
 }
 .subagent-meta [data-status='failed'] {
   color: var(--error);
