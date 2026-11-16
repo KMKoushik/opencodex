@@ -45,7 +45,7 @@ nonisolated struct TranscriptItem: Hashable, Sendable {
 
   /// Cells differ per kind; an item whose kind changes is reloaded rather than reconfigured.
   enum Kind: Hashable, Sendable {
-    case history, user, text, code, table, rule, image, copy, disclosure, note
+    case history, user, text, code, table, rule, image, canvas, copy, disclosure, note
   }
 
   var id: String
@@ -67,6 +67,7 @@ nonisolated struct TranscriptItem: Hashable, Sendable {
       case .table: .table
       case .rule: .rule
       case .image: .image
+      case .canvas: .canvas
       }
     case .copy: .copy
     case .turn, .activity, .tool, .skill, .thinking, .shell: .disclosure

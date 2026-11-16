@@ -525,9 +525,8 @@ async function previewPage(
   await mkdir(output, { recursive: true });
   const url = `${origin}/api/canvas-runtime/frame.html`;
   const results = await Promise.all(
-    PREVIEW_VARIANTS.map(async ({ width, scheme, mode }) => {
+    PREVIEW_VARIANTS.map(async ({ width, scheme, firstScreen }) => {
       const script = previewScript({
-        mode,
         theme: PREVIEW_THEMES[scheme],
         html,
         data,
@@ -536,8 +535,8 @@ async function previewPage(
       });
       try {
         const render = await renderer({ url, script, width, scheme });
-        const tiles = mode === 'panel' ? render.tiles.slice(0, 1) : render.tiles;
-        const name = mode === 'panel' ? `${width}-panel` : `${width}-${scheme}`;
+        const tiles = firstScreen ? render.tiles.slice(0, 1) : render.tiles;
+        const name = firstScreen ? `${width}-wide` : `${width}-${scheme}`;
         const files = await Promise.all(
           tiles.map(async (tile, index) => {
             const file = join(output, `${name}${tiles.length > 1 ? `-${index + 1}` : ''}.png`);
@@ -545,12 +544,12 @@ async function previewPage(
             return file;
           }),
         );
-        return { width, scheme, mode, render, files };
+        return { width, scheme, firstScreen, render, files };
       } catch (error) {
         return {
           width,
           scheme,
-          mode,
+          firstScreen,
           error: error instanceof Error ? error.message : String(error),
         };
       }
@@ -562,10 +561,11 @@ async function previewPage(
   const lines: string[] = [];
   let failed = false;
   for (const result of results) {
-    const label =
-      result.mode === 'panel'
-        ? `${result.width}px side panel (first screen)`
-        : `${result.width}px ${result.scheme}`;
+    const label = result.firstScreen
+      ? `${result.width}px app page (first screen)`
+      : result.width < 500
+        ? `${result.width}px iPhone ${result.scheme}`
+        : `${result.width}px side panel ${result.scheme}`;
     if ('error' in result) {
       failed = true;
       lines.push(`- ${label}: couldn’t render: ${result.error}`);
@@ -588,7 +588,7 @@ async function previewPage(
   }
   if (errors.size) failed = true;
   const sections = [
-    `Previews, rendered as OpenCodex shows the page in a chat. Read every screenshot (they are PNG files) and fix anything broken, cramped, misaligned, generic or hard to read before you show the canvas:\n${lines.join('\n')}`,
+    `Previews, rendered as OpenCodex shows the page when it is opened. Read every screenshot (they are PNG files) and fix anything broken, cramped, misaligned, generic or hard to read before you show the canvas:\n${lines.join('\n')}`,
   ];
   if (errors.size)
     sections.push(`Page errors:\n${[...errors].map((line) => `- ${line}`).join('\n')}`);

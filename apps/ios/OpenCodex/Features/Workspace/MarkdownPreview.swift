@@ -121,6 +121,13 @@ final class MarkdownCollection: UIView, UICollectionViewDataSource {
         source: source.flatMap { TranscriptItemBuilder.source($0, key: $0) }, alt: alt,
         typography: typography, theme: theme)
       return cell
+    case .canvas(_, let title):
+      // Canvases open from a chat; a Markdown file only names them.
+      let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "text", for: indexPath) as! TextBlockCell
+      cell.configure(
+        NSAttributedString(string: title, attributes: [.font: typography.body, .foregroundColor: theme.text]),
+        quote: false, panel: nil, theme: theme)
+      return cell
     case .rule:
       let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "rule", for: indexPath) as! RuleCell
       cell.configure(theme: theme)

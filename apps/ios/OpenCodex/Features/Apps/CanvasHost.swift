@@ -353,7 +353,7 @@ final class CanvasBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate
       shownTheme = theme
       shownRunning = running
       post([
-        "type": .string("init"), "mode": .string("panel"), "theme": theme, "html": .string(source.html),
+        "type": .string("init"), "theme": theme, "html": .string(source.html),
         "data": .object(values), "running": .array(running.map { .string($0) }),
         "scroll": .number(scroll),
       ])
@@ -581,5 +581,32 @@ struct CanvasPanel: View {
     let problems = (model.source?.errors ?? []) + (model.data?.errors ?? []) + model.pageErrors
     if !problems.isEmpty { return problems.joined(separator: "\n") }
     return model.writeError
+  }
+}
+
+/// A canvas opened from a chat: its page under a title bar with Done, like the desktop's
+/// Canvas panel.
+struct CanvasScreen: View {
+  let client: GatewayClient
+  let events: EventHub
+  let id: String
+  let title: String
+  @Environment(\.dismiss) private var dismiss
+  @Environment(\.palette) private var palette
+
+  var body: some View {
+    NavigationStack {
+      CanvasPanel(client: client, events: events, id: id, title: title)
+        .background(palette.color("surface").ignoresSafeArea())
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+          ToolbarItem(placement: .confirmationAction) {
+            Button("Done", role: .confirm) { dismiss() }
+              .accessibilityIdentifier("canvas.done")
+          }
+        }
+    }
+    .tint(palette.color("text"))
   }
 }

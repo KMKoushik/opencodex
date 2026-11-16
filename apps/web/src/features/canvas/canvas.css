@@ -1,29 +1,79 @@
 .canvas-card {
-  margin: 14px 0;
-}
-/* The page sits on the chat itself, like the reply around it; only a small title row. */
-.canvas-card-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 28px;
-  margin-bottom: 6px;
-  color: var(--text-tertiary);
-  font-size: 12px;
+  gap: 12px;
+  width: min(100%, 440px);
+  margin: 14px 0;
+  padding: 10px 14px 10px 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--elevated);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  container: canvas-card / inline-size;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+.canvas-card:disabled {
+  cursor: default;
+}
+.canvas-card .app-icon {
+  flex: none;
+  border-radius: 27%;
+}
+.canvas-card-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
 }
 .canvas-card-title {
-  flex: 1;
-  color: var(--text-secondary);
+  font-size: 14px;
   font-weight: 550;
+  line-height: 1.35;
+}
+.canvas-card-detail {
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.canvas-card-detail[data-error] {
+  color: var(--error);
+}
+.canvas-card-open {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 550;
+}
+/* In a narrow chat column the title keeps the room; the arrow alone says it opens. */
+@container canvas-card (max-width: 360px) {
+  .canvas-card-label {
+    display: none;
+  }
+}
+@media (hover: hover) {
+  .canvas-card:not(:disabled):hover {
+    border-color: var(--border-heavy);
+    background: var(--hover);
+  }
+  .canvas-card:not(:disabled):hover .canvas-card-open {
+    color: var(--text);
+  }
 }
 .canvas-frame {
   position: relative;
   display: flex;
+  flex: 1;
   flex-direction: column;
   min-height: 0;
-}
-.canvas-frame[data-mode='panel'] {
-  flex: 1;
 }
 .canvas-frame iframe {
   display: block;
@@ -32,7 +82,8 @@
   /* The frame adopts this element's color-scheme, so its background stays transparent. */
   background: transparent;
 }
-.canvas-frame[data-mode='panel'] iframe {
+.canvas-frame iframe {
+  /* Fills the panel. */
   flex: 1;
   min-height: 0;
 }

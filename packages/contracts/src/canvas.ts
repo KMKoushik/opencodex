@@ -161,7 +161,6 @@ export type CanvasTheme = { scheme: 'light' | 'dark'; vars: Record<string, strin
 export const CANVAS_CHANNEL = 'opencodex-canvas';
 export type CanvasInit = {
   type: 'init';
-  mode: 'inline' | 'panel';
   theme: CanvasTheme;
   html: string;
   data: Record<string, unknown>;
@@ -211,7 +210,6 @@ export type FrameMessage = { channel: typeof CANVAS_CHANNEL } & (
   | { type: 'ready' }
   /** Show the page again: the host reloads the frame and sends `scroll` with the next init. */
   | { type: 'reload'; scroll: number }
-  | { type: 'size'; height: number }
   | { type: 'set'; key: string; value: unknown }
   | { type: 'call'; call: number; name: string; args: unknown[] }
   /** The page reads the task board: the host sends `tasks` now and on every change. */

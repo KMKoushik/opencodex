@@ -31,14 +31,15 @@ export const PREVIEW_MAX_TILES = 4;
 export const PREVIEW_TIMEOUT = 20_000;
 
 /**
- * What canvas_check renders: the reply column, a phone, the light theme, and the full-size
- * side panel or app page (only its first screen, which shows how the page uses the width).
+ * What canvas_check renders, each as the page shows (the chat links it as a card): a side
+ * panel, the iPhone, the light theme, and a full-width app page (only its first screen,
+ * which shows how the page uses the width).
  */
 export const PREVIEW_VARIANTS = [
-  { width: 728, scheme: 'dark', mode: 'inline' },
-  { width: 390, scheme: 'dark', mode: 'inline' },
-  { width: 728, scheme: 'light', mode: 'inline' },
-  { width: 1280, scheme: 'dark', mode: 'panel' },
+  { width: 728, scheme: 'dark', firstScreen: false },
+  { width: 390, scheme: 'dark', firstScreen: false },
+  { width: 728, scheme: 'light', firstScreen: false },
+  { width: 1280, scheme: 'dark', firstScreen: true },
 ] as const;
 
 const FONTS = {

@@ -77,6 +77,7 @@ nonisolated enum RenderedBlock: @unchecked Sendable {
   case code(language: String, code: String)
   case table(TableContent)
   case image(source: String?, alt: String)
+  case canvas(id: String, title: String)
   case rule
 }
 
@@ -165,6 +166,9 @@ nonisolated final class MarkdownRenderer: @unchecked Sendable {
     case let paragraph as Paragraph:
       if let image = MarkdownBlocks.soleImage(paragraph) {
         return .image(source: image.source, alt: image.plainText)
+      }
+      if let canvas = MarkdownBlocks.soleCanvas(paragraph) {
+        return .canvas(id: canvas.id, title: canvas.title)
       }
       return .text(builder.blocks(Array(document.children)))
     default:

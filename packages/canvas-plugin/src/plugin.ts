@@ -65,8 +65,8 @@ class CanvasError extends Error {}
 const SKILL = `<!-- ${MARKER} -->
 # Canvas
 
-A canvas is a page OpenCodex shows in the chat, where you link it, and full size in a side
-panel. Use one when a visual or interactive result says more than text: reports, dashboards,
+A canvas is a page OpenCodex links in the chat as a card; the user opens it in a side panel
+(full screen on iPhone). Use one when a visual or interactive result says more than text: reports, dashboards,
 comparisons, charts, audits, architecture or flow diagrams, timelines, checklists, small
 tools. Prefer a canvas over a long markdown table or an ASCII diagram.
 
@@ -82,14 +82,14 @@ tools. Prefer a canvas over a long markdown table or an ASCII diagram.
    from \`canvas.data.<key>\`. Don't paste data into the page: the user and the app update
    values, and the page follows them.
 4. \`canvas_check({ id })\` checks the canvas and renders the page the way OpenCodex shows it:
-   728px wide (the reply column) and 390px (a phone) in dark mode, 728px in light, and the
-   first screen of the full-size side panel at 1280px. It
+   a 728px side panel and a 390px iPhone in dark mode, the 728px panel in light, and the
+   first screen of a full-width app page at 1280px. It
    saves screenshots and reports the page's height, sideways overflow, and console errors.
    Read every screenshot, fix anything broken, cramped, misaligned, generic or hard to read,
    and check again until it passes and looks right.
 5. Put the link it gives you, \`[Title](canvas:<id>)\`, on its own line in your final reply.
-   The user sees the page there, so don't announce it or restate it; add only what the page
-   doesn't say.
+   It shows as a card the user clicks to open the page. Say in a sentence or two what the
+   page shows and the main finding, but don't restate its contents.
 
 To change a canvas, edit its files (\`canvas_list\` finds it), run \`canvas_check\`, and link
 it again. Open views update live.
@@ -98,7 +98,7 @@ it again. Open views update live.
 
 - OpenCodex injects its theme as CSS variables on \`:root\`. They follow the user's theme and
   light/dark mode live, so build colors from them, directly or with \`color-mix()\`:
-  \`--surface\` (the chat background behind the page), \`--elevated\` (raised surfaces),
+  \`--surface\` (the background behind the page), \`--elevated\` (raised surfaces),
   \`--text\`, \`--text-secondary\`, \`--text-tertiary\`, \`--border\`, \`--border-heavy\`, \`--hover\`,
   \`--primary\` and \`--on-primary\` (solid buttons), \`--accent\`, \`--success\`, \`--warning\`,
   \`--error\`, \`--code-bg\`, \`--font-sans\`, \`--font-mono\`, and the palette \`--blue\`, \`--green\`,
@@ -115,19 +115,16 @@ it again. Open views update live.
 
 ## Layout
 
-- In the chat, the page has no border and sits on the chat background, as wide as the reply
-  column (about 728px; 390px on phones). Leave html, body and the outermost element without
-  a background, and add no outer card, border, or banner title: the page is part of the
-  reply.
-- Use a fluid width with no horizontal padding on the outermost element. A box with its own
+- The page fills its frame: a side panel (about 500 to 900px wide), an app's own page (often
+  1100 to 1600px), or an iPhone screen (390px). The frame adds padding around the body and
+  scrolls the page. Leave html, body and the outermost element without a background, and add
+  no outer card, border, or banner title: the panel already shows the title.
+- Use a fluid width with no horizontal padding on the outermost element. Fill the width:
+  don't cap or center the whole page. On wide frames use the room for side-by-side sections,
+  and cap only the line length of paragraphs (about 75 characters). A box with its own
   background gets at least 16px of padding and rounded corners.
-- In the side panel and an app's own page, the page fills a much wider frame (often 1100 to
-  1600px) with the frame's padding. Fill that width: don't cap or center the whole page. Use
-  the room for side-by-side sections, and cap only the line length of paragraphs (about
-  75 characters) so text stays readable.
 - Let content set the height. Give charts fixed pixel heights. Never use \`100vh\` or
-  \`height: 100%\` on html or body. A page taller than about 1000px scrolls inside its frame in
-  the chat, so put what matters first.
+  \`height: 100%\` on html or body. Put what matters first.
 
 ## Design
 

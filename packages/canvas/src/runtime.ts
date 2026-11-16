@@ -11,7 +11,6 @@
  * window, so the runtime attaches its own again after the write.
  */
 import type {
-  CanvasInit,
   CanvasTaskInput,
   CanvasTaskOp,
   CanvasTasks,
@@ -46,15 +45,12 @@ const listeners: { [K in keyof Events]: Set<Events[K]> } = {
   tasks: new Set(),
 };
 
-let mode: CanvasInit['mode'] = 'panel';
 let theme: CanvasTheme = { scheme: 'dark', vars: {} };
 let html = '';
 const data: Record<string, unknown> = {};
 let running: readonly string[] = [];
 let shown = false;
 let pending: ReturnType<typeof setTimeout> | undefined;
-let lastHeight = 0;
-let sizes: ResizeObserver | undefined;
 let nextCall = 0;
 const calls = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>();
 const reported = new Set<string>();
@@ -201,16 +197,11 @@ function hostCss() {
     '--chart-5:var(--pink)',
     '--chart-6:var(--yellow)',
   ].join(';');
-  const inline = mode === 'inline';
-  // An inline frame sits on the chat and grows to fit (scrolling inside past the host's
-  // cap); a preview renders it on its own.
-  const framed = inline && window.parent !== window;
   // One line, so line numbers in the page's error messages match index.html.
   return (
     `:root{${vars};${colors};color-scheme:${theme.scheme}}` +
-    `html{background:${framed ? 'transparent' : 'var(--surface)'};color:var(--text);font-family:var(--font-sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%${framed ? ';overflow-x:hidden;scrollbar-width:none' : ''}}` +
-    (framed ? 'html::-webkit-scrollbar{display:none}' : '') +
-    `body{margin:0${inline ? '' : ';padding:24px 28px'}}code,kbd,pre,samp{font-family:var(--font-mono)}`
+    `html{background:var(--surface);color:var(--text);font-family:var(--font-sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}` +
+    `body{margin:0;padding:24px 28px}code,kbd,pre,samp{font-family:var(--font-mono)}`
   );
 }
 
@@ -225,7 +216,6 @@ function compose(page: string) {
 }
 
 function render(scroll = 0) {
-  sizes?.disconnect();
   // Defined before the page's markup is parsed, so its elements upgrade as they appear.
   defineElements();
   document.open();
@@ -247,13 +237,6 @@ function render(scroll = 0) {
     },
     { once: true },
   );
-  if (mode === 'inline') {
-    sizes = new ResizeObserver(() => {
-      const height = Math.ceil(document.documentElement.getBoundingClientRect().height);
-      if (height !== lastHeight) post({ type: 'size', height: (lastHeight = height) });
-    });
-    sizes.observe(document.documentElement);
-  }
 }
 
 /** Asks the host to show the page again with its latest page and values, once per load. */
@@ -289,7 +272,6 @@ function receive(event: MessageEvent<HostMessage>) {
   switch (message.type) {
     case 'init':
       if (shown) return;
-      mode = message.mode;
       theme = message.theme;
       html = message.html;
       Object.assign(data, message.data);

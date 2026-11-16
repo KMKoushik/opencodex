@@ -52,6 +52,7 @@ enum Symbol {
 final class ProseTextView: UITextView, UITextViewDelegate {
   /// Opens a local file link's `href`; nil leaves file links inert.
   var onOpenFile: ((String) -> Void)?
+  var onOpenCanvas: ((String) -> Void)?
 
   init() {
     // TextKit 1 lays out and measures static text faster and more predictably in cells.
@@ -90,6 +91,10 @@ final class ProseTextView: UITextView, UITextViewDelegate {
     let scheme = url.scheme?.lowercased()
     if scheme == "http" || scheme == "https" || scheme == "mailto" {
       return UIAction { _ in UIApplication.shared.open(url) }
+    }
+    // `canvas:<id>` links open the canvas, like the desktop's `CanvasLink`.
+    if scheme == "canvas", let id = MarkdownBlocks.canvasID(url.absoluteString), let open = onOpenCanvas {
+      return UIAction { _ in open(id) }
     }
     // Workspace paths and `file:` URLs open the file, like the desktop's file links.
     if scheme == nil || scheme == "file", let open = onOpenFile {
@@ -169,6 +174,10 @@ final class TextBlockCell: TranscriptCell {
   var onOpenFile: ((String) -> Void)? {
     get { textView.onOpenFile }
     set { textView.onOpenFile = newValue }
+  }
+  var onOpenCanvas: ((String) -> Void)? {
+    get { textView.onOpenCanvas }
+    set { textView.onOpenCanvas = newValue }
   }
 
   override func prepareForReuse() {
@@ -752,6 +761,89 @@ final class RuleCell: TranscriptCell {
     let column = column(bounds.width)
     line.frame = CGRect(x: column.x, y: 6, width: column.width, height: 1)
   }
+}
+
+// MARK: Canvases
+
+/// The desktop's `CanvasCard`: a `[Title](canvas:<id>)` line shows as a card that opens the
+/// canvas full screen, instead of the page itself.
+final class CanvasBlockCell: TranscriptCell {
+  var onOpen: (() -> Void)?
+
+  private let card = UIControl()
+  private let tile = UIView()
+  private let glyph = UIImageView()
+  private let title = UILabel()
+  private let detail = UILabel()
+  private let chevron = UIImageView()
+  private static let height: CGFloat = 60
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    card.layer.cornerRadius = 14
+    card.layer.cornerCurve = .continuous
+    card.layer.borderWidth = 1
+    card.addTarget(self, action: #selector(open), for: .touchUpInside)
+    card.addTarget(self, action: #selector(highlight), for: [.touchDown, .touchDragEnter])
+    card.addTarget(self, action: #selector(unhighlight), for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit])
+    tile.layer.cornerRadius = 9
+    tile.layer.cornerCurve = .continuous
+    tile.isUserInteractionEnabled = false
+    glyph.contentMode = .center
+    glyph.image = Symbol.image("square.grid.2x2", 15, .medium)
+    tile.addSubview(glyph)
+    title.font = .systemFont(ofSize: UIFont.preferredFont(forTextStyle: .subheadline).pointSize, weight: .semibold)
+    detail.font = .preferredFont(forTextStyle: .caption1)
+    detail.text = "Canvas · Tap to open"
+    chevron.image = Symbol.image(Symbol.chevron, 12, .semibold)
+    chevron.contentMode = .center
+    for view in [tile, title, detail, chevron] {
+      view.isUserInteractionEnabled = false
+      card.addSubview(view)
+    }
+    contentView.addSubview(card)
+    card.isAccessibilityElement = true
+    card.accessibilityTraits = .button
+    card.accessibilityIdentifier = "transcript.canvas"
+  }
+
+  required init?(coder: NSCoder) { fatalError() }
+
+  func configure(title text: String, theme: TranscriptTheme) {
+    title.text = text
+    title.textColor = theme.text
+    detail.textColor = theme.textTertiary
+    chevron.tintColor = theme.textTertiary
+    card.backgroundColor = theme.elevated
+    card.layer.borderColor = theme.border.cgColor
+    tile.backgroundColor = theme.accentSoft
+    glyph.tintColor = theme.accentText
+    card.accessibilityLabel = text
+    card.accessibilityHint = "Opens the canvas"
+  }
+
+  override func measure(width: CGFloat) -> CGFloat { Self.height + 8 }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    let column = column(bounds.width)
+    card.frame = CGRect(x: column.x, y: 4, width: min(column.width, 440), height: Self.height)
+    let side: CGFloat = 36
+    tile.frame = CGRect(x: 12, y: (Self.height - side) / 2, width: side, height: side)
+    glyph.frame = tile.bounds
+    chevron.frame = CGRect(x: card.bounds.width - 30, y: 0, width: 18, height: Self.height)
+    let textX = tile.frame.maxX + 12
+    let textWidth = max(0, chevron.frame.minX - 8 - textX)
+    let titleHeight = title.font.lineHeight.rounded(.up)
+    let detailHeight = detail.font.lineHeight.rounded(.up)
+    let top = ((Self.height - titleHeight - detailHeight - 2) / 2).rounded()
+    title.frame = CGRect(x: textX, y: top, width: textWidth, height: titleHeight)
+    detail.frame = CGRect(x: textX, y: title.frame.maxY + 2, width: textWidth, height: detailHeight)
+  }
+
+  @objc private func open() { onOpen?() }
+  @objc private func highlight() { card.alpha = 0.7 }
+  @objc private func unhighlight() { UIView.animate(withDuration: 0.15) { self.card.alpha = 1 } }
 }
 
 // MARK: Images

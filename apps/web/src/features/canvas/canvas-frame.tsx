@@ -26,10 +26,6 @@ type Outgoing = HostMessage extends infer M
   : never;
 
 const FRAME_URL = '/api/canvas-runtime/frame.html';
-const MIN_HEIGHT = 96;
-const MAX_INLINE_HEIGHT = 1000;
-// Last measured height per canvas, so a remounted inline frame doesn't jump.
-const heights = new Map<string, number>();
 
 /**
  * Hosts one canvas in a sandboxed iframe. The frame has an opaque origin and reaches only
@@ -39,13 +35,11 @@ const heights = new Map<string, number>();
  */
 export function CanvasFrame({
   id,
-  mode,
   title,
   annotating = false,
   onAnnotated,
 }: {
   id: string;
-  mode: 'inline' | 'panel';
   title: string;
   /** Shows the comment overlay in the frame while true; turning it off cancels it. */
   annotating?: boolean;
@@ -109,7 +103,6 @@ export function CanvasFrame({
   const [frameKey, setFrameKey] = useState(0);
   // Counts the frame's ready messages; 0 until the current frame instance is listening.
   const [session, setSession] = useState(0);
-  const [height, setHeight] = useState(() => heights.get(id) ?? 240);
   const [error, setError] = useState<string>();
   // Uncaught errors from the page itself, until the agent changes it.
   const [pageErrors, setPageErrors] = useState<string[]>([]);
@@ -160,10 +153,6 @@ export function CanvasFrame({
             ? errors
             : [...errors, message.message],
         );
-      } else if (message.type === 'size') {
-        const next = Math.max(MIN_HEIGHT, Math.min(MAX_INLINE_HEIGHT, message.height));
-        heights.set(id, next);
-        setHeight(next);
       } else if (message.type === 'set') {
         writer.set(message.key, message.value);
       } else if (message.type === 'call') {
@@ -229,7 +218,6 @@ export function CanvasFrame({
     shown.current.theme = JSON.stringify(theme);
     post({
       type: 'init',
-      mode,
       theme,
       html: source.data.html,
       data: values,
@@ -238,7 +226,7 @@ export function CanvasFrame({
       scroll: scroll.current,
     });
     scroll.current = 0;
-  }, [session, source.data, data.data, mode, post]);
+  }, [session, source.data, data.data, post]);
 
   // The agent edited the page: the frame asks to reload, and its next `ready` gets the new one.
   useEffect(() => {
@@ -303,20 +291,13 @@ export function CanvasFrame({
   const failure = source.error ?? data.error;
   const problems = [...(source.data?.errors ?? []), ...(data.data?.errors ?? []), ...pageErrors];
   return (
-    <div className="canvas-frame" data-mode={mode}>
+    <div className="canvas-frame">
       {(failure || problems.length > 0 || error) && (
         <div className="canvas-frame-error" role="alert">
           {failure ? failure.message : problems.length ? problems.join('\n') : error}
         </div>
       )}
-      <iframe
-        key={frameKey}
-        ref={frame}
-        title={title}
-        src={FRAME_URL}
-        sandbox="allow-scripts"
-        style={mode === 'inline' ? { height } : undefined}
-      />
+      <iframe key={frameKey} ref={frame} title={title} src={FRAME_URL} sandbox="allow-scripts" />
     </div>
   );
 }

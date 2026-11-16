@@ -1,4 +1,5 @@
 import Observation
+import SwiftUI
 import UIKit
 
 /// Calls back after each layout pass, so the transcript can stay pinned to the end.
@@ -520,6 +521,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     let table = UICollectionView.CellRegistration<TableCell, String> { _, _, _ in }
     let rule = UICollectionView.CellRegistration<RuleCell, String> { _, _, _ in }
     let image = UICollectionView.CellRegistration<ImageBlockCell, String> { _, _, _ in }
+    let canvas = UICollectionView.CellRegistration<CanvasBlockCell, String> { _, _, _ in }
     let disclosure = UICollectionView.CellRegistration<DisclosureCell, String> { _, _, _ in }
     let note = UICollectionView.CellRegistration<NoteCell, String> { _, _, _ in }
     dataSource = UICollectionViewDiffableDataSource(collectionView: collectionView) {
@@ -535,6 +537,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
         case .table: collectionView.dequeueConfiguredReusableCell(using: table, for: indexPath, item: id)
         case .rule: collectionView.dequeueConfiguredReusableCell(using: rule, for: indexPath, item: id)
         case .image: collectionView.dequeueConfiguredReusableCell(using: image, for: indexPath, item: id)
+        case .canvas: collectionView.dequeueConfiguredReusableCell(using: canvas, for: indexPath, item: id)
         case .disclosure:
           collectionView.dequeueConfiguredReusableCell(using: disclosure, for: indexPath, item: id)
         case .note, .copy, .history:
@@ -568,12 +571,16 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
       case (.text(let text), let cell as TextBlockCell):
         cell.configure(text, quote: block.kind == .quote, panel: item.panel, theme: theme)
         cell.onOpenFile = { [weak self] href in self?.openFile(href) }
+        cell.onOpenCanvas = { [weak self] id in self?.openCanvas(id, title: nil) }
       case (.code(let language, let code), let cell as CodeBlockCell):
         cell.configure(language: language, code: code, typography: typography, theme: theme)
         cell.onShare = { [weak self] text, view in self?.share(text, from: view) }
       case (.table(let content), let cell as TableCell):
         cell.configure(content)
         cell.onOpenLink = { [weak self] url in self?.openLink(url) }
+      case (.canvas(let id, let title), let cell as CanvasBlockCell):
+        cell.configure(title: title, theme: theme)
+        cell.onOpen = { [weak self] in self?.openCanvas(id, title: title) }
       case (.rule, let cell as RuleCell):
         cell.configure(theme: theme)
       case (.image(let source, let alt), let cell as ImageBlockCell):
@@ -819,6 +826,7 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
       case .table: return CGFloat(Self.newlines(block.source)) * (line + 22)
       case .rule: return 13
       case .image: return 180
+      case .canvas: return 68
       default:
         // Wrapped lines from length, plus one per explicit line break.
         let wrapped = (CGFloat(block.source.utf8.count) / charsPerLine).rounded(.up)
@@ -876,6 +884,20 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
     case nil, "file": openFile(url.absoluteString)
     default: break
     }
+  }
+
+  /// Opens a canvas full screen, like the desktop's Canvas panel.
+  private func openCanvas(_ id: String, title: String?) {
+    guard presentedViewController == nil, let palette else { return }
+    let client = model.client
+    let events = model.events
+    let screen = UIHostingController(
+      rootView: CanvasScreen(client: client, events: events, id: id, title: title ?? "Canvas")
+        .environment(\.palette, palette))
+    screen.modalPresentationStyle = .pageSheet
+    screen.sheetPresentationController?.detents = [.large()]
+    screen.sheetPresentationController?.prefersGrabberVisible = true
+    present(screen, animated: true)
   }
 
   /// A local file link: the chat's folder resolves relative and absolute paths.

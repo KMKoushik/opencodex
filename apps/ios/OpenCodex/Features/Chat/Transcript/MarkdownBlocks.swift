@@ -4,7 +4,7 @@ import Markdown
 /// One top-level Markdown block's source. Each renders as its own transcript row, so a growing
 /// answer re-renders only its tail and long answers stay virtualized.
 nonisolated struct MarkdownBlock: Hashable, Sendable {
-  enum Kind: String, Sendable { case text, quote, code, table, rule, image }
+  enum Kind: String, Sendable { case text, quote, code, table, rule, image, canvas }
   var kind: Kind
   var source: String
   /// Link reference definitions from the whole text: they resolve across blocks.
@@ -39,6 +39,32 @@ nonisolated enum MarkdownBlocks {
       }
     }
     return image
+  }
+
+  /// A paragraph that is only a `[Title](canvas:<id>)` link renders as a card that opens the
+  /// canvas, like the desktop's `CanvasCard`.
+  static func soleCanvas(_ paragraph: Paragraph) -> (id: String, title: String)? {
+    var found: (id: String, title: String)?
+    for child in paragraph.children {
+      if let link = child as? Markdown.Link, found == nil, let id = canvasID(link.destination) {
+        found = (id, link.plainText.isEmpty ? "Canvas" : link.plainText)
+      } else if let text = child as? Markdown.Text, text.string.allSatisfy(\.isWhitespace) {
+        continue
+      } else if child is SoftBreak || child is LineBreak {
+        continue
+      } else {
+        return nil
+      }
+    }
+    return found
+  }
+
+  /// The id in a `canvas:<id>` link (`CANVAS_LINK` in the contracts).
+  static func canvasID(_ href: String?) -> String? {
+    guard let href, href.hasPrefix("canvas:") else { return nil }
+    let id = String(href.dropFirst("canvas:".count))
+    return id.range(of: #"^[a-z0-9][a-z0-9-]{0,62}-[a-z0-9]{4}$"#, options: .regularExpression) == nil
+      ? nil : id
   }
 
   /// A link into the workspace rather than to a site: no scheme and not an anchor.
@@ -83,6 +109,7 @@ nonisolated enum MarkdownBlocks {
         case is ThematicBreak: .rule
         case is BlockQuote: .quote
         case let paragraph as Paragraph where soleImage(paragraph) != nil: .image
+        case let paragraph as Paragraph where soleCanvas(paragraph) != nil: .canvas
         default: .text
         }
       if let last = starts.last, last.0 >= start { continue }

@@ -281,7 +281,7 @@ function AppDetail({
         </div>
       )}
       {tab === 'app' ? (
-        <CanvasFrame id={app.id} mode="panel" title={app.title} />
+        <CanvasFrame id={app.id} title={app.title} />
       ) : (
         <Suspense
           fallback={

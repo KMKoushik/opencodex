@@ -158,7 +158,6 @@ export function CanvasPanel({ sessionID, directory, active, headerElement }: Pan
           <CanvasFrame
             key={selected}
             id={selected}
-            mode="panel"
             title={titles.get(selected) ?? 'Canvas'}
             annotating={commenting === selected}
             onAnnotated={annotated}
