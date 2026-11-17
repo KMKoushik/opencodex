@@ -285,6 +285,30 @@
 .message-annotations {
   anchor-scope: --message-annotations;
 }
+/* "From side chat" above a message a side chat sent. */
+.message-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: -2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: 12px;
+}
+button.message-source {
+  cursor: pointer;
+}
+button.message-source:hover {
+  color: var(--text-secondary);
+}
+button.message-source:focus-visible {
+  outline: 2px solid var(--border-heavy);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 .message-annotations-chip {
   display: inline-flex;
   align-items: center;

@@ -1,17 +1,22 @@
-import { memo, useId } from 'react';
-import { Comment01Icon } from '@hugeicons/core-free-icons';
+import { memo, useContext, useId } from 'react';
+import { BubbleChatQuestionIcon, Comment01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   messageAnnotations,
+  messageSideChat,
   type MessageAnnotations,
   type PromptFileAttachment,
   type PromptMention,
 } from '@opencodex/contracts';
 import { MessageAttachments } from './message-attachments';
 import { MessageText } from './message-text';
+import { SideChatOpenContext } from '../side-chat/side-chat-context';
 import './comments.css';
 
-/** A sent prompt: its review comments as one chip, the user's own text, then attachments. */
+/**
+ * A sent prompt: where it came from (a side chat), its review comments as one chip, the
+ * user's own text, then attachments.
+ */
 export const UserPrompt = memo(function UserPrompt({
   text,
   files,
@@ -28,8 +33,10 @@ export const UserPrompt = memo(function UserPrompt({
 }) {
   const annotations = messageAnnotations({ text, metadata });
   const own = annotations ? text.slice(0, annotations.end).trimEnd() : text;
+  const sideChat = messageSideChat(metadata);
   return (
     <>
+      {sideChat && <FromSideChat sideID={sideChat} />}
       {annotations && <AnnotationsChip text={text} annotations={annotations} />}
       {own && (
         <p className="user-message-bubble" data-find-text={findable ? '' : undefined}>
@@ -40,6 +47,24 @@ export const UserPrompt = memo(function UserPrompt({
     </>
   );
 });
+
+/** "From side chat": the message was sent by a side chat; opens it where it can. */
+function FromSideChat({ sideID }: { sideID: string }) {
+  const open = useContext(SideChatOpenContext);
+  const label = (
+    <>
+      <HugeiconsIcon icon={BubbleChatQuestionIcon} size={13} aria-hidden="true" />
+      From side chat
+    </>
+  );
+  return open ? (
+    <button type="button" className="message-source" onClick={() => open(sideID)}>
+      {label}
+    </button>
+  ) : (
+    <span className="message-source">{label}</span>
+  );
+}
 
 function AnnotationsChip({ text, annotations }: { text: string; annotations: MessageAnnotations }) {
   const id = useId();

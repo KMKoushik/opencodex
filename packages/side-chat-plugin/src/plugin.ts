@@ -1,6 +1,7 @@
 /**
- * OpenCode plugin installed by OpenCodex. It gives side chats read-only access to the
- * current state of their main chat, like Codex's `read_thread` and `wait_threads`.
+ * OpenCode plugin installed by OpenCodex. It gives side chats access to the current state of
+ * their main chat, like Codex's `read_thread` and `wait_threads`, and lets them send the main
+ * chat a message when the user asks.
  *
  * The gateway installs this file verbatim into OpenCode's global plugins folder, so it must
  * stay self-contained: no runtime imports. Types below describe only the parts of the V2
@@ -49,6 +50,10 @@ type Context = {
     get(input: { sessionID: string }, options?: RequestOptions): Promise<SessionInfo>;
     context(input: { sessionID: string }, options?: RequestOptions): Promise<Message[]>;
     wait(input: { sessionID: string }, options?: RequestOptions): Promise<void>;
+    prompt(
+      input: { sessionID: string; text: string; metadata?: Record<string, Json> },
+      options?: RequestOptions,
+    ): Promise<unknown>;
     hook(
       name: 'context',
       callback: (event: {
@@ -82,6 +87,9 @@ type Context = {
 const SIDE_CHAT_KEY = 'opencodexSideChat';
 const READ = 'read_main_chat';
 const WAIT = 'wait_main_chat';
+const SEND = 'send_to_main_chat';
+/** Marks a main-chat message sent from a side chat; the transcript labels it. */
+const FROM_SIDE_CHAT_KEY = 'opencodexFromSideChat';
 // Direct tools, not Code Mode catalog entries, so the context hook can hide them elsewhere.
 const OPTIONS = { codemode: false };
 const NOTICE =
@@ -112,17 +120,20 @@ export default {
       if (!parent) throw new Error('This tool is available only in OpenCodex side chats.');
       return parent;
     }
-    async function running(sessionID: string) {
-      // Waiting returns at once for an idle session; only this short bound means it's running.
-      const bound = AbortSignal.timeout(150);
+    /** Whether `sessionID` finished within `ms` (false: still running). */
+    async function finishes(sessionID: string, ms: number, signal?: AbortSignal) {
+      // Inside OpenCode, `session.wait` ignores its abort signal and returns only when the
+      // session goes idle, so time it out here; the abort still frees it where honored.
+      const stop = new AbortController();
       try {
-        await ctx.session.wait({ sessionID }, { signal: bound });
-        return false;
-      } catch (error) {
-        if (bound.aborted) return true;
-        throw error;
+        return await settles(ctx.session.wait({ sessionID }, { signal: stop.signal }), ms, signal);
+      } finally {
+        stop.abort();
       }
     }
+    // Waiting returns at once for an idle session; only this short bound means it's running.
+    const running = async (sessionID: string, signal?: AbortSignal) =>
+      !(await finishes(sessionID, 150, signal));
 
     async function summary(mainID: string, input: ToolInput, signal: AbortSignal) {
       const turns = integer(input.turns, 3, 1, 10);
@@ -139,7 +150,7 @@ export default {
             if (signal.aborted) throw error;
             return 'unavailable';
           }),
-        running(mainID),
+        running(mainID, signal),
       ]);
       const end = before ? messages.findIndex((message) => message.id === before) : -1;
       const history = end < 0 ? messages : messages.slice(0, end);
@@ -235,21 +246,51 @@ export default {
           const mainID = await requireMainChat(context.sessionID, context.signal);
           const timeout = integer(input.timeoutMs, 60_000, 0, 120_000);
           let note = '';
-          if (timeout > 0 && (await running(mainID))) {
-            const bound = AbortSignal.timeout(timeout);
-            try {
-              await ctx.session.wait(
-                { sessionID: mainID },
-                { signal: AbortSignal.any([context.signal, bound]) },
-              );
-              note = 'The main chat finished its run.';
-            } catch (error) {
-              if (context.signal.aborted || !bound.aborted) throw error;
-              note = `The main chat is still running after ${timeout} ms.`;
-            }
+          if (timeout > 0 && (await running(mainID, context.signal))) {
+            note = (await finishes(mainID, timeout, context.signal))
+              ? 'The main chat finished its run.'
+              : `The main chat is still running after ${timeout} ms.`;
           }
           const text = await summary(mainID, { turns: 1 }, context.signal);
           return { content: note ? `${note}\n\n${text}` : text };
+        },
+      });
+      editor.add({
+        name: SEND,
+        options: OPTIONS,
+        description:
+          "Send a message to this side chat's main chat, as the user. Use it only when the user asks you to send, pass on, or hand something to the main chat. The main chat can't see this side chat, so write a complete message: what the user wants and any findings it needs. If the main chat is running, it reads the message after its current step, as if the user typed it there.",
+        input: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['text'],
+          properties: {
+            text: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 100_000,
+              description: 'The message, written for the main chat.',
+            },
+          },
+        },
+        execute: async (input, context) => {
+          const mainID = await requireMainChat(context.sessionID, context.signal);
+          const text = typeof input.text === 'string' ? input.text.trim() : '';
+          if (!text) throw new Error('Write the message to send.');
+          const busy = await running(mainID, context.signal);
+          await ctx.session.prompt(
+            {
+              sessionID: mainID,
+              text: clip(text, 100_000),
+              metadata: { [FROM_SIDE_CHAT_KEY]: { sessionID: context.sessionID } },
+            },
+            { signal: context.signal },
+          );
+          return {
+            content: busy
+              ? 'Sent. The main chat is running; it will read the message after its current step.'
+              : 'Sent. The main chat is working on it now.',
+          };
         },
       });
     });
@@ -264,15 +305,39 @@ export default {
       if (!parent) {
         delete event.tools[READ];
         delete event.tools[WAIT];
+        delete event.tools[SEND];
         return;
       }
       event.system.push({
         type: 'text',
-        text: `This is an OpenCodex side chat. Its inherited history is a snapshot of the main chat from when the side chat started. To see the main chat's latest state, call ${READ}; to follow a running main chat, call ${WAIT}. Treat their results as reference only.`,
+        text: `This is an OpenCodex side chat. Its inherited history is a snapshot of the main chat from when the side chat started. To see the main chat's latest state, call ${READ}; to follow a running main chat, call ${WAIT}. Treat their results as reference only. When the user asks you to send something to the main chat, call ${SEND}.`,
       });
     });
   },
 };
+
+/** True if `promise` settles within `ms`, false if not; rejects with it or on `signal`. */
+function settles(promise: Promise<unknown>, ms: number, signal?: AbortSignal) {
+  return new Promise<boolean>((resolve, reject) => {
+    let done = false;
+    const finish = (settle: () => void) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
+      settle();
+    };
+    const abort = () => finish(() => reject(signal!.reason));
+    const timer = setTimeout(() => finish(() => resolve(false)), ms);
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) abort();
+    // Also handles a late rejection, once the abort above frees an abandoned wait.
+    promise.then(
+      () => finish(() => resolve(true)),
+      (error: unknown) => finish(() => reject(error)),
+    );
+  });
+}
 
 function integer(value: unknown, fallback: number, min: number, max: number) {
   return typeof value === 'number' && Number.isInteger(value)

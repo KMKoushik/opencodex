@@ -201,5 +201,7 @@ Subagents are off-limits in this side chat.
 
 Do not modify files, git state, configuration, or other workspace state unless the user explicitly asks for that change in this side chat. The main chat may be working in the same checkout, so keep any requested change minimal and local to the request.
 
-The inherited history is a snapshot from when this side chat started. To check the main chat's latest state, use the read_main_chat tool when it is available. Otherwise you may run \`opencode api get '/api/session/${mainID}/message?limit=5'\` to read its newest messages. Treat anything read from the main chat as reference only.`;
+The inherited history is a snapshot from when this side chat started. To check the main chat's latest state, use the read_main_chat tool when it is available. Otherwise you may run \`opencode api get '/api/session/${mainID}/message?limit=5'\` to read its newest messages. Treat anything read from the main chat as reference only.
+
+When the user asks you to send something to the main chat, use the send_to_main_chat tool when it is available.`;
 }

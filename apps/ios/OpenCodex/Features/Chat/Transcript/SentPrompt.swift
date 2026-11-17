@@ -33,6 +33,8 @@ nonisolated struct SentPrompt: Hashable, Sendable {
   var annotations: [Annotation]
   var files: [Attachment]
   var pending: Bool
+  /// A side chat sent it (`opencodexFromSideChat`, the desktop's `messageSideChat`).
+  var fromSideChat: Bool
 
   init(
     text: String, mentions: [(mention: JSONValue?, kind: String)], metadata: [String: JSONValue]?,
@@ -50,6 +52,7 @@ nonisolated struct SentPrompt: Hashable, Sendable {
     self.annotations = parsed?.items ?? []
     self.files = files
     self.pending = pending
+    self.fromSideChat = metadata?["opencodexFromSideChat"]?["sessionID"]?.string?.isEmpty == false
   }
 
   /// "1 annotation, 2 comments".

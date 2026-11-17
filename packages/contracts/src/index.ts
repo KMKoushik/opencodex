@@ -407,6 +407,15 @@ export const promptMentionSchema = z.discriminatedUnion('type', [
 ]);
 export type PromptMention = z.infer<typeof promptMentionSchema>;
 export const MESSAGE_ANNOTATIONS_KEY = 'opencodexAnnotations';
+/** Marks a main-chat message that a side chat sent (the side-chat plugin's send_to_main_chat). */
+export const FROM_SIDE_CHAT_KEY = 'opencodexFromSideChat';
+/** The side chat that sent a message, if one did. */
+export function messageSideChat(metadata?: Record<string, unknown>): string | undefined {
+  const value = metadata?.[FROM_SIDE_CHAT_KEY];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+  const id = (value as { sessionID?: unknown }).sessionID;
+  return typeof id === 'string' && id ? id : undefined;
+}
 const textRangeSchema = z.tuple([z.number().int().nonnegative(), z.number().int().nonnegative()]);
 /** Review comments sent with a message, as ranges of its text; the text stays the prompt. */
 export const messageAnnotationsSchema = z.object({

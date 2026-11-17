@@ -49,7 +49,7 @@ import { SessionActionsToggle } from '../features/sessions/session-actions-toggl
 import { SessionTitle } from '../features/sessions/session-title';
 import { WorkbenchRail } from '../features/workbench/workbench-rail';
 import { panels, type SideChatRequest, type SubagentRequest } from '../features/workbench/panels';
-import { SideChatQuoteContext } from '../features/side-chat/side-chat-context';
+import { SideChatOpenContext, SideChatQuoteContext } from '../features/side-chat/side-chat-context';
 import { CanvasOpenContext, CanvasSessionContext } from '../features/canvas/canvas-context';
 import { SidebarResize } from '../features/sidebar/sidebar-resize';
 import { readTerminalPlacement, type TerminalPlacement } from '../features/terminal/placement';
@@ -222,6 +222,12 @@ export function App() {
   const askSideChat = useCallback(
     (quote: string) => {
       if (selectedID) openSideChat({ sessionID: selectedID, kind: 'quote', quote });
+    },
+    [selectedID, openSideChat],
+  );
+  const showSideChat = useCallback(
+    (sideID: string) => {
+      if (selectedID) openSideChat({ sessionID: selectedID, kind: 'open', sideID });
     },
     [selectedID, openSideChat],
   );
@@ -785,47 +791,49 @@ export function App() {
                   >
                     <FileLinkContext.Provider value={openFileLink}>
                       <SideChatQuoteContext.Provider value={askSideChat}>
-                        <CanvasOpenContext.Provider value={openCanvas}>
-                          <ChatView
-                            key={selectedID}
-                            sessionID={selectedID}
-                            focusRequest={
-                              composerFocus?.sessionID === selectedID
-                                ? composerFocus.token
-                                : undefined
-                            }
-                            onFocusHandled={() => setComposerFocus(undefined)}
-                            onOpenSession={setSelectedID}
-                            onNewChat={newChat}
-                            onOpenSubagent={(childID) => {
-                              setSubagentRequest({ sessionID: selectedID, childID });
-                              setWorkbenchLoaded(true);
-                              setWorkbenchPanel(subagentsPanel);
-                              setWorkbenchOpen(true);
-                            }}
-                            onOpenSideChat={(sideID) =>
-                              openSideChat({ sessionID: selectedID, kind: 'open', sideID })
-                            }
-                            live={live}
-                            projectName={currentProject?.name}
-                            project={currentProject}
-                            projects={projects}
-                            switching={switchProject.isPending}
-                            switchError={
-                              switchProject.variables?.sourceSessionID === selectedID
-                                ? switchProject.error?.message
-                                : undefined
-                            }
-                            onSwitchProject={(next, model) => {
-                              if (switchProject.isPending) return;
-                              switchProject.mutate({
-                                project: next,
-                                sourceSessionID: selectedID,
-                                model,
-                              });
-                            }}
-                          />
-                        </CanvasOpenContext.Provider>
+                        <SideChatOpenContext.Provider value={showSideChat}>
+                          <CanvasOpenContext.Provider value={openCanvas}>
+                            <ChatView
+                              key={selectedID}
+                              sessionID={selectedID}
+                              focusRequest={
+                                composerFocus?.sessionID === selectedID
+                                  ? composerFocus.token
+                                  : undefined
+                              }
+                              onFocusHandled={() => setComposerFocus(undefined)}
+                              onOpenSession={setSelectedID}
+                              onNewChat={newChat}
+                              onOpenSubagent={(childID) => {
+                                setSubagentRequest({ sessionID: selectedID, childID });
+                                setWorkbenchLoaded(true);
+                                setWorkbenchPanel(subagentsPanel);
+                                setWorkbenchOpen(true);
+                              }}
+                              onOpenSideChat={(sideID) =>
+                                openSideChat({ sessionID: selectedID, kind: 'open', sideID })
+                              }
+                              live={live}
+                              projectName={currentProject?.name}
+                              project={currentProject}
+                              projects={projects}
+                              switching={switchProject.isPending}
+                              switchError={
+                                switchProject.variables?.sourceSessionID === selectedID
+                                  ? switchProject.error?.message
+                                  : undefined
+                              }
+                              onSwitchProject={(next, model) => {
+                                if (switchProject.isPending) return;
+                                switchProject.mutate({
+                                  project: next,
+                                  sourceSessionID: selectedID,
+                                  model,
+                                });
+                              }}
+                            />
+                          </CanvasOpenContext.Provider>
+                        </SideChatOpenContext.Provider>
                       </SideChatQuoteContext.Provider>
                     </FileLinkContext.Provider>
                   </Suspense>

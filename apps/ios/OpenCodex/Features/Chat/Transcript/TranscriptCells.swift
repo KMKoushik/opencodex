@@ -1042,6 +1042,8 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
   /// Shares the prompt's text from the bubble.
   var onShare: ((String, UIView) -> Void)?
 
+  /// `.message-source`: "From side chat" above a message a side chat sent.
+  private let source = UILabel()
   private let chip = UIButton(type: .custom)
   private let bubble = UIView()
   private let label = PromptTextView()
@@ -1072,6 +1074,9 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
     chip.accessibilityIdentifier = "transcript.annotations"
     chip.accessibilityHint = "Shows the comments sent with this message."
     chip.addAction(UIAction { [weak self] _ in self.map { $0.onAnnotations?($0.chip) } }, for: .primaryActionTriggered)
+    source.textAlignment = .right
+    source.isAccessibilityElement = true
+    contentView.addSubview(source)
     contentView.addSubview(chip)
     contentView.addSubview(bubble)
     bubble.addSubview(label)
@@ -1110,6 +1115,20 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
     note.font = typography.small
     note.textColor = theme.textTertiary
     note.isHidden = !prompt.pending
+    source.isHidden = !prompt.fromSideChat
+    if prompt.fromSideChat {
+      let text = NSMutableAttributedString()
+      if let icon = Symbol.image("bubble.left.and.text.bubble.right", typography.small.pointSize * 0.95) {
+        text.append(NSAttributedString(attachment: NSTextAttachment(image: icon.withTintColor(theme.textTertiary))))
+        text.append(NSAttributedString(string: " "))
+      }
+      text.append(NSAttributedString(string: "From side chat"))
+      text.addAttributes(
+        [.font: typography.small, .foregroundColor: theme.textTertiary],
+        range: NSRange(location: 0, length: text.length))
+      source.attributedText = text
+      source.accessibilityLabel = "From side chat"
+    }
     bubble.isHidden = prompt.text.isEmpty
     bubble.accessibilityLabel = prompt.text
     bubble.accessibilityIdentifier = prompt.pending ? "transcript.pending" : "transcript.user"
@@ -1139,6 +1158,7 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
   }
 
   private struct Frames {
+    var source: CGRect
     var chip: CGRect
     var bubble: CGRect
     var label: CGRect
@@ -1151,14 +1171,22 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
     let column = column(width)
     let right = column.x + column.width
     var y: CGFloat = 0
+    var sourceFrame = CGRect.zero
+    if prompt?.fromSideChat == true {
+      let height = source.sizeThatFits(CGSize(width: column.width, height: .greatestFiniteMagnitude)).height
+        .rounded(.up)
+      sourceFrame = CGRect(x: column.x, y: 0, width: column.width, height: height)
+      y = height
+    }
     var chipFrame = CGRect.zero
     if let prompt, !prompt.annotations.isEmpty {
+      if y > 0 { y += gap }
       // `height: 30px`, as wide as its label.
       let height = typography.px(30)
       let fitted = chip.sizeThatFits(CGSize(width: column.width, height: height)).width.rounded(.up)
       let chipWidth = min(column.width, fitted)
-      chipFrame = CGRect(x: right - chipWidth, y: 0, width: chipWidth, height: height)
-      y = height
+      chipFrame = CGRect(x: right - chipWidth, y: y, width: chipWidth, height: height)
+      y += height
     }
     var bubbleFrame = CGRect.zero
     var labelFrame = CGRect.zero
@@ -1207,7 +1235,7 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
       y += height
     }
     return Frames(
-      chip: chipFrame, bubble: bubbleFrame, label: labelFrame, tiles: tileFrames, note: noteFrame, height: y)
+      source: sourceFrame, chip: chipFrame, bubble: bubbleFrame, label: labelFrame, tiles: tileFrames, note: noteFrame, height: y)
   }
 
   override func measure(width: CGFloat) -> CGFloat { frames(width).height }
@@ -1215,6 +1243,7 @@ final class BubbleCell: TranscriptCell, UIContextMenuInteractionDelegate {
   override func layoutSubviews() {
     super.layoutSubviews()
     let frames = frames(bounds.width)
+    source.frame = frames.source
     chip.frame = frames.chip
     chip.layer.cornerRadius = frames.chip.height / 2
     bubble.frame = frames.bubble
