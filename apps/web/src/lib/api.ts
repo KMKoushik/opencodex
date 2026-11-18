@@ -218,6 +218,15 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(input),
     }),
+  projectInstructions: (id: string, signal: AbortSignal) =>
+    nativeRequest<{ text: string }>(`/projects/${encodeURIComponent(id)}/instructions`, {
+      signal,
+    }),
+  saveProjectInstructions: (id: string, text: string) =>
+    nativeRequest<{ text: string }>(`/projects/${encodeURIComponent(id)}/instructions`, {
+      method: 'PUT',
+      body: JSON.stringify({ text }),
+    }),
   createSession: (directory: string, model?: ModelRef) =>
     nativeRequest<SessionInfo>('/sessions', post({ directory, model })),
   worktrees: (projectID: string, signal: AbortSignal) =>

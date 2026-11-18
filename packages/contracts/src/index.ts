@@ -48,6 +48,13 @@ export const projectUpdateSchema = z.object({
     .optional(),
 });
 export type ProjectUpdate = z.infer<typeof projectUpdateSchema>;
+/** A project's own instructions, sent with every chat in it (see project-instructions.ts). */
+export const PROJECT_INSTRUCTIONS_MAX = 50_000;
+export const projectInstructionsSchema = z.object({
+  text: z
+    .string()
+    .max(PROJECT_INSTRUCTIONS_MAX, 'Keep project instructions under 50,000 characters.'),
+});
 
 export const sessionWorktreeSchema = z.object({
   /** The ref the new detached checkout starts from; omitted means the chat's current HEAD. */

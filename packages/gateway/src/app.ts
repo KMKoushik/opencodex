@@ -38,6 +38,7 @@ import { resolveMentions } from './mentions';
 import { searchSessions } from './session-search';
 import { formatTranscript } from './transcript';
 import { createReplyFormat } from './reply-format';
+import { createProjectInstructions, projectInstructionRoutes } from './project-instructions';
 import { CANVAS_ROOT, canvasRoutes, canvasRuntimeRoutes, createCanvasWatcher } from './canvases';
 import { canvasPluginRoutes } from './canvas-plugin';
 import { Apps } from './apps';
@@ -197,6 +198,7 @@ export function createApp(
       }),
     );
   });
+  app.route('/api/projects', projectInstructionRoutes());
   app.use('/api/projects/:id', bodyLimit({ maxSize: 2_100_000 }));
   app.patch('/api/projects/:id', async (c) => {
     const input = projectUpdateSchema.safeParse(await c.req.json().catch(() => null));
@@ -411,6 +413,7 @@ export function createApp(
     ),
   );
   const ensureReplyFormat = createReplyFormat();
+  const ensureProjectInstructions = createProjectInstructions();
   app.use(
     '/api/sessions/:id/prompt',
     bodyLimit({
@@ -438,6 +441,7 @@ export function createApp(
   ) {
     const session = await client.session.get({ sessionID }, options);
     await ensureReplyFormat(client, sessionID, options);
+    await ensureProjectInstructions(client, session, options);
     const mentioned = input.mentions?.length
       ? await resolveMentions(client, session, input.mentions, options)
       : { files: [], skills: [] };

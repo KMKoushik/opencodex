@@ -861,6 +861,52 @@ svg {
   gap: 20px;
   font-size: 13px;
 }
+.project-instructions-dialog {
+  width: min(600px, calc(100vw - 32px));
+}
+.project-instructions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 13px;
+}
+.project-instructions-description,
+.project-instructions-hint {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.project-instructions-hint {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.project-instructions textarea {
+  width: 100%;
+  min-height: 260px;
+  max-height: calc(100dvh - 300px);
+  padding: 10px 12px;
+  border: 1px solid var(--border-heavy);
+  border-radius: 8px;
+  background: var(--control);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  resize: vertical;
+}
+.project-instructions textarea::placeholder {
+  color: var(--text-tertiary);
+}
+.project-instructions textarea:focus-visible {
+  outline: 2px solid var(--border-heavy);
+  outline-offset: 1px;
+}
+.project-instructions-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 120px;
+}
 .project-editor-field {
   display: flex;
   flex-direction: column;
@@ -978,6 +1024,9 @@ svg {
   }
   .projects-search input,
   .project-editor-field input {
+    font-size: 16px;
+  }
+  .project-instructions textarea {
     font-size: 16px;
   }
   .project-settings-link {

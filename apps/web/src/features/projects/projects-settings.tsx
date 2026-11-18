@@ -10,6 +10,7 @@ import { ProjectForm } from './project-form';
 import { ProjectIcon } from './project-icon';
 import { ProjectActions } from './project-actions';
 import { ProjectEditor } from './project-editor';
+import { ProjectInstructionsDialog } from './project-instructions';
 import { projectFolder, projectFolders } from './project-metadata';
 import { WorktreesDialog } from '../worktrees/worktrees-dialog';
 
@@ -31,6 +32,7 @@ export function ProjectsSettings({
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<OpenCodeProject>();
+  const [instructing, setInstructing] = useState<OpenCodeProject>();
   const [worktrees, setWorktrees] = useState<{ project: OpenCodeProject; name: string }>();
   const client = useQueryClient();
   const projects = useQuery({
@@ -41,11 +43,14 @@ export function ProjectsSettings({
     refetchInterval: connected && !live ? 15_000 : false,
   });
   const copy = useMutation({ mutationFn: (path: string) => navigator.clipboard.writeText(path) });
+  // A folder opened before OpenCode knew it has no native project yet: register it, then open
+  // the dialog that needed it.
   const register = useMutation({
-    mutationFn: api.addProject,
-    onSuccess: (project) => {
+    mutationFn: (input: { directory: string; then: 'edit' | 'instructions' }) =>
+      api.addProject(input.directory),
+    onSuccess: (project, input) => {
       void client.invalidateQueries({ queryKey: ['projects'] });
-      setEditing(project);
+      (input.then === 'edit' ? setEditing : setInstructing)(project);
     },
   });
   const items = useMemo(() => {
@@ -140,7 +145,9 @@ export function ProjectsSettings({
                 title={folder.directory}
                 disabled={!connected || register.isPending}
                 onClick={() =>
-                  metadata ? setEditing(metadata) : register.mutate(folder.directory)
+                  metadata
+                    ? setEditing(metadata)
+                    : register.mutate({ directory: folder.directory, then: 'edit' })
                 }
               >
                 <ProjectIcon name={folder.name} icon={metadata?.icon} />
@@ -153,7 +160,17 @@ export function ProjectsSettings({
                   {
                     label: 'Edit project',
                     onSelect: () =>
-                      metadata ? setEditing(metadata) : register.mutate(folder.directory),
+                      metadata
+                        ? setEditing(metadata)
+                        : register.mutate({ directory: folder.directory, then: 'edit' }),
+                    disabled: !connected || register.isPending,
+                  },
+                  {
+                    label: 'Instructions',
+                    onSelect: () =>
+                      metadata
+                        ? setInstructing(metadata)
+                        : register.mutate({ directory: folder.directory, then: 'instructions' }),
                     disabled: !connected || register.isPending,
                   },
                   ...(metadata?.vcs
@@ -215,6 +232,13 @@ export function ProjectsSettings({
       )}
       {editing && (
         <ProjectEditor key={editing.id} project={editing} onClose={() => setEditing(undefined)} />
+      )}
+      {instructing && (
+        <ProjectInstructionsDialog
+          key={instructing.id}
+          project={instructing}
+          onClose={() => setInstructing(undefined)}
+        />
       )}
     </>
   );
