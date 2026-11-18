@@ -74,15 +74,21 @@ export function createTimelineProjector() {
                 type: 'tool',
                 tool: part,
               });
-            if (part.type === 'reasoning')
-              entries.push({
-                id: `${message.id}:reasoning:${reasoning}`,
-                type: 'reasoning',
-                messageID: message.id,
-                ordinal: reasoning++,
-                text: part.text,
-                completed: Boolean(message.time.completed),
-              });
+            // Some models end a finished reply with an empty reasoning part: it has nothing to
+            // show, and as work after the answer it would put the turn's header below it.
+            if (part.type === 'reasoning') {
+              // Numbered by position, so live deltas still find later reasoning parts.
+              const ordinal = reasoning++;
+              if (part.text.trim() || !message.time.completed)
+                entries.push({
+                  id: `${message.id}:reasoning:${ordinal}`,
+                  type: 'reasoning',
+                  messageID: message.id,
+                  ordinal,
+                  text: part.text,
+                  completed: Boolean(message.time.completed),
+                });
+            }
             if (part.type === 'text') {
               const ordinal = text++;
               if (part.text.trim() || !message.time.completed)
