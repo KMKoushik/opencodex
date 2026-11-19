@@ -11,6 +11,8 @@ struct ThreadList: View {
   let tasks: () -> Void
   let apps: () -> Void
   @Environment(\.palette) private var palette
+  /// The project whose instructions are being edited.
+  @State private var instructing: HomeModel.Group?
 
   var body: some View {
     List {
@@ -70,6 +72,10 @@ struct ThreadList: View {
     .environment(\.defaultMinListRowHeight, 0)
     .refreshable { await model.reload() }
     .accessibilityIdentifier("threads")
+    .sheet(item: $instructing) { group in
+      ProjectInstructionsSheet(
+        client: model.client, projectID: group.projectID, name: group.badge.name)
+    }
   }
 
   // MARK: Projects
@@ -91,7 +97,8 @@ struct ThreadList: View {
         group: group,
         toggle: { model.toggle(group.canonical) },
         newThread: { newThreadIn(group.canonical) },
-        hide: { model.setHidden(group.canonical, true) })
+        hide: { model.setHidden(group.canonical, true) },
+        instructions: { instructing = group })
       if group.expanded {
         ForEach(group.items) { item in row(item, showsProject: false) }
         if let error = group.error {
@@ -326,6 +333,7 @@ private struct ProjectHeader: View {
   let toggle: () -> Void
   let newThread: () -> Void
   let hide: () -> Void
+  let instructions: () -> Void
   @Environment(\.palette) private var palette
 
   var body: some View {
@@ -362,6 +370,7 @@ private struct ProjectHeader: View {
     }
     .contextMenu {
       Button("New thread", systemImage: "square.and.pencil", action: newThread)
+      Button("Instructions", systemImage: "text.badge.star", action: instructions)
       Button("Hide project", systemImage: "eye.slash", action: hide)
     }
   }

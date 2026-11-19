@@ -23,6 +23,8 @@ final class HomeModel {
   /// One project in the Projects view.
   struct Group: Identifiable, Equatable {
     var canonical: String
+    /// The native project ID (its instructions are keyed by it).
+    var projectID: String
     var badge: ProjectBadge
     var expanded: Bool
     /// The visible rows: newest first, unpinned, at most the shown count.
@@ -765,6 +767,7 @@ final class HomeModel {
       groups.append(
         Group(
           canonical: project.canonical,
+          projectID: project.id,
           badge: badges[project.canonical]!,
           expanded: expanded,
           items: expanded ? rows.prefix(feed.visible).map(\.0) : [],
