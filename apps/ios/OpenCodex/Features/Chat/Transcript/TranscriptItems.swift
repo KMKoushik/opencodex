@@ -32,7 +32,8 @@ nonisolated struct TranscriptItem: Hashable, Sendable {
     case activity(summary: String, active: Bool, errors: Int, open: Bool)
     case tool(ToolCall, open: Bool)
     case skill(name: String, status: ToolCall.Status, error: String?)
-    case thinking(open: Bool, empty: Bool)
+    /// A reasoning part; `preview` is its first words, shown while it's closed.
+    case thinking(open: Bool, empty: Bool, preview: String)
     case shell(ShellMessage, open: Bool)
     case note(String)
     case failure(String)
@@ -146,9 +147,13 @@ nonisolated final class TranscriptItemBuilder {
           let isOpen = open.contains(reasoning.id)
           let shown = text(reasoning.id, reasoning.text, isOpen)
           let empty = shown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+          // A finished, empty part (some models end a reply with one) has nothing to show.
+          if empty && reasoning.completed { continue }
           items.append(
             TranscriptItem(
-              id: reasoning.id, content: .thinking(open: isOpen, empty: empty), row: group, indent: 1))
+              id: reasoning.id,
+              content: .thinking(open: isOpen, empty: empty, preview: Self.thoughtPreview(shown)),
+              row: group, indent: 1))
           if isOpen && !empty {
             let parts = blocks(reasoning.id, shown, streaming: !reasoning.completed)
             items += parts.enumerated().map { index, block in
@@ -163,6 +168,14 @@ nonisolated final class TranscriptItemBuilder {
       }
       return items
     }
+  }
+
+  /// A thought's opening words on one line: `activity.tsx`'s `Thought` shows its text rather
+  /// than a bare "Thinking", so what the agent worked out is visible without opening it.
+  static func thoughtPreview(_ text: String) -> String {
+    let words = text.prefix(400).replacingOccurrences(of: "**", with: "")
+      .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    return String(words.prefix(240))
   }
 
   /// `SkillTool`: the input's name or id, else the name in the loaded skill's output.

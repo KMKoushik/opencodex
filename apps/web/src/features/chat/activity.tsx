@@ -12,6 +12,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import type { TimelineRow, WorkEntry } from './timeline-model';
 import { StreamText } from './stream-text';
 import { Disclosure } from './disclosure';
+import { useDisclosure } from './disclosure-state';
 import { SkillTool, SkillUsage } from './skill';
 
 export const Activity = memo(function Activity({
@@ -33,40 +34,88 @@ export const Activity = memo(function Activity({
         </>
       }
     >
-      <LegendList
-        data={row.entries}
-        keyExtractor={workKey}
-        renderItem={({ item }) => <WorkItem key={item.id} entry={item} sessionID={sessionID} />}
-        estimatedItemSize={34}
-        drawDistance={160}
-        maintainVisibleContentPosition
-        style={{ height: Math.max(160, Math.min(300, row.entries.length * 38 + 24)) }}
-        className="activity-entries"
-        aria-label="Agent activity"
-        role="region"
-      />
+      {row.entries.length > VIRTUAL_AFTER ? (
+        <LegendList
+          data={row.entries}
+          keyExtractor={workKey}
+          renderItem={({ item }) => <WorkItem key={item.id} entry={item} sessionID={sessionID} />}
+          estimatedItemSize={34}
+          drawDistance={160}
+          maintainVisibleContentPosition
+          style={{ height: Math.min(360, workHeight(row.entries)) }}
+          className="activity-entries"
+          aria-label="Agent activity"
+          role="region"
+        />
+      ) : (
+        // Most turns do a few steps: those take their natural height, so a short list leaves no
+        // gap and an opened thought or tool shows in full instead of scrolling in a fixed box.
+        <div className="activity-entries" aria-label="Agent activity" role="region">
+          {row.entries.map((entry) => (
+            <WorkItem key={entry.id} entry={entry} sessionID={sessionID} />
+          ))}
+        </div>
+      )}
     </Disclosure>
   );
 });
 
 const workKey = (entry: WorkEntry) => entry.id;
+/** Longer step lists render virtualized in a scrolling box. */
+const VIRTUAL_AFTER = 30;
+/** Rough content height: tools are one row, thoughts two lines of text. */
+const workHeight = (entries: WorkEntry[]) =>
+  entries.reduce((sum, entry) => sum + (entry.type === 'reasoning' ? 46 : 38), 24);
+
+/**
+ * A reasoning part shown as its own text, like T3 Code: two lines until clicked, then all of
+ * it. A bare "Thinking" label hid what the agent found unless it was opened.
+ */
+function Thought({
+  entry,
+  sessionID,
+}: {
+  entry: Extract<WorkEntry, { type: 'reasoning' }>;
+  sessionID: string;
+}) {
+  const [open, toggle] = useDisclosure(entry.id);
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className="activity-thought"
+      data-open={open}
+      aria-expanded={open}
+      aria-label={open ? undefined : 'Thought, collapsed'}
+      onClick={() => {
+        // Selecting text to copy it shouldn't fold the thought.
+        if (!window.getSelection()?.isCollapsed) return;
+        toggle();
+      }}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggle();
+        }
+      }}
+    >
+      <StreamText
+        sessionID={sessionID}
+        messageID={entry.messageID}
+        kind="reasoning"
+        ordinal={entry.ordinal}
+        text={entry.text}
+        completed={entry.completed}
+      />
+    </div>
+  );
+}
 
 function WorkItem({ entry, sessionID }: { entry: WorkEntry; sessionID: string }) {
   if (entry.type === 'skill')
     return <SkillUsage name={entry.message.name || entry.message.skill} />;
-  if (entry.type === 'reasoning')
-    return (
-      <Disclosure id={entry.id} className="activity-item" label={<span>Thinking</span>}>
-        <StreamText
-          sessionID={sessionID}
-          messageID={entry.messageID}
-          kind="reasoning"
-          ordinal={entry.ordinal}
-          text={entry.text}
-          completed={entry.completed}
-        />
-      </Disclosure>
-    );
+  if (entry.type === 'reasoning') return <Thought entry={entry} sessionID={sessionID} />;
   const tool = entry.tool;
   if (tool.name === 'skill') return <SkillTool tool={tool} />;
   const state = tool.state;

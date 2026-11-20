@@ -671,9 +671,11 @@ final class TranscriptViewController: UIViewController, UICollectionViewDelegate
         chevron: .none, expandable: false, icon: "square.stack.3d.up", iconTint: theme.activitySkill, title: title.string,
         attributedTitle: title, titleFont: typography.small, height: typography.px(32), below: error,
         accessibilityIdentifier: "transcript.skill")
-    case .thinking(let open, _):
+    case .thinking(let open, let empty, let preview):
       return .init(
-        chevron: .none, open: open, title: "Thinking", titleFont: typography.small,
+        chevron: .none, open: open,
+        title: open ? "Thought" : empty ? "Thinking…" : preview,
+        titleFont: typography.small, titleColor: theme.textTertiary,
         accessibilityIdentifier: "transcript.thinking")
     case .shell(let shell, let open):
       var body: NSAttributedString?

@@ -1971,6 +1971,44 @@ svg {
   line-height: 1.6;
   white-space: pre-wrap;
 }
+/* A thought in a turn's work: its own text, two lines until opened. */
+.activity-thought {
+  padding: 5px 8px 5px 2px;
+  border-radius: 5px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.activity-thought:empty::before {
+  content: 'Thinking…';
+}
+.activity-thought .reasoning-text {
+  margin: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font-size: inherit;
+  line-height: 1.55;
+}
+.activity-thought .reasoning-text p {
+  margin: 0;
+}
+.activity-thought[data-open='false'] .reasoning-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.activity-thought:focus-visible {
+  outline: 2px solid var(--border-heavy);
+  outline-offset: 1px;
+}
+@media (hover: hover) {
+  .activity-thought:hover {
+    color: var(--text-secondary);
+  }
+}
 @media (hover: hover) {
   .disclosure-trigger:hover {
     color: var(--text);

@@ -4,7 +4,8 @@ const KEY = 'opencodex.reply-format';
 const VALUE = `OpenCodex renders your replies as Markdown, and links in them are clickable. Unless the user asks otherwise:
 
 - Whenever you mention a file, write it as a Markdown link to its absolute path, with the file name or a short relative path as the link text, such as [app.ts](/Users/me/project/src/app.ts) or [src/app.ts](/Users/me/project/src/app.ts). Wrap paths that contain spaces in angle brackets, such as [notes.md](</Users/me/My Project/notes.md>). Never leave a file path only in a code span, because code spans can't be clicked. When a command includes a file path, keep the command in code and also link the file.
-- Whenever you mention a GitHub issue, pull request, or commit, link it with its ID as the link text, such as [#123](https://github.com/owner/repo/pull/123) or [a1b2c3d](https://github.com/owner/repo/commit/a1b2c3d). Take the owner and repository from the git remote or from output you already have. If you aren't sure whether a number is an issue or a pull request, use /issues/123; GitHub redirects it.`;
+- Whenever you mention a GitHub issue, pull request, or commit, link it with its ID as the link text, such as [#123](https://github.com/owner/repo/pull/123) or [a1b2c3d](https://github.com/owner/repo/commit/a1b2c3d). Take the owner and repository from the git remote or from output you already have. If you aren't sure whether a number is an issue or a pull request, use /issues/123; GitHub redirects it.
+- Your thinking and tool calls are folded away under "Worked for …", and the user rarely opens them. Put everything the user needs (findings, explanations, numbers, the answer to their question) in your reply text, even when you already worked it out while thinking.`;
 const MAX_SESSIONS = 2000;
 
 /**
