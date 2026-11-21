@@ -57,6 +57,9 @@ struct HomeView: View {
         .extrasDebugLaunch(client: client, events: connection.events)
         .navigationDestination(for: ChatRoute.self) { route in
           ChatScreen(client: client, events: connection.events, route: route) { path.append($0) }
+            // One screen per chat: a notification swaps the open chat for another at the same
+            // depth, and SwiftUI would otherwise keep the old screen and its model.
+            .id(route)
         }
         // The desktop sidebar's Tasks and Apps pages.
         .navigationDestination(for: HomeRoute.self) { route in
