@@ -46,6 +46,7 @@ import { type RemoteAccess, remoteDenial, remoteRequest, remoteRoutes } from './
 import { Push, pushRoutes } from './push';
 import { appModelUpdateSchema, canvasIconUpdateSchema } from '@opencodex/contracts/canvas';
 import { playwrightRenderer, type PageRenderer } from './canvas-preview';
+import { hostUpdateRoutes, type HostUpdates } from './host-updates';
 
 export function createApp(
   backend = new OpenCodeBackend(),
@@ -56,6 +57,8 @@ export function createApp(
     push?: Push;
     /** Renders canvas previews; the desktop app passes Electron's. */
     renderer?: PageRenderer;
+    /** The desktop app's updater, so a paired phone can update it. */
+    updates?: HostUpdates;
   } = {},
 ) {
   const app = new Hono();
@@ -199,6 +202,7 @@ export function createApp(
     );
   });
   app.route('/api/projects', projectInstructionRoutes());
+  app.route('/api/host', hostUpdateRoutes(options.updates));
   app.use('/api/projects/:id', bodyLimit({ maxSize: 2_100_000 }));
   app.patch('/api/projects/:id', async (c) => {
     const input = projectUpdateSchema.safeParse(await c.req.json().catch(() => null));

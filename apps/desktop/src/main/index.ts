@@ -81,6 +81,12 @@ app
     // Packaged builds take the production icon from the bundle.
     if (!app.isPackaged && process.platform === 'darwin')
       app.dock?.setIcon(fileURLToPath(new URL('../../build/icon-dev.png', import.meta.url)));
+    // Before the gateway, which offers it to paired phones.
+    const updates = createUpdates(async () => {
+      await gateway?.close();
+      restartingForUpdate = true;
+      quitting = true;
+    });
     if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
       origin = process.env.ELECTRON_RENDERER_URL;
     } else {
@@ -88,15 +94,11 @@ app
       gateway = await startGateway({
         assets: fileURLToPath(new URL('../renderer/', import.meta.url)),
         renderer: renderCanvasPreview,
+        updates,
       });
       origin = gateway.url;
     }
     const preferences = createPreferences();
-    const updates = createUpdates(async () => {
-      await gateway?.close();
-      restartingForUpdate = true;
-      quitting = true;
-    });
     registerNativeHandlers(new URL(origin).origin, preferences, updates);
     await createWindow();
     app.on('activate', () => {

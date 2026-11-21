@@ -60,6 +60,7 @@ struct SettingsView: View {
         Section {
           SettingsValue(label: "Version", value: Self.appVersion)
             .accessibilityIdentifier("settings-version")
+          DesktopUpdateRow(client: client)
         } header: {
           SettingsHeader("About")
         }

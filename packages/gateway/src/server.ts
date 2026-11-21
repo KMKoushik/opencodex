@@ -13,9 +13,10 @@ import { RemoteAccess, remoteRequest } from './remote';
 export type { PageRenderer, PageRender, PageLog } from './canvas-preview';
 export { PREVIEW_MAX_TILES, PREVIEW_TILE, PREVIEW_TIMEOUT } from './canvas-preview';
 import type { PageRenderer } from './canvas-preview';
+import type { HostUpdates } from './host-updates';
 
 export async function startGateway(
-  options: { port?: number; assets?: string; renderer?: PageRenderer } = {},
+  options: { port?: number; assets?: string; renderer?: PageRenderer; updates?: HostUpdates } = {},
 ) {
   const shutdown = new AbortController();
   const url = process.env.OPENCODE_URL;
@@ -44,6 +45,7 @@ export async function startGateway(
     triggers: true,
     remote,
     renderer: options.renderer,
+    updates: options.updates,
   });
   if (options.assets) {
     app.use('*', async (c, next) => {
