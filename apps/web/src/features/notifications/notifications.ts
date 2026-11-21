@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 import {
+  isAppSession,
   sessionMuted,
   sessionSummary,
   sideChatParent,
@@ -122,6 +123,8 @@ export async function notifySession(
     const root = main ? await info(client, main) : session;
     // A muted thread stays quiet, including its subagents and side chats.
     if (sessionMuted(root)) return;
+    // An app's `oc.run` runs report in the app's run log; only their requests need the user.
+    if (kind === 'reply' && isAppSession(root)) return;
     const thread = sessionSummary(root);
     if (inFront()) return;
     shown.get(thread.id)?.close();

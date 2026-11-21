@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
-import { sessionMuted, sideChatParent } from '@opencodex/contracts';
+import { isAppSession, sessionMuted, sideChatParent } from '@opencodex/contracts';
 import type { OpenCodeBackend } from './opencode';
 import { remoteRequest, type DevicePush, type RemoteAccess } from './remote';
 
@@ -369,6 +369,8 @@ export class Push {
     const root = main ? await info(main) : session;
     // A muted thread stays quiet, including its subagents and side chats.
     if (sessionMuted(root)) return;
+    // An app's `oc.run` runs report in the app's run log; only their requests need the user.
+    if (kind === 'reply' && isAppSession(root)) return;
     const directory = root.location?.directory ?? session.location?.directory;
     const project = directory?.split(/[\\/]/).filter(Boolean).pop();
     return { id: root.id, title: root.title || 'Untitled session', project };
