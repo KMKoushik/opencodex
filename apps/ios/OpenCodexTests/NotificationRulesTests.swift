@@ -22,6 +22,7 @@ struct NotificationRulesTests {
       "side": session(#""id":"side","title":"Side","metadata":{"opencodexSideChat":{"parentID":"root"}}"#),
       "muted": session(#""id":"muted","title":"Quiet","metadata":{"opencodexMuted":true}"#),
       "untitled": session(#""id":"untitled""#),
+      "app": session(#""id":"app","title":"Slack scan","metadata":{"opencodexApp":{"canvas":"c","run":"r"}}"#),
     ]
     func thread(_ event: GatewayEvent) async throws -> NotificationRules.Thread? {
       let trigger = try #require(NotificationRules.trigger(event))
@@ -37,6 +38,11 @@ struct NotificationRulesTests {
     // Side chats open their main chat; muted threads stay quiet.
     #expect(try await thread(event("session.execution.succeeded", #"{"sessionID":"side"}"#)) == root)
     #expect(try await thread(event("permission.asked", #"{"sessionID":"muted"}"#)) == nil)
+    // An app's runs finish quietly; a request from one still needs the user.
+    #expect(try await thread(event("session.execution.succeeded", #"{"sessionID":"app"}"#)) == nil)
+    #expect(
+      try await thread(event("permission.asked", #"{"sessionID":"app"}"#))
+        == .init(id: "app", title: "Slack scan"))
     #expect(
       try await thread(event("session.execution.failed", #"{"sessionID":"untitled"}"#))
         == .init(id: "untitled", title: "Untitled session"))

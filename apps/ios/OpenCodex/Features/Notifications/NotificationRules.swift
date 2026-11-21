@@ -81,6 +81,8 @@ nonisolated enum NotificationRules {
     }
     // A muted thread stays quiet, including its subagents and side chats.
     if session.metadata?["opencodexMuted"]?.bool == true { return nil }
+    // An app's `oc.run` runs report in the app's run log; only their requests need the user.
+    if trigger.kind == .reply, session.metadata?["opencodexApp"]?.object != nil { return nil }
     let title = session.title.flatMap { $0.isEmpty ? nil : $0 } ?? "Untitled session"
     return Thread(id: session.id, title: title)
   }
