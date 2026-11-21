@@ -47,7 +47,11 @@ function shell(input: { command: string; cwd?: string; input?: string; timeout?:
       clearTimeout(timer);
       resolve({ code, stdout, stderr });
     });
-    child.stdin.end(input.input ?? '');
+    // A command can exit before reading its input (`echo hi`), and writing to the closed pipe
+    // then fails with EPIPE. Unhandled, that error crashed this whole app process.
+    child.stdin.on('error', () => {});
+    if (input.input) child.stdin.end(input.input);
+    else child.stdin.end();
   });
 }
 
