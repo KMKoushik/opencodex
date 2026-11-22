@@ -8,6 +8,7 @@ pub mod timeline;
 pub mod types;
 
 pub use client::Gateway;
+pub use client::terminal;
 pub use snapshot::Snapshot;
 
 /// Screenshot-only page fetch. Call before rendering, on a capture worker.
