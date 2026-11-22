@@ -264,3 +264,20 @@ Images are intentionally ignored and remain under `goldens/pages/`. Representati
 - `pair-apps-empty-light-1600x1000-reviewed.png`
 
 Testing used only `/tmp/ocr-pages`, service port 4951 and gateway port 4481.
+
+## Source parity correction pass (rune-parity-pages)
+
+This pass corrects invented thread/app/native-menu content, real thread mutations
+and exports, gateway-ranked global message search, General service/plugin status
+and controls, settings icons/shortcut content, project disclosure, Tasks setup,
+Remote's basic form and Find controls. It is **not full parity**: see the explicit
+42-issue checklist in `goldens/parity-pages.md` (20 fixed, 2 matching content checks,
+20 remaining/incompletely verified). Appearance and populated Tasks/Apps in
+particular still differ substantially from React.
+
+`node apps/rune/tools/parity-pages.mjs` from the repository root recreates 52 fresh
+web/Rune pairs using the same isolated `/tmp/ocr-parity` fixture on service 4961 /
+gateway 4491. Evidence is under `goldens/parity-pages/`, web on the left. The tool
+requires the seed fixture, built web assets and the release Rune binary. No user
+OpenCode state or service is used. Screenshot layout now initializes from `--size`;
+this corrects percentage/modal placement without requiring redraw loops.
