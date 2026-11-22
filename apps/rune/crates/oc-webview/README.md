@@ -30,6 +30,12 @@ load rather than queueing unbounded work.
 
 ## API and ownership
 
+- `capture_html` is a bounded, one-shot macOS diagnostic export using an
+  offscreen native window and `takeSnapshot`. It runs only after headless Rune
+  rendering, waits for the host/runtime readiness handshake, and returns real
+  WebKit pixels without screen capture or a display/redraw loop. Non-macOS
+  callers receive an explicit unsupported error.
+
 - `load_url`, `load_html(html, base_url)`, `load_local_file(url, root)`, `back`, `forward`, `reload`, `stop`.
 - `state()` is an event-maintained snapshot (title, URL, loading, estimated progress, history
   availability). Native KVO produces coalesced `Event::Changed`; there is no state polling.

@@ -107,11 +107,11 @@ function report(rows) {
       ? [review.$note, '']
       : []),
     '- Logical size 1280×800 (unless requested otherwise), device scale 2. Installed Electron binary runs this checkout’s actual built desktop main, preload and IPC handlers; Playwright connects through its ephemeral remote-debugging port/CDP. A finite temporary bootstrap imports that real main and only sets window content size, theme and hidden state. CDP device metrics match the content size. `Page.captureScreenshot` captures the hidden renderer surface, excluding OS titlebar traffic lights. The genuine preload enables the macOS titlebar inset. Native release `--screenshot --at 0.7` uses the same size/theme. Each scored record verifies the real bridge, viewport and scale and records Electron/Chromium versions.',
-    '- Fixed browser Date and verified native realtime-clock interposer; monotonic/network time remains real. Web CSS animations paused at their initial phase and input caret hidden; native animation/caret phase uses the fixed virtual capture clock. Pointer parked except explicit hover. Transcript scroll fraction explicit. No redraw loops.',
+    '- Fixed browser Date and verified native realtime-clock interposer; monotonic/network time remains real. Web CSS animations paused at their initial phase and input caret hidden; the delayed follow-pill entrance is explicitly sampled at 0.7s, matching native --at 0.7 rather than hiding a mounted control at zero opacity. Native animation/caret phase uses the fixed virtual capture clock. Pointer parked except explicit hover. Transcript scroll fraction explicit. No redraw loops.',
     '- Each pair brackets capture with a SHA-256 digest of the same gateway projects, session info/history, forms, permissions, children, side forks, tasks, apps and canvas data. A changing digest invalidates the pair (no score). Captures are sequential over an unchanged snapshot, **not atomic simultaneous GPU presentation**.',
     '- RGB MAE is 0–255; over16 is the percentage of pixels whose maximum channel error exceeds 16. Structural metric is grayscale MAE after a 2-physical-pixel Gaussian blur and 2× downsampling (lower is better). No alignment correction, masks or cropping. Heatmap magnifies errors 4×.',
     '- Classification is manually reviewed where noted in the driver review file; otherwise thresholds are provisional: equivalent requires RGB <1.5 and blurred MAE <0.7; small layout <5; larger errors missing/extra. State classification uses the worst theme/size. Metrics alone never prove semantic equivalence.',
-    '- WKWebView content and unsupported interaction/run states are unscored with explicit reasons; no blank-child or parent/completed-state substitutes.',
+    '- Native canvas capture composites the real WKWebView takeSnapshot export at its laid-out host rectangle; adjacent child PNG/JSON preserve pixels and placement provenance. It uses the same gateway runtime, source, data and theme, waiting for document/fonts and the snapshot paint fence. No blank-child substitute, image mask or alignment correction. Unsupported run states remain unscored with explicit reasons; chat-streaming is an active-run limitation, not a second canvas.',
     '',
     '## States, worst first (worst theme/size shown)',
     '',
@@ -247,7 +247,7 @@ try {
         const [width, height] = size.split('x').map(Number);
         const name = `${state}-${theme}${sizes.length > 1 || size !== '1280x800' ? '-' + size : ''}`;
         const stem = out + '/' + name;
-        const c = config(state, extras);
+        const c = config(state, extras, { width, height });
         const row = { state, theme, size, stem: name, source: sourceKey, reference: 'electron' };
         results.splice(
           0,

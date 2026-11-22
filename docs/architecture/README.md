@@ -253,6 +253,13 @@ worker, sanitizer and preview document in `src/docx`; no privileged guest bridge
 
 # Rune native controls
 
+Rune's headless canvas screenshot export reads the same gateway source/data and
+theme as the interactive host, loads the existing opaque runtime in an offscreen
+WKWebView, and composites `takeSnapshot` pixels at the host's actual layout rect.
+This is a bounded diagnostic export after the headless render, not another
+runtime host, persisted snapshot cache, gateway capability, or redraw loop.
+Child PNG/placement metadata accompany the screenshot for parity auditability.
+
 Rune's live sidebar requests session pages only for expanded, presentation-owned
 folders, including folders with no native project registration. Service-discovered
 project metadata enriches these folders without owning their open/closed state.

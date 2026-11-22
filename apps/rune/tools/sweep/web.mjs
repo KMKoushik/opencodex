@@ -45,6 +45,7 @@ export async function reach(page, state, c, extras) {
       '*,*::before,*::after { animation-delay:0s!important;animation-play-state:paused!important;transition:none!important;caret-color:transparent!important }',
   });
   let point;
+  const extraEnv = {};
   if (state === 'home-no-project') {
     await page.getByRole('heading', { name: 'Open a project', exact: true }).waitFor();
     return {};
@@ -179,6 +180,14 @@ export async function reach(page, state, c, extras) {
     if (state === 'panel-side-chat') {
       await page.getByRole('tab', { name: 'Side chat 1', exact: true }).click();
     }
+    if (state === 'panel-canvas') {
+      await page.locator('.canvas-list-open').filter({ hasText: 'Release dashboard' }).click();
+      await page
+        .frameLocator('iframe[title="Release dashboard"]')
+        .getByRole('heading', { name: 'Release dashboard' })
+        .waitFor();
+      extraEnv.OPENCODEX_CANVAS = extras.canvas.id;
+    }
     if (state === 'side-chat-new') {
       // Attach both rejection handlers immediately: a missing/disabled button
       // must become a failed state, not an unhandled response-wait rejection
@@ -278,5 +287,15 @@ export async function reach(page, state, c, extras) {
   }
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(400);
-  return { ...(point ? { OCR_MENU_POINT: point } : {}) };
+  // The follow pill has a delayed entrance. Pausing that animation at its
+  // zero-opacity first frame would hide a mounted control forever and compare
+  // it with Rune's already-completed entrance at --at 0.7.
+  await page.locator('.jump-to-latest').evaluateAll((pills) => {
+    for (const pill of pills)
+      for (const animation of pill.getAnimations({ subtree: true })) {
+        animation.pause();
+        animation.currentTime = 700;
+      }
+  });
+  return { ...extraEnv, ...(point ? { OCR_MENU_POINT: point } : {}) };
 }

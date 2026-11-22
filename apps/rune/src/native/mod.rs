@@ -3,6 +3,7 @@ mod annotations;
 mod browser;
 pub use browser::{browser_panel, browser_tabs};
 mod canvas;
+pub mod capture;
 mod icons;
 mod storage;
 use crate::{

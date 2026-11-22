@@ -14,6 +14,8 @@ use raw_window_handle::RawWindowHandle;
 use std::{cell::RefCell, collections::VecDeque};
 
 mod dates;
+mod capture;
+pub use capture::capture as capture_html;
 mod delegate;
 pub use dates::{browser_locale, short_time, updated_label};
 mod local_pages;

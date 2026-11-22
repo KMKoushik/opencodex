@@ -35,9 +35,15 @@ bridge, viewport and device scale on every scored capture. No redraw loop is add
 
 `clock.c` is a test-process-only macOS dyld interposer; only realtime clocks are
 frozen. No app code, shared service, user HOME, or other worktree is changed.
-Rune's own virtual clock controls animation phase. Native HTML children cannot
-be exported through the current headless CLI: those captures remain unscored.
-Streaming likewise cannot be honestly reproduced by importing completed text.
+Rune's own virtual clock controls animation phase. Native canvas screenshots
+export the actual WKWebView with `takeSnapshot`, then composite its pixels at
+the host rectangle from Rune's layout tree. The adjacent `.webview.png` and
+`.webview.json` retain the original child pixels and placement provenance.
+The native child uses the gateway runtime, source, data and app theme, not a
+HTML facsimile. Export waits for document/font readiness and the snapshot paint fence;
+its bounded AppKit run-loop wait is screenshot-only, not an app redraw loop.
+Streaming still cannot be honestly reproduced by importing completed text:
+the other historically unscored state is `chat-streaming`, not a second canvas.
 
 Apps/Tasks empty states temporarily remove the fixture tasks / app server before
 the pair and restore them afterwards. The gateway must confirm the empty list;

@@ -2,7 +2,7 @@ export const states =
   `home-empty home-no-project sidebar-hidden sidebar-project-collapsed sidebar-row-hover sidebar-focus-view app-menu-open thread-search-open composer-focused composer-text composer-attachment composer-slash composer-mention model-picker-open model-picker-filtered project-picker-open project-open-dialog project-actions-open project-edit-open project-copy-feedback worktree-picker-open worktree-new-selected worktrees-empty chat-markdown-top chat-markdown-middle chat-markdown-bottom chat-long-top chat-long-middle chat-long-bottom chat-tools-bottom chat-question-bottom chat-architecture-bottom chat-subagent-bottom chat-checklist-bottom chat-external-read-bottom chat-streaming tools-expanded tool-rows-expanded tool-detail-open thoughts-expanded question-selected question-review thread-actions-open thread-context-menu session-details-open find-markdown-open find-long-open panel-changes panel-diff-open panel-files panel-file-open panel-terminal panel-canvas panel-side-chat side-chat-new panel-subagents subagents-list subagent-conversation settings-general settings-general-bottom settings-appearance settings-shortcuts settings-projects settings-usage settings-remote-access usage-limits-open tasks-empty apps-empty connection-offline`.split(
     ' ',
   );
-export function config(state, extras) {
+export function config(state, extras, viewport = { width: 1280 }) {
   const flags = [],
     script = [],
     env = {};
@@ -51,6 +51,12 @@ export function config(state, extras) {
   if (composer[state]) flags.push('--composer-state', composer[state]);
   if (state.startsWith('question-')) session = 2;
   if (/^chat-.*-(top|middle|bottom)$/.test(state)) flags.push('--scroll', state.split('-').at(-1));
+  if (state === 'chat-long-top' || state === 'chat-long-middle') {
+    // Electron's history priming starts with a reading gesture. Give Rune the
+    // same reading intent on blank viewport space after its capture scroll,
+    // without perturbing the requested top/midpoint or selecting response text.
+    script.push({ t: 0.1, type: 'click', x: viewport.width - 60, y: 100 });
+  }
   if (state === 'tools-expanded')
     script.push({ t: 0.1, type: 'click', key: 'turn:msg_parity_00004' });
   if (state === 'tool-rows-expanded' || state === 'tool-detail-open') flags.push('--work', 'open');
@@ -120,8 +126,6 @@ export function config(state, extras) {
   const reason =
     state === 'chat-streaming'
       ? 'No model calls: imported unfinished history does not create an active run; no native headless event-feed injection exists. Refusing a completed-transcript substitute.'
-      : state === 'panel-canvas'
-        ? 'WKWebView snapshot API exists but no headless CLI snapshot/export bridge mounts the native child; refusing a blank native-child pixel score.'
-        : undefined;
+      : undefined;
   return { flags, script, env, session, reason };
 }

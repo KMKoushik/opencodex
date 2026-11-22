@@ -498,7 +498,7 @@ fn main() {
             *arg = "--snap".into();
         }
     }
-    let value = |flag: &str| args.windows(2).find(|v| v[0] == flag).map(|v| v[1].clone());
+    let value = |flag: &str| args.windows(2).rev().find(|v| v[0] == flag).map(|v| v[1].clone());
     let dark = value("--theme").is_none_or(|t| t != "light");
     if args.iter().any(|a| a == "--list-presets") {
         for p in theme::presets(dark) {
@@ -520,6 +520,12 @@ fn main() {
             "--snap" | "--tree" | "--frames" | "--first-pixels"
         )
     });
+    let native_capture = if headless && std::env::var_os("OPENCODEX_CANVAS").is_some() {
+        value("--snap").map(|screenshot| {
+            let tree = value("--tree").unwrap_or_else(|| format!("{screenshot}.tree.json"));
+            (screenshot, tree)
+        })
+    } else { None };
     OPTIONS
         .set(Options {
             gateway: std::env::var("OPENCODEX_GATEWAY").ok(),
@@ -556,6 +562,9 @@ fn main() {
             std::process::exit(1);
         }
         return;
+    }
+    if let Some((_, tree)) = &native_capture {
+        if !args.iter().any(|a| a == "--tree") { args.extend(["--tree".into(), tree.clone()]); }
     }
     let spec = AppSpec {
         poll: Some(poll),
@@ -833,4 +842,10 @@ fn main() {
         }
     })
     .run();
+    if let Some((screenshot, tree)) = native_capture {
+        if let Err(error) = native::capture::composite(&screenshot, &tree) {
+            eprintln!("native screenshot: {error}");
+            std::process::exit(1);
+        }
+    }
 }

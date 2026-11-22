@@ -1,6 +1,13 @@
 //! Main-thread-only, lazy native web surfaces. See the crate README for embedding contracts.
 use std::{cell::Cell, rc::Rc};
 
+#[cfg(target_os = "macos")]
+pub use macos::capture_html;
+#[cfg(not(target_os = "macos"))]
+pub fn capture_html(_: &str, _: &str, _: [f64; 2], _: serde_json::Value) -> Result<Vec<u8>, String> {
+    Err("native webview capture is available only on macOS".into())
+}
+
 #[cfg(not(target_os = "macos"))]
 mod fallback;
 #[cfg(target_os = "macos")]

@@ -29,7 +29,7 @@ fn valid_key(key: &str) -> bool {
             .bytes()
             .all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-')
 }
-fn shell(s: &State) -> String {
+pub(super) fn shell(s: &State) -> String {
     let origin = crate::sidecar::url().unwrap_or("");
     let url = format!(
         "{}/api/canvas-runtime/frame.html",
@@ -138,7 +138,7 @@ pub(super) fn request_failed(native: &mut Native, tag: &str, error: &str) {
         post(c, json!({"type":"result","call":call,"error":error}));
     }
 }
-fn canvas_theme(s: &State) -> Value {
+pub(super) fn canvas_theme(s: &State) -> Value {
     let mut vars: serde_json::Map<String, Value> = s
         .theme
         .tokens
