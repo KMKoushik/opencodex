@@ -1,9 +1,26 @@
 {
   "canvas": {
     "width": 119,
-    "height": 77
+    "height": 91
   },
   "boxes": [
+    {
+      "id": "rune",
+      "x": 5,
+      "y": 80,
+      "width": 65,
+      "height": 9,
+      "title": "NATIVE RUNE CLIENT / apps/rune (M1)",
+      "color": "#7bb8ff",
+      "align": "left",
+      "lines": [
+        "Rust + Rune GPU shell; system fonts; shared theme seeds",
+        "oc-gateway worker: typed /api HTTP + /api/events SSE",
+        "Live sidebar reduction; reconnect replaces snapshots",
+        "Virtual rows; headless PNGs; no bundled gateway yet",
+        "UI preferences: OPENCODEX_DATA_DIR, else ~/.opencodex/rune"
+      ]
+    },
     {
       "id": "releases",
       "x": 89,
@@ -121,6 +138,26 @@
     }
   ],
   "connectors": [
+    {
+      "points": [
+        [23, 80],
+        [23, 78],
+        [1, 78],
+        [1, 27],
+        [4, 27]
+      ],
+      "color": "#7bb8ff"
+    },
+    {
+      "points": [
+        [5, 28],
+        [0, 28],
+        [0, 77],
+        [55, 77],
+        [55, 79]
+      ],
+      "color": "#5eead4"
+    },
     {
       "points": [
         [57, 34],
@@ -328,7 +365,7 @@
     {
       "x": 2,
       "y": 2,
-      "value": "Two surfaces. One shared UI. One OpenCode backend.",
+      "value": "Shared web UI; native iPhone and Rune clients. One backend.",
       "color": "#aeb8c6"
     },
     {
