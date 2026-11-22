@@ -1,28 +1,16 @@
-//! ResponseCopy: verify readback rather than merely acknowledging a queued write.
-//!
-//! Pinned Rune exposes no ordinary-write completion result. Readback is best effort:
-//! a failed write with identical preexisting clipboard text is indistinguishable from
-//! success (including an empty expected string and an unavailable/empty read).
-//! Another application replacing clipboard contents before readback, or a successful
-//! write followed by an unavailable read, can conversely produce a false failure.
+//! ResponseCopy: AppKit's actual write result, not clipboard-content inference.
 use crate::{
     State,
     sidebar::{icon_button, label},
 };
 use rune::{El, row};
 
-fn acknowledge(
-    chat: &mut super::Chat,
-    id: String,
-    expected: &str,
-    actual: &str,
-    clock: f64,
-) -> bool {
+fn acknowledge(chat: &mut super::Chat, id: String, success: bool, clock: f64) -> bool {
     if chat.copy_pending.as_deref() != Some(&id) {
         return false;
     }
     chat.copy_pending = None;
-    if actual == expected {
+    if success {
         chat.copied = Some((id, clock + 2.0));
         true
     } else {
@@ -33,9 +21,17 @@ fn acknowledge(
 
 pub fn view(s: &State, id: &str, source: &str, reader: bool) -> El {
     let chat = super::conversation(s, reader);
-    let copied = chat.copied.as_ref().is_some_and(|(key, _)| key == id);
-    let pending = chat.copy_pending.as_deref() == Some(id);
-    let error = chat.copy_error.as_deref() == Some(id);
+    let mut copied = chat.copied.as_ref().is_some_and(|(key, _)| key == id);
+    let mut pending = chat.copy_pending.as_deref() == Some(id);
+    let mut error = chat.copy_error.as_deref() == Some(id);
+    #[cfg(target_os = "macos")]
+    if let Some((key, success)) = &chat.media.pasteboard.result {
+        if key == id {
+            pending = false;
+            copied = *success && chat.media.pasteboard.due.is_some();
+            error = !success;
+        }
+    }
     let button_key = format!("response-copy-{reader}-{id}");
     let id = id.to_owned();
     let source = source.to_owned();
@@ -57,9 +53,19 @@ pub fn view(s: &State, id: &str, source: &str, reader: bool) -> El {
             .label("Copy response")
             .disabled(copied || pending)
             .on_press_tx(move |s: &mut State, tx| {
+                let wake = s.waker.clone();
                 let chat = super::conversation_mut(s, reader);
                 chat.copy_pending = Some(id.clone());
                 chat.copy_error = None;
+                #[cfg(target_os = "macos")]
+                if !crate::OPTIONS.get().is_some_and(|o| o.headless) {
+                    chat.media
+                        .pasteboard
+                        .request(id.clone(), source.clone(), wake);
+                    // Completion wakes the mailbox. The newly mounted Copied
+                    // status schedules one expiry, two seconds after success.
+                    return;
+                }
                 tx.copy(source.clone());
                 let id = id.clone();
                 let source = source.clone();
@@ -68,15 +74,22 @@ pub fn view(s: &State, id: &str, source: &str, reader: bool) -> El {
                 // never schedules a destructive wipe. Reads also work with headless memory.
                 tx.read_clipboard(move |s: &mut State, content, tx| {
                     let chat = super::conversation_mut(s, reader);
-                    if acknowledge(chat, id, &source, content.text(), tx.clock()) {
+                    if acknowledge(chat, id, content.text() == source, tx.clock()) {
                         tx.wake_after(std::time::Duration::from_secs(2));
                     }
                 });
             }),
         );
     if copied {
-        control =
-            control.child(label(&s.theme, "Copied", 12.0, 400.0, "text-secondary").role("status"));
+        control = control.child(
+            label(&s.theme, "Copied", 12.0, 400.0, "text-secondary")
+                .key("copy-success-status")
+                .role("status")
+                .on_layout_tx(|_: &mut State, _, tx| {
+                    tx.wake_after(std::time::Duration::from_secs(2));
+                    tx.live_only();
+                }),
+        );
     }
     if error {
         control = control.child(
@@ -90,20 +103,13 @@ pub fn view(s: &State, id: &str, source: &str, reader: bool) -> El {
 mod tests {
     use super::*;
     #[test]
-    fn readback_cannot_distinguish_an_identical_preexisting_clipboard() {
+    fn failed_write_never_reports_success_even_for_identical_prior_contents() {
         let mut chat = super::super::Chat::default();
         chat.copy_pending = Some("answer".into());
-        // No write occurred: this deliberately confirms the fallback's limitation.
-        assert!(acknowledge(&mut chat, "answer".into(), "same", "same", 0.0));
+        assert!(!acknowledge(&mut chat, "answer".into(), false, 0.0));
+        assert!(chat.copied.is_none());
         chat.copy_pending = Some("answer".into());
-        // An intervening writer can conversely make a completed write look failed.
-        assert!(!acknowledge(
-            &mut chat,
-            "answer".into(),
-            "same",
-            "other app",
-            0.0
-        ));
+        assert!(acknowledge(&mut chat, "answer".into(), true, 0.0));
     }
     #[test]
     fn response_copy_acknowledges_memory_clipboard_and_reports_unavailable_clipboard() {
@@ -150,15 +156,7 @@ mod tests {
                 // A native clipboard read that is rejected/unavailable resolves to
                 // empty ClipboardContent; bare headless Runtime has no OS shell to
                 // deliver that reply. Exercise that exact result without OS access.
-                rt.update(|s, _| {
-                    assert!(!acknowledge(
-                        &mut s.chat,
-                        "answer".into(),
-                        "Copy 🚀",
-                        "",
-                        0.3
-                    ))
-                });
+                rt.update(|s, _| assert!(!acknowledge(&mut s.chat, "answer".into(), false, 0.3)));
                 rt.frame(0.4);
             }
             assert!(rt.state.chat.copy_pending.is_none());

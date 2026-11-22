@@ -14,6 +14,8 @@ mod markdown;
 pub(crate) use markdown::render as markdown_view;
 mod attachments;
 mod copy;
+#[cfg(target_os = "macos")]
+mod pasteboard;
 pub(crate) mod details;
 mod media;
 pub mod preview;

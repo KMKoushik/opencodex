@@ -7,6 +7,8 @@ use std::{collections::BTreeMap, sync::Arc};
 type Images = BTreeMap<String, Result<Image, String>>;
 #[derive(Default)]
 pub struct Media {
+    #[cfg(target_os = "macos")]
+    pub pasteboard: super::pasteboard::Writer,
     pub details: super::details::Data,
     pending: Latest<Result<Images, String>>,
     pub images: Arc<Images>,
@@ -57,7 +59,11 @@ impl Media {
         Ok(())
     }
     pub fn take(&mut self) -> bool {
-        let details = self.details.take();
+        let mut details = self.details.take();
+        #[cfg(target_os = "macos")]
+        {
+            details |= self.pasteboard.take();
+        }
         if let Some(result) = self.pending.take() {
             let images = match result {
                 Ok(images) => images,
