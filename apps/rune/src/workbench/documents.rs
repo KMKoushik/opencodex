@@ -1,13 +1,11 @@
+use super::diff::{self, DiffMode, DiffState, DiffView};
 use super::{
     Panel,
     worker::{self, Operation, Payload},
 };
 use crate::{State, sidebar::label};
 use rune::{El, GrowthSpec, ScrollSpec, TextEdit, TextStyle, col, rich, row};
-use rune_kit::{
-    diff::{self, DiffMode, DiffState, DiffView},
-    syntax::{self, Highlighter, SyntaxTheme},
-};
+use rune_kit::syntax::{self, Highlighter, SyntaxTheme};
 use serde_json::{Value, json};
 use std::sync::Arc;
 const MAX_EDIT_BYTES: usize = 2 * 1024 * 1024;
@@ -19,7 +17,11 @@ pub struct Document {
     pub pinned: bool,
     pub value: Value,
     pub diff: DiffState,
+    pub pending_expansion: Vec<(usize, usize, diff::Expand)>,
     pub edit: TextEdit,
+    pub source_input: super::editor::SourceInput,
+    pub source_rects: std::collections::BTreeMap<usize, [f32; 4]>,
+    pub source_viewport: f32,
     pub editing: bool,
     pub preview: bool,
     pub rich_preview: Option<super::preview::Host>,
@@ -159,7 +161,9 @@ pub fn receive(s: &mut State, tag: &str, mut p: Payload) {
     let Some((kind, path)) = tag.split_once(':') else {
         return;
     };
-    let target = serde_json::from_str::<[String; 2]>(path).ok();
+    let target = serde_json::from_str::<Vec<String>>(path)
+        .ok()
+        .filter(|v| v.len() >= 2);
     let directory = target
         .as_ref()
         .map(|v| v[0].clone())
@@ -196,15 +200,40 @@ pub fn receive(s: &mut State, tag: &str, mut p: Payload) {
     if !matches!(kind, "file" | "diff" | "diff-full") {
         return;
     }
-    let mut files = Vec::new();
-    for prepared in p.diff {
-        let mut f = diff::parse(&prepared.header);
-        if let Some(file) = f.first_mut() {
-            file.hunks = prepared.hunks;
+    if kind == "diff-full" {
+        if target
+            .as_ref()
+            .and_then(|v| v.get(2))
+            .is_some_and(|mode| mode != &s.workbench.mode)
+        {
+            return;
         }
-        files.extend(f);
+        if let Some(doc) = s
+            .workbench
+            .docs
+            .iter_mut()
+            .find(|d| d.is_diff && d.path == path && d.directory == directory)
+        {
+            if target.as_ref().and_then(|v| v.get(3)).is_some_and(|hash| {
+                *hash != worker::hash(doc.value["patch"].as_str().unwrap_or("")).to_string()
+            }) {
+                return;
+            }
+            doc.diff.attach_full_sources(p.diff);
+            let map = Arc::new(p.highlights);
+            doc.diff.set_highlighter(
+                Highlighter::new(move |_, code| {
+                    map.get(&worker::hash(code)).cloned().unwrap_or_default()
+                })
+                .key((s.workbench.epoch, path, "full")),
+            );
+            for (file, gap, how) in std::mem::take(&mut doc.pending_expansion) {
+                doc.diff.expand(file, gap, how);
+            }
+        }
+        return;
     }
-    let mut diff = DiffState::new(files);
+    let mut diff = DiffState::new(p.diff);
     diff.set_mode(if s.workbench.split {
         DiffMode::Split
     } else {
@@ -252,7 +281,11 @@ pub fn receive(s: &mut State, tag: &str, mut p: Payload) {
         image_view: Default::default(),
         value: p.value,
         diff,
+        pending_expansion: Vec::new(),
         edit,
+        source_input: Default::default(),
+        source_rects: Default::default(),
+        source_viewport: 0.0,
         editing,
         preview: false,
         rich_preview,
@@ -270,6 +303,9 @@ pub fn receive(s: &mut State, tag: &str, mut p: Payload) {
         stale: false,
     };
     reindex(&mut doc);
+    if doc.editing {
+        super::editor::activate(&mut doc, 0);
+    }
     if doc.pinned {
         s.workbench.pin_target = None;
     }
@@ -330,8 +366,12 @@ pub(super) fn reindex(doc: &mut Document) {
     doc.lines = text
         .split('\n')
         .map(|line| {
-            doc.line_columns = doc.line_columns.max(line.chars().count());
-            let range = (start, start + line.len());
+            let content = line.strip_suffix('\r').unwrap_or(line);
+            let columns = content.chars().fold(0, |column, c| {
+                column + if c == '\t' { 4 - column % 4 } else { 1 }
+            });
+            doc.line_columns = doc.line_columns.max(columns);
+            let range = (start, start + content.len());
             start += line.len() + 1;
             range
         })
@@ -406,6 +446,29 @@ pub fn view(s: &State) -> El {
             },
         )
         .fold_row(diff::FoldRow::LineInfo)
+        .syntax(super::editor::syntax_theme(s))
+        .on_expand(move |s, file, gap, how| {
+            let doc = &mut s.workbench.docs[index];
+            if doc.pending_expansion.len() < 64 {
+                doc.pending_expansion.push((file, gap, how));
+            }
+            let (directory, path) = (doc.directory.clone(), doc.path.clone());
+            let fingerprint = worker::hash(doc.value["patch"].as_str().unwrap_or("")).to_string();
+            s.workspace_get(
+                &format!(
+                    "diff-full:{}",
+                    json!([directory, path, s.workbench.mode, fingerprint])
+                ),
+                "workspace/diff".into(),
+                vec![
+                    ("directory".into(), directory),
+                    ("path".into(), path),
+                    ("mode".into(), s.workbench.mode.clone()),
+                    ("full".into(), "1".into()),
+                ],
+                true,
+            );
+        })
         .on_comment(|s, range, tx| {
             if s.chat.comment_editor.is_some() {
                 return;
@@ -507,6 +570,7 @@ pub fn view(s: &State) -> El {
                             doc.saved_revision = doc.revision;
                             doc.discarding = false;
                             reindex(doc);
+                            super::editor::sync(doc);
                         })),
                 )
         } else if doc.preview {
@@ -748,5 +812,29 @@ pub fn capture(
         &format!("{}:{path}", if is_diff { "diff" } else { "file" }),
         p,
     );
+    // Capture-only replay of a lazy context response; production uses DiffView::on_expand.
+    if is_diff {
+        if let Some(gap) = std::env::var("OPENCODEX_CAPTURE_EXPAND_GAP")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+        {
+            if let Some(index) = s.workbench.selected {
+                s.workbench.docs[index]
+                    .pending_expansion
+                    .push((0, gap, diff::Expand::Down));
+                let full = super::capture_get(
+                    url,
+                    "workspace/diff".into(),
+                    vec![
+                        ("directory".into(), directory.into()),
+                        ("path".into(), path.into()),
+                        ("mode".into(), "working".into()),
+                        ("full".into(), "1".into()),
+                    ],
+                )?;
+                receive(s, &format!("diff-full:{path}"), full);
+            }
+        }
+    }
     Ok(())
 }

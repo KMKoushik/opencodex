@@ -9,6 +9,7 @@ mod review;
 mod tabs;
 mod tree;
 pub use review::refresh as refresh_comment_annotations;
+mod diff;
 mod documents;
 mod editor;
 mod links;
@@ -763,7 +764,12 @@ pub(crate) fn capture_get(
             .map(|(k, v)| (k.as_str(), v.as_str()))
             .collect();
         rt.block_on(client.get_bounded::<Value>(&path, &q, 16 * 1024 * 1024))
-            .map(worker::prepare)
+            .map(|mut value| {
+                if query.iter().any(|(k, v)| k == "full" && v == "1") {
+                    value["__full"] = Value::Bool(true);
+                }
+                worker::prepare(value)
+            })
     })
     .join()
     .map_err(|_| "Workspace capture worker panicked".to_owned())?

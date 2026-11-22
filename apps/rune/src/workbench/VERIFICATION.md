@@ -2,7 +2,7 @@
 
 This is not a pixel-identical whole-window sign-off. The native chat/sidebar/composer are
 outside this change; the paired fixture deliberately contains empty threads, not fabricated
-model replies. Only `/tmp/ocr-pc-files`, OpenCode 4968 and gateway 4498 were used.
+model replies. This follow-up uses only `/tmp/ocr-pc-files2`, OpenCode 4968 and gateway 4498.
 
 ## Closed behavior
 
@@ -16,7 +16,7 @@ model replies. Only `/tmp/ocr-pc-files`, OpenCode 4968 and gateway 4498 were use
   pending/error state and keyboard menu navigation. File reveal uses the gateway's checked
   file-location route before `open -R`. Discovery/open operations have separate bounded native
   worker admission, so Spotlight cannot block the file/diff/save queue.
-- Native `rune-edit` source input: 12.5/20 mono text, virtual number/comment gutter, active
+- Native `rune-edit` source input: 12.5/20 mono text, virtual no-wrap source rows/gutter, active
   line, range selection, two-space Tab/outdent, normal Return, CRLF preservation, undo,
   revision-safe save, source review targets including version, and scoped worker highlighting.
   Lexer work is never on the key handler; idle syntax refresh coalesces behind a 120 ms deadline.
@@ -37,41 +37,56 @@ model replies. Only `/tmp/ocr-pc-files`, OpenCode 4968 and gateway 4498 were use
   version/mode/path scoped, stale quotes are not restored into unrelated diffs, pending text
   cannot be replaced by another gutter comment, and separators use `FoldRow::LineInfo`.
 
-## Pinned framework boundaries, not falsely certified matches
+## App-owned diff and inline source layout
 
-`rune` is pinned to `7286a3c5`. Its `rune-edit::TextEdit` has `pub text: String`; neither that
-checkout nor `~/git/personal/rune-src/rune` contains the requested rope/sum_tree editor API.
-Native editing/IME/undo are retained rather than replaced with a WebView editor.
+The two former framework blockers are removed rather than accepted:
 
-1. Native input exposes inline decorations, **not block widgets or a line-layout provider**.
-   Source review cards therefore occupy a bounded dock below the source rather than CodeMirror's
-   inline block widgets. There is also no multiline no-wrap setting: the source field is sized
-   from its longest mono line inside an outer horizontal scroller. Exact CodeMirror selection,
-   inline-widget geometry and every default editing command are not claimed. Rune-kit's lexer
-   also privately caps source colouring at 128 KiB and exposes no resumable lexical state;
-   syntax decorations are limited to visible/overscan lines and shifted around local edits.
-2. Rune-kit's `diff/state.rs` privately fixes `HEADER_H = 44`, `LINE_H = 20`, `GAP_H = 32`;
-   `diff/view/look.rs` privately fixes source font size 13 and number widths from `0.6 * size`.
-   React uses a 40-point header and 12.5-point source. `DiffView` exposes no metric overrides or
-   lazy-full-context loader, and prepared source-bearing diff construction is not public.
-   The native virtualized diff, selection, annotations and worker parser are retained; these
-   exact metric/full-context differences require upstream APIs or a separately maintained diff
-   renderer. This change does not conceal them with scaling, negative margins or fake controls.
-3. WK PDF/media controls are WebKit's, not Chromium's internal PDF player/media controls.
-   Rune headless PNGs omit native children. The WK smoke PNG is a separate real WK snapshot,
-   **not an atomic Rune/native frame**. The existing native-slot presentation limitation remains.
+- `diff/` vendors Rune-kit's MIT renderer from revision
+  `7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de`, with its license and provenance retained.
+  Shared configurable metrics drive layout/navigation: 40-point header, 12.5/20 source,
+  32-point separator, 11.5-point separator labels, one unified number column, overlaid
+  4-point bars and CSS-equivalent gutter/code padding. The SF Mono advance was checked
+  against computed Chromium geometry (7.525635 points at 12.5).
+- Expansion controls now cover leading/inter-hunk **and unknown trailing context**. Missing
+  sources load through the existing `workspace/diff?...&full=1` transport. The exact queued
+  gesture replays on receipt: 20 lines per arrow, both ends for the label, all with Shift.
+  Sources attach without resetting hunks, selections, annotations or virtual row keys.
+  Parse/pair/fold/highlight/maximum-width work stays on the bounded worker; immutable source
+  storage crosses its mailbox using `Arc`, with no UI-thread reparse.
+- Source lines are actual virtual growth rows, not a full-document field beside virtual
+  numbers. Native **single-line, no-wrap** input mounts at the edited line; other visible
+  lines use syntax-decorated no-wrap text. Review cards and pending editors are row children
+  immediately after the selected **end line**, matching CodeMirror's `line.to, side:1`.
+  Card width comes from the measured viewport minus the gutter, not the longest source line.
+  The old below-editor dock is gone. Visible row rectangles account for cards during gutter
+  range selection, without adding document bytes or triggering scroll redraw loops.
+- The document remains the save/undo identity. Native selection/IME work within the active
+  field; app-owned cross-line navigation/selection, clipboard, multiline paste, newline joins,
+  Return/CRLF, Tab/outdent, undo/redo and save bridge back to that document. Unchanged review
+  targets map across preceding edits/undo; stale quotes remain excluded. This is not a claim
+  that every optional CodeMirror extension/default command has been reimplemented.
+
+Rune-kit's lexer still caps colouring at 128 KiB and has no resumable lexical-state API;
+visible syntax decorations shift around local edits while the idle worker catches up.
+WK PDF/media controls remain WebKit's rather than Chromium's internal controls. Headless
+PNGs omit WK children; the older WK smoke is a separate snapshot, not an atomic native frame.
 
 ## Performance and evidence
 
 Release runtime test, 2,097,152-byte source, 20 actual native replacement key events:
-**p50 10.882 ms, p95/max 12.834 ms** from key dispatch through CPU frame completion, with real
-TypeScript syntax decorations enabled (the earlier unstyled run was 5.586/6.735 ms). This includes
+**p50 3.935 ms, p95/max 6.465 ms** from key dispatch through CPU frame completion, with real
+TypeScript syntax decorations enabled (previous whole-field result: 10.882/12.834 ms). This includes
 native input handling/view/layout and excludes OS delivery, GPU upload/presentation and IME UI.
-Only viewport/overscan number rows and syntax decorations mount. This is inside a 60 Hz CPU
+Only viewport/overscan source rows and syntax decorations mount. Each key asserts the actual
+replacement byte and unchanged 2 MiB size; focus and selection use the real row input. This is inside a 60 Hz CPU
 budget, not a 120 Hz presentation guarantee. No production timer or forced redraw loop was added.
 
 Pairs (web left, Rune right), both appearances, 1280×800 and 1600×1000, scale 2:
-`apps/rune/goldens/pc-files/pair-{files,changes,image}-*-review4.png`.
+`apps/rune/goldens/pc-files/pair-{files,inline,changes,diff-inline,expanded,image}-*-rows.png`.
+Source and diff inline pairs are produced by actual native gutter-click/paste/Cmd-Enter script events and
+the equivalent CodeMirror actions. The expanded web pair waits for a real full-context
+response; Rune's capture-only response replay uses the same worker preparation, source attach
+and queued 20-line expansion path. It is not represented as an asynchronous headless-network test.
 Native layout callbacks settle with finite `--at 0.1` capture time, not an application redraw loop.
 The separate converter checks are `docx-worker-find-review.png` and `docx-real-wk-review.png`.
 
@@ -79,9 +94,12 @@ The separate converter checks are `docx-worker-find-review.png` and `docx-real-w
 read-only preview assets with `node apps/rune/src/workbench/build-preview.mjs` after changing
 the pinned web Mammoth/DOMPurify dependencies or preview client. Third-party licenses are adjacent.
 
-Final checks passed: `cargo build --release --workspace`, `cargo test --workspace` (50 unit
-tests), `bun check`, `bun format:check`, and `git diff --check`. The three added tests cover
-preview-tab selection, 2 MiB native editing, and measured image/annotation coordinates.
-Both fixture listeners were stopped only after checking their actual isolated environment;
-ports 4498/4968 have no listeners and `/tmp/ocr-pc-files` was deleted. The small input fixture
-and converter smoke inputs are retained in the ignored `goldens/pc-files/fixture-evidence.tar.gz`.
+Final checks passed: `cargo build --release --workspace`, `cargo test --workspace` (72 unit
+tests), `bun check`, `bun format:check`, and `git diff --check`. New runtime checks cover
+end-line card placement, mapped targets, native multiline paste/IME/undo/click-to-edit, and
+full-source attachment with selection retention and 20/all expansion. The vendored upstream
+regressions are retained too. The previous preview/tab/image/save tests still pass.
+The small input fixture and capture scripts/logs are retained in the ignored
+`goldens/pc-files/fixture-rows-evidence.tar.gz`; the older converter inputs remain in
+`fixture-evidence.tar.gz`. Fixture services are stopped after verification; the user's
+OpenCode service and storage are never used.

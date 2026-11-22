@@ -1,6 +1,7 @@
 //! Bounded network/parse worker. No filesystem access or lexer runs in a UI handler.
+use super::diff;
 use oc_gateway::Gateway;
-use rune_kit::{diff, syntax};
+use rune_kit::syntax;
 use serde_json::Value;
 use std::{
     collections::HashMap,
@@ -70,13 +71,9 @@ pub struct Payload {
     pub preview: Option<String>,
     pub apps: Vec<super::open_apps::App>,
     pub value: Value,
-    pub diff: Vec<PreparedFile>,
+    pub diff: Vec<diff::FileDiff>,
     pub highlights: HashMap<u64, Vec<syntax::Highlight>>,
     pub image: Option<Result<rune::Image, String>>,
-}
-pub struct PreparedFile {
-    pub header: String,
-    pub hunks: Vec<diff::Hunk>,
 }
 pub struct Worker {
     send: mpsc::SyncSender<Request>,
@@ -107,6 +104,9 @@ impl Worker {
                         .and_then(|client| rt.block_on(run(client, request.op)))
                         .map(|mut value| {
                             if let Some((kind, path)) = tag.split_once(':') {
+                                if kind == "diff-full" {
+                                    value["__full"] = Value::Bool(true);
+                                }
                                 if kind == "file" || kind == "save" {
                                     value["__path"] = Value::String(
                                         serde_json::from_str::<[String; 2]>(path)
@@ -277,9 +277,8 @@ pub fn prepare(mut value: Value) -> Payload {
     let mut highlights = HashMap::new();
     let mut prepared = Vec::new();
     if let Some(patch) = value["patch"].as_str() {
-        // FileDiff holds Rc internally. Transfer only its Send-safe public data; recreate the
-        // constant-size header on the UI thread, never redo Myers/word pairing there.
-        for mut file in diff::parse(patch) {
+        // The owned model uses Arc sources: parsing, pairing, folding and lexing all stay here.
+        for file in diff::parse(patch) {
             let lang = file.language();
             for side in [diff::Side::Old, diff::Side::New] {
                 let mut chunks: std::collections::BTreeMap<u32, Vec<(u32, &str)>> =
@@ -306,11 +305,13 @@ pub fn prepare(mut value: Value) -> Payload {
                         .or_insert_with(|| syntax::builtin(lang, &text));
                 }
             }
-            let hunks = std::mem::take(&mut file.hunks);
-            prepared.push(PreparedFile {
-                header: file.patch(),
-                hunks,
-            });
+            let mut file = if value["__full"] == true {
+                file.fold(3)
+            } else {
+                file
+            };
+            file.prepare_layout();
+            prepared.push(file);
         }
     }
     if let Some(text) = value["text"].as_str() {

@@ -176,7 +176,7 @@ fn large_workspaces_mount_only_visible_rows() {
 }
 
 #[test]
-fn two_mib_native_editor_keeps_input_and_virtualizes_number_rows() {
+fn two_mib_native_editor_keeps_input_and_virtualizes_source_rows() {
     let mut s = state();
     let mut source = "let value = 1234567890123456789;\n".repeat(70_000);
     source.truncate(2 * 1024 * 1024);
@@ -195,6 +195,7 @@ fn two_mib_native_editor_keeps_input_and_virtualizes_number_rows() {
     rt.update(|s, tx| {
         s.workbench.docs[0].edit.anchor = 0;
         s.workbench.docs[0].edit.focus = 1;
+        super::editor::sync(&mut s.workbench.docs[0]);
         tx.focus("workspace-editor", false);
     });
     rt.frame(0.0);
@@ -203,6 +204,7 @@ fn two_mib_native_editor_keeps_input_and_virtualizes_number_rows() {
         rt.update(|s, _| {
             s.workbench.docs[0].edit.anchor = 0;
             s.workbench.docs[0].edit.focus = 1;
+            super::editor::sync(&mut s.workbench.docs[0]);
         });
         rt.frame(0.0);
         let start = Instant::now();
@@ -214,6 +216,10 @@ fn two_mib_native_editor_keeps_input_and_virtualizes_number_rows() {
         times.push(start.elapsed().as_secs_f64() * 1000.0);
         rt.update(|s, _| {
             assert_eq!(s.workbench.docs[0].edit.text.len(), 2 * 1024 * 1024);
+            assert_eq!(
+                &s.workbench.docs[0].edit.text[..1],
+                if i % 2 == 0 { "x" } else { "y" }
+            );
             assert!(s.workbench.error.is_none());
             assert!(s.workbench.docs[0].dirty());
         });
@@ -239,4 +245,159 @@ fn two_mib_native_editor_keeps_input_and_virtualizes_number_rows() {
         times[times.len() - 1],
         times.len()
     );
+}
+
+#[test]
+fn source_cards_follow_end_line_and_native_rows_keep_multiline_paste_ime_and_undo() {
+    let mut s = state();
+    documents::receive(
+        &mut s,
+        "file:source.ts",
+        worker::prepare(
+            serde_json::json!({"kind":"text","text":"alpha\nbeta\ngamma","version":"disk"}),
+        ),
+    );
+    let directory = s.workbench.docs[0].directory.clone();
+    s.draft_mut().comments.push(crate::chat::comments::Comment { id: "inline".into(), text: "Review these two lines".into(), target: serde_json::json!({"path":"source.ts","directory":directory,"version":"disk","start":1,"end":2,"quote":"alpha\nbeta"}) });
+    fn source_view(s: &State, _: &mut rune::Cx<State>) -> rune::El {
+        super::editor::view(s, 0).h_full()
+    }
+    let mut rt = rune::Runtime::new(s, source_view, (800.0, 600.0), rune::Env::new(true, 2.0));
+    rt.frame(0.0);
+    let elements = rt.elements();
+    let card = elements
+        .iter()
+        .find(|e| e.key.as_deref() == Some("source-review-inline"))
+        .unwrap();
+    let second = elements
+        .iter()
+        .find(|e| e.key.as_deref() == Some("source-line-0-1"))
+        .unwrap();
+    let third = elements
+        .iter()
+        .find(|e| e.key.as_deref() == Some("source-line-0-2"))
+        .unwrap();
+    assert!(card.rect[1] >= second.rect[1] + 20.0);
+    assert!(third.rect[1] >= card.rect[1] + card.rect[3]);
+    rt.update(|s, tx| {
+        s.workbench.docs[0].source_input.edit.anchor = 0;
+        s.workbench.docs[0].source_input.edit.focus = 0;
+        tx.focus("workspace-editor", false);
+    });
+    rt.frame(0.0);
+    rt.paste("one\ntwo\n");
+    rt.frame(0.0);
+    rt.update(|s, _| {
+        assert_eq!(
+            s.workbench.docs[0].edit.text,
+            "one\ntwo\nalpha\nbeta\ngamma"
+        );
+        assert_eq!(s.draft().comments[0].target["start"], 3);
+        assert_eq!(s.draft().comments[0].target["end"], 4);
+    });
+    rt.ime(rune::Ime::Preedit("日".into(), Some((3, 3)), vec![]));
+    rt.frame(0.0);
+    rt.ime(rune::Ime::Commit("日".into()));
+    rt.frame(0.0);
+    rt.update(|s, _| {
+        assert_eq!(
+            s.workbench.docs[0].edit.text,
+            "one\ntwo\n日alpha\nbeta\ngamma"
+        )
+    });
+    rt.key(rune::KeyEvent {
+        key: rune::Key::Command('z'),
+        mods: rune::Mods {
+            cmd: true,
+            ..Default::default()
+        },
+    });
+    rt.frame(0.0);
+    rt.update(|s, _| {
+        assert_eq!(
+            s.workbench.docs[0].edit.text,
+            "one\ntwo\nalpha\nbeta\ngamma"
+        )
+    });
+    rt.key(rune::KeyEvent {
+        key: rune::Key::Command('a'),
+        mods: rune::Mods {
+            cmd: true,
+            ..Default::default()
+        },
+    });
+    rt.paste("replacement\nlast");
+    rt.frame(0.0);
+    rt.update(|s, _| assert_eq!(s.workbench.docs[0].edit.text, "replacement\nlast"));
+    let first = rt
+        .elements()
+        .into_iter()
+        .find(|e| e.key.as_deref() == Some("source-line-0-0"))
+        .unwrap()
+        .rect;
+    let (x, y) = (first[0] + 37.5 + 15.0, first[1] + 10.0);
+    rt.pointer_move(x, y);
+    rt.pointer_down(x, y);
+    rt.frame(0.0);
+    rt.pointer_up(x, y);
+    rt.frame(0.0);
+    rt.key(rune::KeyEvent {
+        key: rune::Key::Text("X".into()),
+        mods: Default::default(),
+    });
+    rt.frame(0.0);
+    rt.update(|s, _| assert_eq!(s.workbench.docs[0].edit.text, "reXplacement\nlast"));
+}
+
+#[test]
+fn lazy_diff_sources_preserve_hunks_selection_and_expand_twenty_then_all() {
+    let old = (1..=100).map(|n| format!("line {n}\n")).collect::<String>();
+    let new = old.replace("line 40\n", "changed 40\n");
+    let full = diff::FileDiff::from_texts_with_context("source.ts", &old, &new, 200);
+    let partial = diff::FileDiff::from_texts("source.ts", &old, &new);
+    let mut state = diff::DiffState::new(diff::parse(&partial.patch()));
+    assert!(!state.files()[0].expandable());
+    assert_eq!(state.hidden(0, 1), None);
+    let range = diff::LineRange {
+        file: 0,
+        start: diff::LineRef::new(diff::Side::New, 40),
+        end: diff::LineRef::new(diff::Side::New, 40),
+    };
+    state.set_selection(Some(range));
+    let mut prepared = worker::prepare(serde_json::json!({"patch":full.patch(),"__full":true}));
+    assert!(prepared.diff[0].expandable());
+    state.attach_full_sources(std::mem::take(&mut prepared.diff));
+    assert_eq!(state.selection(), Some(range));
+    assert_eq!(state.files()[0].hunks.len(), 1);
+    assert_eq!(state.hidden(0, 1), Some(57));
+    state.expand(0, 1, diff::Expand::Down);
+    assert_eq!(state.hidden(0, 1), Some(37));
+    state.expand(0, 1, diff::Expand::All);
+    assert_eq!(state.hidden(0, 1), Some(0));
+    assert_eq!(state.metrics.header, 40.0);
+    assert_eq!(state.metrics.font, 12.5);
+    let mut s = self::state();
+    let partial_patch = partial.patch();
+    documents::receive(
+        &mut s,
+        "diff:source.ts",
+        worker::prepare(serde_json::json!({"patch":partial_patch})),
+    );
+    let directory = s.workbench.docs[0].directory.clone();
+    for (mode, hash, accepted) in [
+        ("branch", worker::hash(&partial_patch).to_string(), false),
+        ("working", "stale-patch".into(), false),
+        ("working", worker::hash(&partial_patch).to_string(), true),
+    ] {
+        let tag = format!(
+            "diff-full:{}",
+            serde_json::json!([directory, "source.ts", mode, hash])
+        );
+        documents::receive(
+            &mut s,
+            &tag,
+            worker::prepare(serde_json::json!({"patch":full.patch(),"__full":true})),
+        );
+        assert_eq!(s.workbench.docs[0].diff.files()[0].expandable(), accepted);
+    }
 }

@@ -1,6 +1,6 @@
+use super::diff::{Annotation, LineRange, LineRef, Side};
 use crate::{State, chat::comments, sidebar::label};
 use rune::El;
-use rune_kit::diff::{Annotation, LineRange, LineRef, Side};
 use serde_json::json;
 
 pub fn begin(s: &mut State, range: LineRange) {
@@ -40,6 +40,9 @@ pub fn begin(s: &mut State, range: LineRange) {
     refresh(s);
 }
 pub fn source_selection(s: &mut State) {
+    if let Some(index) = s.workbench.selected {
+        super::editor::selection(&mut s.workbench.docs[index]);
+    }
     let Some(index) = s.workbench.selected else {
         return;
     };
@@ -66,9 +69,14 @@ pub fn source_selection(s: &mut State) {
     let last = text[boundary..]
         .find('\n')
         .map_or(text.len(), |i| boundary + i);
+    let last = if text[..last].ends_with('\r') {
+        last - 1
+    } else {
+        last
+    };
     comments::begin(
         s,
-        json!({"path":doc.path,"directory":doc.directory,"version":doc.value["version"],"start":start,"end":end,"quote":text[first..last].chars().take(8000).collect::<String>()}),
+        json!({"path":doc.path,"directory":doc.directory,"version":doc.value["version"],"start":start,"end":end,"anchor":{"line":end,"side":"additions"},"quote":text[first..last].chars().take(8000).collect::<String>()}),
     );
 }
 pub fn refresh(s: &mut State) {
@@ -127,6 +135,9 @@ pub fn refresh(s: &mut State) {
             ));
         }
         doc.diff.set_annotations(annotations);
+        if s.chat.comment_editor.is_none() {
+            doc.diff.set_selection(None);
+        }
     }
 }
 pub fn card(s: &State, annotation: &Annotation) -> El {
@@ -135,7 +146,7 @@ pub fn card(s: &State, annotation: &Annotation) -> El {
         .as_ref()
         .is_some_and(|e| e.id == annotation.id)
     {
-        return comments::inline_editor(s);
+        return comments::inline_editor(s).w_full();
     }
     let Some(comment) = s.draft().comments.iter().find(|c| c.id == annotation.id) else {
         return rune::el();
@@ -167,9 +178,13 @@ pub fn card(s: &State, annotation: &Annotation) -> El {
                     comments::source(&comment.target)
                 ))
                 .on_press(move |s: &mut State| {
+                    let mut target = edit.target.clone();
+                    if target["diffMode"].is_null() {
+                        target["anchor"] = json!({"line":target["end"],"side":"additions"});
+                    }
                     s.chat.comment_editor = Some(comments::Editor {
                         id: edit.id.clone(),
-                        target: edit.target.clone(),
+                        target,
                         text: rune::TextEdit::new(edit.text.clone()),
                         existing: true,
                     });
