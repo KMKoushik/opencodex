@@ -74,8 +74,8 @@ pub fn reader(s: &State, chat: &Chat, width: f32) -> El {
     let mut timeline = col().key("reader-timeline").grow(1.0).min_h(0.0).w_full()
         .child(super::follow::viewport(scroll, true));
     if chat.jump {
-        let height = rune::memo::layout_size("reader-timeline").map(|size| size[1]).unwrap_or(0.0);
-        timeline = timeline.child(super::jump_pill(s, width, height, true));
+        let size = rune::memo::layout_size("reader-timeline").unwrap_or([width - 1.0, 0.0]);
+        timeline = timeline.child(super::jump_pill(s, size[0], size[1], true));
     }
     timeline
 }
