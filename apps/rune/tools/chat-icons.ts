@@ -16,6 +16,14 @@ const names = {
   chat: 'BubbleChatQuestionIcon',
   terminal: 'CommandLineIcon',
   open: 'FolderOpenIcon',
+  skill: 'Layers01Icon',
+  source: 'SourceCodeIcon',
+  attachment: 'Attachment01Icon',
+  undo: 'Undo03Icon',
+  save: 'FloppyDiskIcon',
+  browser: 'Globe02Icon',
+  latest: 'ArrowDown02Icon',
+  preview: 'ViewIcon',
 } as const;
 let source = '// Generated from Hugeicons by tools/chat-icons.ts.\nuse rune::Icon;\n';
 for (const [id, name] of Object.entries(names)) {

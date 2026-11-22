@@ -66,7 +66,6 @@ impl Drafts {
 pub enum Menu {
     Models,
     Thinking,
-    Access,
     ConfirmAccess,
     Workspace,
     Branch,

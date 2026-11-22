@@ -278,6 +278,11 @@ pub fn capture_messages(
             .map_err(|e| e.to_string())?
             .block_on(async {
                 let mut messages = messages::Messages::load(&client, &id).await?;
+                // Like Timeline.onReady, confirm the history boundary for short
+                // conversations. A cursor may exist even on the final partial page.
+                if !history && messages.messages.len() < 50 && messages.cursor.is_some() {
+                    messages.earlier(&client).await?;
+                }
                 if history {
                     while messages.cursor.is_some() {
                         messages.earlier(&client).await?;

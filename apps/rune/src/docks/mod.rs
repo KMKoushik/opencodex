@@ -182,6 +182,10 @@ fn advance(s: &mut State) {
         s.docks.collapsed = false;
         return;
     }
+    if s.docks.collapsed {
+        s.docks.collapsed = false;
+        return;
+    }
     let fs = fields(&s.docks);
     let index = s.docks.index.min(fs.len().saturating_sub(1));
     for (i, f) in fs.iter().enumerate() {
@@ -220,7 +224,7 @@ pub fn active(s: &State) -> bool {
 }
 pub fn waiting_label(s: &State) -> &'static str {
     if !s.docks.permissions.is_empty() {
-        "Waiting for approval"
+        "Waiting for permission"
     } else {
         "Waiting for your answer"
     }
@@ -328,7 +332,11 @@ pub fn view(s: &State) -> El {
                     .child(label(t, &header, 12.0, 500.0, "text-secondary"))
                     .child(label(
                         t,
-                        if s.docks.reviewing {
+                        if s.docks.reviewing
+                            || fs
+                                .get(index)
+                                .is_none_or(|f| f["description"].as_str().is_none_or(str::is_empty))
+                        {
                             ""
                         } else {
                             fs.get(index)
@@ -343,18 +351,37 @@ pub fn view(s: &State) -> El {
             .child(
                 crate::sidebar::icon_button_size(
                     t,
-                    &crate::icons::DOWN,
                     if s.docks.collapsed {
-                        "Expand"
+                        &crate::icons::UP
                     } else {
-                        "Collapse"
+                        &crate::icons::DOWN
+                    },
+                    if s.docks.collapsed {
+                        "Expand question"
+                    } else {
+                        "Collapse question"
                     },
                     14.0,
                 )
                 .on_press(|s: &mut State| s.docks.collapsed = !s.docks.collapsed),
             ),
     );
-    if !s.docks.collapsed {
+    if s.docks.collapsed {
+        dock = dock.child(
+            label(
+                t,
+                if s.docks.reviewing {
+                    "Your answers are ready to send"
+                } else {
+                    fs.get(index).map(|f| title(f)).unwrap_or("Question")
+                },
+                13.0,
+                400.0,
+                "text-secondary",
+            )
+            .wrap(),
+        );
+    } else {
         if s.docks.reviewing {
             dock = dock
                 .child(label(t, "Check your answers before sending", 15.0, 600.0, "text").mb(12.0));
@@ -450,6 +477,17 @@ pub fn view(s: &State) -> El {
                                     .wrap(),
                                 ),
                         )
+                        .child(label(
+                            t,
+                            if i < 9 {
+                                (i + 1).to_string()
+                            } else {
+                                String::new()
+                            },
+                            11.0,
+                            400.0,
+                            "text-tertiary",
+                        ))
                         .on_press(move |s: &mut State| {
                             if s.docks.sending {
                                 return;
@@ -573,10 +611,15 @@ pub fn view(s: &State) -> El {
             }
         }))
         .child(el().grow(1.0));
-    if s.docks.reviewing || index > 0 {
+    if (s.docks.reviewing || index > 0) && !s.docks.collapsed && !fs.is_empty() {
         footer = footer.child(button(s, "Back").on_press(|s: &mut State| {
+            let last = fields(&s.docks).len().saturating_sub(1);
+            s.docks.index = if s.docks.reviewing {
+                last
+            } else {
+                s.docks.index.saturating_sub(1)
+            };
             s.docks.reviewing = false;
-            s.docks.index = s.docks.index.saturating_sub(1);
         }));
     }
     footer = footer.child(
@@ -585,6 +628,8 @@ pub fn view(s: &State) -> El {
                 s,
                 if s.docks.sending {
                     "Sending…"
+                } else if s.docks.collapsed {
+                    "Continue"
                 } else if s.docks.reviewing {
                     "Send answers ↵"
                 } else if index + 1 >= fs.len() {

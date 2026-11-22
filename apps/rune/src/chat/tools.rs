@@ -14,10 +14,11 @@ pub fn activity(
     summary: &str,
     active: bool,
     errors: usize,
+    reader: bool,
 ) -> El {
     let t = &s.theme;
     let id = id.to_owned();
-    let open = s.chat.open(&id);
+    let open = super::conversation(s, reader).open(&id);
     let mut header = row()
         .w_full()
         .min_h(32.0)
@@ -33,14 +34,7 @@ pub fn activity(
             "text-secondary",
         ));
     if active {
-        header = header
-            .child(
-                rune_kit::Spinner::new()
-                    .size(12.0)
-                    .color(t.c("text-tertiary"))
-                    .build(&rune_kit::Kit::neutral(t.dark)),
-            )
-            .child(label(t, summary, 12.0, 400.0, "text-tertiary").truncate());
+        header = header.child(label(t, summary, 12.0, 400.0, "text-tertiary").truncate());
     }
     if errors > 0 {
         header = header.child(label(t, format!("{errors} failed"), 12.0, 400.0, "error"));
@@ -52,7 +46,7 @@ pub fn activity(
             .focusable(true)
             .expanded(open)
             .on_press_tx(move |s: &mut State, tx| {
-                s.chat.toggle(&id);
+                super::conversation_mut(s, reader).toggle(&id);
                 tx.keep_on_screen(id.clone());
                 tx.instant();
             }),
@@ -74,20 +68,20 @@ pub fn activity(
                     count,
                     38.0,
                     move |_: &State, n| keys[n].id.clone().into(),
-                    move |s: &State, n| work(s, &entries[n]),
+                    move |s: &State, n| work(s, &entries[n], reader),
                 ));
         } else {
             for entry in entries {
-                content = content.child(work(s, entry));
+                content = content.child(work(s, entry, reader));
             }
         }
         group = group.child(content);
     }
     group
 }
-fn work(s: &State, r: &Row) -> El {
+fn work(s: &State, r: &Row, reader: bool) -> El {
     let t = &s.theme;
-    let open = s.chat.open(&r.id);
+    let open = super::conversation(s, reader).open(&r.id);
     let id = r.id.clone();
     match &r.kind {
         Kind::Reasoning { text: content, .. } => {
@@ -116,49 +110,67 @@ fn work(s: &State, r: &Row) -> El {
                 .expanded(open)
                 .focusable(true)
                 .on_press_tx(move |s: &mut State, tx| {
-                    s.chat.toggle(&id);
+                    super::conversation_mut(s, reader).toggle(&id);
                     tx.keep_on_screen(id.clone());
                     tx.instant();
                 })
         }
-        Kind::Skill(m) => label(
-            t,
-            format!(
-                "Used {}",
-                m.fields
-                    .get("name")
-                    .and_then(Value::as_str)
-                    .unwrap_or("skill")
-            ),
-            12.0,
-            400.0,
-            "text-secondary",
-        )
-        .py(8.0),
-        Kind::Tool(tool) => tool_row(s, &id, tool),
+        Kind::Skill(m) => skill(
+            s,
+            m.fields
+                .get("name")
+                .or_else(|| m.fields.get("skill"))
+                .and_then(Value::as_str),
+            "completed",
+            None,
+        ),
+        Kind::Tool(tool) => tool_row(s, &id, tool, reader),
         _ => col(),
     }
 }
-fn tool_row(s: &State, id: &str, tool: &Value) -> El {
+fn tool_row(s: &State, id: &str, tool: &Value, reader: bool) -> El {
     let t = &s.theme;
-    let open = s.chat.open(id);
+    let open = super::conversation(s, reader).open(id);
     let name = tool["name"].as_str().unwrap_or("Tool");
     let state = &tool["state"];
     let input = &state["input"];
+    if name == "skill" {
+        let name = ["name", "id"]
+            .iter()
+            .find_map(|k| input[*k].as_str().filter(|v| !v.is_empty()));
+        let output_name = state["content"].as_array().and_then(|items| {
+            items.iter().find_map(|item| {
+                let text = item["text"].as_str()?;
+                let start = text.find("<skill_content")?;
+                let tag = text[start..].split('>').next()?;
+                let tail = tag.split_once("name=")?.1;
+                let quote = tail.chars().next()?;
+                if !matches!(quote, '\'' | '"') {
+                    return None;
+                }
+                tail[1..].split(quote).next()
+            })
+        });
+        return skill(
+            s,
+            name.or(output_name),
+            state["status"].as_str().unwrap_or("completed"),
+            state["error"]["message"].as_str(),
+        );
+    }
     let target = ["filePath", "path", "command", "pattern", "query"]
         .iter()
         .find_map(|key| input[*key].as_str())
-        .unwrap_or(name);
+        .unwrap_or(if name == "question" { "" } else { name });
     let (glyph, title, ink) = match name {
         "read" | "read_file" => (&super::icons::READ, "Read", "text-secondary"),
         "shell" | "bash" | "exec" | "execute" => (&super::icons::SHELL, "Run", "text-secondary"),
         "grep" | "glob" | "search" | "list" | "ls" => (&i::SEARCH, name, "activity-search"),
         "edit" | "write" | "patch" | "apply_patch" | "write_file" => {
-            (&i::EDIT, name, "activity-edit")
+            (&super::icons::CHANGES, name, "activity-edit")
         }
-        "skill" => (&i::BOOK, "Skill", "activity-skill"),
-        "question" => (&i::PLAN, "Question", "text-secondary"),
-        _ => (&i::FOLDER, name, "text-secondary"),
+        "question" => (&super::icons::READ, "Question", "text-secondary"),
+        _ => (&super::icons::READ, name, "text-secondary"),
     };
     let status = state["status"].as_str().unwrap_or("");
     let key = id.to_owned();
@@ -212,7 +224,7 @@ fn tool_row(s: &State, id: &str, tool: &Value) -> El {
         .expanded(open)
         .focusable(true)
         .on_press_tx(move |s: &mut State, tx| {
-            s.chat.toggle(&key);
+            super::conversation_mut(s, reader).toggle(&key);
             tx.keep_on_screen(key.clone());
             tx.instant();
         });
@@ -253,24 +265,50 @@ fn tool_row(s: &State, id: &str, tool: &Value) -> El {
                 if let Some(content) = output["text"].as_str() {
                     details = details.child(pre(s, content));
                 } else {
-                    details = details.child(label(t, "File output", 12.0, 400.0, "text-tertiary"));
+                    details = details.child(label(
+                        t,
+                        format!("File output ({})", output["mime"].as_str().unwrap_or("")),
+                        12.0,
+                        400.0,
+                        "text-tertiary",
+                    ));
                 }
             }
-        }
-        // Task calls expose the child conversation without reimplementing subagent execution.
-        if let Some(session) = state["metadata"]["sessionId"]
-            .as_str()
-            .or_else(|| state["metadata"]["sessionID"].as_str())
-        {
-            let session = session.to_owned();
-            details = details.child(
-                label(t, "Open subagent conversation", 12.0, 500.0, "link")
-                    .on_press(move |s: &mut State| s.open_session(Some(session.clone()))),
-            );
         }
         body = body.child(details);
     }
     body
+}
+pub fn skill(s: &State, name: Option<&str>, status: &str, error: Option<&str>) -> El {
+    let t = &s.theme;
+    let title = match status {
+        "completed" => "Used skill",
+        "error" => "Failed to load skill",
+        _ => "Loading skill",
+    };
+    let title = format!(
+        "{title}{}{}",
+        name.map(|n| format!(": {n}")).unwrap_or_default(),
+        if matches!(status, "running" | "streaming") {
+            "…"
+        } else {
+            ""
+        }
+    );
+    let mut result = col().w_full().child(
+        row()
+            .min_h(32.0)
+            .px(2.0)
+            .py(4.0)
+            .gap(8.0)
+            .center_y()
+            .child(icon(&super::icons::SKILL, 14.0).color(t.c("activity-skill")))
+            .child(label(t, title, 12.0, 400.0, "text-secondary").wrap()),
+    );
+    if let Some(error) = error {
+        result = result.child(label(t, error, 12.0, 400.0, "error").wrap());
+    }
+    result
 }
 fn pre(s: &State, source: &str) -> El {
     col()
@@ -288,7 +326,7 @@ fn pre(s: &State, source: &str) -> El {
                 .selectable(true),
         )
 }
-pub fn shell(s: &State, m: &Message) -> El {
+pub fn shell(s: &State, m: &Message, reader: bool) -> El {
     let cmd = m
         .fields
         .get("command")
@@ -299,8 +337,53 @@ pub fn shell(s: &State, m: &Message) -> El {
         .get("output")
         .and_then(|o| o["output"].as_str())
         .unwrap_or("");
-    col()
-        .w_full()
-        .child(label(&s.theme, cmd, 12.0, 500.0, "text-secondary"))
-        .child(pre(s, output))
+    let id = m.id.clone();
+    let open = super::conversation(s, reader).open(&id);
+    let mut result = col().w_full().child(
+        row()
+            .min_h(32.0)
+            .px(2.0)
+            .py(4.0)
+            .gap(8.0)
+            .center_y()
+            .child(
+                icon(if open { &i::DOWN } else { &i::RIGHT }, 12.0)
+                    .color(s.theme.c("text-tertiary")),
+            )
+            .child(
+                text(cmd)
+                    .font(TextStyle::new(13.0, 400.0).mono())
+                    .color(s.theme.c("text-secondary"))
+                    .truncate_fade(),
+            )
+            .role("button")
+            .label(cmd)
+            .expanded(open)
+            .focusable(true)
+            .on_press(move |s: &mut State| super::conversation_mut(s, reader).toggle(&id)),
+    );
+    if open {
+        result = result.child(
+            pre(s, output)
+                .ml(22.0)
+                .mr(8.0)
+                .mb(12.0)
+                .padding(12.0)
+                .radius(8.0)
+                .fill(s.theme.c("secondary")),
+        );
+        if m.fields
+            .get("output")
+            .is_some_and(|v| v["truncated"] == true)
+        {
+            result = result.child(label(
+                &s.theme,
+                "Output truncated by OpenCode.",
+                12.0,
+                400.0,
+                "text-tertiary",
+            ));
+        }
+    }
+    result
 }

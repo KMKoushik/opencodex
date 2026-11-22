@@ -10,6 +10,7 @@ use rune::{El, GrowthSpec, ScrollSpec, TextStyle, col, el, icon, row, text};
 use std::{cell::Cell, collections::BTreeMap, rc::Rc, sync::Arc};
 pub(crate) mod icons;
 mod markdown;
+pub(crate) use markdown::render as markdown_view;
 mod media;
 pub mod preview;
 pub mod probe;
@@ -29,6 +30,7 @@ pub struct Chat {
     pub loading_earlier: bool,
     pub scroll_applied: bool,
     pub details: bool,
+    pub context: bool,
     pub media: media::Media,
     pub preview: Option<String>,
     pub tick_due: Option<f64>,
@@ -71,6 +73,7 @@ impl Default for Chat {
             loading_earlier: false,
             scroll_applied: false,
             details: false,
+            context: false,
             media: media::Media::default(),
             preview: None,
             tick_due: None,
@@ -180,8 +183,10 @@ pub fn view(s: &State, width: f32) -> El {
                             return history(s);
                         }
                         if n > s.chat.rows.len() {
-                            let mut end =
-                                col().key("transcript-end").h(52.0).w_full().items_center();
+                            let mut end = col().key("transcript-end").min_h(52.0).w(width_for_row(s)).px(24.0).pb(32.0).gap(20.0);
+                            if !s.chat.data.running && s.chat.data.info.as_ref().is_some_and(|i| i.outcome.as_deref() == Some("failed")) {
+                                end = end.child(label(&s.theme, "The run failed. Check OpenCode’s provider configuration and try again.", 14.0, 400.0, "error").role("alert").wrap());
+                            }
                             if crate::docks::active(s) {
                                 end = end.child(
                                     label(
@@ -191,8 +196,11 @@ pub fn view(s: &State, width: f32) -> El {
                                         400.0,
                                         "text-tertiary",
                                     )
-                                    .w(width_for_row(s) - 48.0),
+                                    .w_full(),
                                 );
+                            }
+                            else if !s.chat.data.running && s.chat.data.info.as_ref().is_some_and(|i| i.outcome.as_deref() == Some("interrupted")) {
+                                end = end.child(label(&s.theme, "Stopped", 12.0, 400.0, "text-tertiary").role("status"));
                             }
                             return end;
                         }
@@ -266,7 +274,7 @@ pub fn view(s: &State, width: f32) -> El {
                         .radius(20.0)
                         .fill(t.c("elevated"))
                         .border(1.0, t.c("border-heavy"))
-                        .child(icon(&i::DOWN, 14.0).color(t.c("text-secondary")))
+                        .child(icon(&icons::LATEST, 14.0).color(t.c("text-secondary")))
                         .child(label(t, "Jump to latest", 12.0, 500.0, "text-secondary"))
                         .role("button")
                         .label("Jump to latest")
@@ -289,28 +297,20 @@ pub fn view(s: &State, width: f32) -> El {
                 .wrap(),
         );
     }
-    if s.chat
-        .data
-        .info
-        .as_ref()
-        .is_some_and(|info| info.revert.is_some())
-    {
-        body=body.child(label(t,"Conversation undone. Use /redo to restore it, or send a message to continue from here.",12.0,400.0,"text-tertiary").role("status").px(24.0).py(8.0).wrap());
-    }
     body
 }
 pub fn scroll_key(s: &State) -> String {
     format!("conversation-{}", s.selected.as_deref().unwrap_or(""))
 }
 fn history(s: &State) -> El {
-    let title = if let Some(error) = &s.chat.data.error {
-        error.as_str()
+    let title = if s.chat.data.error.is_some() {
+        "Retry loading history"
     } else if s.chat.loading_earlier {
         "Loading earlier messages…"
     } else if s.chat.data.cursor.is_none() {
         "Beginning of conversation"
     } else {
-        "Load earlier messages"
+        ""
     };
     row()
         .key("history-status")
@@ -345,8 +345,25 @@ fn width_for_row(s: &State) -> f32 {
         .min(768.0)
 }
 fn render_row(s: &State, r: &Row) -> El {
+    conversation_row(s, r, width_for_row(s), false)
+}
+pub(super) fn conversation(s: &State, reader: bool) -> &Chat {
+    if reader {
+        &s.workbench.reader_chat
+    } else {
+        &s.chat
+    }
+}
+pub(super) fn conversation_mut(s: &mut State, reader: bool) -> &mut Chat {
+    if reader {
+        &mut s.workbench.reader_chat
+    } else {
+        &mut s.chat
+    }
+}
+pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> El {
     let t = &s.theme;
-    let width = width_for_row(s);
+    let chat = conversation(s, reader);
     let padding = match &r.kind {
         Kind::Turn { .. } => 12.0,
         Kind::Activity { .. } => 8.0,
@@ -354,10 +371,10 @@ fn render_row(s: &State, r: &Row) -> El {
         _ => 20.0,
     };
     rune::memo(
-        format!("chat-row-{}", r.id),
+        format!("chat-row-{reader}-{}", r.id),
         (
             r.version,
-            s.chat.disclosure_revision,
+            chat.disclosure_revision,
             crate::docks::active(s),
             width.to_bits(),
             s.theme.dark,
@@ -369,7 +386,7 @@ fn render_row(s: &State, r: &Row) -> El {
                     ..
                 }
             ) {
-                s.chat.now_ms as u64 / 1000
+                chat.now_ms as u64 / 1000
             } else {
                 0
             },
@@ -389,7 +406,7 @@ fn render_row(s: &State, r: &Row) -> El {
                         width - 48.0,
                     ));
                     if message.time.completed.is_none()
-                        && s.chat.data.running
+                        && chat.data.running
                         && !crate::docks::active(s)
                     {
                         content = content.child(el().size(5.0, 15.0).fill(t.c("text-secondary")));
@@ -424,6 +441,7 @@ fn render_row(s: &State, r: &Row) -> El {
                                 }),
                         );
                     }
+                    let mut attachments = row().gap(8.0).max_w(width - 48.0).scroll_x();
                     if let Some(files) = m.fields.get("files").and_then(serde_json::Value::as_array)
                     {
                         for file in files {
@@ -435,8 +453,8 @@ fn render_row(s: &State, r: &Row) -> El {
                             {
                                 if mime.starts_with("image/") {
                                     let source = format!("data:{mime};base64,{data}");
-                                    if let Some(Ok(image)) = s.chat.media.images.get(&source) {
-                                        bubble = bubble.child(
+                                    if let Some(Ok(image)) = chat.media.images.get(&source) {
+                                        attachments = attachments.child(
                                             el().size(96.0, 76.0)
                                                 .radius(10.0)
                                                 .pixels_fit(image.pixels(), rune::SurfaceFit::Fill)
@@ -455,7 +473,18 @@ fn render_row(s: &State, r: &Row) -> El {
                                     }
                                 }
                             }
-                            bubble = bubble.child(
+                            let name = file["name"]
+                                .as_str()
+                                .or_else(|| file["mime"].as_str())
+                                .unwrap_or("");
+                            let kind = if file["mime"] == "application/pdf" {
+                                "PDF".into()
+                            } else {
+                                name.rsplit_once('.')
+                                    .map(|(_, ext)| ext.to_uppercase())
+                                    .unwrap_or("File".into())
+                            };
+                            attachments = attachments.child(
                                 row()
                                     .w(240.0)
                                     .h(76.0)
@@ -463,14 +492,16 @@ fn render_row(s: &State, r: &Row) -> El {
                                     .center_y()
                                     .radius(10.0)
                                     .border(1.0, t.c("border-heavy"))
-                                    .child(icon(&i::FOLDER, 20.0).color(t.c("text-secondary")))
-                                    .child(label(
-                                        t,
-                                        file["name"].as_str().unwrap_or("Attachment"),
-                                        14.0,
-                                        400.0,
-                                        "text",
-                                    )),
+                                    .gap(10.0)
+                                    .child(
+                                        icon(&icons::ATTACHMENT, 20.0).color(t.c("text-secondary")),
+                                    )
+                                    .child(
+                                        col()
+                                            .min_w(0.0)
+                                            .child(label(t, name, 14.0, 400.0, "text").truncate())
+                                            .child(label(t, kind, 12.0, 400.0, "text-tertiary")),
+                                    ),
                             );
                         }
                     }
@@ -479,19 +510,25 @@ fn render_row(s: &State, r: &Row) -> El {
                         .get("text")
                         .and_then(serde_json::Value::as_str)
                         .unwrap_or("");
-                    bubble.child(
-                        text(txt)
-                            .spans(crate::find::highlights(s, txt))
-                            .font(TextStyle::new(14.0, 400.0).lh(22.75))
-                            .color(t.c("text"))
-                            .wrap()
-                            .selectable(true)
-                            .max_w(((width - 48.0) * 0.7).min(456.0))
-                            .px(12.0)
-                            .py(8.0)
-                            .radius(16.0)
-                            .fill(t.c("user-message")),
-                    )
+                    if !txt.is_empty() {
+                        bubble = bubble.child(
+                            text(txt)
+                                .spans(crate::find::highlights(s, txt))
+                                .font(
+                                    TextStyle::new(s.prefs.chat_font_size.unwrap_or(14.0), 400.0)
+                                        .lh(s.prefs.chat_font_size.unwrap_or(14.0) * 1.625),
+                                )
+                                .color(t.c("text"))
+                                .wrap()
+                                .selectable(true)
+                                .max_w(((width - 48.0) * 0.7).min(456.0))
+                                .px(12.0)
+                                .py(8.0)
+                                .radius(16.0)
+                                .fill(t.c("user-message")),
+                        );
+                    }
+                    bubble.child(attachments)
                 }
                 Kind::Turn {
                     status,
@@ -500,10 +537,10 @@ fn render_row(s: &State, r: &Row) -> El {
                     open,
                 } => {
                     let duration = end
-                        .or_else(|| (*status == "working").then_some(s.chat.now_ms))
+                        .or_else(|| (*status == "working").then_some(chat.now_ms))
                         .map(|end| format_duration((end - start).max(0.0)));
                     let title = match (*status, duration) {
-                        ("working", Some(d)) if s.chat.now_ms - start >= 1000.0 => {
+                        ("working", Some(d)) if chat.now_ms - start >= 1000.0 => {
                             format!("Working for {d}")
                         }
                         ("working", _) => "Working".into(),
@@ -528,9 +565,10 @@ fn render_row(s: &State, r: &Row) -> El {
                                 .color(t.c("text-tertiary")),
                         )
                         .on_press_tx(move |s: &mut State, tx| {
-                            s.chat.overrides.insert(id.clone(), open);
-                            s.chat.disclosure_revision += 1;
-                            s.chat.rebuild();
+                            let chat = conversation_mut(s, reader);
+                            chat.overrides.insert(id.clone(), open);
+                            chat.disclosure_revision += 1;
+                            chat.rebuild();
                             tx.keep_on_screen(id.clone());
                             tx.instant();
                         })
@@ -540,29 +578,66 @@ fn render_row(s: &State, r: &Row) -> El {
                     summary,
                     active,
                     errors,
-                } => tools::activity(s, &r.id, entries, summary, *active, *errors),
+                } => tools::activity(s, &r.id, entries, summary, *active, *errors, reader),
                 Kind::Message(m) => {
                     let error = m.fields.get("error").and_then(|e| e["message"].as_str());
-                    if let Some(error) = error {
-                        label(t, error, 13.0, 400.0, "error").wrap()
+                    if m.r#type == "assistant" {
+                        let mut status = col().gap(14.0).w_full();
+                        if let Some(retry) = m
+                            .fields
+                            .get("retry")
+                            .and_then(|v| v["error"]["message"].as_str())
+                        {
+                            status = status.child(
+                                label(
+                                    t,
+                                    format!("Retrying: {retry}"),
+                                    12.0,
+                                    400.0,
+                                    "text-tertiary",
+                                )
+                                .role("status")
+                                .wrap(),
+                            );
+                        }
+                        if let Some(error) = error {
+                            status = status
+                                .child(label(t, error, 14.0, 400.0, "error").role("alert").wrap());
+                        }
+                        status
                     } else if m.r#type == "shell" {
-                        tools::shell(s, m)
+                        tools::shell(s, m, reader)
                     } else {
-                        label(
-                            t,
-                            format!(
-                                "{} {}",
-                                m.r#type,
+                        let value = |key: &str| {
+                            m.fields
+                                .get(key)
+                                .and_then(serde_json::Value::as_str)
+                                .unwrap_or("")
+                        };
+                        let note = match m.r#type.as_str() {
+                            "compaction" => match value("status") {
+                                "running" => "Compacting context…".into(),
+                                "failed" => format!("Compaction failed: {}", error.unwrap_or("")),
+                                _ => "Context compacted".into(),
+                            },
+                            "agent-switched" => format!("Agent: {}", value("agent")),
+                            "model-switched" => format!(
+                                "Model: {}",
                                 m.fields
-                                    .get("name")
-                                    .and_then(serde_json::Value::as_str)
+                                    .get("model")
+                                    .and_then(|v| v["id"].as_str())
                                     .unwrap_or("")
                             ),
-                            12.0,
-                            400.0,
-                            "text-tertiary",
-                        )
-                        .wrap()
+                            "location-switched" => format!(
+                                "Directory: {}",
+                                m.fields
+                                    .get("location")
+                                    .and_then(|v| v["directory"].as_str())
+                                    .unwrap_or("")
+                            ),
+                            _ => String::new(),
+                        };
+                        label(t, note, 12.0, 400.0, "text-tertiary").wrap()
                     }
                 }
                 _ => el(),

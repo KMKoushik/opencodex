@@ -98,6 +98,7 @@ pub struct SessionInfo {
     pub model: Option<ModelRef>,
     pub metadata: Option<Value>,
     pub revert: Option<Value>,
+    pub outcome: Option<String>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Connection {

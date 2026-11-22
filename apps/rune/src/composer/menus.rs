@@ -147,23 +147,9 @@ pub fn filter(s: &mut State) {
                     model
                         .variants
                         .iter()
-                        .map(|v| choice(&v.id, &v.id, "", Value::Null)),
+                        .map(|v| choice(&v.id, &super::variant_label(&v.id), "", Value::Null)),
                 );
             }
-        }
-        Menu::Access => {
-            choices.push(choice(
-                "default",
-                "Permissions",
-                "Use OpenCode permissions",
-                Value::Null,
-            ));
-            choices.push(choice(
-                "full",
-                "Enable full access",
-                "Read and change files, run commands without approval",
-                Value::Null,
-            ));
         }
         Menu::Workspace => {
             choices.push(choice(
@@ -371,13 +357,6 @@ fn choose(s: &mut State, index: usize, tx: &mut Tx) {
                 s.choose_model(model);
             }
         }
-        Some(Menu::Access) => {
-            if c.id == "full" {
-                s.composer.menu = Some(Menu::ConfirmAccess);
-                return;
-            }
-            super::access::change(s, false);
-        }
         Some(Menu::Workspace) => {
             s.draft_mut().worktree = c.id == "worktree";
             s.touch_draft();
@@ -433,7 +412,6 @@ pub fn view(s: &State) -> Option<El> {
     let anchor = match menu {
         Menu::Models => "model-picker",
         Menu::Thinking => "thinking-picker",
-        Menu::Access => "permission-picker",
         Menu::Workspace | Menu::Branch => "workspace-bar",
         _ => "composer",
     };

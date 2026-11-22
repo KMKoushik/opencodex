@@ -6,6 +6,7 @@ use rune::{El, TextStyle, col, el, icon, row, text_input};
 mod access;
 pub mod capture;
 mod commands;
+mod context;
 mod fuzzy;
 mod icons;
 pub mod keys;
@@ -173,6 +174,9 @@ pub fn area(s: &State, width: f32) -> El {
         });
     let input = rune::auto_grow(input, 2, 12).min_h(52.0).max_h(240.0);
     let mut controls = row().grow(1.0).min_w(0.0).center_y().justify_end().gap(4.0);
+    if s.selected.is_some() {
+        controls = controls.child(context::view(s));
+    }
     controls = controls.child(
         t.shadow(
             t.paint(
@@ -218,12 +222,18 @@ pub fn area(s: &State, width: f32) -> El {
             .border_layout()
             .child(label(
                 t,
-                if s.model_info().is_some_and(|m| !m.variants.is_empty()) {
-                    s.selected_model()
-                        .and_then(|m| m.variant.as_deref())
-                        .unwrap_or("Default")
+                &if s.model_info().is_some_and(|m| !m.variants.is_empty()) {
+                    variant_label(
+                        s.selected_model()
+                            .and_then(|m| m.variant.as_deref())
+                            .unwrap_or("default"),
+                    )
                 } else {
-                    "No thinking options"
+                    if inner < 300.0 {
+                        String::new()
+                    } else {
+                        "No thinking options".into()
+                    }
                 },
                 12.5,
                 500.0,
@@ -264,9 +274,20 @@ pub fn area(s: &State, width: f32) -> El {
         ))
         .key("permission-picker")
         .role("button")
-        .label("Permissions")
+        .label(if s.draft().full_access {
+            "Full access: restore OpenCode permissions"
+        } else {
+            "Permissions: enable full access"
+        })
+        .disabled(s.composer.access_pending)
         .focusable(true)
-        .on_press_tx(|s: &mut State, tx| menus::open(s, Menu::Access, tx));
+        .on_press_tx(|s: &mut State, tx| {
+            if s.draft().full_access {
+                access::change(s, false);
+            } else {
+                menus::open(s, Menu::ConfirmAccess, tx);
+            }
+        });
     let running = s.chat.data.running
         || s.selected
             .as_ref()
@@ -550,6 +571,7 @@ fn starters(s: &State, width: f32) -> El {
 fn attachments(s: &State) -> El {
     let mut out = row()
         .w_full()
+        .scroll_x()
         .gap(8.0)
         .mb(if s.draft().attachments.is_empty() {
             0.0
@@ -566,7 +588,7 @@ fn attachments(s: &State) -> El {
                 .gap(8.0)
                 .radius(12.0)
                 .border(1.0, s.theme.c("border"))
-                .fill(s.theme.c("elevated"))
+                .fill(s.theme.c("secondary"))
                 .center_y()
                 .child(if let Some(Some(image)) = s.draft().images.get(i) {
                     el().size(44.0, 44.0).radius(6.0).pixels(image.pixels())
@@ -575,7 +597,10 @@ fn attachments(s: &State) -> El {
                         .radius(6.0)
                         .fill(s.theme.c("control"))
                         .center()
-                        .child(icon(&i::BOOK, 20.0).color(s.theme.c("text-tertiary")))
+                        .child(
+                            icon(&crate::chat::icons::ATTACHMENT, 20.0)
+                                .color(s.theme.c("text-secondary")),
+                        )
                 })
                 .child(
                     col()
@@ -586,7 +611,7 @@ fn attachments(s: &State) -> El {
                         )
                         .child(label(
                             &s.theme,
-                            &format!("{} B", item.bytes.len()),
+                            &attachment_size(item.bytes.len()),
                             11.0,
                             400.0,
                             "text-tertiary",
@@ -610,4 +635,20 @@ fn attachments(s: &State) -> El {
         );
     }
     out
+}
+fn attachment_size(bytes: usize) -> String {
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else if bytes < 1024 * 1024 {
+        format!("{} KB", bytes.div_ceil(1024))
+    } else {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    }
+}
+fn variant_label(value: &str) -> String {
+    let mut chars = value.chars();
+    chars
+        .next()
+        .map(|first| first.to_uppercase().collect::<String>() + chars.as_str())
+        .unwrap_or_default()
 }

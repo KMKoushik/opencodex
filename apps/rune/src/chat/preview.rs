@@ -6,7 +6,14 @@ use rune::{El, col, el, row};
 
 pub fn view(s: &State, width: f32, height: f32) -> Option<El> {
     let source = s.chat.preview.as_ref()?;
-    let image = s.chat.media.images.get(source)?.as_ref().ok()?;
+    let image = s
+        .chat
+        .media
+        .images
+        .get(source)
+        .or_else(|| s.workbench.reader_chat.media.images.get(source))?
+        .as_ref()
+        .ok()?;
     let t = &s.theme;
     Some(
         el().key("image-preview")
