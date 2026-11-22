@@ -16,6 +16,7 @@ pub struct Document {
     pub path: String,
     pub directory: String,
     pub is_diff: bool,
+    pub pinned: bool,
     pub value: Value,
     pub diff: DiffState,
     pub edit: TextEdit,
@@ -28,6 +29,7 @@ pub struct Document {
     pub lines: Vec<(usize, usize)>,
     pub highlights: Vec<syntax::Highlight>,
     pub image: Option<Result<rune::Image, String>>,
+    pub image_scale: Option<f32>,
     pub stale: bool,
 }
 impl Document {
@@ -194,6 +196,8 @@ pub fn receive(s: &mut State, tag: &str, mut p: Payload) {
         path: path.into(),
         directory: directory.clone(),
         is_diff: kind.starts_with("diff"),
+        pinned: false,
+        image_scale: None,
         value: p.value,
         diff,
         edit,
@@ -214,8 +218,16 @@ pub fn receive(s: &mut State, tag: &str, mut p: Payload) {
     if let Some(index) = s.workbench.docs.iter().position(|d| {
         d.path == path && d.directory == directory && d.is_diff == doc.is_diff && !d.dirty()
     }) {
+        if bytes.saturating_sub(s.workbench.docs[index].bytes()) + doc.bytes() > 64 * 1024 * 1024 {
+            s.workbench.error = Some(
+                "This preview exceeds the 64 MiB memory budget. Close an open file first.".into(),
+            );
+            return;
+        }
+        doc.pinned = s.workbench.docs[index].pinned;
         s.workbench.docs[index] = doc;
         s.workbench.selected = Some(index);
+        super::review::refresh(s);
         return;
     }
     if doc.bytes() > 64 * 1024 * 1024 {
@@ -223,6 +235,22 @@ pub fn receive(s: &mut State, tag: &str, mut p: Payload) {
         return;
     }
     let mut bytes = bytes;
+    if let Some(index) = s.workbench.selected.filter(|i| {
+        s.workbench
+            .docs
+            .get(*i)
+            .is_some_and(|d| !d.pinned && !d.dirty() && d.saving.is_none())
+    }) {
+        if bytes.saturating_sub(s.workbench.docs[index].bytes()) + doc.bytes() > 64 * 1024 * 1024 {
+            s.workbench.error = Some(
+                "This preview exceeds the 64 MiB memory budget. Close an open file first.".into(),
+            );
+            return;
+        }
+        s.workbench.docs[index] = doc;
+        super::review::refresh(s);
+        return;
+    }
     while s.workbench.docs.len() >= 12 || bytes + doc.bytes() > 64 * 1024 * 1024 {
         if let Some(i) = s
             .workbench
@@ -238,6 +266,7 @@ pub fn receive(s: &mut State, tag: &str, mut p: Payload) {
     }
     s.workbench.docs.push(doc);
     s.workbench.selected = Some(s.workbench.docs.len() - 1);
+    super::review::refresh(s);
 }
 fn reindex(doc: &mut Document) {
     let text = doc.value["text"].as_str().unwrap_or("");
@@ -251,61 +280,6 @@ fn reindex(doc: &mut Document) {
         })
         .collect();
 }
-pub fn tabs(s: &State) -> El {
-    let t = &s.theme;
-    let mut tabs = row().h(39.0).center_y().scroll_x();
-    for (index, doc) in s.workbench.docs.iter().enumerate() {
-        let name = doc.path.rsplit('/').next().unwrap_or(&doc.path);
-        tabs = tabs.child(
-            row()
-                .h(39.0)
-                .px(10.0)
-                .gap(6.0)
-                .center_y()
-                .fill(if s.workbench.selected == Some(index) {
-                    t.c("surface")
-                } else {
-                    t.c("surface-under")
-                })
-                .border_sides(
-                    [
-                        0.0,
-                        1.0,
-                        if s.workbench.selected == Some(index) {
-                            2.0
-                        } else {
-                            0.0
-                        },
-                        0.0,
-                    ],
-                    t.c("border"),
-                )
-                .child(
-                    label(
-                        t,
-                        &format!("{}{}", name, if doc.dirty() { " •" } else { "" }),
-                        12.0,
-                        400.0,
-                        "text",
-                    )
-                    .on_press(move |s: &mut State| {
-                        let doc = &s.workbench.docs[index];
-                        let (directory, path, is_diff) =
-                            (doc.directory.clone(), doc.path.clone(), doc.is_diff);
-                        s.open_workspace_target(directory, path, is_diff);
-                    }),
-                )
-                .child(
-                    label(t, "×", 14.0, 400.0, "text-tertiary")
-                        .role("button")
-                        .label("Close file")
-                        .focusable(true)
-                        .on_press(move |s: &mut State| s.close_workspace_document(index)),
-                ),
-        );
-    }
-    tabs
-}
 pub fn view(s: &State) -> El {
     let Some(index) = s.workbench.selected else {
         return super::view::empty(s, "Select a file to preview.");
@@ -316,8 +290,9 @@ pub fn view(s: &State) -> El {
     let t = &s.theme;
     let mut toolbar = row()
         .w_full()
-        .h(36.0)
-        .px(10.0)
+        .h(40.0)
+        .pl(12.0)
+        .pr(8.0)
         .gap(8.0)
         .center_y()
         .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
@@ -327,47 +302,49 @@ pub fn view(s: &State) -> El {
                 .grow(1.0),
         );
     if doc.is_diff {
-        toolbar = toolbar.child(button(s, "Expand context").on_press(move |s: &mut State| {
-            let path = s.workbench.docs[index].path.clone();
-            s.workspace_get(
-                &format!("diff-full:{path}"),
-                "workspace/diff".into(),
-                vec![
-                    ("directory".into(), s.workspace_directory()),
-                    ("path".into(), path),
-                    ("mode".into(), s.workbench.mode.clone()),
-                    ("full".into(), "1".into()),
-                ],
-                false,
-            );
-        }));
-        toolbar = toolbar
-            .child(
-                button(
-                    s,
-                    if s.workbench.split {
-                        "Unified"
-                    } else {
-                        "Split"
-                    },
-                )
-                .on_press(|s: &mut State| {
-                    s.workbench.split = !s.workbench.split;
-                    let mode = if s.workbench.split {
-                        DiffMode::Split
-                    } else {
-                        DiffMode::Unified
-                    };
+        let mut layouts = row()
+            .gap(2.0)
+            .padding(2.0)
+            .radius(8.0)
+            .fill(t.c("secondary"))
+            .role("group")
+            .label("Diff layout");
+        for (split, name, glyph) in [
+            (false, "Unified", &crate::chat::icons::UNIFIED),
+            (true, "Split", &crate::chat::icons::SPLIT),
+        ] {
+            let choice = crate::sidebar::icon_button(t, glyph, name)
+                .size(28.0, 24.0)
+                .checked(s.workbench.split == split)
+                .on_press(move |s: &mut State| {
+                    s.workbench.split = split;
                     for doc in &mut s.workbench.docs {
-                        doc.diff.set_mode(mode);
+                        doc.diff.set_mode(if split {
+                            DiffMode::Split
+                        } else {
+                            DiffMode::Unified
+                        });
                     }
-                }),
-            )
-            .child(button(s, "Open file").on_press(move |s: &mut State| {
-                let path = s.workbench.docs[index].path.clone();
-                s.workbench.panel = Panel::Files;
-                s.open_workspace_file(path, false);
-            }));
+                });
+            layouts = layouts.child(if s.workbench.split == split {
+                t.shadow(t.paint(choice, "glaze"), "glaze-shadow")
+            } else {
+                choice
+            });
+        }
+        toolbar = toolbar.child(layouts);
+        if doc.value["status"] != "deleted" {
+            toolbar = toolbar.child(
+                crate::sidebar::icon_button(t, &crate::icons::EDIT, "Edit file").on_press(
+                    move |s: &mut State| {
+                        let doc = &s.workbench.docs[index];
+                        let (directory, path) = (doc.directory.clone(), doc.path.clone());
+                        s.workbench.panel = Panel::Files;
+                        s.open_workspace_target(directory, path, false);
+                    },
+                ),
+            );
+        }
         let diff = DiffView::new(
             |s: &State| &s.workbench.docs[s.workbench.selected.unwrap()].diff,
             |s: &mut State| {
@@ -375,12 +352,21 @@ pub fn view(s: &State) -> El {
                 &mut s.workbench.docs[i].diff
             },
         )
+        .on_comment(|s, range, tx| {
+            super::review::begin(s, range);
+            tx.focus("review-comment", false);
+        })
+        .annotation(super::review::card)
         .build(s, &super::view::kit(s));
         return col()
             .grow(1.0)
             .min_h(0.0)
             .min_w(0.0)
-            .child(toolbar.child(tree_toggle(s)))
+            .child(
+                toolbar
+                    .child(super::actions::trigger(s, index))
+                    .child(tree_toggle(s)),
+            )
             .child(diff.grow(1.0).min_h(0.0));
     }
     if doc.editing {
@@ -415,18 +401,11 @@ pub fn view(s: &State) -> El {
                 .disabled(!doc.dirty() || doc.saving.is_some())
                 .on_press(move |s: &mut State| s.workbench.docs[index].discarding = true),
         );
+        toolbar = toolbar.child(super::actions::save(s, index));
         toolbar = toolbar.child(
-            crate::sidebar::icon_button(
-                t,
-                &crate::chat::icons::SAVE,
-                if doc.saving.is_some() {
-                    "Saving file…"
-                } else {
-                    "Save file"
-                },
-            )
-            .disabled(!doc.dirty() || doc.saving.is_some())
-            .on_press(|s: &mut State| s.save_workspace_file()),
+            button(s, "Comment")
+                .disabled(doc.edit.anchor == doc.edit.focus)
+                .on_press(super::review::source_selection),
         );
     }
     let content = if doc.discarding {
@@ -506,6 +485,11 @@ pub fn view(s: &State) -> El {
                 }
             })
             .on_input_key(|s: &mut State, key, tx| {
+                if key.is_command('m') && key.mods.shift {
+                    super::review::source_selection(s);
+                    tx.focus("review-comment", false);
+                    return true;
+                }
                 if key.is_command('s') {
                     s.save_workspace_file();
                     tx.instant();
@@ -528,12 +512,7 @@ pub fn view(s: &State) -> El {
                 move |s: &State, n| file_line(s, index, n),
             ))
     } else if let Some(Ok(image)) = &doc.image {
-        col().grow(1.0).min_h(0.0).center().child(
-            rune::el()
-                .grow(1.0)
-                .w_full()
-                .pixels_fit(image.pixels(), rune::SurfaceFit::Fit),
-        )
+        super::image::view(s, index, image)
     } else {
         super::view::empty(
             s,
@@ -548,7 +527,11 @@ pub fn view(s: &State) -> El {
         .grow(1.0)
         .min_h(0.0)
         .min_w(0.0)
-        .child(toolbar.child(tree_toggle(s)))
+        .child(
+            toolbar
+                .child(super::actions::trigger(s, index))
+                .child(tree_toggle(s)),
+        )
         .child(content)
 }
 fn file_line(s: &State, index: usize, n: usize) -> El {

@@ -1,5 +1,10 @@
 //! Workspace presentation. All project data and mutations cross the existing gateway.
+mod actions;
 mod details;
+mod image;
+mod review;
+mod tabs;
+pub use review::refresh as refresh_comment_annotations;
 mod documents;
 mod links;
 pub use details::view as details_view;
@@ -10,6 +15,7 @@ mod tests;
 mod view;
 pub mod worker;
 use crate::{OPTIONS, State};
+pub use documents::button as comment_button;
 use rune::{TextEdit, Waker};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -70,6 +76,8 @@ pub struct Workbench {
     pub open: bool,
     pub expanded: bool,
     pub tree_visible: bool,
+    pub file_actions: Option<usize>,
+    pub delete_side: Option<String>,
     pub panel: Panel,
     pub worker: Option<Worker>,
     epoch: u64,
@@ -109,6 +117,8 @@ impl Default for Workbench {
             open: false,
             expanded: false,
             tree_visible: true,
+            file_actions: None,
+            delete_side: None,
             panel: Panel::Files,
             worker: None,
             epoch: 0,
@@ -520,6 +530,15 @@ fn receive(s: &mut State, tag: &str, p: worker::Payload) {
             .or_else(|| p.value.as_array())
             .cloned()
             .unwrap_or_default();
+    } else if let Some(id) = tag.strip_prefix("side-delete:") {
+        s.workbench.sides.retain(|v| v["id"] != id);
+        s.workbench.side_drafts.remove(id);
+        s.workbench.side_revisions.remove(id);
+        s.workbench.delete_side = None;
+        if s.workbench.reader.as_deref() == Some(id) {
+            s.workbench.reader = None;
+            s.workbench.reader_chat = Default::default();
+        }
     } else if tag == "side-create" {
         let auto_send = s.workbench.side_origin.is_some();
         let id = p.value["id"].as_str().unwrap_or_default().to_owned();

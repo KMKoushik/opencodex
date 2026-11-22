@@ -62,6 +62,7 @@ fn file_links_keep_directory_identity_and_large_text_remains_editable() {
                 serde_json::json!({"kind":"text", "text":text, "version":"disk", "bytes":text.len()}),
             ),
         );
+        s.workbench.docs.last_mut().unwrap().pinned = true;
     }
     assert_eq!(s.workbench.docs.len(), 2);
     for (doc, directory) in s.workbench.docs.iter().zip(["/first", "/second"]) {

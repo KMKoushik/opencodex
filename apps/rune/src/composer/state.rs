@@ -15,6 +15,7 @@ pub struct Draft {
     pub model: Option<ModelRef>,
     pub attachments: Vec<Attachment>,
     pub mentions: Vec<Value>,
+    pub comments: Vec<crate::chat::comments::Comment>,
     pub full_access: bool,
     pub worktree: bool,
     pub branch: Option<String>,
@@ -28,6 +29,7 @@ impl Default for Draft {
             model: None,
             attachments: vec![],
             mentions: vec![],
+            comments: vec![],
             full_access: false,
             worktree: false,
             branch: None,
@@ -58,6 +60,7 @@ impl Drafts {
             draft.attachments.clear();
             draft.images.clear();
             draft.mentions.clear();
+            draft.comments.clear();
             self.touch(key);
         }
     }
@@ -183,7 +186,9 @@ impl State {
                 .composer
                 .attachment_pending
                 .contains_key(self.draft_key())
-            && (!self.draft().edit.text.trim().is_empty() || !self.draft().attachments.is_empty())
+            && (!self.draft().edit.text.trim().is_empty()
+                || !self.draft().attachments.is_empty()
+                || !self.draft().comments.is_empty())
             && self.draft().edit.text.chars().count() <= 200_000
     }
     pub fn send(&mut self) {
@@ -224,6 +229,7 @@ impl State {
             }
         }
         let mentions = prompt_mentions(&text, &d.mentions);
+        let (text, annotations) = crate::chat::comments::annotated(&text, &d.comments);
         let send = Send {
             key: self.draft_key().into(),
             revision: d.revision,
@@ -236,6 +242,7 @@ impl State {
                 .unwrap_or_else(|| self.project().unwrap().canonical.clone()),
             model: self.selected_model().unwrap().clone(),
             text,
+            annotations,
             attachments: d.attachments.clone(),
             mentions,
             command,
@@ -309,6 +316,7 @@ pub fn poll(s: &mut State) -> bool {
                     Ok(value) => {
                         let unchanged = s.composer.drafts.get(&session).revision == revision;
                         s.composer.drafts.acknowledge(&session, revision);
+                        crate::workbench::refresh_comment_annotations(s);
                         if unchanged && let Some(text) = value["restored"].as_str() {
                             s.composer.drafts.edit(&session).edit.replace_text(text);
                             s.composer.drafts.touch(&session);
@@ -331,6 +339,7 @@ pub fn poll(s: &mut State) -> bool {
                 s.composer.pending.remove(&key);
                 if result.is_ok() {
                     s.composer.drafts.acknowledge(&key, revision);
+                    crate::workbench::refresh_comment_annotations(s);
                 }
                 if let Err(e) = result {
                     s.error = Some(e);

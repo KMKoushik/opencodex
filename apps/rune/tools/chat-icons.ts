@@ -24,6 +24,8 @@ const names = {
   browser: 'Globe02Icon',
   latest: 'ArrowDown02Icon',
   preview: 'ViewIcon',
+  unified: 'Menu01Icon',
+  split: 'LayoutTwoColumnIcon',
 } as const;
 let source = '// Generated from Hugeicons by tools/chat-icons.ts.\nuse rune::Icon;\n';
 for (const [id, name] of Object.entries(names)) {

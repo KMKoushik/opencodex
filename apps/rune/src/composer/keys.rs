@@ -3,6 +3,14 @@ use crate::State;
 use rune::{Key, KeyEvent, Tx};
 
 pub fn global(s: &mut State, event: &KeyEvent, tx: &mut Tx) -> bool {
+    if event.mods.shift
+        && event.is_command('m')
+        && let Some(target) = s.chat.selected_response.clone()
+    {
+        crate::chat::comments::begin(s, target);
+        tx.focus("review-comment", false);
+        return true;
+    }
     if s.chat.read_only() {
         return false;
     }

@@ -388,11 +388,18 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
     if let Some(preview) = chat::preview::view(s, w, h) {
         shell = shell.child(preview);
     }
+    shell = shell.child(chat::comments::editor(s));
     shell
 }
 fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
     notifications::clear_on_focus(s);
     let mut changed = false;
+    for chat in [&mut s.chat, &mut s.workbench.reader_chat] {
+        if chat.copied.as_ref().is_some_and(|(_, due)| clock >= *due) {
+            chat.copied = None;
+            changed = true;
+        }
+    }
     if s.menus.toast_due.is_some_and(|due| clock >= due) {
         s.menus.toast = None;
         s.menus.toast_due = None;

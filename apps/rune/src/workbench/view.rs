@@ -142,7 +142,7 @@ fn panel(s: &State, cx: &mut rune::Cx<State>) -> El {
         .window_drag()
         .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"));
     if files && !s.workbench.docs.is_empty() {
-        header = header.child(documents::tabs(s).grow(1.0).min_w(0.0));
+        header = header.child(super::tabs::documents(s).grow(1.0).min_w(0.0));
     } else if s.workbench.panel == Panel::Canvas {
         header = header.child(crate::native::canvas_tabs(s));
     } else {
@@ -248,7 +248,7 @@ fn panel(s: &State, cx: &mut rune::Cx<State>) -> El {
                 }),
         );
     }
-    panel
+    panel.child(super::actions::overlay(s))
 }
 fn tree(s: &State) -> El {
     let t = &s.theme;
@@ -416,16 +416,10 @@ fn tree_row(s: &State, n: usize, changes: bool) -> El {
         .and_then(|i| s.workbench.docs.get(i))
         .is_some_and(|d| d.path == path);
     let name = path.rsplit('/').next().unwrap_or(&path);
-    let file = rune_kit::FileNode::<()> {
-        name: name.into(),
-        path: path.clone(),
-        dir: false,
-        data: None,
-    };
     let glyph = if dir {
         if open { &icons::DOWN } else { &icons::RIGHT }
     } else {
-        file.icon(false)
+        rune_theme_opencode::tree_icons::file(&path).icon()
     };
     let mut r = row()
         .key(path.clone())

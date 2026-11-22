@@ -419,6 +419,7 @@ pub fn area(s: &State, width: f32) -> El {
                     }
                     tx.focus("message", false);
                 })
+                .child(crate::chat::comments::chips(s))
                 .child(attachments(s))
                 .child(input)
                 .child(footer),

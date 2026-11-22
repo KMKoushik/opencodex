@@ -8,6 +8,7 @@ use oc_gateway::{
 };
 use rune::{El, GrowthSpec, ScrollSpec, TextStyle, col, el, icon, row, text};
 use std::{cell::Cell, collections::BTreeMap, rc::Rc, sync::Arc};
+pub(crate) mod comments;
 pub(crate) mod icons;
 mod markdown;
 pub(crate) use markdown::render as markdown_view;
@@ -31,10 +32,13 @@ pub struct Chat {
     pub scroll_applied: bool,
     pub details: bool,
     pub context: bool,
+    pub comment_editor: Option<comments::Editor>,
+    pub selected_response: Option<serde_json::Value>,
     pub media: media::Media,
     pub preview: Option<String>,
     pub tick_due: Option<f64>,
     pub now_ms: f64,
+    pub copied: Option<(String, f64)>,
 }
 
 /// Bench evidence must be visible new assistant output, not the prompt or forked history.
@@ -74,10 +78,13 @@ impl Default for Chat {
             scroll_applied: false,
             details: false,
             context: false,
+            comment_editor: None,
+            selected_response: None,
             media: media::Media::default(),
             preview: None,
             tick_due: None,
             now_ms: crate::unix_ms() as f64,
+            copied: None,
         }
     }
 }
@@ -266,26 +273,31 @@ pub fn view(s: &State, width: f32) -> El {
                 .absolute((width - 160.0) / 2.0, height - 40.0)
                 .center()
                 .child(
-                    row()
-                        .h(28.0)
-                        .px(10.0)
-                        .gap(6.0)
-                        .center_y()
-                        .radius(20.0)
-                        .fill(t.c("elevated"))
-                        .border(1.0, t.c("border-heavy"))
-                        .child(icon(&icons::LATEST, 14.0).color(t.c("text-secondary")))
-                        .child(label(t, "Jump to latest", 12.0, 500.0, "text-secondary"))
-                        .role("button")
-                        .label("Jump to latest")
-                        .focusable(true)
-                        .on_press_tx(|s: &mut State, tx| {
-                            tx.scroll_to_bottom(scroll_key(s));
-                            s.chat.jump = false;
-                        }),
+                    t.shadow(
+                        row()
+                            .h(28.0)
+                            .px(10.0)
+                            .gap(6.0)
+                            .center_y()
+                            .radius(20.0)
+                            .fill(t.c("elevated"))
+                            .hover(t.c("secondary-hover"))
+                            .border(1.0, t.c("border-heavy"))
+                            .child(icon(&icons::LATEST, 14.0).color(t.c("text-secondary")))
+                            .child(label(t, "Jump to latest", 12.0, 500.0, "text-secondary"))
+                            .role("button")
+                            .label("Jump to latest")
+                            .focusable(true)
+                            .on_press_tx(|s: &mut State, tx| {
+                                tx.scroll_to_bottom(scroll_key(s));
+                                s.chat.jump = false;
+                            }),
+                        "chip-shadow",
+                    ),
                 ),
         );
     }
+    body = body.child(comments::selected_actions(s));
     if s.chat.details {
         body = body.child(details(s, width));
     }
@@ -375,6 +387,7 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
         (
             r.version,
             chat.disclosure_revision,
+            chat.copied.as_ref().map(|(id, _)| id.as_str()),
             crate::docks::active(s),
             width.to_bits(),
             s.theme.dark,
@@ -397,8 +410,10 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
                     message,
                     text,
                     copyable,
-                    ..
+                    ordinal,
                 } => {
+                    let message_id = message.id.clone();
+                    let ordinal = *ordinal;
                     let mut content = col().w_full().gap(14.0).child(markdown::render(
                         s,
                         text,
@@ -413,13 +428,33 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
                     }
                     if *copyable {
                         let copy = text.clone();
+                        let copy_id = r.id.clone();
+                        let copied = chat.copied.as_ref().is_some_and(|(id, _)| id == &copy_id);
                         content = content.child(
-                            icon_button(t, &icons::COPY, "Copy response")
-                                .group_opacity(0.0, 1.0)
-                                .on_press_tx(move |_: &mut State, tx| tx.copy(copy.clone())),
+                            icon_button(
+                                t,
+                                if copied { &icons::CHECK } else { &icons::COPY },
+                                if copied { "Copied" } else { "Copy response" },
+                            )
+                            .group_opacity(if copied { 1.0 } else { 0.0 }, 1.0)
+                            .on_press_tx(move |s: &mut State, tx| {
+                                tx.copy(copy.clone());
+                                let chat = if reader {
+                                    &mut s.workbench.reader_chat
+                                } else {
+                                    &mut s.chat
+                                };
+                                chat.copied = Some((copy_id.clone(), tx.clock() + 2.0));
+                                tx.wake_after(std::time::Duration::from_secs(2));
+                            }),
                         );
                     }
-                    content.hover_group()
+                    content.hover_group().selection_group(true)
+                        .on_selection_change(move |s: &mut State, change, _| {
+                            if reader || change.dragging() || s.chat.comment_editor.is_some() { return; }
+                            let quote = change.selection().map(|v| v.text().trim()).filter(|v| !v.is_empty());
+                            s.chat.selected_response = quote.map(|quote| serde_json::json!({"messageID":message_id,"ordinal":ordinal,"quote":quote.chars().take(8000).collect::<String>()}));
+                        })
                 }
                 Kind::Message(m) if m.r#type == "user" => {
                     let mut bubble = col().w_full().items_end().gap(8.0);

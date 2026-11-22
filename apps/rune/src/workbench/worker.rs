@@ -9,6 +9,14 @@ use std::{
 };
 
 pub enum Operation {
+    SaveData {
+        uri: String,
+        destination: std::path::PathBuf,
+    },
+    RevealFile {
+        directory: String,
+        path: String,
+    },
     CanvasWrite {
         path: String,
         body: Value,
@@ -115,6 +123,37 @@ impl Worker {
 }
 async fn run(client: &Gateway, op: Operation) -> Result<Value, String> {
     match op {
+        Operation::SaveData { uri, destination } => {
+            use base64::Engine;
+            let (_, data) = uri
+                .split_once(";base64,")
+                .ok_or("This file has no downloadable data.")?;
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(data)
+                .map_err(|e| e.to_string())?;
+            std::fs::write(destination, bytes).map_err(|e| e.to_string())?;
+            Ok(Value::Null)
+        }
+        Operation::RevealFile { directory, path } => {
+            let location: Value = client
+                .get_bounded(
+                    "workspace/file-location",
+                    &[("directory", directory.as_str()), ("path", path.as_str())],
+                    16 * 1024,
+                )
+                .await?;
+            let path = location["path"]
+                .as_str()
+                .ok_or("The service did not return a file location.")?;
+            let result = std::process::Command::new("/usr/bin/open")
+                .args(["-R", "--", path])
+                .status()
+                .map_err(|e| e.to_string())?;
+            if !result.success() {
+                return Err("This file could not be shown in Finder.".into());
+            }
+            Ok(Value::Null)
+        }
         Operation::CanvasWrite { path, body } => client.canvas_write(&path, body).await,
         Operation::Patch { path, body } => client.patch_json(&path, body).await,
         Operation::Delete(path) => client.delete_json(&path).await,

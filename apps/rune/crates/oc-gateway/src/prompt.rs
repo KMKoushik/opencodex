@@ -109,6 +109,7 @@ pub struct Send {
     pub directory: String,
     pub model: ModelRef,
     pub text: String,
+    pub annotations: Option<Value>,
     pub attachments: Vec<Attachment>,
     pub mentions: Vec<Value>,
     pub command: Option<String>,
@@ -471,6 +472,9 @@ impl Gateway {
         let files: Vec<_> = send.attachments.iter().map(|a| json!({"name":a.name,"uri":format!("data:{};base64,{}", a.mime, base64(&a.bytes))})).collect();
         let mut body =
             json!({"text":send.text,"model":send.model,"files":files,"mentions":send.mentions});
+        if let Some(annotations) = &send.annotations {
+            body["annotations"] = annotations.clone();
+        }
         if let Some(command) = &send.command {
             body["command"] = json!(command);
         }
