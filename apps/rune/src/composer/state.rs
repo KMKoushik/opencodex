@@ -78,7 +78,8 @@ pub enum Menu {
 }
 #[derive(Default)]
 pub struct Composer {
-    pub context_clicked: bool,
+    pub context_visibility: super::context::Visibility,
+    pub context_focus: Option<String>,
     pub recent_chats: Vec<Value>,
     pub running: super::running::Running,
     pub undo: Option<super::undo::Pending>,

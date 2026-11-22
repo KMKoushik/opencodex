@@ -191,6 +191,12 @@ pub fn view(s: &State, width: f32) -> El {
                         }
                         if n > s.chat.rows.len() {
                             let mut end = col().key("transcript-end").min_h(52.0).w(width_for_row(s)).px(24.0).pb(32.0).gap(20.0);
+                            if crate::composer::running::has_inbox(s) {
+                                end = end.child(crate::composer::running::inbox(s));
+                            }
+                            if crate::docks::has_permissions(s) {
+                                end = end.child(crate::docks::permissions(s));
+                            }
                             if !s.chat.data.running && s.chat.data.info.as_ref().is_some_and(|i| i.outcome.as_deref() == Some("failed")) {
                                 end = end.child(label(&s.theme, "The run failed. Check OpenCode’s provider configuration and try again.", 14.0, 400.0, "error").role("alert").wrap());
                             }
@@ -206,6 +212,9 @@ pub fn view(s: &State, width: f32) -> El {
                                     .w_full(),
                                 );
                             }
+                            else if !s.chat.data.running && crate::composer::running::has_inbox(s) {
+                                end = end.child(label(&s.theme, "Message accepted; waiting to run…", 12.0, 400.0, "text-tertiary").role("status"));
+                            }
                             else if !s.chat.data.running && s.chat.data.info.as_ref().is_some_and(|i| i.outcome.as_deref() == Some("interrupted")) {
                                 end = end.child(label(&s.theme, "Stopped", 12.0, 400.0, "text-tertiary").role("status"));
                             }
@@ -219,6 +228,10 @@ pub fn view(s: &State, width: f32) -> El {
                         .data
                         .revision
                         .wrapping_add(s.chat.disclosure_revision)
+                        .wrapping_add(s.docks.revision)
+                        .wrapping_add(s.composer.running.revision)
+                        .wrapping_mul(2)
+                        .wrapping_add(u64::from(s.composer.access_pending))
                         .wrapping_mul(2)
                         .wrapping_add(u64::from(crate::docks::active(s))),
                 ),

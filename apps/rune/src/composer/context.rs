@@ -1,6 +1,93 @@
 use crate::{State, sidebar::label};
 use rune::{Align, El, Shape, Side, col, el, row};
 
+#[derive(Clone, Copy, Default, PartialEq)]
+pub enum Visibility {
+    #[default]
+    Closed,
+    Hovered,
+    Focused,
+    HoveredFocused,
+    Dismissed {
+        hovered: bool,
+        focused: bool,
+    },
+}
+#[derive(Clone, Copy)]
+pub enum Event {
+    Hover(bool),
+    Focus(bool),
+    Open,
+    Dismiss,
+}
+impl Visibility {
+    fn interests(self) -> (bool, bool) {
+        match self {
+            Self::Closed => (false, false),
+            Self::Hovered => (true, false),
+            Self::Focused => (false, true),
+            Self::HoveredFocused => (true, true),
+            Self::Dismissed { hovered, focused } => (hovered, focused),
+        }
+    }
+    fn open(self) -> bool {
+        matches!(self, Self::Hovered | Self::Focused | Self::HoveredFocused)
+    }
+}
+pub fn step(state: &mut Visibility, event: Event) {
+    let (mut hovered, mut focused) = state.interests();
+    let dismissed = matches!(state, Visibility::Dismissed { .. });
+    match event {
+        Event::Dismiss => {
+            *state = Visibility::Dismissed { hovered, focused };
+            return;
+        }
+        Event::Hover(value) => hovered = value,
+        Event::Focus(value) => focused = value,
+        Event::Open => {
+            *state = if hovered {
+                Visibility::HoveredFocused
+            } else {
+                Visibility::Focused
+            };
+            return;
+        }
+    }
+    if dismissed && matches!(event, Event::Hover(false) | Event::Focus(false)) {
+        *state = Visibility::Dismissed { hovered, focused };
+    } else {
+        *state = match (hovered, focused) {
+            (false, false) => Visibility::Closed,
+            (true, false) => Visibility::Hovered,
+            (false, true) => Visibility::Focused,
+            (true, true) => Visibility::HoveredFocused,
+        };
+    }
+}
+pub fn dispatch(s: &mut State, event: Event) {
+    step(&mut s.composer.context_visibility, event);
+    s.chat.context = s.composer.context_visibility.open();
+}
+pub fn poll(s: &mut State, tx: &mut rune::Tx) -> bool {
+    // Input is dispatched after poll. Observe its resulting focus once; a no-change
+    // wake does not commit or draw, and never schedules another wake of its own.
+    if tx.input_waiting() {
+        tx.wake_after(std::time::Duration::ZERO);
+    }
+    let focused = tx.focused();
+    if s.composer.context_focus.as_deref() == focused {
+        return false;
+    }
+    let was_trigger = s.composer.context_focus.as_deref() == Some("context-indicator");
+    let is_trigger = focused == Some("context-indicator");
+    s.composer.context_focus = focused.map(str::to_owned);
+    let was_open = s.chat.context;
+    if was_trigger != is_trigger {
+        dispatch(s, Event::Focus(is_trigger));
+    }
+    was_open != s.chat.context
+}
+
 fn total(tokens: &serde_json::Value) -> u64 {
     tokens["input"].as_u64().unwrap_or(0)
         + tokens["output"].as_u64().unwrap_or(0)
@@ -96,20 +183,16 @@ pub fn view(s: &State) -> El {
         .hover(t.c("hover"))
         .child(ring)
         .on_hover_change(|s: &mut State, inside, tx| {
-            s.chat.context = inside || tx.focused() == Some("context-indicator")
+            poll(s, tx);
+            dispatch(s, Event::Hover(inside));
         })
-        .on_press(|s: &mut State| {
-            s.chat.context = true;
-            s.composer.context_clicked = true;
+        .on_press_tx(|s: &mut State, tx| {
+            s.composer.context_focus = tx.focused().map(str::to_owned);
+            dispatch(s, Event::Open);
         })
         .on_key(|s: &mut State, event, _| {
-            if event.key == rune::Key::Tab {
-                s.chat.context = false;
-                s.composer.context_clicked = false;
-                false
-            } else if event.key == rune::Key::Escape {
-                s.chat.context = false;
-                s.composer.context_clicked = false;
+            if event.key == rune::Key::Escape {
+                dispatch(s, Event::Dismiss);
                 true
             } else {
                 false
@@ -191,14 +274,6 @@ pub fn view(s: &State) -> El {
         let panel =
             t.shadow(panel, "shadow")
                 .anchored("context-indicator", Side::Top, Align::End, 8.0);
-        let panel = if s.composer.context_clicked {
-            panel.modal(true, |s: &mut State| {
-                s.chat.context = false;
-                s.composer.context_clicked = false;
-            })
-        } else {
-            panel
-        };
         wrapper = wrapper.child(panel);
     }
     wrapper

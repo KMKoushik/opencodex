@@ -48,6 +48,9 @@ pub fn validate(field: &Value, value: Option<&Value>) -> Option<String> {
         if let Some(n) = field["maxLength"].as_u64().filter(|n| length > *n as usize) {
             return Some(format!("Use no more than {n} characters."));
         }
+        if let Some(error) = super::format::validate(field, text) {
+            return Some(error);
+        }
     }
     if field["type"] == "number" || field["type"] == "integer" {
         let Some(n) = value.as_f64().filter(|n| n.is_finite()) else {

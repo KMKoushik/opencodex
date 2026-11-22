@@ -6,14 +6,16 @@ use rune::{El, TextStyle, col, el, icon, row, text_input};
 mod access;
 pub mod capture;
 mod commands;
-mod context;
+pub(crate) mod context;
+#[cfg(test)]
+mod context_tests;
 mod fork;
 mod fuzzy;
 mod icons;
 pub mod keys;
 pub mod menus;
 mod providers;
-mod running;
+pub(crate) mod running;
 pub mod state;
 mod undo;
 use state::Menu;

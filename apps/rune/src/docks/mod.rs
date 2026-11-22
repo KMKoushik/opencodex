@@ -1,5 +1,6 @@
 //! Gateway forms and permission requests, replacing the active composer's draft.
 mod answer;
+mod format;
 mod keyboard;
 mod permission;
 #[cfg(test)]
@@ -12,6 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Default)]
 pub struct Docks {
+    pub revision: u64,
     forms: Vec<Value>,
     permissions: Vec<Value>,
     form_id: String,
@@ -82,7 +84,12 @@ pub fn receive(s: &mut State, tag: &str, value: Value) {
                 restore_input(&mut s.docks);
             }
         }
-        "permissions" => s.docks.permissions = items,
+        "permissions" => {
+            if s.docks.permissions != items {
+                s.docks.permissions = items;
+                s.docks.revision = s.docks.revision.wrapping_add(1);
+            }
+        }
         _ => {}
     }
 }
@@ -147,6 +154,7 @@ fn current_index(d: &Docks) -> usize {
 
 pub fn replied(s: &mut State, path: &str, result: Result<Value, String>) {
     if s.docks.permission_pending.remove(path) {
+        s.docks.revision = s.docks.revision.wrapping_add(1);
         if let Err(error) = result {
             s.docks.permission_errors.insert(path.into(), error);
         } else {
@@ -187,6 +195,7 @@ fn button(s: &State, title: &str) -> El {
         .disabled(s.docks.sending)
 }
 fn reply(s: &mut State, path: String, body: Value, delete: bool) {
+    s.docks.revision = s.docks.revision.wrapping_add(1);
     let permission = path.contains("/permissions/");
     if s.composer.access_pending
         || if permission {
@@ -279,18 +288,22 @@ pub fn waiting_label(s: &State) -> &'static str {
         "Waiting for your answer"
     }
 }
-pub fn view(s: &State) -> El {
-    if !active(s) {
-        return el();
-    }
-    let t = &s.theme;
+pub fn permissions(s: &State) -> El {
     let mut out = col().w_full().gap(8.0);
     for request in &s.docks.permissions {
         out = out.child(permission::view(s, request));
     }
-    if s.docks.forms.is_empty() {
-        return out;
+    out
+}
+pub fn has_permissions(s: &State) -> bool {
+    s.selected.is_some() && !s.docks.permissions.is_empty()
+}
+pub fn view(s: &State) -> El {
+    if !has_question(s) {
+        return el();
     }
+    let t = &s.theme;
+    let out = col().w_full().gap(8.0);
     let fs = fields(&s.docks);
     let index = current_index(&s.docks);
     let mut dock = col()

@@ -87,3 +87,37 @@ fn headless_boolean_navigation_and_review() {
         "No"
     );
 }
+#[test]
+fn html_formats_and_unicode_set_patterns_are_checked_on_submit() {
+    use super::format;
+    let pattern = serde_json::json!({"pattern": "[\\p{ASCII}&&\\p{Letter}]+"});
+    assert!(format::validate(&pattern, "abc").is_none());
+    assert!(format::validate(&pattern, "é").is_some());
+    assert!(format::validate(&serde_json::json!({"pattern":"["}), "anything").is_none());
+    assert!(format::validate(&serde_json::json!({"format":"email"}), "a@localhost").is_none());
+    assert!(format::validate(&serde_json::json!({"format":"email"}), "a b@example.test").is_some());
+    assert!(
+        format::validate(
+            &serde_json::json!({"format":"uri"}),
+            "mailto:a@example.test"
+        )
+        .is_none()
+    );
+    assert!(format::validate(&serde_json::json!({"format":"uri"}), "relative/path").is_some());
+    assert!(format::date("2000-02-29").is_some());
+    assert!(format::date("1900-02-29").is_none());
+    assert!(
+        format::validate(
+            &serde_json::json!({"format":"date-time"}),
+            "2026-11-22T23:59:59.123"
+        )
+        .is_none()
+    );
+    assert!(
+        format::validate(
+            &serde_json::json!({"format":"date-time"}),
+            "2026-11-22T24:00"
+        )
+        .is_some()
+    );
+}

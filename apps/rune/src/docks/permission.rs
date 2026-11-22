@@ -78,7 +78,7 @@ pub fn view(s: &State, request: &Value) -> El {
         .join("\n");
     let mut card = col()
         .w_full()
-        .padding(16.0)
+        .padding(17.0)
         .radius(12.0)
         .border(1.0, t.c("border-heavy"))
         .role("group")
@@ -99,7 +99,12 @@ pub fn view(s: &State, request: &Value) -> El {
     card = card
         .child(
             label(t, resources, 12.0, 400.0, "text")
-                .font(TextStyle::new(12.0, 400.0).family(rune::Family::Mono))
+                .font(
+                    TextStyle::new(12.0, 400.0)
+                        .family(rune::Family::Mono)
+                        .lh(19.2),
+                )
+                .mt(10.0)
                 .wrap(),
         )
         .child(actions);

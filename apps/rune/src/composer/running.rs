@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 
 #[derive(Default)]
 pub struct Running {
+    pub revision: u64,
     pub inbox: Vec<oc_gateway::timeline::Row>,
     pub session: String,
     pub moving: bool,
@@ -66,6 +67,7 @@ pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) {
     }
     match result {
         Ok(Value::Array(items)) if kind == "inbox" => {
+            s.composer.running.revision = s.composer.running.revision.wrapping_add(1);
             s.composer.running.session = id.into();
             s.composer.running.inbox = items
                 .into_iter()
@@ -95,7 +97,17 @@ pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) {
         _ => {}
     }
 }
-pub fn view(s: &State) -> El {
+pub fn has_inbox(s: &State) -> bool {
+    s.selected.as_deref() == Some(&s.composer.running.session)
+        && s.composer.running.inbox.iter().any(|item| {
+            !s.chat
+                .data
+                .messages
+                .iter()
+                .any(|message| message.id == item.id)
+        })
+}
+pub fn inbox(s: &State) -> El {
     let t = &s.theme;
     let mut out = col().w_full().gap(8.0);
     if s.selected.as_deref() == Some(&s.composer.running.session) {
@@ -126,6 +138,11 @@ pub fn view(s: &State) -> El {
             );
         }
     }
+    out
+}
+pub fn view(s: &State) -> El {
+    let t = &s.theme;
+    let mut out = col().w_full().gap(8.0);
     let parts = blocking(s);
     if !parts.is_empty() {
         let shells = parts.iter().filter(|p| p["name"] == "shell").count();

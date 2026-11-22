@@ -390,10 +390,21 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
     }
     shell = shell.child(chat::comments::editor(s));
     shell
+        .on_background_press(|s: &mut State| {
+            composer::context::dispatch(s, composer::context::Event::Dismiss);
+        })
+        .on_key(|s: &mut State, event, _| {
+            if event.key == rune::Key::Escape && s.chat.context {
+                composer::context::dispatch(s, composer::context::Event::Dismiss);
+                true
+            } else {
+                false
+            }
+        })
 }
 fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
     notifications::clear_on_focus(s);
-    let mut changed = false;
+    let mut changed = composer::context::poll(s, tx);
     for chat in [&mut s.chat, &mut s.workbench.reader_chat] {
         if chat.copied.as_ref().is_some_and(|(_, due)| clock >= *due) {
             chat.copied = None;
