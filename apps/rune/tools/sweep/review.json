@@ -1,0 +1,273 @@
+{
+  "$source": "5f483eeecd98e3c280089e74ebb46a7389e618a842f9ca6c768987807e71a89b",
+  "$reference": "electron",
+  "$note": "All 69 states completed in both themes: 134 scored pairs and four explicitly unsupported attempts. All 67 scored states were visually reviewed on fresh-name, worst-first Electron/Rune sheets, including the worst 25 below. Both clients show the Browser rail and Updates card; the previous Chrome-host absence classifications are withdrawn. Electron's Updates card is NOT hidden in this development launch: it says Updates are available in installed builds, not development, and disables Check for updates. Rune's headless card instead reads Reading update status with Check enabled. This is an updater-state/headless limitation, not an extra card. The layout category includes substantial scroll/reflow mismatches in Side chat and middle history; it does not imply a small pixel error. Streaming and WKWebView canvas remain unscored. All 134 scored snapshot digests stayed unchanged. This is visual parity evidence, not interaction or atomic presentation sign-off; no fresh-fixture byte-repeatability claim is made for this Electron corpus.",
+  "home-empty": {
+    "classification": "equivalent (only rasterization)",
+    "description": "Matching hero, starters, composer and four-row sidebar; glyph and analytic shadow rasterization differs."
+  },
+  "home-no-project": {
+    "classification": "small layout differences",
+    "description": "Both show the inline folder-browse control and identical setup copy; Rune's hero/input group sits slightly higher and its input is wider."
+  },
+  "sidebar-hidden": {
+    "classification": "missing/extra UI",
+    "description": "Native hidden-sidebar toolbar omits Electron's brand mark and shifts the sidebar toggle/breadcrumb left; centered home content otherwise matches."
+  },
+  "sidebar-project-collapsed": {
+    "classification": "small layout differences",
+    "description": "Matching collapsed folder and home; disclosure/focus affordance and glyph/shadow edges differ."
+  },
+  "sidebar-row-hover": {
+    "classification": "missing/extra UI",
+    "description": "Same Caching row hovered; Electron shows the title/relative-time tooltip, while native shows only the row highlight."
+  },
+  "sidebar-focus-view": {
+    "classification": "small layout differences",
+    "description": "Same eight Focus titles/order; small row/icon metrics, heading controls and home shadows differ."
+  },
+  "app-menu-open": {
+    "classification": "small layout differences",
+    "description": "Same four menu entries; popup height, row rhythm, border and shadow differ slightly."
+  },
+  "thread-search-open": {
+    "classification": "small layout differences",
+    "description": "Same gateway-ranked titles and paths; dialog/input outline, result spacing and shadow differ slightly."
+  },
+  "composer-focused": {
+    "classification": "small layout differences",
+    "description": "Matching focused composer; native caret/focus painting and shadow differ from the caret-suppressed Electron capture."
+  },
+  "composer-text": {
+    "classification": "small layout differences",
+    "description": "Exact same draft and send state; native caret remains visible at its fixed capture phase; glyph/shadow edges differ."
+  },
+  "composer-attachment": {
+    "classification": "small layout differences",
+    "description": "Same notes.txt bytes, 30 B chip and draft; chip padding/icon, hero vertical position and native caret differ."
+  },
+  "composer-slash": {
+    "classification": "small layout differences",
+    "description": "Same six command rows and descriptions; Rune's popup starts lower and is shorter, exposing the hero subtitle that Electron's popup overlaps."
+  },
+  "composer-mention": {
+    "classification": "small layout differences",
+    "description": "Same three skill and five thread suggestions; Rune's popup starts lower, has tighter row insets and different glyphs, not a different catalog."
+  },
+  "model-picker-open": {
+    "classification": "small layout differences",
+    "description": "Same current model and provider catalog; native row density, visible bottom cutoff and popup shadow differ."
+  },
+  "model-picker-filtered": {
+    "classification": "small layout differences",
+    "description": "Same big query and Big Pickle result; Rune's filtered popup is shorter and its search field/top edge sit lower above the composer."
+  },
+  "project-picker-open": {
+    "classification": "small layout differences",
+    "description": "Same atlas-api/home recent-project rows and paths; search popup inset, height and shadow differ slightly."
+  },
+  "project-open-dialog": {
+    "classification": "small layout differences",
+    "description": "Both show the same setup page with an inline folder-browse button; Rune's path field is wider and hero/button group sits slightly higher."
+  },
+  "project-actions-open": {
+    "classification": "small layout differences",
+    "description": "Same six actions at the measured anchor; native menu rows are more compact, shortening the popup."
+  },
+  "project-edit-open": {
+    "classification": "small layout differences",
+    "description": "Same fields, path and colors; native Upload icon spans the row and URL action/button sizing differs."
+  },
+  "project-copy-feedback": {
+    "classification": "small layout differences",
+    "description": "Same Project path copied notice; native project card is slightly shorter and notice/row spacing differs."
+  },
+  "worktree-picker-open": {
+    "classification": "missing/extra UI",
+    "description": "Same Local/New worktree choices; native omits Electron's leading folder icons and selected checkmark; popup is wider."
+  },
+  "worktree-new-selected": {
+    "classification": "small layout differences",
+    "description": "Same new-worktree selection and master branch; native label lacks Electron's From prefix and chip sizing differs."
+  },
+  "worktrees-empty": {
+    "classification": "small layout differences",
+    "description": "Same empty worktree dialog and explanatory text; tiny dialog height, border and shadow differences."
+  },
+  "chat-markdown-top": {
+    "classification": "small layout differences",
+    "description": "Same beginning label, prompt, headings, list and table; Rune's paragraph/list rhythm shifts lower content and shows Jump to latest where Electron has no floating control."
+  },
+  "chat-markdown-middle": {
+    "classification": "small layout differences",
+    "description": "Same Markdown history at 50% scroll; Rune's table/list rhythm and code-block position differ, and its Jump to latest control overlays the lower transcript."
+  },
+  "chat-markdown-bottom": {
+    "classification": "small layout differences",
+    "description": "Same numbered list, three-row table, checklist, code and final paragraph; Rune's table/list spacing moves the code block and final line down."
+  },
+  "chat-long-top": {
+    "classification": "small layout differences",
+    "description": "Both fully page to the beginning and show turns 1–4; small repeated bubble/text baseline offsets accumulate."
+  },
+  "chat-long-middle": {
+    "classification": "small layout differences",
+    "description": "Both load all 40 turns at 50% scroll; accumulated row-height differences show Electron turns 19–22 versus Rune 20–23, with Rune's Jump to latest also visible."
+  },
+  "chat-long-bottom": {
+    "classification": "small layout differences",
+    "description": "Same final turns 37–40; repeated bubble/answer spacing and line baselines differ slightly."
+  },
+  "chat-tools-bottom": {
+    "classification": "small layout differences",
+    "description": "Same collapsed 5s work turn and linked answer; disclosure glyph, link icon and text baselines differ."
+  },
+  "chat-question-bottom": {
+    "classification": "small layout differences",
+    "description": "Same real form and unselected choices; native title/choice/footer spacing and radio/button rendering differ."
+  },
+  "chat-architecture-bottom": {
+    "classification": "small layout differences",
+    "description": "Same authored architecture Markdown and three-row table; Rune's list/table rhythm displaces the checklist/code/final paragraph and checkbox glyphs differ."
+  },
+  "chat-subagent-bottom": {
+    "classification": "small layout differences",
+    "description": "Same parent prompt and answer; near-matching transcript geometry with small bubble/text metrics differences."
+  },
+  "chat-checklist-bottom": {
+    "classification": "small layout differences",
+    "description": "Same checked Tests and unchecked Release items; native checkbox shapes and list/text baselines differ."
+  },
+  "chat-external-read-bottom": {
+    "classification": "small layout differences",
+    "description": "Same caching Markdown and permission record; Rune's table/list spacing moves the checklist/code/final line down. This is rendered history, not pending-permission-dock coverage."
+  },
+  "tools-expanded": {
+    "classification": "small layout differences",
+    "description": "Same expanded work turn with collapsed activity summary; disclosure marker and summary/answer baselines differ."
+  },
+  "tool-rows-expanded": {
+    "classification": "small layout differences",
+    "description": "Same reasoning and five collapsed tool rows; native adds leading disclosure chevrons and uses slightly different row/icon metrics."
+  },
+  "tool-detail-open": {
+    "classification": "small layout differences",
+    "description": "Only the same Read output is expanded, with bottom scroll normalized; native code/input padding and row disclosure icons differ."
+  },
+  "thoughts-expanded": {
+    "classification": "small layout differences",
+    "description": "Same reasoning text and tool rows; short authored reasoning fits without truncation in both; row chevrons and spacing differ."
+  },
+  "question-selected": {
+    "classification": "small layout differences",
+    "description": "Same Local choice selected; radio inset, choice height, footer/button geometry differ slightly."
+  },
+  "question-review": {
+    "classification": "small layout differences",
+    "description": "Same Local answer and Review answers state; Rune's card begins lower, with tighter answer/footer rows and different button height."
+  },
+  "thread-actions-open": {
+    "classification": "small layout differences",
+    "description": "Same six thread actions; Rune anchors the popup's left edge at the trigger instead of Electron's right alignment, moving it into the rail; table/list rhythm also differs."
+  },
+  "thread-context-menu": {
+    "classification": "small layout differences",
+    "description": "Same Caching row and six actions at the measured right-click point; popup row height/shadow differ slightly while Rune's underlying table/code baselines sit lower."
+  },
+  "session-details-open": {
+    "classification": "small layout differences",
+    "description": "Same context, checkout, one changed file, canvas/MCP/skills values; Rune's Session popover is slightly tighter and underlying table/code baselines differ."
+  },
+  "find-markdown-open": {
+    "classification": "small layout differences",
+    "description": "Same empty Find field and Markdown; Rune's Find box lacks Electron's raised shadow, while table/list/code baselines shift down."
+  },
+  "find-long-open": {
+    "classification": "small layout differences",
+    "description": "Same empty Find field and final long-history turns; native overlay border/shadow and transcript vertical rhythm differ."
+  },
+  "panel-changes": {
+    "classification": "small layout differences",
+    "description": "Same one-file change tree and Review your changes placeholder; Rune's empty-state glyph/toolbar differ, and narrow main-chat code wraps rather than clipping horizontally."
+  },
+  "panel-diff-open": {
+    "classification": "small layout differences",
+    "description": "Same src/index.ts addition and diff lines; Rune's file icon, gutter and toolbar metrics differ, while narrow main-chat code wraps and composer controls reflow."
+  },
+  "panel-files": {
+    "classification": "small layout differences",
+    "description": "Same .git/src/README/report tree and workspace placeholder; Rune uses a different empty-state glyph and toolbar metrics, with wrapped narrow-chat code and reflowed composer."
+  },
+  "panel-file-open": {
+    "classification": "small layout differences",
+    "description": "Same README bytes, source lines and file tree; Rune's tree/file markers and editor toolbar spacing differ, alongside wrapped narrow-chat code and reflowed composer."
+  },
+  "panel-terminal": {
+    "classification": "small layout differences",
+    "description": "Same real PTY prompt and bottom drawer; Rune has an outlined cursor versus Electron's solid cursor, different tab glyphs and shifted Markdown/code baselines."
+  },
+  "panel-side-chat": {
+    "classification": "small layout differences",
+    "description": "Same first side fork selected and inherited Markdown; Rune shows Modules near the top while Electron starts within its list, moving the table/code down; side composer is shorter and narrow main controls reflow."
+  },
+  "side-chat-new": {
+    "classification": "small layout differences",
+    "description": "Same newly created second fork selected in both; Rune's side transcript shows the Modules heading and lower table/code at a different scroll extent, with a shorter composer; only this temporary fork is removed after capture."
+  },
+  "panel-subagents": {
+    "classification": "small layout differences",
+    "description": "Same real Explore source child, All 1 / Running 0; native header/icon spacing and narrow main composer reflow differ."
+  },
+  "subagents-list": {
+    "classification": "small layout differences",
+    "description": "Same completed Explore source child and counts; native row/header glyphs and narrow main composer layout differ."
+  },
+  "subagent-conversation": {
+    "classification": "small layout differences",
+    "description": "Same real child prompt/answer; Rune omits Electron's beginning label in the child reader, shifts the prompt/answer upward and puts Idle at the bottom; narrow main composer controls reflow."
+  },
+  "settings-general": {
+    "classification": "small layout differences",
+    "description": "Both show the Updates card: Electron says Updates are available in installed builds, not development and disables Check for updates; headless Rune says Reading update status with Check enabled. Updater-state limitation plus small group/button metrics, not an extra card."
+  },
+  "settings-general-bottom": {
+    "classification": "small layout differences",
+    "description": "Both scrolled to the same service/plugin, notification and project sections; Rune's group heights/button insets differ and plugin-path wrapping shifts section boundaries."
+  },
+  "settings-appearance": {
+    "classification": "small layout differences",
+    "description": "Same visible mode, font size, terminal placement and theme controls; range-track/knob geometry, segmented controls and row metrics differ."
+  },
+  "settings-shortcuts": {
+    "classification": "equivalent (only rasterization)",
+    "description": "Matching visible shortcut catalog, row positions and keycaps; glyph/border rasterization differs."
+  },
+  "settings-projects": {
+    "classification": "equivalent (only rasterization)",
+    "description": "Matching two actual service projects, order, controls and geometry; glyph and border rasterization differs."
+  },
+  "settings-usage": {
+    "classification": "equivalent (only rasterization)",
+    "description": "Matching empty Usage/Limits content and geometry; glyph/refresh-icon rasterization differs."
+  },
+  "settings-remote-access": {
+    "classification": "small layout differences",
+    "description": "Same off-state fields and no devices; native input/segmented-control insets and card/row dimensions differ slightly."
+  },
+  "usage-limits-open": {
+    "classification": "equivalent (only rasterization)",
+    "description": "Matching empty Usage/Limits page; only text/refresh-icon rasterization differs."
+  },
+  "tasks-empty": {
+    "classification": "small layout differences",
+    "description": "Both real task lists are empty; native assignee/project filter row sits slightly higher and column/header/control spacing differs."
+  },
+  "apps-empty": {
+    "classification": "equivalent (only rasterization)",
+    "description": "Both real app lists are empty; matching empty-state copy, icon and placement with glyph/shadow rasterization differences."
+  },
+  "connection-offline": {
+    "classification": "equivalent (only rasterization)",
+    "description": "Matching unreachable-gateway page, retry button and disabled shell; minor glyph/shadow rasterization differences."
+  }
+}
