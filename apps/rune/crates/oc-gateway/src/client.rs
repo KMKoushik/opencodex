@@ -1,4 +1,6 @@
 use crate::types::*;
+#[path = "terminal.rs"]
+pub mod terminal;
 use reqwest::{Client, Method, Response, Url};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
