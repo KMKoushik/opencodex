@@ -357,6 +357,7 @@ pub fn view(s: &State, id: &str) -> El {
                 .role("region")
                 .read_only(true)
                 .focusable(true)
+                .on_secondary_press(crate::menus::native::selected_text)
                 .on_key(|s: &mut State, event, tx| {
                     if s.pages.apps.code.find.open {
                         find::key(s, event, tx)

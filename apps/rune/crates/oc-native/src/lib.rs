@@ -1,6 +1,7 @@
 //! macOS's native color panel, used by the web's color input as well. AppKit
 //! stays on the main thread; callbacks publish only the latest value and wake.
 use std::sync::Mutex;
+pub mod menu;
 static CHANGED: Mutex<Option<(String, String)>> = Mutex::new(None);
 static ACTIVE: Mutex<Option<(String, rune::Waker)>> = Mutex::new(None);
 pub fn take_color() -> Option<(String, String)> {
