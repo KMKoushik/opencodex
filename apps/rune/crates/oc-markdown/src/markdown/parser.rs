@@ -198,7 +198,9 @@ pub(super) fn parse_doc_tail(src: &str, autolink: bool) -> (ParsedDoc, Tail) {
                         HeadingLevel::H1 => 1,
                         HeadingLevel::H2 => 2,
                         HeadingLevel::H3 => 3,
-                        _ => 4,
+                        HeadingLevel::H4 => 4,
+                        HeadingLevel::H5 => 5,
+                        HeadingLevel::H6 => 6,
                     };
                     b.inline = Some((InlineKind::Heading(l), Inline::default(), Vec::new(), SpanMap::default()));
                 }

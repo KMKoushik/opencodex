@@ -5,6 +5,7 @@ use super::super::*;
 use rune::text::{BareIcon, PillChip, TextSystem};
 
 thread_local! {
+    static BASELINES: RefCell<std::collections::HashMap<u64, (f32, f32)>> = RefCell::default();
     static SHAPER: RefCell<TextSystem> = RefCell::new({
         let families=("System Font, .SF NS, Segoe UI, sans-serif", "ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace");
         // TextSystem::new publishes measurement fonts. Keep this auxiliary
@@ -14,6 +15,38 @@ thread_local! {
     });
 }
 const ANCHOR: &str = "\u{2060}";
+
+pub(super) fn inline_baseline(font: TextStyle) -> f32 {
+    let baseline = baselines(font).0;
+    // Blink's inline replaced boxes align on the half-point grid on macOS.
+    (baseline * 2.0).round() * 0.5
+}
+
+pub(in crate::markdown) fn code_line_height(font: TextStyle, strut: TextStyle) -> f32 {
+    font.line_px() + (baselines(strut).1 - baselines(font).1).abs()
+}
+
+fn baselines(font: TextStyle) -> (f32, f32) {
+    let key = super::hash_of(font);
+    if let Some(value) = BASELINES.with_borrow(|cache| cache.get(&key).copied()) { return value; }
+    let value = SHAPER.with_borrow_mut(|s| {
+        let layout = s.layout_blocks("x", &[], &[], &[], font, 1.0, None, parley::Alignment::Start);
+        let line = layout.lines().next().unwrap();
+        for item in line.items() {
+            if let parley::PositionedLayoutItem::GlyphRun(run) = item {
+                let m = run.run().font_metrics();
+                return ((font.line_px() + m.ascent - m.descent) * 0.5,
+                    (font.line_px() + m.ascent.round() - m.descent.round()) * 0.5);
+            }
+        }
+        (font.line_px() * 0.5, font.line_px() * 0.5)
+    });
+    BASELINES.with_borrow_mut(|cache| {
+        if cache.len() >= 64 { cache.clear(); }
+        cache.insert(key, value);
+    });
+    value
+}
 
 fn portion(inl: &Inline, a: usize, b: usize) -> Inline {
     Inline {
@@ -315,6 +348,34 @@ impl Renderer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn web_nested_blocks_and_replaced_boxes_keep_css_heights() {
+        fn view(_: &(), _: &mut rune::Cx<()>) -> El {
+            Markdown::new("##### Five\n\n###### Six\n\n> first\n>\n> second\n\n- outer\n  - inner\n\n```text\none\ntwo\n```\n\n- [ ] first\n- [x] second\n\n---\n\n| Head |\n| --- |\n| Body |")
+                .scroll_wide(true)
+                .code_frame(|body, _| body.border(1.0, Color::TRANSPARENT).border_layout())
+                .render(&MarkdownStyle::neutral(true)
+                    .web_layout()
+                    .body_font(TextStyle::new(14.0, 400.0).lh(22.75))
+                    .code_block_font(TextStyle::new(13.0, 400.0).mono().lh(22.75))
+                    .code_block_strut(TextStyle::new(14.0, 400.0).mono().lh(22.75))
+                    .code_block_padding(16.0, 14.0)
+                    .list(24.0, 6.0)
+                    .task_inline_height(28.0)
+                    .table_outline(None)
+                    .table_cell_padding(12.0, 10.0)
+                    .text_width(500.0))
+        }
+        let mut runtime = rune::Runtime::new((), view, (500.0, 1000.0), rune::Env::new(true, 2.0));
+        runtime.frame(0.0);
+        let elements = runtime.elements();
+        // Measured against Electron/Chromium, including its 14px pre strut,
+        // 13px code child, and workbench's 28px checkbox input override.
+        for (key, height) in [("b0", 22.75), ("b1", 22.75), ("b2", 45.5), ("b3", 45.5), ("b4", 76.5), ("b5", 74.5), ("b6", 1.0), ("b7", 87.5), ("th", 43.25), ("r0", 43.75)] {
+            let block = elements.iter().find(|e| e.key.as_deref() == Some(key)).unwrap();
+            assert!((block.rect[3] - height).abs() < 0.01, "{key}: {:?}, expected {height}", block.rect);
+        }
+    }
     #[test]
     fn css_code_line_box_does_not_inflate_the_following_plain_line() {
         fn view(_: &(), _: &mut rune::Cx<()>) -> El {

@@ -3,7 +3,7 @@ use oc_markdown::{Markdown, MarkdownStyle};
 use rune::{El, TextStyle};
 
 pub fn render(s: &State, source: &str, streaming: bool, width: f32) -> El {
-    render_marked(s, source, streaming, width, Vec::new(), "")
+    render_marked(s, source, streaming, width, Vec::new(), "", false)
 }
 pub fn response(
     s: &State,
@@ -13,6 +13,7 @@ pub fn response(
     message: &str,
     ordinal: usize,
     row: &str,
+    reader: bool,
 ) -> El {
     let mut marks = Vec::new();
     for comment in &s.draft().comments {
@@ -48,7 +49,7 @@ pub fn response(
     } else {
         row.to_owned()
     };
-    render_marked(s, source, streaming, width, marks, &scope)
+    render_marked(s, source, streaming, width, marks, &scope, reader)
 }
 fn render_marked(
     s: &State,
@@ -57,6 +58,7 @@ fn render_marked(
     width: f32,
     mut highlights: Vec<(Vec<std::ops::Range<usize>>, oc_markdown::Highlight)>,
     row: &str,
+    reader: bool,
 ) -> El {
     let t = &s.theme;
     let prepared = if source.contains('<') {
@@ -83,7 +85,8 @@ fn render_marked(
         .web_inline_metrics(1.0, 1.0, 5.0, 2.0)
         .list_markers_outside(true)
         .code_block(t.c("surface-under"), t.c("border"))
-        .code_block_font(TextStyle::new(13.0, 400.0).mono().lh(22.75))
+        .code_block_font(TextStyle::new(13.0, 400.0).mono().lh(font_size * 1.625))
+        .code_block_strut(TextStyle::new(font_size, 400.0).mono().lh(font_size * 1.625))
         .code_block_padding(16.0, 14.0)
         .text_width(width)
         .list(24.0, 6.0)
@@ -91,7 +94,7 @@ fn render_marked(
             13.0,
             2.0,
             0.0,
-            Some(3.0),
+            Some(3.5),
             t.c("text-tertiary"),
             t.c("surface"),
             t.c("secondary"),
@@ -129,6 +132,11 @@ fn render_marked(
     for (level, scale) in [(1, 1.75), (2, 1.5), (3, 1.25), (4, 1.0)] {
         let size = font_size * scale;
         style = style.heading_font(level, TextStyle::new(size, 600.0).lh(size * 1.4));
+    }
+    if reader {
+        // workbench.css applies its 28px input height to Markdown checkboxes
+        // too. Blink baseline-aligns that replaced box, increasing these lines.
+        style = style.task_inline_height(28.0);
     }
     let images = s.chat.media.images.clone();
     let reader_images = s.workbench.reader_chat.media.images.clone();
@@ -296,6 +304,9 @@ fn render_marked(
                 })
         })
         .selectable(true)
+        // Chromium keeps preformatted lines and table min-content widths intact;
+        // only their overflow viewports scroll, never the transcript's text column.
+        .scroll_wide(true)
         .tasks_read_only()
         .streaming(streaming)
         // StreamText uses react-markdown's default pre/code nodes: no invented
