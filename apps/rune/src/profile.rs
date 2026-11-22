@@ -6,6 +6,8 @@ use std::sync::{Arc, Mutex, mpsc};
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Preferences {
+    pub project_models: std::collections::BTreeMap<String, oc_gateway::types::ModelRef>,
+    pub model_variants: std::collections::BTreeMap<String, Option<String>>,
     pub project: Option<String>,
     pub closed_projects: Vec<String>,
     pub sidebar_width: Option<f32>,

@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 mod assets;
 mod composer;
+mod docks;
 mod icons;
 mod profile;
 mod sidebar;
@@ -12,7 +13,7 @@ mod runtime_tests;
 use assets::Assets;
 use oc_gateway::{Gateway, Snapshot, Worker};
 use profile::{Preferences, Profile};
-use rune::{AppSpec, Chrome, Cx, El, TextEdit, Tx, col, el, row};
+use rune::{AppSpec, Chrome, Cx, El, Tx, col, el, row};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, OnceLock};
 use theme::Theme;
@@ -22,6 +23,8 @@ struct Options {
     preset: String,
     dark: bool,
     headless: bool,
+    composer_state: String,
+    session: Option<String>,
 }
 static OPTIONS: OnceLock<Options> = OnceLock::new();
 struct State {
@@ -38,7 +41,8 @@ struct State {
     inactive_open: bool,
     inactive_visible: usize,
     selected: Option<String>,
-    draft: TextEdit,
+    composer: composer::state::Composer,
+    docks: docks::Docks,
     error: Option<String>,
     window_size: (f32, f32),
     waker: Option<rune::Waker>,
@@ -63,13 +67,25 @@ impl State {
             inactive_open: false,
             inactive_visible: 10,
             selected: None,
-            draft: TextEdit::new(""),
+            composer: Default::default(),
+            docks: Default::default(),
             error: None,
             window_size: (1240.0, 840.0),
             waker: None,
         }
     }
     fn project(&self) -> Option<&oc_gateway::types::Project> {
+        if let Some(session) = self
+            .selected
+            .as_ref()
+            .and_then(|id| self.snapshot.sessions.get(id))
+        {
+            if let Some(project) = self.snapshot.projects.iter().find(|p| {
+                session.project_id.as_deref() == Some(&p.id) || session.directory == p.canonical
+            }) {
+                return Some(project);
+            }
+        }
         self.prefs
             .project
             .as_ref()
@@ -88,13 +104,7 @@ impl State {
         }
     }
     fn model_name(&self) -> &str {
-        self.project()
-            .and_then(|p| self.snapshot.models.get(&p.canonical))
-            .and_then(|c| {
-                c.default_model
-                    .as_ref()
-                    .and_then(|default| c.data.iter().find(|m| m.id == default.id))
-            })
+        self.model_info()
             .map(|m| m.name.as_str())
             .unwrap_or("Select model")
     }
@@ -192,9 +202,22 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
             tx.live_only();
         });
     if !s.prefs.sidebar_closed {
-        shell = shell.child(sidebar::view(s));
+        shell = shell.child(rune::memo(
+            "sidebar",
+            (
+                s.rows_revision,
+                s.snapshot.revision,
+                &s.selected,
+                s.sidebar_width().to_bits(),
+                s.prefs.focus,
+            ),
+            || sidebar::view(s),
+        ));
     }
     shell = shell.child(main);
+    if let Some(menu) = composer::menus::view(s) {
+        shell = shell.child(menu);
+    }
     if !s.prefs.sidebar_closed {
         shell = shell.child(
             el().key("sidebar-resize")
@@ -281,6 +304,11 @@ fn poll(s: &mut State, _: f64, tx: &mut Tx) -> bool {
         sidebar::rebuild(s);
         tx.instant();
     }
+    composer::menus::prefetch(s);
+    if composer::state::poll(s) {
+        changed = true;
+        tx.instant();
+    }
     changed
 }
 pub fn unix_ms() -> u128 {
@@ -333,6 +361,8 @@ fn main() {
             preset: value("--preset").unwrap_or_default(),
             dark,
             headless,
+            composer_state: value("--composer-state").unwrap_or_default(),
+            session: value("--session"),
         })
         .ok();
     let spec = AppSpec {
@@ -346,6 +376,9 @@ fn main() {
         ),
         min_size: Some((760.0, 560.0)),
         on_key: Some(|s, ev, tx| {
+            if composer::keys::global(s, ev, tx) {
+                return true;
+            }
             if rune::Chord::parse("mod+b").unwrap().matches_tx(ev, tx) {
                 s.prefs.sidebar_closed = !s.prefs.sidebar_closed;
                 s.save();
@@ -376,8 +409,13 @@ fn main() {
         let mut s = State::new();
         if OPTIONS.get().unwrap().headless {
             if let Some(url) = &OPTIONS.get().unwrap().gateway {
-                match Gateway::new(url, None).and_then(oc_gateway::capture) {
-                    Ok(snapshot) => s.snapshot = Arc::new(snapshot),
+                match Gateway::new(url, None).and_then(|client| {
+                    oc_gateway::capture_directory(client, s.prefs.project.clone())
+                }) {
+                    Ok(mut snapshot) => {
+                        snapshot.live = true;
+                        s.snapshot = Arc::new(snapshot);
+                    }
                     Err(e) => {
                         eprintln!("{e}");
                         std::process::exit(1);
@@ -385,6 +423,7 @@ fn main() {
                 }
             }
             s.assets = Some(Assets::load(&s.theme, Arc::new(|| {}), true));
+            composer::capture::setup(&mut s);
             sidebar::rebuild(&mut s);
         }
         s
@@ -402,6 +441,7 @@ fn main() {
             match &OPTIONS.get().unwrap().gateway {
                 Some(url) => match Gateway::new(url, None) {
                     Ok(client) => {
+                        composer::state::start(s, client.clone(), wake.clone());
                         s.worker = Some(Worker::start(client, s.prefs.project.clone(), move || {
                             wake()
                         }))

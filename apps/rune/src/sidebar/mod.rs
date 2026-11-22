@@ -578,7 +578,7 @@ fn render_item(s: &State, n: usize) -> El {
                     if let Some(t) = s.snapshot.sessions.get(&id) {
                         s.prefs.project = Some(t.directory.clone());
                     }
-                    s.selected = Some(id.clone());
+                    s.open_session(id.clone());
                     s.save();
                 }))
         }
