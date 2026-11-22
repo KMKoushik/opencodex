@@ -208,6 +208,10 @@ pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) -> bool 
                 if path.starts_with("apps/") && path.ends_with("/runs") {
                     s.page_get("apps");
                 }
+                if path == "remote/revoke" {
+                    s.page_get("remote");
+                    return true;
+                }
                 if path == "remote" {
                     s.pages.remote.dirty = false;
                 }
@@ -238,6 +242,7 @@ pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) -> bool 
 /// Follow OpenCode's plugin reload only while a relevant page is visible. No
 /// redraw timer: a wake can issue a read, and only its changed reply redraws.
 pub fn poll(s: &mut State, clock: f64, tx: &mut rune::Tx) {
+    crate::settings::remote::poll(s, clock, tx);
     if s.pages.route == Route::Tasks {
         let minute = chrono::Local::now().timestamp() / 60;
         if s.pages.tasks.minute != minute {

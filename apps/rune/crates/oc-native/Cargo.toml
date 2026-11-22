@@ -11,3 +11,4 @@ rune = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1
 objc2 = "0.6"
 objc2-foundation = "0.3"
 objc2-app-kit = "0.3"
+block2 = "0.6"

@@ -24,6 +24,7 @@ pub struct Projects {
     pub color: String,
     pub image: String,
     pub preview: Option<rune::Image>,
+    pub preparing: Option<&'static str>,
     pub busy: bool,
     pub error: Option<String>,
     pub folders: Option<Value>,
@@ -358,6 +359,9 @@ pub fn avatar(s: &State, name: &str, color: &str, size: f32) -> El {
         ))
 }
 pub fn dialog(s: &State) -> Option<El> {
+    if s.pages.remote.pairing_at.is_some() {
+        return super::pairing::dialog(s);
+    }
     let dialog = s.pages.projects.dialog.as_ref()?;
     let (title, width, content): (String, f32, El) = match dialog {
         Dialog::Open(register) => (

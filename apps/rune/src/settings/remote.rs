@@ -3,7 +3,7 @@ use crate::{
     pages::{self, button, data},
     sidebar::label,
 };
-use rune::{El, TextEdit, TextStyle, col, el, row, text_input};
+use rune::{El, TextEdit, TextStyle, el, row, text_input};
 use serde_json::{Value, json};
 #[derive(Default)]
 pub struct Remote {
@@ -15,6 +15,58 @@ pub struct Remote {
     pub pair: Option<Value>,
     pub qr: Vec<(usize, usize, usize)>,
     pub qr_size: usize,
+    pub pairing_at: Option<i64>,
+    pub next_poll: f64,
+    pub minute: i64,
+    pub next_usage: f64,
+    pub clock_second: i64,
+}
+/// Visible-page network cadence and countdown updates, never an idle redraw loop.
+pub fn poll(s: &mut State, clock: f64, tx: &mut rune::Tx) {
+    if s.pages.route == pages::Route::Settings("usage".into()) {
+        s.pages.remote.minute = chrono::Utc::now().timestamp() / 60;
+        if s.composer.worker.is_some() && s.snapshot.live && clock >= s.pages.remote.next_usage {
+            s.pages.remote.next_usage = clock + 300.0;
+            s.page_get("usage/limits");
+        }
+        tx.wake_after(std::time::Duration::from_secs(60));
+    }
+    if s.pages.route != pages::Route::Settings("remote".into()) {
+        return;
+    }
+    let pairing = s.pages.remote.pairing_at.is_some();
+    let value = data(s, "remote");
+    let enabled = value.is_some_and(|v| v["enabled"] == true);
+    if (pairing || enabled) && s.composer.worker.is_some() {
+        let interval = if pairing
+            || value.is_some_and(|v| {
+                v["tunnel"] != "external" && v["connector"]["state"] != "connected"
+            }) {
+            2.0
+        } else {
+            10.0
+        };
+        if s.composer.worker.is_some() && clock >= s.pages.remote.next_poll {
+            s.pages.remote.next_poll = clock + interval;
+            s.page_get("remote");
+        }
+        tx.wake_after(std::time::Duration::from_secs_f64(
+            (s.pages.remote.next_poll - clock).max(0.05),
+        ));
+    }
+    if pairing
+        && super::pairing::paired(s).is_none()
+        && s.pages.remote.pair.as_ref().is_some_and(|v| {
+            v["expires"].as_i64().unwrap_or(0) > s.pages.remote.clock_second * 1000
+        })
+    {
+        s.pages.remote.clock_second = chrono::Utc::now().timestamp();
+        if s.pages.remote.pair.as_ref().is_some_and(|v| {
+            v["expires"].as_i64().unwrap_or(0) > chrono::Utc::now().timestamp_millis()
+        }) {
+            tx.wake_after(std::time::Duration::from_secs(1));
+        }
+    }
 }
 pub fn receive(s: &mut State, path: &str, value: &Value) {
     if path == "remote" && !s.pages.remote.dirty {
@@ -26,9 +78,11 @@ pub fn receive(s: &mut State, path: &str, value: &Value) {
     if path == "remote/codes" {
         s.pages.remote.qr.clear();
         if let Some(url) = value["url"].as_str() {
-            if let Ok(code) = qrcode::QrCode::new(url.as_bytes()) {
+            if let Ok(code) =
+                qrcode::QrCode::with_error_correction_level(url.as_bytes(), qrcode::EcLevel::M)
+            {
                 let size = code.width();
-                s.pages.remote.qr_size = size + 8;
+                s.pages.remote.qr_size = size + 4;
                 for y in 0..size {
                     let mut x = 0;
                     while x < size {
@@ -37,7 +91,7 @@ pub fn receive(s: &mut State, path: &str, value: &Value) {
                             while x < size && code[(x, y)] == qrcode::Color::Dark {
                                 x += 1;
                             }
-                            s.pages.remote.qr.push((start + 4, y + 4, x - start));
+                            s.pages.remote.qr.push((start + 2, y + 2, x - start));
                         } else {
                             x += 1;
                         }
@@ -49,8 +103,23 @@ pub fn receive(s: &mut State, path: &str, value: &Value) {
     }
 }
 pub fn view(s: &State, mut body: El) -> El {
-    if let Some(status) = pages::status(s, "remote") {
-        return body.child(status);
+    if data(s, "remote").is_none() {
+        let error = s.pages.data.get("remote").and_then(|v| v.as_ref().err());
+        let message = error.map(String::as_str).unwrap_or("Checking…");
+        return body.child(
+            super::group(s, "Remote access").child(super::setting_row_styled(
+                s,
+                "Status",
+                message,
+                vec![
+                    rune::Span::new(0, message.len()).color(s.theme.c(if error.is_some() {
+                        "error"
+                    } else {
+                        "text-secondary"
+                    })),
+                ],
+            )),
+        );
     }
     let enabled = data(s, "remote").is_some_and(|v| v["enabled"] == true);
     let value = data(s, "remote").unwrap();
@@ -69,7 +138,12 @@ pub fn view(s: &State, mut body: El) -> El {
             .on_press(move |s: &mut State| save(s, !enabled)),
         ),
     )
-    .child(super::setting_row(s, "Status", &status));
+    .child(super::setting_row_styled(
+        s,
+        "Status",
+        &status,
+        vec![rune::Span::new(0, status.len()).color(s.theme.c(tone(value)))],
+    ));
     for (key, title, description) in [
         (
             "hostname",
@@ -248,12 +322,7 @@ pub fn view(s: &State, mut body: El) -> El {
                 .disabled(!ready)
                 .dim(if ready { 1.0 } else { 0.45 })
                 .on_press(|s: &mut State| {
-                    s.prompt_request(oc_gateway::prompt::Request::Mutate {
-                        tag: "page:remote/codes".into(),
-                        path: "remote/codes".into(),
-                        body: json!({}),
-                        delete: false,
-                    });
+                    super::pairing::open(s);
                 }),
         ),
     );
@@ -271,64 +340,44 @@ pub fn view(s: &State, mut body: El) -> El {
     {
         let id = device["id"].as_str().unwrap_or("").to_owned();
         devices = devices.child(
-            super::setting_row(s, device["name"].as_str().unwrap_or("Device"), "").child(
-                button(s, "Revoke").on_press(move |s: &mut State| {
-                    s.page_mutate(&format!("remote/devices/{id}"), Value::Null, "remote", true)
-                }),
+            super::setting_row(
+                s,
+                device["name"].as_str().unwrap_or("Device"),
+                &device_date(device),
+            )
+            .child(
+                button(s, "Revoke")
+                    .disabled(s.pages.pending.contains("remote/revoke"))
+                    .on_press(move |s: &mut State| {
+                        s.page_mutate(
+                            &format!("remote/devices/{id}"),
+                            Value::Null,
+                            "remote/revoke",
+                            true,
+                        )
+                    }),
             ),
         );
     }
     body = body.child(devices);
-    if let Some(pair) = &s.pages.remote.pair {
-        let mut qr = el().size(224.0, 224.0).fill(rune::Color::WHITE);
-        let scale = 224.0 / s.pages.remote.qr_size.max(1) as f32;
-        for &(x, y, width) in &s.pages.remote.qr {
-            qr = qr.child(
-                el().absolute(x as f32 * scale, y as f32 * scale)
-                    .size(width as f32 * scale, scale)
-                    .fill(rune::Color::BLACK),
-            );
-        }
-        body = body.child(
-            col()
-                .gap(12.0)
-                .child(label(&s.theme, "Scan to pair", 15.0, 500.0, "text"))
-                .child(qr)
-                .child(
-                    label(
-                        &s.theme,
-                        pair["code"].as_str().unwrap_or(""),
-                        20.0,
-                        600.0,
-                        "text",
-                    )
-                    .selectable(true),
-                )
-                .child(
-                    label(
-                        &s.theme,
-                        pair["url"].as_str().unwrap_or(""),
-                        12.0,
-                        400.0,
-                        "text-secondary",
-                    )
-                    .selectable(true),
-                )
-                .child(button(s, "Done").on_press(|s: &mut State| {
-                    s.pages.remote.pair = None;
-                    s.pages.remote.qr.clear();
-                    s.page_get("remote");
-                })),
-        );
+    if let Some(error) = s.pages.errors.get("remote/revoke") {
+        body = body.child(label(&s.theme, error, 12.0, 400.0, "error").role("alert"));
     }
     body
 }
 fn save(s: &mut State, enabled: bool) {
-    let Ok(port) = s.pages.remote.port.text.parse::<u16>() else {
-        s.pages
-            .errors
-            .insert("remote".into(), "Enter a valid port".into());
-        return;
+    // React passes Number(input) through JSON; the gateway owns validation and
+    // its actual message, including empty, fractional and out-of-range ports.
+    let input = s.pages.remote.port.text.trim();
+    let port = if input.is_empty() {
+        json!(0)
+    } else {
+        input
+            .parse::<f64>()
+            .ok()
+            .filter(|v| v.is_finite())
+            .map(|v| json!(v))
+            .unwrap_or(Value::Null)
     };
     let hostname = s.pages.remote.hostname.text.trim();
     let mut body = json!({"enabled":enabled,"hostname":if hostname.is_empty(){None}else{Some(hostname)},"port":port,"tunnel":if s.pages.remote.external{"external"}else{"token"}});
@@ -336,6 +385,64 @@ fn save(s: &mut State, enabled: bool) {
         body["token"] = json!(s.pages.remote.token.text.trim());
     }
     s.page_write("remote", "PUT", body, "remote");
+}
+fn tone(value: &Value) -> &'static str {
+    if value["enabled"] != true {
+        return "text-secondary";
+    }
+    if value["listener"]["state"] == "failed" {
+        return "error";
+    }
+    if value["listener"]["state"] != "listening" {
+        return "text-secondary";
+    }
+    if value["served"] != true {
+        return "error";
+    }
+    if value["tunnel"] == "external" {
+        return "text-secondary";
+    }
+    match value["connector"]["state"].as_str() {
+        Some("connected") => "success",
+        Some("missing" | "failed") => "error",
+        _ => "text-secondary",
+    }
+}
+fn device_date(device: &Value) -> String {
+    let created = device["created"]
+        .as_i64()
+        .and_then(chrono::DateTime::from_timestamp_millis)
+        .map(|d| d.with_timezone(&chrono::Local).format("%b %-d").to_string())
+        .unwrap_or_default();
+    let mut text = format!("Paired {created}");
+    if let Some(seen) = device["seen"].as_i64().filter(|v| *v != 0) {
+        let seconds = ((seen - chrono::Utc::now().timestamp_millis()) as f64 / 1000.0).round();
+        let mut ago = "just now".to_owned();
+        for (unit, size) in [("day", 86400.0), ("hr", 3600.0), ("min", 60.0)] {
+            if seconds.abs() >= size {
+                let n = (seconds / size).round() as i64;
+                ago = if unit == "day" && n == -1 {
+                    "yesterday".into()
+                } else if unit == "day" && n == 1 {
+                    "tomorrow".into()
+                } else if n < 0 {
+                    format!(
+                        "{} {unit}{} ago",
+                        -n,
+                        if unit == "day" && n != -1 { "s" } else { "" }
+                    )
+                } else {
+                    format!(
+                        "in {n} {unit}{}",
+                        if unit == "day" && n != 1 { "s" } else { "" }
+                    )
+                };
+                break;
+            }
+        }
+        text.push_str(&format!(" · Active {ago}"));
+    }
+    text
 }
 fn describe(value: &Value) -> String {
     if value["enabled"] != true {

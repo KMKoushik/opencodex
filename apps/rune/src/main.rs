@@ -375,6 +375,7 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
     shell
 }
 fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
+    let settings_clock = (s.pages.remote.minute, s.pages.remote.clock_second);
     let task_minute = s.pages.tasks.minute;
     if let Some(worker) = &s.worker {
         let changes = worker.take_page_changes();
@@ -384,7 +385,10 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
     notifications::clear_on_focus(s);
     let code_changed = apps::code::poll(s);
     let source_find_changed = apps::code::find::poll(s, tx);
+    let notification_changed = notifications::poll(s);
     let mut changed = settings::appearance::receive_color(s)
+        || notification_changed
+        || settings_clock != (s.pages.remote.minute, s.pages.remote.clock_second)
         || task_minute != s.pages.tasks.minute
         || code_changed
         || source_find_changed;

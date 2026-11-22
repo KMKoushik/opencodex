@@ -16,9 +16,15 @@ fn input(
         .fill(s.theme.c("control"))
         .border(1.0, s.theme.c("border-heavy"))
         .radius(8.0)
-        .disabled(s.pages.projects.busy)
+        .disabled(
+            s.pages.projects.busy
+                && (name != "Project name" || s.pages.projects.preparing.is_none()),
+        )
         .on_edit(edit)
         .on_input_paste(move |s: &mut State, c, _| {
+            if name != "Project name" {
+                return false;
+            }
             let field = if name == "Project name" {
                 &mut s.pages.projects.name
             } else {
@@ -44,7 +50,7 @@ fn input(
                 } else {
                     &mut s.pages.projects.url
                 };
-                ui::limit_key(field, e, if name == "Project name" { 256 } else { 4096 })
+                name == "Project name" && ui::limit_key(field, e, 256)
             }
         })
 }
@@ -66,8 +72,17 @@ pub fn view(s: &State, id: &str) -> El {
         col()
             .grow(1.0)
             .gap(4.0)
-            .child(pages::button(s, "Upload icon").disabled(busy).on_press_tx(
-                |_: &mut State, tx| {
+            .child(
+                pages::button(
+                    s,
+                    if busy && p.preparing == Some("upload") {
+                        "Preparing icon…"
+                    } else {
+                        "Upload icon"
+                    },
+                )
+                .disabled(busy)
+                .on_press_tx(|_: &mut State, tx| {
                     tx.open_file(
                         rune::FileDialogOptions {
                             title: "Project icon".into(),
@@ -84,8 +99,8 @@ pub fn view(s: &State, id: &str) -> El {
                             _ => {}
                         },
                     )
-                },
-            ))
+                }),
+            )
             .child(label(
                 &s.theme,
                 "Images are cropped to a square.",
@@ -159,21 +174,26 @@ pub fn view(s: &State, id: &str) -> El {
         } else {
             false
         }
-    });
+    })
+    .on_input_change(|s: &mut State, _| s.pages.projects.error = None);
     with_error(s,col().w_full().gap(20.0)
         .child(col().w_full().gap(8.0).child(label(&s.theme,"Project name",13.0,500.0,"text"))
             .child(input(s,"Project name",&p.name,|s|&mut s.pages.projects.name)))
         .child(icon)
         .child(col().w_full().gap(8.0).child(label(&s.theme,"Website or icon URL",13.0,500.0,"text")).child(url)
             .child(row().gap(8.0)
-                .child(pages::button(s,"Use favicon").disabled(busy||p.url.text.trim().is_empty()).on_press(|s:&mut State|request(s,s.pages.projects.url.text.clone(),false,true)))
-                .child(pages::button(s,"Use image URL").disabled(busy||p.url.text.trim().is_empty()).on_press(|s:&mut State|request(s,s.pages.projects.url.text.clone(),false,false))))
+                .child(pages::button(s,if busy && p.preparing==Some("favicon") {"Loading favicon…"} else {"Use favicon"}).disabled(busy||p.url.text.trim().is_empty()).on_press(|s:&mut State|request(s,s.pages.projects.url.text.clone(),false,true)))
+                .child(pages::button(s,if busy && p.preparing==Some("image") {"Loading image…"} else {"Use image URL"}).disabled(busy||p.url.text.trim().is_empty()).on_press(|s:&mut State|request(s,s.pages.projects.url.text.clone(),false,false))))
             .child(label(&s.theme,"Favicon uses the site's /favicon.ico. URL icons need an internet connection.",12.0,400.0,"text-secondary").w_full().wrap()))
         .child(col().gap(8.0).child(label(&s.theme,"Icon color",13.0,500.0,"text")).child(colors))
         .child(label(&s.theme,s.snapshot.projects.iter().find(|p|p.id==id).map(|p|p.canonical.as_str()).unwrap_or(""),12.0,400.0,"text-tertiary").w_full().wrap()))
         .child(footer(s,true,save_current))
 }
 fn save_current(s: &mut State) {
+    if s.pages.projects.busy {
+        return;
+    }
+    s.pages.projects.preparing = None;
     let Some(Dialog::Edit(saveid)) = s.pages.projects.dialog.clone() else {
         return;
     };
@@ -201,6 +221,13 @@ fn request(s: &mut State, source: String, local: bool, favicon: bool) {
         return;
     }
     s.pages.projects.error = None;
+    s.pages.projects.preparing = Some(if local {
+        "upload"
+    } else if favicon {
+        "favicon"
+    } else {
+        "image"
+    });
     s.pages.projects.busy = s.prompt_request(oc_gateway::prompt::Request::ProjectIcon {
         source,
         local,
@@ -211,7 +238,11 @@ fn request(s: &mut State, source: String, local: bool, favicon: bool) {
     }
 }
 pub fn receive_icon(s: &mut State, value: Value) {
+    let local = s.pages.projects.preparing.take() == Some("upload");
     s.pages.projects.image = value["url"].as_str().unwrap_or("").into();
+    if local {
+        s.pages.projects.url.clear();
+    }
     if let Some(bytes) = value["png"].as_array() {
         let bytes: Vec<_> = bytes
             .iter()
