@@ -2,8 +2,8 @@
 // These are authored UI fixtures, never represented as model output or cloud recordings.
 import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
-const root = '/tmp/ocr-parity-chat';
-const base = 'http://127.0.0.1:4495/api';
+const root = process.env.OCR_FIXTURE ?? '/tmp/ocr-parity-chat';
+const base = `${process.env.OCR_BASE ?? 'http://127.0.0.1:4495'}/api`;
 const env = {
   ...process.env,
   HOME: `${root}/home`,
