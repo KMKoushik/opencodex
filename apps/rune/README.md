@@ -326,8 +326,8 @@ Seven alternating `--profile perf` samples measured 5,000-file first CPU frames 
 **1.287 ms** (1.225–2.485). These synthetic headless CPU numbers exclude network,
 GPU upload/presentation and OS input; the diff expands to 4,000 added/removed rows.
 
-This is functional workbench coverage, not 1:1 completion: editing above 128 KiB remains
-read-only; image zoom, rich media/Markdown previews, review comments, pinned/preview tab
+This is functional workbench coverage, not 1:1 completion: text editing now follows the
+web's 2 MiB ceiling and Markdown has source/preview controls; image zoom, other rich media previews, review comments, pinned/preview tab
 semantics, per-session panel layouts, application discovery menus, full session-cost
 aggregation, subagent tool-detail disclosures, side attachments/request docks/deletion,
 and exact typography/controls/empty-state parity remain. The first diff frame still has
@@ -407,3 +407,18 @@ the gateway default model rather than the web client's project-model preference.
 function execution limits remain server-owned, as in the web host. Native visible GPU
 presentation/IME candidate windows were not verified on this locked/offscreen host.
 The crate's documented native-slot transaction and hidden-JavaScript limitations remain.
+
+## Strict chat parity audit (partial)
+
+See [`goldens/parity-chat.md`](goldens/parity-chat.md) for source-checked fixes and explicit
+outstanding work. This is not a 1:1 parity sign-off. The isolated reproduction on OpenCode
+4965 / gateway 4495 encountered the free provider's HTTP 429 quota limit; successful-response
+goldens could not be recreated. Composer pairs and real failed-run pairs were captured instead,
+with that limitation retained in their evidence. No fabricated successful transcript was used.
+
+Corrections include service-filesystem link routing and cross-directory document/save identity,
+shared side/subagent transcript disclosures, exact tool/skill/status strings, context usage,
+direct permission confirmation, attachment formatting, question-collapse behavior, file source
+editing/discard/Markdown controls, rail order/glaze, and Menlo 13 terminal text. Many visual and
+behavioral gaps remain, including local-link icons, selection/comments, side composer parity,
+browser profiles/local HTML, canvas deletion and precise editor/diff/terminal chrome.
