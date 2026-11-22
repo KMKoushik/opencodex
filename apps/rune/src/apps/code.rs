@@ -1,4 +1,5 @@
 //! App source is read-only. Index and lex on a coalescing worker, never on scroll.
+pub(crate) mod find;
 use super::*;
 use rune::{Span, TextStyle, el, row, text};
 use rune_kit::syntax::{Paint, Syntax};
@@ -18,6 +19,7 @@ pub struct Source {
 }
 #[derive(Default)]
 pub struct Code {
+    pub find: find::Find,
     pub source: Option<Arc<Source>>,
     error: Option<String>,
     worker: Option<Worker>,
@@ -218,6 +220,8 @@ fn spans(s: &State, tokens: &[(Range<usize>, Syntax)]) -> Vec<Span> {
         .collect()
 }
 fn line(s: &State, file: &File, n: usize) -> El {
+    let mut decorations = spans(s, &file.tokens[n]);
+    decorations.extend(find::highlights(s, file, n));
     row()
         .key(format!("app-code-line-{n}"))
         .min_w(0.0)
@@ -238,7 +242,7 @@ fn line(s: &State, file: &File, n: usize) -> El {
                 .key(format!("app-code-text-{n}"))
                 .font(TextStyle::new(12.0, 400.0).mono().lh(20.4))
                 .color(s.theme.c("text"))
-                .spans(spans(s, &file.tokens[n]))
+                .spans(decorations)
                 .selectable(true),
         )
 }
@@ -348,15 +352,36 @@ pub fn view(s: &State, id: &str) -> El {
             );
         body = body.child(
             col()
-                .key(format!("app-code-scroll-{name}"))
+                .key("app-code-reader")
+                .label("Source code")
+                .role("region")
+                .read_only(true)
+                .focusable(true)
+                .on_key(|s: &mut State, event, tx| {
+                    if s.pages.apps.code.find.open {
+                        find::key(s, event, tx)
+                    } else {
+                        false
+                    }
+                })
                 .w_full()
                 .grow(1.0)
                 .min_h(0.0)
-                .scroll_xy()
-                .child(lines),
+                .child(
+                    col()
+                        .key(format!("app-code-scroll-{name}"))
+                        .w_full()
+                        .grow(1.0)
+                        .min_h(0.0)
+                        .scroll_xy()
+                        .child(lines),
+                ),
         );
     } else {
         body = body.child(el().grow(1.0));
+    }
+    if code.find.open {
+        body = body.child(find::view(s));
     }
     body
 }

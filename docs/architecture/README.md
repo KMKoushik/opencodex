@@ -225,3 +225,7 @@ visible lines are constructed while scrolling. The worker belongs to the native
 page state and exits after its channel closes; it neither runs app code nor owns
 the shared OpenCode service. Code highlighting uses the pinned Rune lexer and the
 same semantic syntax tokens as the React editor, not a second executable editor.
+Source Find uses a second lazy coalescing worker over the immutable indexed source,
+not transcript rows or mounted text. It keeps at most 2,000 match ranges and labels
+truncated counts explicitly; navigation beyond that cap and CodeMirror's exact
+normalization/selection semantics remain parity gaps. Neither worker persists data.

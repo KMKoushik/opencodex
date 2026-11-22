@@ -19,7 +19,10 @@ fn app_code_mounts_a_viewport_and_copies_across_blank_lines() {
     state.pages.app = Some("code-test".into());
     state.pages.apps.tab = "code".into();
     state.pages.data.insert("apps".into(),Ok(serde_json::json!([{"id":"code-test","title":"Source","running":[],"functions":[],"triggers":{}}])));
-    let source = format!("first\n\nlast\n{}", "const n = 1;\n".repeat(19997));
+    let source = format!(
+        "first\n\nlast\n{}OffscreenNeedle",
+        "const n = 1;\n".repeat(19997)
+    );
     state.pages.apps.code.source = Some(Arc::new(
         apps::code::prepare(serde_json::json!({"files":[{"name":"app.tsx","text":source}]}))
             .unwrap(),
@@ -71,6 +74,36 @@ fn app_code_mounts_a_viewport_and_copies_across_blank_lines() {
         clipboard.text().as_deref().map(|text| text.as_str()),
         Some("first\n\nlast")
     );
+    rt.update(crate::find::open);
+    rt.frame(0.5);
+    rt.frame(0.6);
+    assert!(
+        !rt.state.find.open,
+        "source find must not open transcript find"
+    );
+    rt.key(rune::KeyEvent {
+        key: rune::Key::Text("offscreen".into()),
+        mods: Default::default(),
+    });
+    rt.frame(0.7);
+    rt.frame(1.5);
+    assert!(
+        rt.elements()
+            .iter()
+            .any(|element| element.label.as_deref() == Some("Find in file"))
+    );
+    assert!(
+        rt.elements()
+            .iter()
+            .any(|element| element.key.as_deref() == Some("app-code-text-20000")),
+        "find must reveal source beyond the mounted viewport"
+    );
+    rt.key(rune::KeyEvent {
+        key: rune::Key::Escape,
+        mods: Default::default(),
+    });
+    rt.frame(1.6);
+    assert!(!rt.state.pages.apps.code.find.open);
 }
 
 #[test]

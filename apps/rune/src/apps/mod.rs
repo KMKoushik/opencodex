@@ -209,6 +209,7 @@ pub fn capture(s: &mut State, page: &str) -> bool {
             | "app-settings"
             | "app-code"
             | "app-code-index"
+            | "app-code-find"
             | "app-runs-open"
             | "app-icon-open"
             | "app-model-open"
@@ -257,12 +258,15 @@ pub fn capture(s: &mut State, page: &str) -> bool {
             s.pages.apps.tab = "settings".into();
             fetch(s, &format!("apps/{id}/runs"));
         }
-        "app-code" | "app-code-index" => {
+        "app-code" | "app-code-index" | "app-code-find" => {
             s.pages.apps.tab = "code".into();
-            if page == "app-code-index" {
+            if page == "app-code-index" || page == "app-code-find" {
                 s.pages.apps.selected_file = "index.html".into();
             }
             fetch(s, &format!("canvases/{id}/files"));
+            if page == "app-code-find" {
+                code::find::capture(s, "Release");
+            }
         }
         "app-runs-open" => {
             s.pages.apps.runs_open = true;

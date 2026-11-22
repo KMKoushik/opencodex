@@ -12,6 +12,10 @@ pub struct Find {
     counts: std::collections::BTreeMap<String, (u64, usize)>,
 }
 pub fn open(s: &mut State, tx: &mut Tx) {
+    if crate::apps::code::find::scoped(s) {
+        crate::apps::code::find::open(s, tx);
+        return;
+    }
     s.find.open = true;
     s.chat.disclosure_revision += 1;
     tx.focus("chat-find", false);

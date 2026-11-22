@@ -17,7 +17,7 @@
         "Shell, chat, drafts, docks; settings/tasks/apps page routes",
         "Live sidebar/chat worker: /api + SSE; reconnect refresh",
         "Prompt worker: sends, page reads/writes, attachment I/O",
-        "App Code worker: coalesced indexing; virtual source lines",
+        "App Code workers: source indexing + find; virtual lines",
         "oc-native: AppKit color panel; menus + OS notifications",
         "UI/model/theme prefs: OPENCODEX_DATA_DIR or ~/.opencodex/rune"
       ]
@@ -724,7 +724,7 @@
     }
   ],
   "requiredLabels": [
-    "App Code worker: coalesced indexing; virtual source lines",
+    "App Code workers: source indexing + find; virtual lines",
     "OPENCODEX ARCHITECTURE",
     "SHARED UI / apps/web",
     "BROWSER",

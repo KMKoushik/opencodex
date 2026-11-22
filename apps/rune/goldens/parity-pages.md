@@ -136,6 +136,22 @@ counts remain **2 matches, 21 fixed, 19 still differing**.
 
 ## Prior-pass evidence and validation
 
+Source Find continuation: ⌘F on Apps Code now opens **Find in file**, not transcript
+Find. A lazy coalescing worker scans immutable full source, rejects old query/file
+generations and bounds retained matches at 2,000. Highlights and next/previous,
+Enter/Shift+Enter, ⌘G and Escape are implemented. Reopening retains the query.
+The existing Code regression now searches line 20,001 outside the initial viewport
+and checks transcript Find stays closed. All **17 release tests** pass. The focused
+frame mounted 57 lines in 11.40 ms CPU. Matching uses an escaped Unicode-insensitive
+Rust regex; CodeMirror normalization, cursor-relative initial match/selection,
+F3, complete focus/Tab behavior, navigation after 2,000 matches and exact arrow/
+overlay/gutter visuals remain unresolved. No whole-feature status is promoted.
+Four same-fixture pairs: `goldens/parity-pages/pair-app-code-find-*-source-find-final.png`,
+dark/light at both sizes and scale 2. Fresh reviews: `/tmp/ocr-parity/source-find-review-16.png`
+and `source-find-review-17.png`. The canonical architecture now records both source
+workers; generated output was inspected and checked. Root checks, formatting and
+the final release workspace build pass, including accessibility metadata.
+
 `tools/parity-pages.mjs` captures real web and Rune output against the same fresh
 `/tmp/ocr-parity` fixture (OpenCode 4961, gateway 4491), using `goldens/seed.ts`.
 It does not mock API data. Source corpus remains `goldens/web` (unchanged).
