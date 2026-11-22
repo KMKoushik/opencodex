@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { OpenCode } from '../../../../packages/gateway/node_modules/@opencode/client/dist/promise/index.js';
 import { Service } from '../../../../packages/gateway/node_modules/@opencode/client/dist/promise/service.js';
-import { base, fixture, command, now } from './environment.mjs';
+import { base, fixture, command, now, ocPort } from './environment.mjs';
 export async function api(path, body, method = 'POST') {
   const response = await fetch(base + '/api' + path, {
     signal: AbortSignal.timeout(15000),
@@ -18,7 +18,7 @@ export async function seed() {
   // Native import/form APIs are intentionally the same exception as parity-fixture.ts.
   // No prompt route or model call is used anywhere in this sweep.
   const endpoint = await Service.discover();
-  if (!endpoint || new URL(endpoint.url).port !== '4977')
+  if (!endpoint || new URL(endpoint.url).port !== ocPort)
     throw new Error('Refusing non-sweep OpenCode');
   const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) });
   if (!(await client.session.form.list({ sessionID: 'ses_parity_2' })).length)

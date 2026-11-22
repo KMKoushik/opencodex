@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { mkdirSync, openSync, closeSync, readFileSync, writeFileSync } from 'node:fs';
-import { base, root, fixture, env, command, stopProcess } from './environment.mjs';
+import { base, root, fixture, env, command, stopProcess, ocPort, gwPort } from './environment.mjs';
 import { prepare } from './web.mjs';
 
 export function installElectron() {
@@ -25,7 +25,7 @@ async function freePort() {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = server.address().port;
   await new Promise((resolve) => server.close(resolve));
-  return [49374, 4977, 4507].includes(port) ? freePort() : port;
+  return [49374, Number(ocPort), Number(gwPort)].includes(port) ? freePort() : port;
 }
 export async function launchElectron(
   playwright,

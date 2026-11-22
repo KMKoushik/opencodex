@@ -2,8 +2,11 @@ import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, openSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 export const root = resolve(import.meta.dirname, '../../../..');
-export const fixture = '/tmp/ocr-sweep';
-export const base = 'http://127.0.0.1:4507';
+// Parallel sweeps use their own directory and ports: OCR_SWEEP_DIR, OCR_SWEEP_OC_PORT, OCR_SWEEP_GW_PORT.
+export const fixture = process.env.OCR_SWEEP_DIR ?? '/tmp/ocr-sweep';
+export const ocPort = process.env.OCR_SWEEP_OC_PORT ?? '4977';
+export const gwPort = process.env.OCR_SWEEP_GW_PORT ?? '4507';
+export const base = `http://127.0.0.1:${gwPort}`;
 export const now = 1795348800000;
 export const env = {
   ...process.env,
@@ -71,23 +74,23 @@ function start(bin, args, log, extra = {}) {
   return child;
 }
 export async function setup() {
-  for (const port of [4977, 4507])
+  for (const port of [ocPort, gwPort])
     for (const pid of pids(port))
       if (!owned(pid))
         throw new Error(`Port ${port} is owned by a non-sweep process; refusing access.`);
   for (const part of ['home', 'pkg', 'proj']) mkdirSync(fixture + '/' + part, { recursive: true });
   if (!existsSync(fixture + '/pkg/node_modules/.bin/opencode'))
     command('npm', ['install', '--prefix', fixture + '/pkg', '@opencode/cli@2.3.2']);
-  if (!pids(4977).length) {
-    command(fixture + '/pkg/node_modules/.bin/opencode', ['service', 'set', 'port', '4977']);
+  if (!pids(ocPort).length) {
+    command(fixture + '/pkg/node_modules/.bin/opencode', ['service', 'set', 'port', ocPort]);
     start(fixture + '/pkg/node_modules/.bin/opencode', ['serve', '--service'], 'opencode.log');
   }
-  if (!pids(4507).length)
+  if (!pids(gwPort).length)
     start(
       'node',
       ['--import', 'tsx', 'packages/gateway/src/cli.ts', '--production'],
       'gateway.log',
-      { PORT: '4507' },
+      { PORT: gwPort },
     );
   for (let i = 0; i < 120; i++) {
     try {
