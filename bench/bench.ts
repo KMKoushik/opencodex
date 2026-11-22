@@ -21,6 +21,8 @@ import { connect, forkForBench, longestSession, removeSession, streamPrompt } fr
 import { appTree, cpuDelta, cpuOver, footprint, median, memory, round, snapshot } from './lib/proc';
 import { requireIsolatedEnvironment, requireVisibleScreen } from './lib/screen';
 import { startFrames, stopFrames, cdpExercise } from './lib/frames';
+import { verifyBuild } from './lib/build';
+import { seedProfile } from './lib/profile';
 
 const here = dirname(new URL(import.meta.url).pathname);
 const { values: opts } = parseArgs({
@@ -59,6 +61,7 @@ const executable = isBundle
 // Membership is by PID tree plus this exact on-disk path, never by process name, so other
 // instances (for example a dev build with identical helper names) are never counted.
 const bundlePrefix = isBundle ? `${appPath}/` : undefined;
+const build = verifyBuild(appPath, executable);
 const winwatch = opts['headless-safe'] ? '' : buildWinwatch();
 
 const STREAM_PROMPT =
@@ -231,7 +234,7 @@ async function firstContent(app: Launch) {
       `(() => { const p = performance.getEntriesByType('paint').find((e) => e.name === 'first-contentful-paint');
         return p ? performance.timeOrigin + p.startTime : null; })()`,
     );
-    return { at: rows.paintAt ?? rows.domAt, fcpAt: fcp, visibility: rows.visibility };
+    return { at: rows.paintAt, fcpAt: fcp, visibility: rows.visibility };
   }
   if (driver === 'marker')
     return { at: await marker(app.log, 'first_content'), fcpAt: null, visibility: null };
@@ -392,6 +395,8 @@ async function quit(app: Launch) {
 function signal(pids: number[], name: NodeJS.Signals) {
   for (const pid of pids) {
     try {
+      const environment = Bun.spawnSync(['ps', 'eww', '-p', String(pid)]).stdout.toString();
+      if (!environment.includes(process.env.HOME!.slice(0, -5))) continue;
       process.kill(pid, name);
     } catch {
       // Already exited.
@@ -425,16 +430,12 @@ async function main() {
     OPENCODEX_BENCH_SESSION: benchSession,
   };
   // The Electron build reads the selected project from its electron-store preferences.
-  const project = { name: basename(directory), directory };
   const results: Record<string, unknown>[] = [];
   let warmup: Record<string, unknown> | undefined;
   // 'graceful' when SIGTERM ended the whole tree within 10 s, otherwise 'killed'.
   const quitModes: string[] = [];
   try {
-    writeFileSync(
-      join(dataDir, 'preferences.json'),
-      JSON.stringify({ project: JSON.stringify(project), projects: JSON.stringify([project]) }),
-    );
+    seedProfile(dataDir, directory, driver === 'marker');
     // Launch 0 primes the fresh profile (Chromium code cache, GPU cache) and the OS file cache.
     for (let index = 0; index <= runs; index++) {
       const waitedForQuietMs = await waitForQuiet();
@@ -442,6 +443,10 @@ async function main() {
       const app = await launch(dataDir, env);
       try {
         const content = await firstContent(app);
+        if (!content.at || (content.visibility !== null && content.visibility !== 'visible'))
+          throw new Error(
+            'Meaningful content was not presented in a visible window; no visible results will be reported.',
+          );
         while (!app.windowAt && Date.now() - app.t0 < 15_000) await Bun.sleep(10);
         if (!app.windowAt)
           throw new Error(
@@ -474,6 +479,10 @@ async function main() {
           cpuPct: idleCpu.cpuPct,
         });
         const session = await openSession(app, title);
+        if (session.ms === null || session.settledMs === null || session.painted === false)
+          throw new Error(
+            'Long-session presentation/settled milestone missing; keep the app unobstructed.',
+          );
         await Bun.sleep(10_000);
         const sessionMemory = memory(app.pid, bundlePrefix);
         const sessionCpu = await cpuOver(10_000, app.pid, bundlePrefix);
@@ -542,7 +551,9 @@ async function main() {
     median(results.map((r) => fn(r) ?? NaN));
   const output = {
     name,
-    revision: Bun.spawnSync(['git', 'rev-parse', 'HEAD'], { cwd: join(here, '..') })
+    revision: build?.revision ?? null,
+    build,
+    harnessRevision: Bun.spawnSync(['git', 'rev-parse', 'HEAD'], { cwd: join(here, '..') })
       .stdout.toString()
       .trim(),
     app: appPath,
@@ -646,10 +657,17 @@ async function headlessSafe() {
   const dataDir = mkdtempSync(join(tmpdir(), 'opencodex-bench-'));
   const results = [];
   const quitModes = [];
+  if (opts.project) seedProfile(dataDir, opts.project, driver === 'marker');
   try {
     for (let i = 0; i < runs; i++) {
-      const app = await launch(dataDir, {});
+      const waitedForQuietMs = await waitForQuiet();
+      const background = { ...busyBackground(), waitedForQuietMs };
+      const app = await launch(dataDir, {
+        ...(opts.project ? { OPENCODEX_BENCH_PROJECT: opts.project } : {}),
+        ...(opts['source-session'] ? { OPENCODEX_BENCH_SESSION: opts['source-session'] } : {}),
+      });
       try {
+        const cdpAttachedMs = app.cdp ? Date.now() - app.t0 : null;
         const ready = driver === 'marker' ? await marker(app.log, 'gateway_ready', 30000) : null;
         const connected =
           driver === 'marker' ? await marker(app.log, 'gateway_connected', 60000) : null;
@@ -658,13 +676,58 @@ async function headlessSafe() {
         const sidebar = driver === 'marker' ? await marker(app.log, 'sidebar_loaded', 30000) : null;
         if (driver === 'marker' && !sidebar)
           throw new Error('Gateway connected but sidebar snapshot did not load.');
+        const sidebarDomMs = app.cdp
+          ? (await app.cdp.paintedWhen('.session-row')).domAt - app.t0
+          : null;
         await Bun.sleep(10000);
+        const idleMemory = memory(app.pid, bundlePrefix);
+        const idleCpu = await cpuOver(idleMs, app.pid, bundlePrefix);
+        let sessionOpen = null;
+        if (opts['source-session']) {
+          const before = snapshot();
+          const started = performance.now();
+          let domMs: number | null = null;
+          if (app.cdp) {
+            const title = (
+              await (await connect()).client.session.get({ sessionID: opts['source-session'] })
+            ).title;
+            const beforeClick = Date.now();
+            let clicked = false;
+            for (let attempt = 0; attempt < 100 && !clicked; attempt++) {
+              clicked = await app.cdp.eval<boolean>(`(() => {
+                const row = [...document.querySelectorAll('.session-row')].find(e => e.textContent.includes(${JSON.stringify(title)}));
+                if (row) { row.click(); return true; }
+                [...document.querySelectorAll('button')].find(b => b.innerText.trim() === 'Show more')?.click(); return false;
+              })()`);
+              if (!clicked) await Bun.sleep(100);
+            }
+            if (!clicked)
+              throw new Error(
+                'Heavy session absent from sidebar: ' +
+                  (await app.cdp.eval('document.body.innerText')),
+              );
+            domMs = (await app.cdp.paintedWhen('.timeline-row')).domAt - beforeClick;
+          } else process.kill(app.pid, 'SIGUSR1');
+          await Bun.sleep(5000);
+          const elapsedMs = performance.now() - started;
+          sessionOpen = {
+            observationMs: round(elapsedMs),
+            domMs,
+            cpu: cpuDelta(before, snapshot(), elapsedMs / 1000, app.pid, bundlePrefix),
+            memory: memory(app.pid, bundlePrefix),
+            note: 'Five-second non-presentation observation, not time to visible or settled content. Native completion is not measurable while locked.',
+          };
+        }
         results.push({
+          background,
+          cdpAttachedMs,
+          sidebarDomMs,
           gatewayReadyMs: ready ? ready - app.t0 : null,
           gatewayConnectedMs: connected ? connected - app.t0 : null,
           sidebarSnapshotMs: sidebar ? sidebar - app.t0 : null,
-          memory: memory(app.pid, bundlePrefix),
-          idleCpu: await cpuOver(idleMs, app.pid, bundlePrefix),
+          memory: idleMemory,
+          idleCpu,
+          sessionOpen,
         });
       } finally {
         quitModes.push(await quit(app));
@@ -676,10 +739,12 @@ async function headlessSafe() {
   }
   const output = {
     name,
-    revision: Bun.spawnSync(['git', 'rev-parse', 'HEAD'], { cwd: join(here, '..') })
+    revision: build?.revision ?? null,
+    build,
+    harnessRevision: Bun.spawnSync(['git', 'rev-parse', 'HEAD'], { cwd: join(here, '..') })
       .stdout.toString()
       .trim(),
-    mode: 'headless-safe: memory/idle CPU/size/sidecar only; no visible startup or presentation measurements',
+    mode: 'locked screen — no presentation; memory/CPU/size/non-presentation milestones only',
     opencode: { url, serverPid },
     quitModes,
     opencodeSurvivedQuit: serverPid ? true : null,

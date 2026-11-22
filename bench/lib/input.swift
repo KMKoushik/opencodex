@@ -11,18 +11,57 @@ guard let app = NSRunningApplication(processIdentifier: pid) else { exit(4) }
 app.activate(options: [.activateIgnoringOtherApps])
 Thread.sleep(forTimeInterval: 0.2)
 let source = CGEventSource(stateID: .hidSystemState)
-if CommandLine.arguments[2] == "scroll" {
+if CommandLine.arguments[2] == "scroll" || CommandLine.arguments[2] == "fling" {
     let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
     guard let window = windows.first(where: { ($0[kCGWindowOwnerPID as String] as? Int32) == pid && ($0[kCGWindowLayer as String] as? Int) == 0 }),
           let bounds = window[kCGWindowBounds as String] as? NSDictionary,
           let rect = CGRect(dictionaryRepresentation: bounds) else { exit(5) }
     for i in 0..<240 {
-        let event = CGEvent(scrollWheelEvent2Source: source, units: .pixel, wheelCount: 1, wheel1: i < 120 ? 60 : -60, wheel2: 0, wheel3: 0)
+        let pixels: Int32 = CommandLine.arguments[2] == "fling" ? 1200 : 60
+        let event = CGEvent(scrollWheelEvent2Source: source, units: .pixel, wheelCount: 1, wheel1: i < 120 ? pixels : -pixels, wheel2: 0, wheel3: 0)
         event?.location = CGPoint(x: rect.minX + rect.width * 0.65, y: rect.minY + rect.height * 0.45)
         event?.postToPid(pid)
         Thread.sleep(forTimeInterval: 1.0 / 120.0)
     }
-} else {
+} else if CommandLine.arguments[2] == "threads" {
+    let focus = CGEvent(keyboardEventSource: source, virtualKey: 40, keyDown: true)
+    focus?.flags = [.maskCommand, .maskShift]; focus?.postToPid(pid)
+    CGEvent(keyboardEventSource: source, virtualKey: 40, keyDown: false)?.postToPid(pid)
+    for _ in 0..<6 {
+        for key: CGKeyCode in [125, 36] {
+            CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true)?.postToPid(pid)
+            CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false)?.postToPid(pid)
+        }
+        Thread.sleep(forTimeInterval: 0.3)
+    }
+} else if CommandLine.arguments[2] == "diff" {
+    let toggle = CGEvent(keyboardEventSource: source, virtualKey: 34, keyDown: true)
+    toggle?.flags = [.maskCommand]; toggle?.postToPid(pid)
+    CGEvent(keyboardEventSource: source, virtualKey: 34, keyDown: false)?.postToPid(pid)
+    Thread.sleep(forTimeInterval: 0.8)
+    func press(_ element: AXUIElement, matching text: String, depth: Int = 0) -> Bool {
+        if depth > 25 { return false }
+        var label: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXTitleAttribute as CFString, &label)
+        if label == nil { AXUIElementCopyAttributeValue(element, kAXDescriptionAttribute as CFString, &label) }
+        if let label = label as? String, label.localizedCaseInsensitiveContains(text),
+           AXUIElementPerformAction(element, kAXPressAction as CFString) == .success { return true }
+        var children: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &children)
+        for child in (children as? [AXUIElement] ?? []) {
+            if press(child, matching: text, depth: depth + 1) { return true }
+        }
+        return false
+    }
+    let element = AXUIElementCreateApplication(pid)
+    guard press(element, matching: "Changes") else {
+        fputs("Cannot find accessible Changes tab; video refuses to claim an unperformed diff action.\n", stderr); exit(6)
+    }
+    Thread.sleep(forTimeInterval: 0.8)
+    guard press(element, matching: "index.ts") else {
+        fputs("Cannot find accessible index.ts diff; keep the workspace panel visible.\n", stderr); exit(7)
+    }
+} else if CommandLine.arguments[2] == "type" {
     // Focus composer via the app's own shortcut, then type without submitting.
     let focus = CGEvent(keyboardEventSource: source, virtualKey: 37, keyDown: true)
     focus?.flags = [.maskCommand, .maskShift]; focus?.postToPid(pid)
@@ -33,4 +72,6 @@ if CommandLine.arguments[2] == "scroll" {
         CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)?.postToPid(pid)
         Thread.sleep(forTimeInterval: 0.08)
     }
+} else {
+    fputs("Unknown input action.\n", stderr); exit(2)
 }

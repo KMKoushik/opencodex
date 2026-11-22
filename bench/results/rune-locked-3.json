@@ -1,0 +1,116 @@
+{
+  "name": "rune-locked-3",
+  "revision": "6c74d6769f70f6fb7c32b95957827e3b7c4d1d42",
+  "build": {
+    "app": "apps/rune/dist/OpenCodex Rune.app",
+    "version": "0.1.0",
+    "revision": "6c74d6769f70f6fb7c32b95957827e3b7c4d1d42",
+    "allocatedMiB": 122.06640625,
+    "executableSHA256": "09658c05578779ce2bfafd67d7bb0dde93247ab71b8c589a783513048b943e6a"
+  },
+  "harnessRevision": "6c74d6769f70f6fb7c32b95957827e3b7c4d1d42",
+  "mode": "locked screen — no presentation; memory/CPU/size/non-presentation milestones only",
+  "opencode": {
+    "url": "http://127.0.0.1:4989",
+    "serverPid": 21698
+  },
+  "quitModes": [
+    "graceful"
+  ],
+  "opencodeSurvivedQuit": true,
+  "size": {
+    "totalMB": 122.1,
+    "executableMB": 49.7,
+    "gatewayMB": 71.8,
+    "fileCount": 5
+  },
+  "runs": [
+    {
+      "background": {
+        "loadAvg1m": 3.68,
+        "compilerProcesses": 0,
+        "waitedForQuietMs": 73
+      },
+      "cdpAttachedMs": null,
+      "sidebarDomMs": null,
+      "gatewayReadyMs": 325,
+      "gatewayConnectedMs": 336,
+      "sidebarSnapshotMs": 346,
+      "memory": {
+        "processCount": 2,
+        "rssMB": 219,
+        "footprintMB": 119.8,
+        "processes": [
+          {
+            "pid": 27487,
+            "kind": "opencodex",
+            "rssMB": 103.9,
+            "footprintMB": 71.2
+          },
+          {
+            "pid": 27495,
+            "kind": "opencodex-gateway",
+            "rssMB": 115.1,
+            "footprintMB": 48.7
+          }
+        ]
+      },
+      "idleCpu": {
+        "cpuPct": 0.5,
+        "perProcess": [
+          {
+            "pid": 27487,
+            "kind": "opencodex",
+            "cpuPct": 0.1
+          },
+          {
+            "pid": 27495,
+            "kind": "opencodex-gateway",
+            "cpuPct": 0.4
+          }
+        ],
+        "extra": []
+      },
+      "sessionOpen": {
+        "observationMs": 5001.4,
+        "domMs": null,
+        "cpu": {
+          "cpuPct": 1.4,
+          "perProcess": [
+            {
+              "pid": 27487,
+              "kind": "opencodex",
+              "cpuPct": 0.2
+            },
+            {
+              "pid": 27495,
+              "kind": "opencodex-gateway",
+              "cpuPct": 1.2
+            }
+          ],
+          "extra": []
+        },
+        "memory": {
+          "processCount": 2,
+          "rssMB": 233,
+          "footprintMB": 125.8,
+          "processes": [
+            {
+              "pid": 27487,
+              "kind": "opencodex",
+              "rssMB": 108.6,
+              "footprintMB": 71.3
+            },
+            {
+              "pid": 27495,
+              "kind": "opencodex-gateway",
+              "rssMB": 124.4,
+              "footprintMB": 54.5
+            }
+          ]
+        },
+        "note": "Five-second non-presentation observation, not time to visible or settled content. Native completion is not measurable while locked."
+      }
+    }
+  ]
+}

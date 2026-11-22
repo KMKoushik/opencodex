@@ -1,0 +1,127 @@
+{
+  "date": "2026-11-22T13:13:12.950Z",
+  "machine": {
+    "cpu": "Apple M5 Pro",
+    "cores": 18,
+    "ramGiB": 64,
+    "os": "27.2"
+  },
+  "buildRevision": "6c74d6769f70f6fb7c32b95957827e3b7c4d1d42",
+  "harness": "Benchmark-only changes were uncommitted during measurement and are committed together with these results.",
+  "mode": "locked screen — no presentation",
+  "checks": {
+    "bunCheck": "passed (types, lint, tests, builds)",
+    "bunFormatCheck": "passed",
+    "swiftHelpers": "capture, tile, input, winwatch, preflight, video-art and fixture-image compiled",
+    "shellSyntax": "passed",
+    "codesignBothBundles": "verified --deep --strict",
+    "buildHashVerification": "both bundles passed; deliberate mismatched executable rejected",
+    "tiling": "dry-run geometry passed; actual AX positioning intentionally unexecuted while locked",
+    "syntheticComposition": {
+      "inspectedFrame": true,
+      "source": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1920,
+            "height": 1080,
+            "r_frame_rate": "60/1",
+            "avg_frame_rate": "60/1",
+            "nb_frames": "180"
+          }
+        ],
+        "format": {
+          "duration": "3.000000",
+          "size": "16748"
+        }
+      },
+      "output": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1920,
+            "height": 1080,
+            "avg_frame_rate": "60/1"
+          }
+        ],
+        "format": {
+          "duration": "11.000000",
+          "size": "131868"
+        }
+      }
+    },
+    "preflight": {
+      "actualPrivacyGrantsExit": 0,
+      "syntheticDeniedExit": 3,
+      "syntheticDeniedMessage": "Grant Accessibility to the terminal running this command (Terminal/iTerm/OpenCodex) in System Settings > Privacy & Security > Accessibility, then restart that terminal. Also grant Automation > System Events when macOS asks.\nGrant Screen Recording to the terminal running this command in System Settings > Privacy & Security > Screen & System Audio Recording (Screen Recording on older macOS), then quit and reopen it.\n",
+      "lockedWrapperExit": 1,
+      "lockedWrapperMessage": "11 |   const users = JSON.parse(parsed.stdout.toString()) as {\n12 |     CGSSessionScreenIsLocked?: boolean;\n13 |     kCGSSessionOnConsoleKey?: boolean;\n14 |   }[];\n15 |   if (!users.some((u) => u.kCGSSessionOnConsoleKey && !u.CGSSessionScreenIsLocked))\n16 |     throw new Error(\n                   ^\nerror: The Mac screen is locked or has no active console. Unlock it and leave the app visible (not behind a full-screen Space), or use --headless-safe.\n      at requireVisibleScreen (/Users/koushik/git/personal/opencodex-rune/bench/lib/screen.ts:16:15)\n      at /Users/koushik/git/personal/opencodex-rune/[eval]:1:58\n      at loadAndEvaluateModule (2:1)\n\nBun v1.3.13 (macOS arm64)\n",
+      "lockedHarnessExit": 1,
+      "noWindowsOrInputRequested": true
+    },
+    "retryBookkeeping": {
+      "synthetic": true,
+      "noNetwork": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "started": "2026-11-22T13:03:15.135Z",
+          "backoffMs": 0,
+          "error": "Error: simulated 429 rate limit"
+        },
+        {
+          "attempt": 2,
+          "started": "2026-11-22T13:03:15.136Z",
+          "backoffMs": 15000,
+          "error": "Error: simulated 429 rate limit"
+        },
+        {
+          "attempt": 3,
+          "started": "2026-11-22T13:03:15.136Z",
+          "backoffMs": 30000
+        }
+      ],
+      "backoffs": [
+        15000,
+        30000
+      ],
+      "interrupted": 2
+    },
+    "fixture": {
+      "messages": 1501,
+      "images": 15,
+      "projects": [
+        {
+          "directory": "/tmp/ocr-bench/proj/atlas-api",
+          "sessions": 13
+        },
+        {
+          "directory": "/tmp/ocr-bench/proj/console-ui",
+          "sessions": 13
+        },
+        {
+          "directory": "/tmp/ocr-bench/proj/worker-pool",
+          "sessions": 13
+        }
+      ],
+      "contextMessages": 9,
+      "forkContextMessages": 9,
+      "modelCalls": 0
+    },
+    "isolatedServiceSurvivedAllSixQuits": true
+  },
+  "notExecuted": [
+    "visible startup/content/settled timings",
+    "full-screen Space live test",
+    "real input injection / frame pacing",
+    "real ScreenCaptureKit recording",
+    "network model streaming"
+  ],
+  "retainedFixture": "/tmp/ocr-bench",
+  "servicePort": 4989,
+  "userServiceUntouched": "127.0.0.1:49374"
+}

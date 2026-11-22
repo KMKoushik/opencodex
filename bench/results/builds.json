@@ -1,0 +1,36 @@
+[
+  {
+    "app": "apps/desktop/release/mac-arm64/OpenCodex.app",
+    "version": "0.1.0",
+    "revision": "6c74d6769f70f6fb7c32b95957827e3b7c4d1d42",
+    "allocatedMiB": 346.4609375,
+    "executableSHA256": "835fe6b0da2bb7fb0a6bf84974d2820e58c84deca936743c1bbf99dffa66566f",
+    "resources": [
+      {
+        "path": "Contents/Resources/app.asar",
+        "sha256": "a1214ed722056c8c71a99da1688a2b1de98517f7d34553f42fa6c1d479022c35"
+      }
+    ],
+    "runtime": {
+      "framework": "Electron",
+      "version": "44.4.5"
+    }
+  },
+  {
+    "app": "apps/rune/dist/OpenCodex Rune.app",
+    "version": "0.1.0",
+    "revision": "6c74d6769f70f6fb7c32b95957827e3b7c4d1d42",
+    "allocatedMiB": 122.06640625,
+    "executableSHA256": "09658c05578779ce2bfafd67d7bb0dde93247ab71b8c589a783513048b943e6a",
+    "resources": [
+      {
+        "path": "Contents/Resources/opencodex-gateway",
+        "sha256": "91bc20be4c8892fca0a5b44f790eb8fa6d7f7e8d1e7762a8db2c9cf444cc5fd0"
+      }
+    ],
+    "runtime": {
+      "framework": "Rune",
+      "revision": "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de"
+    }
+  }
+]

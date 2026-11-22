@@ -1,0 +1,161 @@
+{
+  "name": "electron-locked-2",
+  "revision": "6c74d6769f70f6fb7c32b95957827e3b7c4d1d42",
+  "build": {
+    "app": "apps/desktop/release/mac-arm64/OpenCodex.app",
+    "version": "0.1.0",
+    "revision": "6c74d6769f70f6fb7c32b95957827e3b7c4d1d42",
+    "allocatedMiB": 346.4609375,
+    "executableSHA256": "835fe6b0da2bb7fb0a6bf84974d2820e58c84deca936743c1bbf99dffa66566f"
+  },
+  "harnessRevision": "6c74d6769f70f6fb7c32b95957827e3b7c4d1d42",
+  "mode": "locked screen — no presentation; memory/CPU/size/non-presentation milestones only",
+  "opencode": {
+    "url": "http://127.0.0.1:4989",
+    "serverPid": 21698
+  },
+  "quitModes": [
+    "graceful"
+  ],
+  "opencodeSurvivedQuit": true,
+  "size": {
+    "totalMB": 346.4,
+    "frameworksMB": 286.8,
+    "appAsarMB": 39.8,
+    "executableMB": 0,
+    "fileCount": 267
+  },
+  "runs": [
+    {
+      "background": {
+        "loadAvg1m": 5.43,
+        "compilerProcesses": 0,
+        "waitedForQuietMs": 68
+      },
+      "cdpAttachedMs": 327,
+      "sidebarDomMs": 459,
+      "gatewayReadyMs": null,
+      "gatewayConnectedMs": null,
+      "sidebarSnapshotMs": null,
+      "memory": {
+        "processCount": 4,
+        "rssMB": 501.3,
+        "footprintMB": 178.4,
+        "processes": [
+          {
+            "pid": 27168,
+            "kind": "OpenCodex",
+            "rssMB": 208.6,
+            "footprintMB": 68
+          },
+          {
+            "pid": 27171,
+            "kind": "OpenCodex Helper:gpu-process",
+            "rssMB": 96.6,
+            "footprintMB": 49.9
+          },
+          {
+            "pid": 27173,
+            "kind": "OpenCodex Helper:utility:NetworkService",
+            "rssMB": 53.3,
+            "footprintMB": 10.2
+          },
+          {
+            "pid": 27175,
+            "kind": "OpenCodex Helper (Renderer):renderer",
+            "rssMB": 142.8,
+            "footprintMB": 51.4
+          }
+        ]
+      },
+      "idleCpu": {
+        "cpuPct": 0.3,
+        "perProcess": [
+          {
+            "pid": 27168,
+            "kind": "OpenCodex",
+            "cpuPct": 0.2
+          },
+          {
+            "pid": 27171,
+            "kind": "OpenCodex Helper:gpu-process",
+            "cpuPct": 0
+          },
+          {
+            "pid": 27173,
+            "kind": "OpenCodex Helper:utility:NetworkService",
+            "cpuPct": 0.1
+          },
+          {
+            "pid": 27175,
+            "kind": "OpenCodex Helper (Renderer):renderer",
+            "cpuPct": 0
+          }
+        ],
+        "extra": []
+      },
+      "sessionOpen": {
+        "observationMs": 5623.8,
+        "domMs": 408,
+        "cpu": {
+          "cpuPct": 8,
+          "perProcess": [
+            {
+              "pid": 27168,
+              "kind": "OpenCodex",
+              "cpuPct": 1.4
+            },
+            {
+              "pid": 27171,
+              "kind": "OpenCodex Helper:gpu-process",
+              "cpuPct": 2.3
+            },
+            {
+              "pid": 27173,
+              "kind": "OpenCodex Helper:utility:NetworkService",
+              "cpuPct": 0.5
+            },
+            {
+              "pid": 27175,
+              "kind": "OpenCodex Helper (Renderer):renderer",
+              "cpuPct": 3.7
+            }
+          ],
+          "extra": []
+        },
+        "memory": {
+          "processCount": 4,
+          "rssMB": 568.6,
+          "footprintMB": 409.4,
+          "processes": [
+            {
+              "pid": 27168,
+              "kind": "OpenCodex",
+              "rssMB": 228.2,
+              "footprintMB": 72.7
+            },
+            {
+              "pid": 27171,
+              "kind": "OpenCodex Helper:gpu-process",
+              "rssMB": 102.2,
+              "footprintMB": 240.6
+            },
+            {
+              "pid": 27173,
+              "kind": "OpenCodex Helper:utility:NetworkService",
+              "rssMB": 53.6,
+              "footprintMB": 10.4
+            },
+            {
+              "pid": 27175,
+              "kind": "OpenCodex Helper (Renderer):renderer",
+              "rssMB": 184.6,
+              "footprintMB": 87.2
+            }
+          ]
+        },
+        "note": "Five-second non-presentation observation, not time to visible or settled content. Native completion is not measurable while locked."
+      }
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "sessionID": "ses_ocrbench_0_0",
+  "projects": [
+    "/tmp/ocr-bench/proj/atlas-api",
+    "/tmp/ocr-bench/proj/console-ui",
+    "/tmp/ocr-bench/proj/worker-pool"
+  ],
+  "messages": 1501,
+  "sessions": 39,
+  "payloadBytes": 42873021,
+  "service": "http://127.0.0.1:4989",
+  "modelCalls": 0,
+  "created": "2026-11-22T12:44:14.360Z",
+  "schemaVersion": 5,
+  "verified": {
+    "count": 1501,
+    "images": 15,
+    "imageDimensions": [
+      960,
+      480
+    ],
+    "tools": 1500,
+    "reasoning": 750,
+    "checkpoints": 1,
+    "serializedMessageBytes": 42581604,
+    "projects": [
+      {
+        "directory": "/tmp/ocr-bench/proj/atlas-api",
+        "sessions": 13
+      },
+      {
+        "directory": "/tmp/ocr-bench/proj/console-ui",
+        "sessions": 13
+      },
+      {
+        "directory": "/tmp/ocr-bench/proj/worker-pool",
+        "sessions": 13
+      }
+    ],
+    "activeContextMessages": 9,
+    "activeContextBytes": 223324,
+    "forkContextMessages": 9,
+    "forkDeleted": true,
+    "modelCalls": 0
+  }
+}

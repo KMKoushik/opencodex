@@ -60,15 +60,48 @@ export async function forkForBench(client: Client, sessionID: string, title: str
 }
 
 /** Sends a prompt and resolves when the session is idle again, with output size stats. */
-export async function streamPrompt(client: Client, sessionID: string, model: string, text: string) {
+export async function streamPrompt(
+  client: Client,
+  sessionID: string,
+  model: string,
+  text: string,
+  waitMs = 300_000,
+) {
   const [providerID, ...rest] = model.split('/');
   await client.session.switchModel({
     sessionID,
     model: { providerID: providerID!, id: rest.join('/') },
   });
   const started = Date.now();
-  await client.session.prompt({ sessionID, text });
-  await client.session.wait({ sessionID }, { signal: AbortSignal.timeout(300_000) });
+  const attempts: { attempt: number; started: string; backoffMs: number; error?: string }[] = [];
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const backoffMs = attempt ? 15000 * 2 ** (attempt - 1) : 0;
+    if (backoffMs) await Bun.sleep(backoffMs);
+    const record: (typeof attempts)[number] = {
+      attempt: attempt + 1,
+      started: new Date().toISOString(),
+      backoffMs,
+    };
+    attempts.push(record);
+    try {
+      const since = Date.now();
+      await client.session.prompt({ sessionID, text });
+      await client.session.wait({ sessionID }, { signal: AbortSignal.timeout(waitMs) });
+      const messages = await client.message.list({ sessionID, limit: 10 });
+      const replies = (messages.data as unknown as Reply[]).filter(
+        (m) => m.type === 'assistant' && (m.time?.created ?? 0) >= since,
+      );
+      if (!replies.some((m) => !m.error && (m.tokens?.output ?? 0) > 0))
+        throw new Error(
+          `Model produced no successful output: ${JSON.stringify(replies.map((m) => m.error))}`,
+        );
+      break;
+    } catch (error) {
+      record.error = String(error);
+      // This is always a disposable benchmark fork, never the source fixture.
+      await client.session.interrupt({ sessionID });
+    }
+  }
   const finished = Date.now();
   const latest = await client.message.list({ sessionID, limit: 10 });
   const replies = (latest.data as unknown as Reply[]).filter(
@@ -85,6 +118,8 @@ export async function streamPrompt(client: Client, sessionID: string, model: str
     durationMs: finished - started,
     textChars,
     outputTokens,
+    attempts,
+    succeeded: !attempts.at(-1)?.error,
   };
 }
 
@@ -94,6 +129,7 @@ type Reply = {
   time?: { created?: number };
   content?: { type: string; text?: string }[];
   tokens?: { output?: number };
+  error?: unknown;
 };
 
 export async function removeSession(client: Client, sessionID: string) {

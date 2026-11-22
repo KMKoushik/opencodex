@@ -51,7 +51,7 @@ export async function stopFrames(log: string, since: number, cdp?: Cdp) {
   };
 }
 
-export async function cdpExercise(cdp: Cdp, action: 'scroll' | 'type') {
+export async function cdpExercise(cdp: Cdp, action: 'scroll' | 'type', wheelPixels = 60) {
   if (action === 'scroll') {
     const point = await cdp.eval<{ x: number; y: number }>(`(() => {
       const row = document.querySelector('.timeline-row'); if (!row) throw new Error('No transcript');
@@ -62,7 +62,7 @@ export async function cdpExercise(cdp: Cdp, action: 'scroll' | 'type') {
         type: 'mouseWheel',
         ...point,
         deltaX: 0,
-        deltaY: i < 120 ? -60 : 60,
+        deltaY: i < 120 ? -wheelPixels : wheelPixels,
       });
       await Bun.sleep(1000 / 120);
     }
