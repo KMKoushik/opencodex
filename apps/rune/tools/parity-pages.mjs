@@ -68,8 +68,69 @@ try {
           if (state !== 'settings-general') await click(title);
           await page.locator('.settings-page').waitFor();
         }
-        if (state === 'tasks-empty') await click('Tasks');
-        if (state === 'apps-empty') await click('Apps');
+        if (state === 'tasks-empty' || state === 'tasks') await click('Tasks');
+        if (state === 'apps-empty' || state === 'apps') await click('Apps');
+        if (
+          [
+            'app-detail',
+            'app-settings',
+            'app-code',
+            'app-runs-open',
+            'app-icon-open',
+            'app-model-open',
+            'app-delete-open',
+          ].includes(state)
+        ) {
+          await click('Apps');
+          await page.locator('.apps-tile').filter({ hasText: 'Release dashboard' }).click();
+          if (state === 'app-settings')
+            await page.getByRole('radio', { name: 'Settings', exact: true }).click();
+          if (state === 'app-code')
+            await page.getByRole('radio', { name: 'Code', exact: true }).click();
+          if (state === 'app-runs-open') await page.getByRole('button', { name: /^Runs/ }).click();
+          if (state === 'app-icon-open') await click('Change icon');
+          if (state === 'app-model-open' || state === 'app-delete-open') {
+            await click('Actions for Release dashboard');
+            await page
+              .getByRole('menuitem', {
+                name: state === 'app-model-open' ? 'Change model…' : 'Delete app…',
+                exact: true,
+              })
+              .click();
+          }
+        }
+        if (
+          [
+            'project-edit-open',
+            'project-actions-open',
+            'project-add-open',
+            'project-instructions-open',
+            'worktrees-open',
+            'worktrees-confirm-open',
+          ].includes(state)
+        ) {
+          await click('Settings');
+          await click('Projects');
+          if (state === 'project-add-open') await click('Add project');
+          else if (state === 'project-edit-open') await click('atlas-api');
+          else {
+            const box = await page
+              .getByRole('button', { name: 'Actions for atlas-api', exact: true })
+              .boundingBox();
+            point = `${box.x + box.width - 180},${box.y + box.height + 4}`;
+            await click('Actions for atlas-api');
+            if (state === 'project-instructions-open')
+              await page.getByRole('menuitem', { name: 'Instructions', exact: true }).click();
+            if (state.startsWith('worktrees-'))
+              await page.getByRole('menuitem', { name: 'Manage worktrees', exact: true }).click();
+            if (state === 'worktrees-confirm-open')
+              await page
+                .getByRole('button', { name: /^Remove worktree / })
+                .first()
+                .click();
+          }
+        }
+        if (state === 'project-open-dialog') await page.keyboard.press('Meta+o');
         if (state === 'app-menu-open') await click('OpenCodex menu');
         if (state === 'thread-search-open') await click('Search threads');
         const chat = state === 'thread-context-menu' || state === 'find-chat-open';
@@ -89,7 +150,7 @@ try {
         }
         await page.evaluate(() => document.fonts.ready);
         await page.waitForTimeout(500);
-        const stem = `${state}-${theme}-${width}x${height}-final`;
+        const stem = `${state}-${theme}-${width}x${height}-${process.env.OCR_LABEL ?? 'final'}`;
         await page.screenshot({ path: `${out}/web-${stem}.png` });
         const args = [
           '--screenshot',
@@ -98,6 +159,8 @@ try {
           `${width}x${height}`,
           '--scale',
           '2',
+          '--at',
+          '0.3',
           '--theme',
           theme,
         ];
