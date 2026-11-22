@@ -1,12 +1,16 @@
 //! The native client talks only to the TypeScript gateway, never to OpenCode.
 mod client;
+pub mod messages;
 mod snapshot;
 mod sse;
+pub mod timeline;
 pub mod types;
 
 pub use client::Gateway;
 pub use snapshot::Snapshot;
 
+#[cfg(test)]
+mod message_tests;
 #[cfg(test)]
 mod tests;
 
@@ -20,11 +24,14 @@ pub enum Command {
     More(String),
     AddProject(String),
     Details(String),
+    OpenSession(String),
+    EarlierMessages(String),
 }
 
 /// A capacity-one latest snapshot mailbox; streaming cannot build a UI work backlog.
 pub struct Worker {
     latest: Arc<Mutex<Option<Arc<Snapshot>>>>,
+    chat: Arc<Mutex<Option<Arc<messages::Messages>>>>,
     commands: mpsc::Sender<Command>,
     stop: Option<tokio::sync::oneshot::Sender<()>>,
 }
@@ -36,6 +43,8 @@ impl Worker {
     ) -> Self {
         let latest = Arc::new(Mutex::new(None));
         let mailbox = latest.clone();
+        let chat = Arc::new(Mutex::new(None));
+        let chat_mailbox = chat.clone();
         let (commands, mut receiver) = mpsc::channel(16);
         let (stop, stopped) = tokio::sync::oneshot::channel();
         std::thread::Builder::new().name("gateway".into()).spawn(move || {
@@ -46,8 +55,14 @@ impl Worker {
                     *mailbox.lock().expect("mailbox") = Some(Arc::new(s.clone()));
                     wake();
                 };
+                let publish_chat = |s: &messages::Messages| {
+                    *chat_mailbox.lock().expect("chat mailbox") = Some(Arc::new(s.clone()));
+                    wake();
+                };
                 let run = async {
                     let mut snapshot = Snapshot::default();
+                    let mut transcript: Option<messages::Messages> = None;
+                    let mut refresh_chat: Option<tokio::time::Instant> = None;
                     let mut delay = Duration::from_millis(500);
                     loop {
                         let result: Result<(), String> = async {
@@ -67,6 +82,10 @@ impl Worker {
                                                     snapshot.live = true;
                                                     delay = Duration::from_millis(500);
                                                     publish(&mut snapshot);
+                                                    if let Some(chat) = &mut transcript {
+                                                        if let Err(e) = chat.refresh(&client).await { chat.error = Some(e); }
+                                                        publish_chat(chat);
+                                                    }
                                                     let directory = initial_directory.clone()
                                                         .or_else(|| snapshot.projects.first().map(|p| p.canonical.clone()));
                                                     if let Some(directory) = directory {
@@ -76,6 +95,11 @@ impl Worker {
                                                 }
                                                 "opencode" => {
                                                     let event: types::Event = serde_json::from_str(&data).map_err(|e| format!("Invalid gateway event: {e}"))?;
+                                                    if let Some(chat) = &mut transcript {
+                                                        let (changed, refresh) = chat.reduce(&event);
+                                                        if changed { publish_chat(chat); }
+                                                        if refresh && refresh_chat.is_none() { refresh_chat = Some(tokio::time::Instant::now() + Duration::from_millis(250)); }
+                                                    }
                                                     let requests=event.r#type.starts_with("permission.") || event.r#type.starts_with("form.");
                                                     let projects=event.r#type.starts_with("project.");
                                                     let mut changed=snapshot.reduce(event);
@@ -91,6 +115,22 @@ impl Worker {
                                     command = receiver.recv() => {
                                         let Some(command) = command else { return Ok(()); };
                                         match command {
+                                            Command::OpenSession(id) => {
+                                                refresh_chat = None;
+                                                match messages::Messages::load(&client, &id).await {
+                                                    Ok(chat) => transcript = Some(chat),
+                                                    Err(error) => transcript = Some(messages::Messages { session_id: id, error: Some(error), ..Default::default() }),
+                                                }
+                                                publish_chat(transcript.as_ref().unwrap());
+                                                continue;
+                                            }
+                                            Command::EarlierMessages(id) => {
+                                                if let Some(chat) = transcript.as_mut().filter(|c| c.session_id == id) {
+                                                    if let Err(e) = chat.earlier(&client).await { chat.error = Some(e); }
+                                                    publish_chat(chat);
+                                                }
+                                                continue;
+                                            }
                                             Command::Details(directory) => {
                                                 if snapshot.models.contains_key(&directory) { continue; }
                                                 snapshot.details(&client,&directory).await?;
@@ -123,6 +163,13 @@ impl Worker {
                                         }
                                         publish(&mut snapshot);
                                     }
+                                    _ = async { match refresh_chat { Some(due) => tokio::time::sleep_until(due).await, None => std::future::pending().await } } => {
+                                        refresh_chat = None;
+                                        if let Some(chat) = &mut transcript {
+                                            if let Err(e) = chat.refresh(&client).await { chat.error = Some(e); }
+                                            publish_chat(chat);
+                                        }
+                                    }
                                 }
                             }
                         }.await;
@@ -140,12 +187,16 @@ impl Worker {
         }).expect("gateway worker");
         Self {
             latest,
+            chat,
             commands,
             stop: Some(stop),
         }
     }
     pub fn take(&self) -> Option<Arc<Snapshot>> {
         self.latest.lock().expect("mailbox").take()
+    }
+    pub fn take_messages(&self) -> Option<Arc<messages::Messages>> {
+        self.chat.lock().expect("chat mailbox").take()
     }
     pub fn command(&self, command: Command) -> Result<(), String> {
         self.commands.try_send(command).map_err(|e| e.to_string())
@@ -176,4 +227,47 @@ pub fn capture(client: Gateway) -> Result<Snapshot, String> {
     })
     .join()
     .map_err(|_| "Gateway capture worker panicked".to_owned())?
+}
+
+pub fn capture_messages(
+    client: Gateway,
+    id: String,
+    history: bool,
+) -> Result<messages::Messages, String> {
+    std::thread::spawn(move || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| e.to_string())?
+            .block_on(async {
+                let mut messages = messages::Messages::load(&client, &id).await?;
+                if history {
+                    while messages.cursor.is_some() {
+                        messages.earlier(&client).await?;
+                    }
+                }
+                Ok(messages)
+            })
+    })
+    .join()
+    .map_err(|_| "Message capture worker panicked".to_owned())?
+}
+
+pub fn capture_details(
+    client: Gateway,
+    directory: String,
+    mut snapshot: Snapshot,
+) -> Result<Snapshot, String> {
+    std::thread::spawn(move || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| e.to_string())?
+            .block_on(async {
+                snapshot.details(&client, &directory).await?;
+                Ok(snapshot)
+            })
+    })
+    .join()
+    .map_err(|_| "Capture details worker panicked".to_owned())?
 }

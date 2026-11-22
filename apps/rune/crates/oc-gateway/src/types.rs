@@ -41,6 +41,8 @@ pub struct ProjectIcon {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct Times {
     pub created: f64,
+    pub completed: Option<f64>,
+    pub streamed: Option<f64>,
     pub updated: Option<f64>,
     pub idle: Option<f64>,
     pub viewed: Option<f64>,
