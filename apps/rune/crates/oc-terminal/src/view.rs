@@ -8,8 +8,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_INSTANCE: AtomicU64 = AtomicU64::new(1);
 
-pub const CELL_WIDTH: f32 = 7.826_172; // Menlo 13 pt, matching the browser font.
-pub const CELL_HEIGHT: f32 = 16.;
+// Ghostty-web rounds canvas measureText("M") up, rather than using the
+// fractional Menlo advance. CDP: width 7.82666, ascent 9.44531, descent 0.
+pub const CELL_WIDTH: f32 = 8.;
+pub const CELL_HEIGHT: f32 = 15.;
+pub const SCROLLBAR_RESERVE: f32 = 15.; // Ghostty FitAddon's reserved gutter.
 
 enum Bell {
     Idle,
@@ -172,7 +175,9 @@ impl TerminalView {
             .on_layout(move |s, rect| {
                 let view = get(s);
                 let size = Size {
-                    cols: (rect[2] / CELL_WIDTH).floor().clamp(2., 1000.) as u16,
+                    cols: ((rect[2] - SCROLLBAR_RESERVE) / CELL_WIDTH)
+                        .floor()
+                        .clamp(2., 1000.) as u16,
                     rows: (rect[3] / CELL_HEIGHT).floor().clamp(1., 500.) as u16,
                 };
                 if size != view.size {
@@ -318,15 +323,19 @@ impl TerminalView {
                                 },
                             );
                             style.family = Family::Named("Menlo, Consolas, monospace");
-                            style.line_height = CELL_HEIGHT;
+                            // Canvas baseline is ceil(actualBoundingBoxAscent)+1
+                            // = 11pt. Menlo's 13pt line box puts that same baseline
+                            // at y=11 without stretching it to the 15pt cell.
+                            style.line_height = 13.;
                             style.italic = c.flags.contains(Flags::ITALIC);
-                            glyph = glyph.child(text(value).font(style).color(fg));
+                            glyph = glyph.child(text(value).font(style).color(fg).absolute(0., 0.));
                         }
                         if c.flags.intersects(Flags::ALL_UNDERLINES) {
-                            glyph = glyph.child(el().absolute(0., 14.).w(width).h(1.).fill(fg));
+                            glyph = glyph
+                                .child(el().absolute(0., CELL_HEIGHT - 2.).w(width).h(1.).fill(fg));
                         }
                         if c.flags.contains(Flags::STRIKEOUT) {
-                            glyph = glyph.child(el().absolute(0., 8.).w(width).h(1.).fill(fg));
+                            glyph = glyph.child(el().absolute(0., 7.).w(width).h(1.).fill(fg));
                         }
                         line_el = line_el.child(glyph);
                     }
@@ -342,7 +351,7 @@ impl TerminalView {
         {
             let (w, h, y) = match shape {
                 CursorShape::Beam => (1., CELL_HEIGHT, 0.),
-                CursorShape::Underline => (CELL_WIDTH, 2., 14.),
+                CursorShape::Underline => (CELL_WIDTH, 2., CELL_HEIGHT - 2.),
                 _ => (CELL_WIDTH, CELL_HEIGHT, 0.),
             };
             let mut cursor = el()
@@ -361,10 +370,11 @@ impl TerminalView {
                         text(paint.cell.c.to_string())
                             .font(TextStyle {
                                 family: Family::Named("Menlo, Consolas, monospace"),
-                                line_height: CELL_HEIGHT,
+                                line_height: 13.,
                                 ..TextStyle::new(13., 400.)
                             })
-                            .color(self.palette.background),
+                            .color(self.palette.background)
+                            .absolute(0., 0.),
                     );
                 }
             }
@@ -376,6 +386,7 @@ impl TerminalView {
                     .absolute(col as f32 * CELL_WIDTH, row as f32 * CELL_HEIGHT)
                     .font(TextStyle {
                         family: Family::Named("Menlo, Consolas, monospace"),
+                        line_height: 13.,
                         ..TextStyle::new(13., 400.)
                     })
                     .color(self.palette.foreground)
