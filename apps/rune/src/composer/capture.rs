@@ -83,6 +83,11 @@ pub fn setup(s: &mut State) {
             s.composer.menu = Some(Menu::Mention);
         }
         "worktree" => s.composer.menu = Some(Menu::Workspace),
+        "fork" => {
+            s.draft_mut().edit.replace_text("/fork");
+            super::fork::open(s);
+        }
+        "context" => s.chat.context = true,
         "new-worktree" => s.draft_mut().worktree = true,
         "question-selected" | "question-review" => {
             crate::docks::capture_selection(s, state == "question-review")

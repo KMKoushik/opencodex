@@ -62,7 +62,11 @@ pub fn prefetch(s: &mut State) {
             query: vec![("directory".into(), directory.clone())],
         });
     }
-    s.prompt_request(Request::IndexFiles(directory));
+    s.prompt_request(Request::Get {
+        tag: format!("mention-chats:{directory}"),
+        path: "session-search".into(),
+        query: vec![("search".into(), String::new())],
+    });
 }
 pub fn filter(s: &mut State) {
     let Some(menu) = s.composer.menu else {
@@ -72,7 +76,7 @@ pub fn filter(s: &mut State) {
     let query = s.composer.search.text.trim();
     let mut choices = vec![];
     match menu {
-        Menu::ConfirmAccess => {}
+        Menu::ConfirmAccess | Menu::Fork => {}
         Menu::Models => {
             if let Some(catalog) = s.snapshot.models.get(directory) {
                 if query.is_empty()
@@ -176,34 +180,66 @@ pub fn filter(s: &mut State) {
             }
         }
         Menu::Slash => {
-            if s.selected.is_some() {
+            {
                 for (name, description) in super::commands::LOCAL {
-                    if fuzzy::score(name, query).is_some() {
+                    {
                         choices.push(choice(name, &format!("/{name}"), description, Value::Null));
                     }
                 }
             }
             for item in s
                 .composer
-                .commands
+                .skills
                 .get(directory)
                 .into_iter()
                 .flatten()
-                .chain(s.composer.skills.get(directory).into_iter().flatten())
+                .chain(s.composer.commands.get(directory).into_iter().flatten())
             {
                 let name = item["name"].as_str().unwrap_or("");
-                if fuzzy::score(name, query).is_some() {
+                if !choices.iter().any(|c| c.id == name) {
                     choices.push(choice(
                         name,
                         &format!("/{name}"),
-                        item["description"].as_str().unwrap_or(""),
+                        item["description"]
+                            .as_str()
+                            .unwrap_or(if item.get("id").is_some() {
+                                "Use skill"
+                            } else {
+                                "Run command"
+                            }),
                         Value::Null,
                     ));
                 }
             }
         }
         Menu::Mention => {
-            for item in s.composer.skills.get(directory).into_iter().flatten() {
+            let search = query.to_lowercase();
+            let mut skills: Vec<_> = s
+                .composer
+                .skills
+                .get(directory)
+                .into_iter()
+                .flatten()
+                .filter_map(|item| {
+                    let name = item["name"].as_str().unwrap_or("").to_lowercase();
+                    let rank = if name.starts_with(&search) {
+                        0
+                    } else if name.contains(&search)
+                        || item["id"]
+                            .as_str()
+                            .unwrap_or("")
+                            .to_lowercase()
+                            .contains(&search)
+                    {
+                        1
+                    } else {
+                        return None;
+                    };
+                    Some((rank, item))
+                })
+                .collect();
+            skills.sort_by_key(|(rank, _)| *rank);
+            for (_, item) in skills.into_iter().take(5) {
                 let name = item["name"].as_str().unwrap_or("");
                 choices.push(choice(
                     name,
@@ -212,39 +248,99 @@ pub fn filter(s: &mut State) {
                     json!({"type":"skill","id":item["id"],"token":format!("@{name}")}),
                 ));
             }
-            for item in s.composer.files.get(directory).into_iter().flatten() {
+            for item in s
+                .composer
+                .files
+                .get(directory)
+                .into_iter()
+                .flatten()
+                .filter(|_| !query.is_empty())
+                .take(6)
+            {
                 let path = item["path"].as_str().unwrap_or("");
+                let (parent, name) = path.rsplit_once('/').unwrap_or(("", path));
                 choices.push(choice(
                     path,
-                    path,
-                    "File",
+                    name,
+                    parent,
                     json!({"type":"file","path":path,"token":format!("@{path}")}),
                 ));
             }
-            for thread in s
+            let mut threads: Vec<_> = s
                 .snapshot
                 .sessions
                 .values()
-                .filter(|t| Some(&t.id) != s.selected.as_ref())
+                .filter(|t| {
+                    Some(&t.id) != s.selected.as_ref() && t.title.to_lowercase().contains(&search)
+                })
+                .collect();
+            threads.sort_by(|a, b| b.updated_at.total_cmp(&a.updated_at));
+            for thread in threads
+                .into_iter()
+                .take(if s.composer.recent_chats.is_empty() {
+                    5
+                } else {
+                    0
+                })
             {
                 choices.push(choice(
                     &thread.id,
                     &thread.title,
-                    "Chat",
+                    thread.directory.rsplit(['/', '\\']).next().unwrap_or(""),
                     json!({"type":"chat","id":thread.id,"token":format!("@{}",thread.title)}),
                 ));
             }
-            choices.retain(|c| fuzzy::score(&c.label, query).is_some());
+            for thread in s
+                .composer
+                .recent_chats
+                .iter()
+                .filter(|t| {
+                    t["id"].as_str() != s.selected.as_deref()
+                        && t["title"]
+                            .as_str()
+                            .unwrap_or("")
+                            .to_lowercase()
+                            .contains(&search)
+                })
+                .take(5)
+            {
+                let id = thread["id"].as_str().unwrap_or("");
+                let title = thread["title"].as_str().unwrap_or("");
+                choices.push(choice(
+                    id,
+                    title,
+                    thread["directory"]
+                        .as_str()
+                        .unwrap_or("")
+                        .rsplit(['/', '\\'])
+                        .next()
+                        .unwrap_or(""),
+                    json!({"type":"chat", "id":id, "token":format!("@{title}")}),
+                ));
+            }
         }
     }
-    if matches!(menu, Menu::Slash | Menu::Mention) && !query.is_empty() {
-        choices.sort_by_key(|c| {
-            (
-                -fuzzy::score(&c.label, query).unwrap_or(0),
-                c.label.len(),
-                c.label.clone(),
-            )
-        });
+    if menu == Menu::Slash {
+        if s.selected.is_none() {
+            choices.retain(|c| !super::commands::LOCAL.iter().any(|(name, _)| *name == c.id));
+        }
+        let query = query.to_lowercase();
+        let rank = |c: &Choice| {
+            let name = c.id.to_lowercase();
+            if name == query {
+                0
+            } else if name.starts_with(&query) {
+                1
+            } else if name.contains(&query) {
+                2
+            } else if c.detail.to_lowercase().contains(&query) {
+                3
+            } else {
+                4
+            }
+        };
+        choices.retain(|c| rank(c) < 4);
+        choices.sort_by_key(rank);
     }
     if matches!(menu, Menu::Slash | Menu::Mention) {
         choices.truncate(50);
@@ -286,6 +382,16 @@ pub fn changed(s: &mut State, tx: &mut Tx) {
             .map(|(_, q)| (Menu::Mention, q.into()))
     };
     if let Some((menu, query)) = next {
+        if menu == Menu::Mention
+            && let Some(directory) = s.project().map(|p| p.canonical.clone())
+        {
+            s.composer.mention_search = Some((
+                std::time::Instant::now() + std::time::Duration::from_millis(80),
+                directory,
+                query.clone(),
+            ));
+            tx.wake_after(std::time::Duration::from_millis(80));
+        }
         s.composer.menu = Some(menu);
         s.composer.search.replace_text(query);
         filter(s);
@@ -394,6 +500,9 @@ pub fn view(s: &State) -> Option<El> {
     if menu == Menu::ConfirmAccess {
         return Some(super::access::view(s));
     }
+    if menu == Menu::Fork {
+        return Some(super::fork::view(s));
+    }
     let t = &s.theme;
     let inline = matches!(menu, Menu::Slash | Menu::Mention);
     let width = if inline {
@@ -466,7 +575,13 @@ pub fn view(s: &State) -> Option<El> {
         col()
             .key("composer-options")
             .w_full()
-            .h((n as f32 * row_height).min(if menu == Menu::Models { 342.0 } else { 352.0 }))
+            .h((n as f32 * row_height).min(if menu == Menu::Models {
+                342.0
+            } else if inline {
+                (s.window_size.1 * 0.4).min(320.0) - 14.0
+            } else {
+                352.0
+            }))
             .scroll(rune::ScrollSpec {
                 stick_bottom: false,
             })
@@ -538,11 +653,16 @@ pub fn view(s: &State) -> Option<El> {
                                 r = r.fill(t.c("selected"));
                             }
                             if inline {
+                                if menu == Menu::Mention {
+                                    let glyph = match c.data["type"].as_str() {
+                                        Some("skill") => &crate::chat::icons::SKILL,
+                                        Some("chat") => &crate::chat::icons::CHAT,
+                                        _ => &crate::chat::icons::READ,
+                                    };
+                                    r = r
+                                        .child(rune::icon(glyph, 14.0).color(t.c("text-tertiary")));
+                                }
                                 return r
-                                    .child(
-                                        rune::icon(&crate::icons::FOLDER, 14.0)
-                                            .color(t.c("text-tertiary")),
-                                    )
                                     .child(label(t, &c.label, 13.0, 400.0, "text").truncate())
                                     .child(
                                         label(t, &c.detail, 12.0, 400.0, "text-tertiary")

@@ -95,11 +95,21 @@ pub fn view(s: &State) -> El {
         .radius(7.0)
         .hover(t.c("hover"))
         .child(ring)
-        .on_hover_change(|s: &mut State, inside, _| s.chat.context = inside)
-        .on_press(|s: &mut State| s.chat.context = true)
+        .on_hover_change(|s: &mut State, inside, tx| {
+            s.chat.context = inside || tx.focused() == Some("context-indicator")
+        })
+        .on_press(|s: &mut State| {
+            s.chat.context = true;
+            s.composer.context_clicked = true;
+        })
         .on_key(|s: &mut State, event, _| {
-            if event.key == rune::Key::Escape {
+            if event.key == rune::Key::Tab {
                 s.chat.context = false;
+                s.composer.context_clicked = false;
+                false
+            } else if event.key == rune::Key::Escape {
+                s.chat.context = false;
+                s.composer.context_clicked = false;
                 true
             } else {
                 false
@@ -178,12 +188,18 @@ pub fn view(s: &State) -> El {
                 .mt(4.0),
             );
         }
-        wrapper = wrapper.child(t.shadow(panel, "shadow").anchored(
-            "context-indicator",
-            Side::Top,
-            Align::End,
-            8.0,
-        ));
+        let panel =
+            t.shadow(panel, "shadow")
+                .anchored("context-indicator", Side::Top, Align::End, 8.0);
+        let panel = if s.composer.context_clicked {
+            panel.modal(true, |s: &mut State| {
+                s.chat.context = false;
+                s.composer.context_clicked = false;
+            })
+        } else {
+            panel
+        };
+        wrapper = wrapper.child(panel);
     }
     wrapper
 }

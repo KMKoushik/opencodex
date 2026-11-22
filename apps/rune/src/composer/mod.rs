@@ -7,12 +7,15 @@ mod access;
 pub mod capture;
 mod commands;
 mod context;
+mod fork;
 mod fuzzy;
 mod icons;
 pub mod keys;
 pub mod menus;
 mod providers;
+mod running;
 pub mod state;
+mod undo;
 use state::Menu;
 
 pub fn view(s: &State, width: f32, height: f32) -> El {
@@ -117,12 +120,13 @@ pub fn area(s: &State, width: f32) -> El {
                 "text-tertiary",
             ));
     }
-    if crate::docks::active(s) {
+    if crate::docks::has_question(s) {
         return col()
             .key("composer-area")
             .w(column)
             .px(24.0)
             .py(12.0)
+            .child(running::view(s))
             .child(crate::docks::view(s));
     }
     let inner = (column - 48.0).max(200.0);
@@ -504,6 +508,8 @@ pub fn area(s: &State, width: f32) -> El {
         .w(column)
         .px(24.0)
         .py(12.0)
+        .child(running::view(s))
+        .child(crate::docks::view(s))
         .child(composer);
     if s.selected.is_none() {
         area = area.child(workspace);

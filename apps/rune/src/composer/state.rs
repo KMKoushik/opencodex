@@ -74,9 +74,17 @@ pub enum Menu {
     Branch,
     Slash,
     Mention,
+    Fork,
 }
 #[derive(Default)]
 pub struct Composer {
+    pub context_clicked: bool,
+    pub recent_chats: Vec<Value>,
+    pub running: super::running::Running,
+    pub undo: Option<super::undo::Pending>,
+    pub fork: Option<super::fork::Pending>,
+    pub mention_search: Option<(std::time::Instant, String, String)>,
+    pub mention_query: String,
     pub escape_until: Option<f64>,
     pub attachment_pending: BTreeMap<String, usize>,
     pub access_pending: bool,
@@ -302,7 +310,26 @@ pub fn start(s: &mut State, client: Gateway, wake: rune::Waker) {
     s.composer.worker = Some(PromptWorker::start(client, move || wake()));
 }
 pub fn poll(s: &mut State) -> bool {
-    let mut changed = false;
+    let mut changed = super::undo::poll(s);
+    if s.composer
+        .mention_search
+        .as_ref()
+        .is_some_and(|(due, _, _)| std::time::Instant::now() >= *due)
+    {
+        let (_, directory, query) = s.composer.mention_search.take().unwrap();
+        if s.composer.menu == Some(Menu::Mention) && !query.is_empty() {
+            s.composer.mention_query = query.clone();
+            s.prompt_request(Request::Get {
+                tag: format!("mention-files:{directory}"),
+                path: "workspace/files".into(),
+                query: vec![
+                    ("directory".into(), directory),
+                    ("path".into(), String::new()),
+                    ("query".into(), query),
+                ],
+            });
+        }
+    }
     while let Some(reply) = s.composer.worker.as_ref().and_then(PromptWorker::take) {
         changed = true;
         match reply {
@@ -338,6 +365,11 @@ pub fn poll(s: &mut State) -> bool {
             } => {
                 s.composer.pending.remove(&key);
                 if result.is_ok() {
+                    if s.selected.as_ref() == session.as_ref()
+                        && !super::running::blocking(s).is_empty()
+                    {
+                        super::running::background(s);
+                    }
                     s.composer.drafts.acknowledge(&key, revision);
                     crate::workbench::refresh_comment_annotations(s);
                 }
@@ -397,16 +429,26 @@ pub fn poll(s: &mut State) -> bool {
             Reply::Data { tag, result } if tag.starts_with("notify:") => {
                 crate::notifications::receive(s, &tag, result);
             }
+            Reply::Data { tag, result } if tag == "fork-reply" => super::fork::receive(s, result),
+            Reply::Data { tag, result }
+                if tag.starts_with("inbox:") || tag.starts_with("background:") =>
+            {
+                super::running::receive(s, &tag, result)
+            }
             Reply::Data { tag, result }
                 if tag.starts_with("page:") || tag.starts_with("page-refresh:") =>
             {
                 crate::pages::receive(s, &tag, result);
             }
+            Reply::Data { tag, result } if tag.starts_with("dock-reply:") => {
+                crate::docks::replied(s, &tag[11..], result)
+            }
             Reply::Data { tag, result } => match result {
                 Err(e) => {
                     s.error = Some(e);
-                    s.docks.sending = false;
-                    s.composer.access_pending = false;
+                    if tag.starts_with("access-") {
+                        s.composer.access_pending = false;
+                    }
                 }
                 Ok(value) => {
                     if let Some((kind, directory)) = tag.split_once(':') {
@@ -416,6 +458,10 @@ pub fn poll(s: &mut State) -> bool {
                             .cloned()
                             .unwrap_or_default();
                         match kind {
+                            "mention-chats" => {
+                                s.composer.recent_chats =
+                                    value["sessions"].as_array().cloned().unwrap_or_default();
+                            }
                             "info" => {
                                 let draft = s.composer.drafts.edit(directory);
                                 if draft.model.is_none() {
@@ -442,7 +488,7 @@ pub fn poll(s: &mut State) -> bool {
                             "skills" => {
                                 s.composer.skills.insert(directory.into(), values);
                             }
-                            "files" => {
+                            "files" | "mention-files" => {
                                 s.composer.files.insert(directory.into(), values);
                             }
                             "branches" => {
@@ -465,6 +511,12 @@ pub fn poll(s: &mut State) -> bool {
         s.composer.dock_revision = s.snapshot.revision;
         if s.selected.is_some() {
             s.refresh_docks();
+            let id = s.selected.clone().unwrap();
+            s.prompt_request(Request::Get {
+                tag: format!("inbox:{id}"),
+                path: format!("sessions/{id}/inbox"),
+                query: vec![],
+            });
         }
     }
     changed
