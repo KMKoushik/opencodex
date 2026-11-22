@@ -147,7 +147,8 @@ pub fn area(s: &State, width: f32) -> El {
             .child(running::view(s))
             .child(crate::docks::view(s));
     }
-    let inner = (column - 48.0).max(200.0);
+    // Container queries use the composer's content box, excluding its padding.
+    let inner = (column - 72.0).max(0.0);
     let project = s.project();
     let input = text_input(&s.draft().edit, TextStyle::new(14.0, 400.0).lh(21.0))
         .key("message")
@@ -208,6 +209,8 @@ pub fn area(s: &State, width: f32) -> El {
         t.shadow(
             t.paint(
                 row()
+                    .shrink()
+                    .min_w(if inner <= 480.0 { 62.0 } else { 96.0 })
                     .h(30.0)
                     .px(8.0)
                     .gap(8.0)
@@ -225,13 +228,12 @@ pub fn area(s: &State, width: f32) -> El {
                 .map(|m| m.provider_id.as_str())
                 .unwrap_or("opencode"),
         ))
-        .child(label(
-            t,
-            if inner < 320.0 { "" } else { s.model_name() },
-            12.5,
-            500.0,
-            "text",
-        ))
+        .child(
+            label(t, s.model_name(), 12.5, 500.0, "text")
+                .min_w(0.0)
+                .shrink()
+                .truncate(),
+        )
         .child(icon(&i::DOWN, 14.0).color(t.c("text-tertiary")))
         .key("model-picker")
         .role("button")
@@ -242,30 +244,38 @@ pub fn area(s: &State, width: f32) -> El {
     controls = controls.child(
         row()
             .h(30.0)
+            // The web selector overflows its model neighbour below its icon's
+            // minimum width. Keep both hit targets separate and ellipsize here.
+            .max_w(if inner <= 480.0 {
+                (inner - if s.selected.is_some() { 36.0 } else { 0.0 } - 66.0).max(32.0)
+            } else {
+                240.0
+            })
             .px(8.0)
             .gap(8.0)
             .center_y()
             .border(1.0, rune::Color::TRANSPARENT)
             .border_layout()
-            .child(label(
-                t,
-                &if s.model_info().is_some_and(|m| !m.variants.is_empty()) {
-                    variant_label(
-                        s.selected_model()
-                            .and_then(|m| m.variant.as_deref())
-                            .unwrap_or("default"),
-                    )
-                } else {
-                    if inner < 300.0 {
-                        String::new()
+            .child(
+                label(
+                    t,
+                    &if s.model_info().is_some_and(|m| !m.variants.is_empty()) {
+                        variant_label(
+                            s.selected_model()
+                                .and_then(|m| m.variant.as_deref())
+                                .unwrap_or("default"),
+                        )
                     } else {
                         "No thinking options".into()
-                    }
-                },
-                12.5,
-                500.0,
-                "text-tertiary",
-            ))
+                    },
+                    12.5,
+                    500.0,
+                    "text-tertiary",
+                )
+                .min_w(0.0)
+                .shrink()
+                .truncate(),
+            )
             .child(icon(&i::DOWN, 14.0).color(t.c("text-tertiary")))
             .dim(if s.model_info().is_some_and(|m| !m.variants.is_empty()) {
                 1.0
@@ -282,7 +292,7 @@ pub fn area(s: &State, width: f32) -> El {
                 }
             }),
     );
-    let permission = row()
+    let mut permission = row()
         .h(30.0)
         .px(8.0)
         .gap(6.0)
@@ -303,8 +313,9 @@ pub fn area(s: &State, width: f32) -> El {
             } else {
                 "text-secondary"
             })),
-        )
-        .child(label(
+        );
+    if inner > 524.0 {
+        permission = permission.child(label(
             t,
             if s.draft().full_access {
                 "Full access"
@@ -318,7 +329,11 @@ pub fn area(s: &State, width: f32) -> El {
             } else {
                 "text-secondary"
             },
-        ))
+        ));
+    } else {
+        permission = permission.w(30.0).px(0.0).center();
+    }
+    let permission = permission
         .key("permission-picker")
         .role("button")
         .label(if s.draft().full_access {
