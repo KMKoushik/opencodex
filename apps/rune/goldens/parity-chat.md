@@ -8,7 +8,7 @@ rendering of its entire surface. `matches` means the named source behavior was c
 Outstanding work is explicitly marked `remaining` rather than falsely describing it as
 impossible in Rune. The requested exhaustive zero-gap audit is **not complete**.
 
-Merged inherited rows: **57 fixed, 14 matches, 10 remaining, 2 native/capture exceptions**.
+Merged inherited rows: **59 fixed, 14 matches, 8 remaining, 2 native/capture exceptions**.
 These counts describe individual inherited audit rows, not whole-screen parity.
 
 ## Integration continuation (`rune-port`)
@@ -26,8 +26,8 @@ These counts describe individual inherited audit rows, not whole-screen parity.
   share this boundary; project copy feedback waits for write acknowledgement.
 - DOCX: chat and Files share one module, embedded worker, sanitizer, DOM-find client,
   generator and license copies in `src/docx`.
-- HTML in Markdown: **remaining**; native sanitizer-allowlist rendering is not implemented.
-- Inline code/link 1pt line-box and icon geometry: **remaining**, not a private-API excuse.
+- HTML in Markdown: **fixed** in `rune-md`; HTML5 parsing, installed sanitizer policy and native allowed-element rendering. See `crates/oc-markdown/HTML.md` for the complete element/attribute matrix and oracle regression.
+- Inline code/link 1pt line-box and icon geometry: **fixed** in `rune-md`; configurable per-line code metrics, inherited link weight, and baseline-positioned icons before code padding.
 - Remaining panel ring/history/footer, side picker/context/docks, canvas bridge-to-draft
   and timestamp, and browser menu/download/relaunch interactions: **remaining**.
 
@@ -96,8 +96,8 @@ The 69-state review is recorded in `final/README.md`; it is not a 1:1 sign-off.
 | Item                                  | Status           | Concrete gap / next action                                                                                                                                                                                                     |
 | ------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Inline file-link icon                 | fixed            | Verified source icons before local links (not external URLs) in fresh goldens/pc-transcript-final/pair-chat-markdown-*.png pairs, both sizes/appearances.                                                                      |
-| Markdown paragraph/list/table metrics | remaining        | Adapter's private exact_lines and inline-icon baseline cannot express CSS's extra 1pt code line box or -2px icon alignment from chat. No global fudge. pc-transcript3/pair-transcript-*-review2.png.                           |
-| HTML in Markdown                      | remaining        | Actual 5.0.2 policy checked (u/mark unwrap; script strips). Native HTML5 tree renderer remains unimplemented, not impossible. Authored fixture: pc-transcript3/pair-html-*-review2.png.                                        |
+| Markdown paragraph/list/table metrics | fixed            | Named code/link discrepancy: configurable per-code-line +1pt, inherited link weight 500, baseline -2pt icons before code padding. Regression preserves a following plain line. `md/pair-links-{dark,light}-v5.png`.            |
+| HTML in Markdown                      | fixed            | HTML5 + installed 5.0.2 policy, 67 same-input web/Rust cases. Native allowed elements, disclosures, table spans, ruby/images; u/mark unwrap, script strips. Full matrix: `crates/oc-markdown/HTML.md`. `md/pair-*-v5.png`.     |
 | Response copy feedback                | fixed            | Actual macOS AppKit BOOL via worker JXA/stdin; no readback. objc2 needs forbidden Cargo.toml edit; unsafe FFI forbidden. Pending/failure/2s success retained; headless/non-macOS fallback remains.                             |
 | User annotations/mentions             | fixed            | Validated UTF-16 own-text/annotations, chip/popover and sent mention pills; overlay paints after rows. Scripted both themes/sizes: goldens/pc-transcript-final/pair-context-*-annotations-final.png.                           |
 | Attachment interactions               | remaining        | Sent DOCX modal + web Mammoth worker/DOMPurify ported. pc-transcript3/pair-docx-*-review2.png omits WK children. Draft click handlers live in composer/mod.rs:572-638, outside allowed src/chat edits.                         |
@@ -132,6 +132,33 @@ The 69-state review is recorded in `final/README.md`; it is not a 1:1 sign-off.
 | Atomic native-child screenshots       | can't-do-in-Rune | Pinned headless Rune screenshot omits WK child views. Must separately snapshot/composite real WK output, explicitly not an atomic GPU/native frame.                                                                            |
 
 ## Verification and images
+
+### Markdown continuation (`rune-md`)
+
+Used only `/tmp/ocr-md`, isolated OpenCode 4978 and gateway 4508. Six explicitly
+authored V2-imported sessions cover every allowed HTML element, a spanning table,
+and plain/code/file/external links in paragraphs and GFM tables; no model calls.
+Chrome (`channel: chrome`) and headless Rune captured the same messages at
+1600×1000, scale 2, dark/light. Twelve final web-left/native-right pairs are
+`md/pair-{inline,blocks,table,headings,spans,links}-{dark,light}-v5.png`.
+Fresh crop copies were read during review. Separate
+`md/pair-disclosures-{dark,light}-v4.png` captures verify pointer close/open and
+Space close/open, with actual final disclosure state `[false,true]` asserted in
+both renderers. Font rasterization and unrelated app/composer/sidebar differences
+are not a whole-window pixel-parity sign-off.
+
+The full element/attribute/component-override matrix is in
+`../crates/oc-markdown/HTML.md`. The Bun oracle runs the actual web plugins on the
+same 67 Rust sanitizer inputs, including every installed element/attribute.
+Two meaningful regressions were added: sanitizer oracle equality and a code line
+followed by an unaffected plain line. Existing incremental parser tests remain.
+HTML5 parsing/sanitization runs on a coalescing worker; the ordinary prefix keeps
+its incremental parser and source maps. No polling/redraw loop was added.
+
+Release workspace build, all 113 Rust unit tests, `bun check` and
+`bun format:check` pass. Local logs, authored fixture/capture sources and paired
+images are retained under ignored `md/`. Only fixture-environment processes were
+stopped, and the temporary fixture was deleted after capture.
 
 ### Current continuation pass
 
