@@ -4,11 +4,11 @@ use super::Chat;
 use crate::State;
 use rune::{El, GrowthSpec, ScrollSpec, col, row};
 
-pub fn reader(s: &State, chat: &Chat, width: f32) -> El {
+pub fn reader(s: &State, chat: &Chat, width: f32, footer: Option<El>) -> El {
     let side = !chat.read_only();
     let row_width = (width - 1.0).min(768.0);
     let position = chat.position.clone();
-    let scroll = col()
+    let mut scroll = col()
         .key("workspace-conversation")
         .role("log")
         .label("Conversation")
@@ -71,6 +71,11 @@ pub fn reader(s: &State, chat: &Chat, width: f32) -> El {
                 .virtual_rows_version(chat.data.revision.wrapping_add(chat.disclosure_revision)),
         )
         .child(super::user::popover(s, true));
+    // Callers supply subagent status/permission content here, not as a child
+    // of the timeline wrapper: it must scroll immediately after the rows.
+    if let Some(footer) = footer {
+        scroll = scroll.child(footer);
+    }
     let mut timeline = col().key("reader-timeline").grow(1.0).min_h(0.0).w_full()
         .child(super::follow::viewport(scroll, true));
     if chat.jump {

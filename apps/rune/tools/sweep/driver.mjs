@@ -329,35 +329,37 @@ try {
             stem + '.blocks.json',
             JSON.stringify(
               await page.evaluate(() =>
-                [...document.querySelectorAll('.timeline-row, .markdown, .markdown *')].map(
-                  (el) => {
-                    const r = el.getBoundingClientRect();
-                    const s = getComputedStyle(el);
-                    return {
-                      tag: el.tagName,
-                      class: el.className,
-                      text: el.textContent.slice(0, 120),
-                      rect: [r.x, r.y, r.width, r.height],
-                      style: Object.fromEntries(
-                        [
-                          'marginTop',
-                          'marginBottom',
-                          'paddingTop',
-                          'paddingBottom',
-                          'paddingLeft',
-                          'paddingRight',
-                          'lineHeight',
-                          'fontFamily',
-                          'fontSize',
-                          'fontWeight',
-                          'borderTopWidth',
-                          'borderBottomWidth',
-                          'display',
-                        ].map((k) => [k, s[k]]),
-                      ),
-                    };
-                  },
-                ),
+                [
+                  ...document.querySelectorAll(
+                    '.timeline-row, .markdown, .markdown *, .history-status, .timeline-footer, .chat-status',
+                  ),
+                ].map((el) => {
+                  const r = el.getBoundingClientRect();
+                  const s = getComputedStyle(el);
+                  return {
+                    tag: el.tagName,
+                    class: el.className,
+                    text: el.textContent.slice(0, 120),
+                    rect: [r.x, r.y, r.width, r.height],
+                    style: Object.fromEntries(
+                      [
+                        'marginTop',
+                        'marginBottom',
+                        'paddingTop',
+                        'paddingBottom',
+                        'paddingLeft',
+                        'paddingRight',
+                        'lineHeight',
+                        'fontFamily',
+                        'fontSize',
+                        'fontWeight',
+                        'borderTopWidth',
+                        'borderBottomWidth',
+                        'display',
+                      ].map((k) => [k, s[k]]),
+                    ),
+                  };
+                }),
               ),
               null,
               2,
@@ -419,6 +421,24 @@ try {
             DYLD_INSERT_LIBRARIES: fixture + '/clock.dylib',
           });
           writeFileSync(stem + '.log', log);
+          if (state === 'subagent-conversation') {
+            // A tiny status label can move hundreds of pixels while remaining
+            // below whole-window MAE thresholds. Guard this scroll boundary
+            // directly instead of classifying a fixed bottom dock as text AA.
+            const blocks = JSON.parse(readFileSync(stem + '.blocks.json'));
+            const tree = JSON.parse(readFileSync(stem + '.tree.json'));
+            const expected = blocks.find(
+              (e) => e.class === 'chat-status' && e.text.trim() === 'Idle',
+            );
+            const actual = tree.elements.find((e) => e.text === 'Idle');
+            const history = tree.elements.find((e) => e.key === 'reader-history');
+            if (!history || Math.abs(history.rect[3] - 44) > 0.01)
+              throw new Error('Subagent history header is not 44px scroll content');
+            if (!expected || !actual || Math.abs(expected.rect[1] - actual.rect[1]) > 1)
+              throw new Error(
+                'Subagent status footer does not follow the transcript inside its scroller',
+              );
+          }
           row.after = await digest();
           if (row.before !== row.after)
             throw new Error('Shared gateway snapshot changed during capture; pair invalidated');

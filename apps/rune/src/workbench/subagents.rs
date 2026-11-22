@@ -118,7 +118,7 @@ pub fn view(s: &State) -> El {
         );
         return body
             .child(header)
-            .child(super::sessions::reader(s).child(footer));
+            .child(crate::chat::reader(s, chat, s.panel_width().max(340.0), Some(footer)));
     }
     let running = s
         .workbench
