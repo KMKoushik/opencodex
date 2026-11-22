@@ -80,6 +80,12 @@ monotonic with a half-pixel correction to a block's geometry.
 
 ## Remaining limits
 
+The later [scroll follow-up](./SCROLL.md) resolves the long-history midpoint and
+side-transcript placement described below. Its live CSS measurement also corrects
+the earlier 40px side-footer assumption to 52px: the more-specific timeline rule
+supplies 32px bottom padding. The measurements below remain the historical result
+of this Markdown-only change.
+
 This does not claim whole-window pixel parity. The side composer/panel chrome,
 Find and session popovers are separate workstreams. The 40-turn middle-scroll
 mismatch is not paragraph-height accumulation: fresh DOM/native dumps show the

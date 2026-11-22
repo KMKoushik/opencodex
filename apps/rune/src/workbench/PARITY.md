@@ -104,8 +104,8 @@ existing half-pixel split remains: Electron content x=577.5, width=658.5, versus
 Rune x=577, width=659. No artificial transcript offset compensates for it.
 
 At 1600px, rows, the footer and composer area also honor the web's centered
-768px maximum width instead of filling the entire panel. This gives a 736px
-side Markdown/card content width, not the previous 787px, without changing the
+768px maximum width instead of filling the entire panel. This gives 736px
+Markdown and composer-card widths, not the previous 787px, without changing the
 full-width header or transcript viewport.
 
 Worst dark/light blurred MAE improves from 4.0950 to 0.9583 for `side-chat-new`

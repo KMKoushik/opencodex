@@ -74,6 +74,9 @@ It never stops OpenCode by executable name or accesses port 49374.
 See [the Markdown follow-up](./MARKDOWN.md) for measured block heights, parity
 results and the remaining virtual-list/viewport differences.
 
+See [the scroll follow-up](./SCROLL.md) for LegendList's measured-height model,
+fractional-scroll priming, same-data metrics, and paired open-time benchmarks.
+
 Every scored pair also saves `.blocks.json` (Chromium rectangles and computed
 spacing/font styles) and `.tree.json` (Rune's inspector tree). For extra code-line
 and nested-block probes, retain a seeded environment with `--keep-env`, then run

@@ -239,6 +239,29 @@ export async function reach(page, state, c, extras) {
         if (attempt === 11) throw new Error('Could not load the complete long-history viewport');
       }
     }
+    if (state === 'chat-long-middle') {
+      // LegendList's scrollHeight still contains estimates after paging to the
+      // beginning. Realize the complete fixture before asking for a fraction:
+      // otherwise 50% means different content as the two virtualizers overscan
+      // different windows. This is finite capture setup, never app frame work.
+      const scroll = page.locator('.chat-scroll');
+      await page.evaluate(() => document.fonts.ready);
+      let next = 0;
+      for (let step = 0; step < 80; step++) {
+        await scroll.evaluate((e, y) => {
+          e.scrollTop = y;
+        }, next);
+        await page.waitForTimeout(80);
+        const at = await scroll.evaluate((e) => ({
+          offset: e.scrollTop,
+          viewport: e.clientHeight,
+          height: e.scrollHeight,
+        }));
+        if (at.offset + at.viewport >= at.height - 1) break;
+        if (step === 79) throw new Error('Could not measure the complete long-history extent');
+        next = at.offset + at.viewport * 0.75;
+      }
+    }
     const fraction = { top: 0, middle: 0.5, bottom: 1 }[state.split('-').at(-1)];
     await page.locator('.chat-scroll').evaluate((e, f) => {
       e.scrollTop = (e.scrollHeight - e.clientHeight) * f;
