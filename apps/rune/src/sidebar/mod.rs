@@ -228,9 +228,30 @@ pub fn view(s: &State) -> El {
         identity = identity.child(el().size(125.0, 24.0));
     }
     identity = identity
-        .child(icon(&i::DOWN, 10.0).color(t.c("text-tertiary")))
+        .child(
+            icon_button_size(t, &i::DOWN, "App menu", 10.0)
+                .on_press(|s: &mut State| s.menus.open = Some(crate::menus::Menu::Brand)),
+        )
         .child(el().grow(1.0))
-        .child(icon_button_size(t, &i::SEARCH, "Search threads", 15.0));
+        .child(
+            icon_button_size(t, &i::SEARCH, "Search threads", 15.0)
+                .on_press_tx(|s: &mut State, tx| crate::menus::open_search(s, tx)),
+        );
+    if let crate::pages::Route::Settings(section) = &s.pages.route {
+        return col()
+            .key("sidebar")
+            .w(s.sidebar_width())
+            .h_full()
+            .fill(t.c("surface-under"))
+            .child(header)
+            .child(
+                col()
+                    .w_full()
+                    .px(10.0)
+                    .child(identity)
+                    .child(crate::settings::navigation(s, section)),
+            );
+    }
     let actions = col()
         .w_full()
         .mb(16.0)
@@ -238,24 +259,28 @@ pub fn view(s: &State) -> El {
             s.open_session(None);
         }))
         .child(
-            nav(t, &i::FOLDER_OPEN, "Open project").on_press_tx(|_: &mut State, tx| {
-                tx.open_folder(
-                    rune::FileDialogOptions {
-                        title: "Open project".into(),
-                        ..Default::default()
-                    },
-                    |s: &mut State, result, _| match result {
-                        Ok(Some(path)) => s.command(oc_gateway::Command::AddProject(
-                            path.to_string_lossy().into_owned(),
-                        )),
-                        Ok(None) => {}
-                        Err(e) => s.error = Some(e.to_string()),
-                    },
-                );
+            nav(t, &i::FOLDER_OPEN, "Open project").on_press_tx(|s: &mut State, tx| {
+                crate::menus::open_projects(s, tx);
             }),
         )
-        .child(nav(t, &i::TASKS, "Tasks").help("Tasks — milestone 4"))
-        .child(nav(t, &i::APPS, "Apps").help("Apps — milestone 4"));
+        .child(
+            nav(t, &i::TASKS, "Tasks")
+                .fill(if s.pages.route == crate::pages::Route::Tasks {
+                    t.c("selected")
+                } else {
+                    rune::Color::TRANSPARENT
+                })
+                .on_press(|s: &mut State| s.open_page(crate::pages::Route::Tasks)),
+        )
+        .child(
+            nav(t, &i::APPS, "Apps")
+                .fill(if s.pages.route == crate::pages::Route::Apps {
+                    t.c("selected")
+                } else {
+                    rune::Color::TRANSPARENT
+                })
+                .on_press(|s: &mut State| s.open_page(crate::pages::Route::Apps)),
+        );
     let list = col()
         .key("project-list")
         .w_full()
@@ -282,8 +307,18 @@ pub fn view(s: &State) -> El {
         .pt(8.0)
         .gap(2.0)
         .center_y()
-        .child(nav_ink(t, &i::SETTINGS, "Settings", "text-secondary").grow(1.0))
-        .child(icon_button(t, &i::USAGE, "Usage limits"));
+        .child(
+            nav_ink(t, &i::SETTINGS, "Settings", "text-secondary")
+                .grow(1.0)
+                .on_press(|s: &mut State| {
+                    s.open_page(crate::pages::Route::Settings("general".into()))
+                }),
+        )
+        .child(
+            icon_button(t, &i::USAGE, "Usage limits").on_press(|s: &mut State| {
+                s.open_page(crate::pages::Route::Settings("usage".into()))
+            }),
+        );
     col()
         .key("sidebar")
         .w(s.sidebar_width())
@@ -375,8 +410,13 @@ fn render_item(s: &State, n: usize) -> El {
             let id = id.clone();
             let close = id.clone();
             let new = id.clone();
+            let actions = id.clone();
             row()
                 .key(format!("folder-{id}"))
+                .on_secondary_press(move |s: &mut State, point, _| {
+                    s.menus.point = Some((point.x, point.y));
+                    s.menus.open = Some(crate::menus::Menu::Project(actions.clone()))
+                })
                 .w_full()
                 .h(32.0)
                 .hover_group()
@@ -482,6 +522,7 @@ fn render_item(s: &State, n: usize) -> El {
                 })
         }
         Item::Session(id, nested) => {
+            let actions = id.clone();
             let thread = &s.snapshot.sessions[id];
             let active = s.snapshot.active.contains(id);
             let selected = s.selected.as_ref() == Some(id);
@@ -494,6 +535,10 @@ fn render_item(s: &State, n: usize) -> El {
                     .is_some_and(|p| thread.directory != p.canonical);
             let mut r = row()
                 .key(format!("thread-{id}"))
+                .on_secondary_press(move |s: &mut State, point, _| {
+                    s.menus.point = Some((point.x, point.y));
+                    s.menus.open = Some(crate::menus::Menu::Thread(actions.clone()))
+                })
                 .role("listitem")
                 .label(&thread.title)
                 .focusable(true)
@@ -627,3 +672,45 @@ const RUNNING: rune::Icon = rune::Icon {
     view: 10.0,
     body: r##"<circle cx="5" cy="5" r="4.25" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3"/><path d="M5 .75 A4.25 4.25 0 0 1 9.25 5" fill="none" stroke="currentColor" stroke-width="1.5"/>"##,
 };
+pub fn resize(width: f32, height: f32) -> El {
+    el().key("sidebar-resize")
+        .role("separator")
+        .label("Resize sidebar")
+        .focusable(true)
+        .size(8.0, height)
+        .absolute(width - 4.0, 0.0)
+        .cursor(rune::Cursor::ResizeColumn)
+        .on_double_press(|s: &mut State| {
+            s.prefs.sidebar_width = Some(300.0);
+            s.save();
+        })
+        .on_key(|s: &mut State, event, tx| {
+            let max = (s.window_size.0 - 360.0).clamp(200.0, 480.0);
+            let next = match event.key {
+                rune::Key::Left => s.sidebar_width() - 32.0,
+                rune::Key::Right => s.sidebar_width() + 32.0,
+                rune::Key::Home => 200.0,
+                rune::Key::End => max,
+                _ => return false,
+            };
+            s.prefs.sidebar_width = Some(next.clamp(200.0, max));
+            s.save();
+            tx.instant();
+            true
+        })
+        .on_drag(|s: &mut State, d, tx| match d.phase {
+            rune::Phase::Down => d.data = s.sidebar_width(),
+            rune::Phase::Move => {
+                s.prefs.sidebar_width = Some(
+                    (d.data + d.dx).clamp(200.0, (s.window_size.0 - 360.0).clamp(200.0, 480.0)),
+                );
+                tx.instant();
+            }
+            rune::Phase::Up => {
+                if d.cancelled() {
+                    s.prefs.sidebar_width = Some(d.data);
+                }
+                s.save();
+            }
+        })
+}

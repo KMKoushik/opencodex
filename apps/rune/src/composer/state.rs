@@ -386,6 +386,14 @@ pub fn poll(s: &mut State) -> bool {
                     Err(e) => s.error = Some(e),
                 }
             }
+            Reply::Data { tag, result } if tag.starts_with("notify:") => {
+                crate::notifications::receive(s, &tag, result);
+            }
+            Reply::Data { tag, result }
+                if tag.starts_with("page:") || tag.starts_with("page-refresh:") =>
+            {
+                crate::pages::receive(s, &tag, result);
+            }
             Reply::Data { tag, result } => match result {
                 Err(e) => {
                     s.error = Some(e);

@@ -4,10 +4,11 @@ use rune_kit::{Markdown, MarkdownStyle};
 
 pub fn render(s: &State, source: &str, streaming: bool, width: f32) -> El {
     let t = &s.theme;
+    let font_size = s.prefs.chat_font_size.unwrap_or(14.0);
     let mut style = MarkdownStyle::neutral(t.dark)
         .text(t.c("text"))
         .muted(t.c("text-secondary"))
-        .body_font(TextStyle::new(14.0, 400.0).lh(22.75))
+        .body_font(TextStyle::new(font_size, 400.0).lh(font_size * 1.625))
         .link(t.c("link"))
         .link_underline(t.c("link-underline"))
         .inline_code_bg(t.c("code-bg"))
@@ -49,6 +50,15 @@ pub fn render(s: &State, source: &str, streaming: bool, width: f32) -> El {
     let hover = t.c("hover");
     let images = s.chat.media.images.clone();
     Markdown::new(source)
+        .highlights(if s.find.open {
+            rune_kit::markdown::find(
+                source,
+                s.find.query.text.trim(),
+                rune_kit::markdown::Case::Insensitive,
+            )
+        } else {
+            vec![]
+        })
         .images(move |source| {
             images
                 .get(source)

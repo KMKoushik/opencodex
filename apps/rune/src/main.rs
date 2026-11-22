@@ -1,11 +1,19 @@
 #![forbid(unsafe_code)]
+mod apps;
 mod assets;
 mod chat;
 mod composer;
 mod docks;
+mod find;
 mod icons;
+mod menus;
+mod notifications;
+mod pages;
 mod profile;
+mod settings;
+mod shortcuts;
 mod sidebar;
+mod tasks;
 mod theme;
 
 #[cfg(test)]
@@ -28,6 +36,7 @@ struct Options {
     scroll: String,
     work: Option<String>,
     composer_state: String,
+    page: String,
 }
 static OPTIONS: OnceLock<Options> = OnceLock::new();
 struct State {
@@ -54,6 +63,10 @@ struct State {
     waker: Option<rune::Waker>,
     chat_settle_due: Option<f64>,
     chat_settled: bool,
+    pages: pages::Pages,
+    menus: menus::Menus,
+    find: find::Find,
+    notifications: notifications::Notifications,
 }
 impl State {
     fn new() -> Self {
@@ -85,6 +98,10 @@ impl State {
             waker: None,
             chat_settle_due: None,
             chat_settled: false,
+            pages: Default::default(),
+            menus: Default::default(),
+            find: Default::default(),
+            notifications: Default::default(),
         }
     }
     fn project(&self) -> Option<&oc_gateway::types::Project> {
@@ -106,6 +123,7 @@ impl State {
             .or_else(|| self.snapshot.projects.first())
     }
     fn open_session(&mut self, id: Option<String>) {
+        self.pages.route = pages::Route::Chat;
         if self.selected == id {
             return;
         }
@@ -253,14 +271,43 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
         .fill(t.c("surface"))
         .border_sides([0.0, 0.0, 0.0, 1.0], t.c("border"))
         .border_layout()
-        .child(toolbar)
-        .child(
-            col()
-                .grow(1.0)
+        .child(if matches!(s.pages.route, pages::Route::Settings(_)) {
+            el().w_full()
+                .h(40.0)
+                .window_drag()
+                .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
+        } else if s.pages.route != pages::Route::Chat {
+            row()
                 .w_full()
-                .min_h(0.0)
-                .child(composer::view(s, w - width, h)),
-        );
+                .h(40.0)
+                .px(20.0)
+                .center_y()
+                .window_drag()
+                .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
+                .child(sidebar::label(
+                    t,
+                    match s.pages.route {
+                        pages::Route::Tasks => "Tasks",
+                        pages::Route::Apps => "Apps",
+                        _ => "Worktrees",
+                    },
+                    13.0,
+                    500.0,
+                    "text",
+                ))
+        } else {
+            toolbar
+        })
+        .child(col().grow(1.0).w_full().min_h(0.0).child(
+            if s.pages.route == pages::Route::Chat && !s.snapshot.live && s.snapshot.error.is_some()
+            {
+                pages::offline::view(s)
+            } else if s.pages.route == pages::Route::Chat {
+                composer::view(s, w - width, h)
+            } else {
+                pages::view(s)
+            },
+        ));
     let mut shell = row()
         .key("window")
         .role("window")
@@ -285,53 +332,23 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
         ));
     }
     shell = shell.child(main);
+    if let Some(message) = &s.menus.toast {
+        shell = shell.child(
+            sidebar::label(t, message, 13.0, 400.0, "text")
+                .padding(12.0)
+                .fill(t.c("elevated"))
+                .radius(8.0)
+                .absolute(width + 24.0, h - 64.0),
+        );
+    }
+    if let Some(menu) = menus::view(s) {
+        shell = shell.child(menu);
+    }
     if let Some(menu) = composer::menus::view(s) {
         shell = shell.child(menu);
     }
     if !s.prefs.sidebar_closed {
-        shell = shell.child(
-            el().key("sidebar-resize")
-                .role("separator")
-                .label("Resize sidebar")
-                .focusable(true)
-                .size(8.0, h)
-                .absolute(width - 4.0, 0.0)
-                .cursor(rune::Cursor::ResizeColumn)
-                .on_double_press(|s: &mut State| {
-                    s.prefs.sidebar_width = Some(300.0);
-                    s.save();
-                })
-                .on_key(|s: &mut State, ev, tx| {
-                    let max = (s.window_size.0 - 360.0).clamp(200.0, 480.0);
-                    let next = match ev.key {
-                        rune::Key::Left => s.sidebar_width() - 32.0,
-                        rune::Key::Right => s.sidebar_width() + 32.0,
-                        rune::Key::Home => 200.0,
-                        rune::Key::End => max,
-                        _ => return false,
-                    };
-                    s.prefs.sidebar_width = Some(next.clamp(200.0, max));
-                    s.save();
-                    tx.instant();
-                    true
-                })
-                .on_drag(|s: &mut State, d, tx| match d.phase {
-                    rune::Phase::Down => d.data = s.sidebar_width(),
-                    rune::Phase::Move => {
-                        s.prefs.sidebar_width = Some(
-                            (d.data + d.dx)
-                                .clamp(200.0, (s.window_size.0 - 360.0).clamp(200.0, 480.0)),
-                        );
-                        tx.instant();
-                    }
-                    rune::Phase::Up => {
-                        if d.cancelled() {
-                            s.prefs.sidebar_width = Some(d.data);
-                        }
-                        s.save();
-                    }
-                }),
-        );
+        shell = shell.child(sidebar::resize(width, h));
     }
     if let Some(preview) = chat::preview::view(s, w, h) {
         shell = shell.child(preview);
@@ -339,12 +356,21 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
     shell
 }
 fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
+    notifications::clear_on_focus(s);
     let mut changed = false;
+    if s.menus.toast_due.is_some_and(|due| clock >= due) {
+        s.menus.toast = None;
+        s.menus.toast_due = None;
+        changed = true;
+    }
     let mut sidebar_changed = false;
     let mut chat_updated = false;
     if let Some(data) = s.worker.as_ref().and_then(Worker::take_messages) {
         if s.selected.as_deref() == Some(&data.session_id) {
             s.chat.accept(data);
+            if s.find.open {
+                find::refresh(s);
+            }
             if let Some(info) = &s.chat.data.info {
                 s.prefs.project = Some(info.location.directory.clone());
             }
@@ -417,6 +443,9 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
     {
         let bench = std::env::var("OPENCODEX_BENCH_PROJECT").ok();
         s.prefs = prefs;
+        if let Some(dark) = s.prefs.dark {
+            s.theme = settings::restored_theme(&s.prefs, dark);
+        }
         if bench.is_some() {
             s.prefs.project = bench;
         }
@@ -434,7 +463,12 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
                 snapshot.error
             );
         }
+        notifications::snapshot(s, &snapshot);
+        let reconnected = snapshot.live && !s.snapshot.live;
         s.snapshot = snapshot;
+        if reconnected && s.pages.route != pages::Route::Chat {
+            s.open_page(s.pages.route.clone());
+        }
         changed = true;
         sidebar_changed = true;
         if let Some(directory) = s
@@ -512,6 +546,7 @@ fn main() {
             scroll: value("--scroll").unwrap_or_else(|| "bottom".into()),
             work: value("--work"),
             composer_state: value("--composer-state").unwrap_or_default(),
+            page: value("--page").unwrap_or_default(),
         })
         .ok();
     if let Some(id) = value("--profile-chat") {
@@ -540,25 +575,10 @@ fn main() {
             "ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace",
         ),
         min_size: Some((760.0, 560.0)),
-        on_key: Some(|s, ev, tx| {
-            if composer::keys::global(s, ev, tx) {
-                return true;
-            }
-            if rune::Chord::parse("mod+b").unwrap().matches_tx(ev, tx) {
-                s.prefs.sidebar_closed = !s.prefs.sidebar_closed;
-                s.save();
-                return true;
-            }
-            if ev.is_command('n') {
-                s.open_session(None);
-                tx.focus("message", false);
-                return true;
-            }
-            false
-        }),
+        on_key: Some(shortcuts::global),
         ..AppSpec::new("OpenCodex", (1240.0, 840.0), State::new, view)
     };
-    let app = rune::App::new(spec)
+    let app = menus::native::install(rune::App::new(spec))
         .args(args)
         .font_smoothing(rune::FontSmoothing::Off)
         .chrome(Chrome {
@@ -567,6 +587,14 @@ fn main() {
             drag_regions: true,
         });
     let handle = app.handle();
+    let notify_handle = handle.clone();
+    rune_notify::on_click(move |click| {
+        if let Some(id) = click.get("session") {
+            let id = id.to_owned();
+            rune_notify::bring_to_front();
+            notify_handle.update(move |s, _| s.open_session(Some(id.clone())));
+        }
+    });
     let bench = std::env::var("OPENCODEX_BENCH").as_deref() == Ok("1");
     #[cfg(unix)]
     if bench && !headless {
@@ -656,6 +684,7 @@ fn main() {
                 s.chat.expand(mode);
             }
             composer::capture::setup(&mut s);
+            settings::capture(&mut s);
             sidebar::rebuild(&mut s);
         }
         s

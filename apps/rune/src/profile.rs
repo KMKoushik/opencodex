@@ -13,6 +13,11 @@ pub struct Preferences {
     pub sidebar_width: Option<f32>,
     pub sidebar_closed: bool,
     pub focus: bool,
+    pub dark: Option<bool>,
+    pub preset: String,
+    pub accent: Option<String>,
+    pub chat_font_size: Option<f32>,
+    pub notifications: std::collections::BTreeMap<String, bool>,
 }
 pub struct Profile {
     pub loaded: Arc<Mutex<Option<Preferences>>>,

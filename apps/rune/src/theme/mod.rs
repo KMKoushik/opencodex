@@ -36,10 +36,13 @@ pub struct Theme {
     shadows: BTreeMap<String, Vec<Shadow>>,
 }
 pub fn presets(dark: bool) -> Vec<Preset> {
-    let mut all: BTreeMap<String, Vec<Preset>> =
-        serde_json::from_str(include_str!("../../presets.json")).expect("bundled theme seeds");
-    all.remove(if dark { "dark" } else { "light" })
-        .expect("appearance")
+    static ALL: std::sync::OnceLock<BTreeMap<String, Vec<Preset>>> = std::sync::OnceLock::new();
+    ALL.get_or_init(|| {
+        serde_json::from_str(include_str!("../../presets.json")).expect("bundled theme seeds")
+    })
+    .get(if dark { "dark" } else { "light" })
+    .expect("appearance")
+    .clone()
 }
 impl Theme {
     pub fn new(dark: bool, id: &str) -> Self {

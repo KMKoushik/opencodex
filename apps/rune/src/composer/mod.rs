@@ -88,33 +88,7 @@ pub fn view(s: &State, width: f32, height: f32) -> El {
             .label("Choose project")
             .focusable(true)
             .on_press_tx(|s: &mut State, tx| {
-                let selected = s.project().map(|p| p.canonical.clone()).unwrap_or_default();
-                let choices = s
-                    .snapshot
-                    .projects
-                    .iter()
-                    .map(|p| (p.canonical.clone(), p.display_name().to_owned()));
-                tx.popup_menu(
-                    rune::PopupMenu::picker(choices, &selected),
-                    "project-switcher",
-                    |s: &mut State, picked, _| {
-                        if let Some(directory) = picked {
-                            if let Some(p) = s
-                                .snapshot
-                                .projects
-                                .iter()
-                                .find(|p| p.canonical == directory)
-                            {
-                                s.folded.remove(&p.id);
-                            }
-                            s.prefs.project = Some(directory.to_owned());
-                            s.open_session(None);
-                            s.command(oc_gateway::Command::Details(directory.to_owned()));
-                            crate::sidebar::rebuild(s);
-                            s.save();
-                        }
-                    },
-                );
+                crate::menus::open_projects(s, tx);
             }),
         )
         .child(starters(s, inner));

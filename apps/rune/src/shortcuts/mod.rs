@@ -1,0 +1,110 @@
+//! Chords are shared with the shortcuts page; composer-specific bindings stay in composer.
+use crate::{State, pages::Route};
+use rune::{KeyEvent, Tx};
+pub fn global(s: &mut State, event: &KeyEvent, tx: &mut Tx) -> bool {
+    if dispatch(s, event, tx) {
+        return true;
+    }
+    if s.pages.route != Route::Chat || s.menus.open.is_some() {
+        return false;
+    }
+    crate::composer::keys::global(s, event, tx)
+}
+pub const COMMANDS: &[(&str, &str, &str)] = &[
+    ("Toggle workspace panel", "mod+i", "workspace.toggle"),
+    ("Toggle terminal", "mod+j", "terminal.toggle"),
+    ("Toggle sidebar", "mod+b", "sidebar.toggle"),
+    ("New chat", "mod+n", "chat.new"),
+    ("New chat", "mod+alt+n", "chat.new"),
+    ("Open project", "mod+o", "project.open"),
+    ("Open tasks", "mod+shift+d", "tasks.open"),
+    ("Open settings", "mod+,", "settings.open"),
+    ("Keyboard shortcuts", "mod+/", "shortcuts.open"),
+    ("Find in chat or file", "mod+f", "find.open"),
+    ("Focus message", "mod+shift+l", "composer.focus"),
+    ("Focus thread navigation", "mod+shift+k", "sidebar.focus"),
+    ("Choose model", "mod+shift+m", "model.choose"),
+    ("Choose thinking level", "mod+shift+e", "thinking.choose"),
+    ("Cycle thinking level", "ctrl+t", "thinking.cycle"),
+    (
+        "Move running work to the background",
+        "ctrl+b",
+        "chat.background",
+    ),
+];
+pub fn dispatch(s: &mut State, event: &KeyEvent, tx: &mut Tx) -> bool {
+    if !event.mods.cmd
+        && !event.mods.ctrl
+        && !matches!(event.key, rune::Key::Command(_) | rune::Key::Escape)
+    {
+        return false;
+    }
+    if event.key == rune::Key::Escape {
+        if s.find.open {
+            s.find.open = false;
+            s.chat.disclosure_revision += 1;
+            return true;
+        }
+        if s.menus.open.take().is_some() {
+            return true;
+        }
+        if s.pages.route != Route::Chat {
+            s.open_page(Route::Chat);
+            return true;
+        }
+    }
+    for &(_, chord, id) in COMMANDS {
+        if rune::Chord::parse(chord).is_ok_and(|chord| chord.matches_tx(event, tx)) {
+            return execute(s, id, tx);
+        }
+    }
+    for n in 1..=9 {
+        if rune::Chord::parse(&format!("mod+{n}"))
+            .unwrap()
+            .matches_tx(event, tx)
+        {
+            let id = s
+                .rows
+                .iter()
+                .filter_map(|row| match row {
+                    crate::sidebar::Item::Session(id, false) => Some(id.clone()),
+                    _ => None,
+                })
+                .nth(n - 1);
+            if let Some(id) = id {
+                s.open_session(Some(id));
+                return true;
+            }
+        }
+    }
+    false
+}
+pub fn execute(s: &mut State, id: &str, tx: &mut Tx) -> bool {
+    match id {
+        "sidebar.toggle" => {
+            s.prefs.sidebar_closed = !s.prefs.sidebar_closed;
+            s.save();
+        }
+        "chat.new" => {
+            s.open_session(None);
+            tx.focus("message", false);
+        }
+        "tasks.open" => s.open_page(Route::Tasks),
+        "settings.open" => s.open_page(Route::Settings("general".into())),
+        "shortcuts.open" => s.open_page(Route::Settings("shortcuts".into())),
+        "project.open" => crate::menus::open_projects(s, tx),
+        "find.open" => crate::find::open(s, tx),
+        "sidebar.focus" => tx.focus("project-list", false),
+        "composer.focus" => {
+            s.open_page(Route::Chat);
+            tx.focus("message", false);
+        }
+        "chat.background" => {
+            s.open_session(None);
+            tx.focus("message", false);
+        }
+        // Workspace and terminal registrations are supplied by the workbench integration.
+        _ => return false,
+    }
+    true
+}

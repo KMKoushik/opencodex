@@ -207,6 +207,9 @@ pub fn view(s: &State, width: f32) -> El {
                 ),
         );
     let mut body = col().key("timeline").w_full().grow(1.0).min_h(0.0);
+    if s.find.open {
+        body = body.child(crate::find::view(s));
+    }
     if let Some(info) = &s.chat.data.info {
         let side = info
             .metadata
@@ -458,6 +461,7 @@ fn render_row(s: &State, r: &Row) -> El {
                         .unwrap_or("");
                     bubble.child(
                         text(txt)
+                            .spans(crate::find::highlights(s, txt))
                             .font(TextStyle::new(14.0, 400.0).lh(22.75))
                             .color(t.c("text"))
                             .wrap()
@@ -559,8 +563,12 @@ pub fn toolbar(s: &State) -> El {
         .gap(4.0)
         .center_y()
         .child(
-            icon_button(t, &icons::MORE, "Thread actions")
-                .help("Thread actions — not yet implemented"),
+            icon_button(t, &icons::MORE, "Thread actions").on_press(|s: &mut State| {
+                if let Some(id) = &s.selected {
+                    s.menus.open = Some(crate::menus::Menu::Thread(id.clone()));
+                    s.menus.point = Some((s.window_size.0 - 216.0, 40.0));
+                }
+            }),
         )
         .child(
             icon_button(t, &icons::INFO, "Session details")
