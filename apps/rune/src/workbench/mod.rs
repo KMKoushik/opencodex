@@ -2,10 +2,15 @@
 mod actions;
 mod details;
 mod image;
+mod markdown;
+mod open_apps;
+mod preview;
 mod review;
 mod tabs;
+mod tree;
 pub use review::refresh as refresh_comment_annotations;
 mod documents;
+mod editor;
 mod links;
 pub use details::view as details_view;
 pub use links::file_target;
@@ -76,7 +81,12 @@ pub struct Workbench {
     pub open: bool,
     pub expanded: bool,
     pub tree_visible: bool,
+    pub tree_width: f32,
     pub file_actions: Option<usize>,
+    pub apps_menu: bool,
+    pub apps_error: Option<String>,
+    pub open_apps: Vec<open_apps::App>,
+    pub selected_app: String,
     pub delete_side: Option<String>,
     pub panel: Panel,
     pub worker: Option<Worker>,
@@ -87,12 +97,17 @@ pub struct Workbench {
     pub entries: BTreeMap<String, Vec<Value>>,
     pub tree: Vec<(String, bool, usize)>,
     pub folders: BTreeSet<String>,
+    pub tree_focus: Option<String>,
+    pub pin_target: Option<(String, String, bool)>,
     pub search: TextEdit,
     pub query: String,
     pub search_due: Option<f64>,
     pub workspace_revision: u64,
     pub refresh_due: Option<f64>,
     pub changes: Vec<Value>,
+    pub change_tree: Vec<(String, bool, usize)>,
+    pub change_lookup: BTreeMap<String, usize>,
+    pub collapsed_changes: BTreeSet<String>,
     pub mode: String,
     pub docs: Vec<documents::Document>,
     pub selected: Option<usize>,
@@ -117,7 +132,12 @@ impl Default for Workbench {
             open: false,
             expanded: false,
             tree_visible: true,
+            tree_width: 220.0,
             file_actions: None,
+            apps_menu: false,
+            apps_error: None,
+            open_apps: Vec::new(),
+            selected_app: String::new(),
             delete_side: None,
             panel: Panel::Files,
             worker: None,
@@ -128,12 +148,17 @@ impl Default for Workbench {
             entries: Default::default(),
             tree: Vec::new(),
             folders: Default::default(),
+            tree_focus: None,
+            pin_target: None,
             search: TextEdit::new(""),
             query: String::new(),
             search_due: None,
             workspace_revision: 0,
             refresh_due: None,
             changes: Vec::new(),
+            change_tree: Vec::new(),
+            change_lookup: Default::default(),
+            collapsed_changes: Default::default(),
             mode: "working".into(),
             docs: Vec::new(),
             selected: None,
@@ -157,6 +182,10 @@ impl Default for Workbench {
 impl State {
     pub fn search_workspace(&mut self) {
         self.workbench.query = self.workbench.search.text.trim().to_owned();
+        if self.workbench.panel == Panel::Changes {
+            tree::rebuild(self);
+            return;
+        }
         if self.workbench.query.is_empty() {
             self.rebuild_workspace_tree();
             return;
@@ -251,7 +280,18 @@ impl State {
         let d = self.workspace_directory();
         let id = self.selected.clone().unwrap_or_default();
         match self.workbench.panel {
-            Panel::Files => self.load_folder("", force),
+            Panel::Files => {
+                self.load_folder("", force);
+                self.workspace_get(
+                    "changes",
+                    "workspace/diff".into(),
+                    vec![
+                        ("directory".into(), d),
+                        ("mode".into(), self.workbench.mode.clone()),
+                    ],
+                    force,
+                );
+            }
             Panel::Changes => self.workspace_get(
                 "changes",
                 "workspace/diff".into(),
@@ -307,6 +347,7 @@ impl State {
 }
 pub fn start(s: &mut State, client: oc_gateway::Gateway, wake: Waker) {
     s.workbench.worker = Some(Worker::start(client, wake));
+    s.workspace_request("open-apps".into(), Operation::DiscoverApps);
     if s.workbench.open {
         s.load_panel(false);
     }
@@ -335,6 +376,29 @@ pub fn reset(s: &mut State) {
     };
 }
 pub fn poll(s: &mut State, clock: f64, _tx: &mut rune::Tx) -> bool {
+    let highlighting: Vec<_> = s
+        .workbench
+        .docs
+        .iter_mut()
+        .filter_map(|doc| {
+            if doc.highlight_due.is_some_and(|due| clock >= due) {
+                doc.highlight_due = None;
+                Some((
+                    format!("highlight:{}", serde_json::json!([doc.directory, doc.path])),
+                    Operation::Highlight {
+                        path: doc.path.clone(),
+                        text: doc.edit.text.clone(),
+                        revision: doc.revision,
+                    },
+                ))
+            } else {
+                None
+            }
+        })
+        .collect();
+    for (tag, operation) in highlighting {
+        s.workspace_request(tag, operation);
+    }
     if s.workbench.workspace_revision != s.snapshot.workspace_revision {
         s.workbench.workspace_revision = s.snapshot.workspace_revision;
         if s.snapshot
@@ -378,7 +442,7 @@ pub fn poll(s: &mut State, clock: f64, _tx: &mut rune::Tx) -> bool {
         .as_ref()
         .map(Worker::take)
         .unwrap_or_default();
-    let mut changed = false;
+    let mut changed = preview::poll(s, _tx);
     if let Some(data) = s
         .workbench
         .reader_worker
@@ -422,6 +486,10 @@ pub fn poll(s: &mut State, clock: f64, _tx: &mut rune::Tx) -> bool {
         changed = true;
         match reply.result {
             Err(e) => {
+                if reply.tag == "open-apps" || reply.tag == "open-app" {
+                    s.workbench.apps_error = Some(e);
+                    continue;
+                }
                 s.workbench.error = Some(e);
                 if let Some(path) = reply.tag.strip_prefix("save:") {
                     let target = serde_json::from_str::<[String; 2]>(path).ok();
@@ -439,13 +507,24 @@ pub fn poll(s: &mut State, clock: f64, _tx: &mut rune::Tx) -> bool {
                 }
             }
             Ok(payload) => {
+                if reply.tag == "reveal-file" {
+                    s.workbench.file_actions = None;
+                    _tx.focus("file-actions", false);
+                }
+                if reply.tag == "open-app" {
+                    _tx.focus("open-project-app", false);
+                }
                 if !reply.tag.starts_with("search:")
                     && !reply.tag.starts_with("file:")
                     && !reply.tag.starts_with("diff:")
                 {
                     s.workbench.loaded.insert(reply.tag.clone());
                 }
-                s.workbench.error = None;
+                if reply.tag == "open-apps" || reply.tag == "open-app" {
+                    s.workbench.apps_error = None;
+                } else {
+                    s.workbench.error = None;
+                }
                 receive(s, &reply.tag, payload);
             }
         }
@@ -453,6 +532,32 @@ pub fn poll(s: &mut State, clock: f64, _tx: &mut rune::Tx) -> bool {
     changed
 }
 fn receive(s: &mut State, tag: &str, p: worker::Payload) {
+    if tag == "open-apps" {
+        s.workbench.open_apps = p.apps;
+        if let Some(selected) = p.value["selected"].as_str() {
+            s.workbench.selected_app = selected.into();
+        }
+        if !s
+            .workbench
+            .open_apps
+            .iter()
+            .any(|a| a.value["id"] == s.workbench.selected_app)
+        {
+            s.workbench.selected_app = s
+                .workbench
+                .open_apps
+                .first()
+                .and_then(|a| a.value["id"].as_str())
+                .unwrap_or("")
+                .into();
+        }
+        return;
+    }
+    if tag == "open-app" {
+        s.workbench.selected_app = p.value["selected"].as_str().unwrap_or("").into();
+        s.workbench.apps_menu = false;
+        return;
+    }
     if tag.starts_with("detail-") {
         s.workbench.details.insert(tag.into(), p.value);
         return;
@@ -475,15 +580,11 @@ fn receive(s: &mut State, tag: &str, p: worker::Payload) {
             );
             return;
         }
-        entries.sort_by(|a, b| {
-            (a["type"] != "directory")
-                .cmp(&(b["type"] != "directory"))
-                .then_with(|| {
-                    a["path"]
-                        .as_str()
-                        .unwrap_or("")
-                        .cmp(b["path"].as_str().unwrap_or(""))
-                })
+        entries.sort_by_cached_key(|a| {
+            (
+                a["type"] != "directory",
+                a["path"].as_str().unwrap_or("").to_lowercase(),
+            )
         });
         s.workbench.entries.insert(path.into(), entries);
         s.rebuild_workspace_tree();
@@ -505,6 +606,7 @@ fn receive(s: &mut State, tag: &str, p: worker::Payload) {
                 file["path"] = file["file"].clone();
             }
         }
+        tree::rebuild(s);
     } else if tag == "agents" || tag == "agents-more" {
         let items = p.value["data"]
             .as_array()
@@ -613,6 +715,17 @@ pub fn capture(s: &mut State) -> Result<(), String> {
     };
     let value = capture_get(&url, path, query)?;
     receive(s, tag, value);
+    if panel == Panel::Files {
+        let value = capture_get(
+            &url,
+            "workspace/diff".into(),
+            vec![
+                ("directory".into(), directory.clone()),
+                ("mode".into(), "working".into()),
+            ],
+        )?;
+        receive(s, "changes", value);
+    }
     if let Some(path) = OPTIONS.get().unwrap().file.clone() {
         if matches!(panel, Panel::Files | Panel::Changes) {
             documents::capture(s, &url, &directory, &path, panel == Panel::Changes)?;

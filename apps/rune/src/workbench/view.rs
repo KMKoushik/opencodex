@@ -56,18 +56,7 @@ pub fn rail(s: &State) -> El {
         .fill(t.c("surface"))
         .border_sides([0.0, 0.0, 0.0, 1.0], t.c("border"))
         .border_layout()
-        .child(
-            el().size(36.0, 40.0)
-                .center()
-                .child(icon(&ci::OPEN, 18.0).color(t.c("text-tertiary")))
-                .help("Open project in Finder")
-                .on_press(|s: &mut State| {
-                    let directory = s.workspace_directory();
-                    std::thread::spawn(move || {
-                        let _ = std::process::Command::new("open").arg(directory).spawn();
-                    });
-                }),
-        );
+        .child(super::open_apps::trigger(s));
     for panel in Panel::ALL {
         let glyph = match panel {
             Panel::Files => &ci::FILES,
@@ -108,7 +97,7 @@ pub fn rail(s: &State) -> El {
                 .on_press(move |s: &mut State| s.select_panel(panel)),
         );
     }
-    rail
+    rail.child(super::open_apps::overlay(s))
 }
 fn panel(s: &State, cx: &mut rune::Cx<State>) -> El {
     let t = &s.theme;
@@ -255,22 +244,27 @@ fn tree(s: &State) -> El {
     let changes = s.workbench.panel == Panel::Changes;
     let mut tree = col()
         .key("workspace-tree")
-        .w(220.0)
+        .w(s.workbench.tree_width)
         .h_full()
         .min_h(0.0)
         .fill(t.c("surface-under"))
         .border_sides([0.0, 0.0, 0.0, 1.0], t.c("border"))
         .border_layout();
     let mut controls = row()
-        .h(39.0)
+        .h(36.0)
         .w_full()
         .px(8.0)
         .gap(4.0)
         .center_y()
         .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"));
     for (p, name) in [(Panel::Files, "All files"), (Panel::Changes, "Changes")] {
+        let name = if p == Panel::Changes {
+            format!("Changes {}", s.workbench.changes.len())
+        } else {
+            name.into()
+        };
         controls = controls.child(
-            documents::button(s, name)
+            documents::button(s, &name)
                 .fill(if s.workbench.panel == p {
                     t.c("selected")
                 } else {
@@ -289,53 +283,48 @@ fn tree(s: &State) -> El {
                 .on_press(|s: &mut State| s.load_panel(true)),
         ),
     );
-    if changes {
-        tree = tree.child(
-            row().h(36.0).px(8.0).center_y().child(
-                documents::button(
-                    s,
-                    if s.workbench.mode == "working" {
-                        "Uncommitted"
+    tree = tree.child(
+        row()
+            .w_full()
+            .center_y()
+            .child(
+                text_input(&s.workbench.search, TextStyle::new(12.0, 400.0))
+                    .key("workspace-filter")
+                    .label(if changes {
+                        "Filter changed files"
                     } else {
-                        "Base branch"
-                    },
-                )
-                .on_press(|s: &mut State| {
-                    s.workbench.mode = if s.workbench.mode == "working" {
-                        "branch"
-                    } else {
-                        "working"
-                    }
-                    .into();
-                    s.workbench.docs.retain(|d| !d.is_diff);
-                    s.workbench.selected = None;
-                    s.load_panel(true);
-                }),
+                        "Find files"
+                    })
+                    .placeholder("Filter files…", t.c("text-tertiary"))
+                    .grow(1.0)
+                    .min_w(0.0)
+                    .h(28.0)
+                    .mx(8.0)
+                    .my(6.0)
+                    .px(9.0)
+                    .radius(8.0)
+                    .border(1.0, t.c("border-heavy"))
+                    .color(t.c("text"))
+                    .on_edit(|s: &mut State| &mut s.workbench.search)
+                    .on_input_change(|s: &mut State, tx| {
+                        if s.workbench.panel == Panel::Changes {
+                            super::tree::rebuild(s);
+                            return;
+                        }
+                        s.workbench.search_due = Some(tx.clock() + 0.18);
+                        tx.wake_after(std::time::Duration::from_millis(180));
+                    })
+                    .on_submit(|s: &mut State, _| s.search_workspace()),
+            )
+            .child(
+                documents::button(s, "−")
+                    .label("Collapse folders")
+                    .help("Collapse folders")
+                    .on_press(super::tree::collapse),
             ),
-        );
-    } else {
-        tree = tree.child(
-            text_input(&s.workbench.search, TextStyle::new(12.0, 400.0))
-                .key("workspace-filter")
-                .placeholder("Filter files…", t.c("text-tertiary"))
-                .w(204.0)
-                .h(28.0)
-                .mx(8.0)
-                .my(6.0)
-                .px(9.0)
-                .radius(8.0)
-                .border(1.0, t.c("border-heavy"))
-                .color(t.c("text"))
-                .on_edit(|s: &mut State| &mut s.workbench.search)
-                .on_input_change(|s: &mut State, tx| {
-                    s.workbench.search_due = Some(tx.clock() + 0.18);
-                    tx.wake_after(std::time::Duration::from_millis(180));
-                })
-                .on_submit(|s: &mut State, _| s.search_workspace()),
-        );
-    }
+    );
     let count = if changes {
-        s.workbench.changes.len()
+        s.workbench.change_tree.len()
     } else {
         s.workbench.tree.len()
     };
@@ -351,11 +340,7 @@ fn tree(s: &State) -> El {
                 24.0,
                 move |s: &State, n| {
                     if changes {
-                        s.workbench.changes[n]["path"]
-                            .as_str()
-                            .unwrap_or("")
-                            .to_owned()
-                            .into()
+                        s.workbench.change_tree[n].0.clone().into()
                     } else {
                         s.workbench.tree[n].0.clone().into()
                     }
@@ -379,42 +364,101 @@ fn tree(s: &State) -> El {
             .padding(12.0),
         );
     }
+    if !changes && !s.workbench.query.is_empty() && count == 200 {
+        tree = tree.child(
+            label(
+                t,
+                "First 200 results. Narrow your search.",
+                12.0,
+                400.0,
+                "text-secondary",
+            )
+            .padding(10.0),
+        );
+    }
+    let additions: u64 = s
+        .workbench
+        .changes
+        .iter()
+        .filter_map(|v| v["additions"].as_u64())
+        .sum();
+    let deletions: u64 = s
+        .workbench
+        .changes
+        .iter()
+        .filter_map(|v| v["deletions"].as_u64())
+        .sum();
     tree.child(
-        label(
-            t,
-            if changes {
-                "Working tree"
-            } else {
-                "Project files"
-            },
-            11.0,
-            400.0,
-            "text-tertiary",
-        )
-        .padding(10.0)
-        .border_sides([1.0, 0.0, 0.0, 0.0], t.c("border")),
+        row()
+            .w_full()
+            .padding(8.0)
+            .gap(8.0)
+            .border_sides([1.0, 0.0, 0.0, 0.0], t.c("border"))
+            .child(label(
+                t,
+                if changes {
+                    format!("{} changed", s.workbench.changes.len())
+                } else {
+                    "Project files".into()
+                },
+                11.0,
+                400.0,
+                "text-tertiary",
+            ))
+            .child(label(t, format!("+{additions}"), 11.0, 400.0, "success"))
+            .child(label(t, format!("−{deletions}"), 11.0, 400.0, "error")),
+    )
+    .child(
+        el().key("file-tree-resize")
+            .size(6.0, s.window_size.1)
+            .absolute(0.0, 0.0)
+            .role("separator")
+            .label("Resize file tree")
+            .focusable(true)
+            .cursor(rune::Cursor::ResizeColumn)
+            .on_key(|s: &mut State, key, tx| {
+                let delta = match key.key {
+                    rune::Key::Left => 16.0,
+                    rune::Key::Right => -16.0,
+                    _ => return false,
+                };
+                s.workbench.tree_width = (s.workbench.tree_width + delta).clamp(150.0, 360.0);
+                tx.instant();
+                true
+            })
+            .on_drag(|s: &mut State, d, tx| match d.phase {
+                rune::Phase::Down => d.data = s.workbench.tree_width,
+                rune::Phase::Move => {
+                    s.workbench.tree_width = (d.data - d.dx).clamp(150.0, 360.0);
+                    tx.instant();
+                }
+                rune::Phase::Up => {
+                    if d.cancelled() {
+                        s.workbench.tree_width = d.data;
+                    }
+                }
+            }),
     )
 }
 fn tree_row(s: &State, n: usize, changes: bool) -> El {
     let t = &s.theme;
     let (path, dir, depth) = if changes {
-        (
-            s.workbench.changes[n]["path"]
-                .as_str()
-                .unwrap_or("")
-                .to_owned(),
-            false,
-            0,
-        )
+        s.workbench.change_tree[n].clone()
     } else {
         s.workbench.tree[n].clone()
     };
-    let open = s.workbench.folders.contains(&path);
+    let open = if changes {
+        !s.workbench.collapsed_changes.contains(&path)
+    } else {
+        s.workbench.folders.contains(&path)
+    };
     let selected = s
         .workbench
         .selected
         .and_then(|i| s.workbench.docs.get(i))
-        .is_some_and(|d| d.path == path);
+        .is_some_and(|d| {
+            d.path == path && d.directory == s.workspace_directory() && d.is_diff == changes
+        });
     let name = path.rsplit('/').next().unwrap_or(&path);
     let glyph = if dir {
         if open { &icons::DOWN } else { &icons::RIGHT }
@@ -442,12 +486,20 @@ fn tree_row(s: &State, n: usize, changes: bool) -> El {
                 .truncate()
                 .grow(1.0),
         );
-    if changes {
-        let v = &s.workbench.changes[n];
+    if let Some(index) = s.workbench.change_lookup.get(&path) {
+        let v = &s.workbench.changes[*index];
         let status = v["status"].as_str().unwrap_or("M");
+        let short = match status {
+            "modified" => "M",
+            "added" => "A",
+            "deleted" => "D",
+            "renamed" => "R",
+            "untracked" => "U",
+            _ => status,
+        };
         r = r.child(label(
             t,
-            status,
+            short,
             10.0,
             500.0,
             if status == "deleted" || status == "D" {
@@ -459,19 +511,102 @@ fn tree_row(s: &State, n: usize, changes: bool) -> El {
             },
         ));
     }
-    r.role(if dir { "treeitem" } else { "button" })
+    let keyboard_path = path.clone();
+    let pin_path = path.clone();
+    r.role("treeitem")
+        .checked(selected)
+        .expanded(dir && open)
+        .label(path.clone())
         .focusable(true)
-        .on_press(move |s: &mut State| {
-            if dir {
-                if !s.workbench.folders.remove(&path) {
-                    s.workbench.folders.insert(path.clone());
-                    s.load_folder(&path, false);
+        .on_double_press(move |s: &mut State| {
+            if !dir {
+                let directory = s.workspace_directory();
+                s.workbench.pin_target = Some((directory.clone(), pin_path.clone(), changes));
+                if let Some(doc) = s.workbench.docs.iter_mut().find(|d| {
+                    d.path == pin_path && d.directory == directory && d.is_diff == changes
+                }) {
+                    doc.pinned = true;
+                    s.workbench.pin_target = None;
                 }
-                s.rebuild_workspace_tree();
+            }
+        })
+        .on_key(move |s: &mut State, key, tx| tree_key(s, &keyboard_path, changes, key, tx))
+        .on_press(move |s: &mut State| {
+            s.workbench.tree_focus = Some(path.clone());
+            if dir {
+                super::tree::toggle(s, &path, changes);
             } else {
                 s.open_workspace_file(path.clone(), changes);
             }
         })
+}
+fn tree_key(
+    s: &mut State,
+    path: &str,
+    changes: bool,
+    key: &rune::KeyEvent,
+    tx: &mut rune::Tx,
+) -> bool {
+    let rows: Vec<(String, bool)> = if changes {
+        s.workbench
+            .change_tree
+            .iter()
+            .map(|(p, d, _)| (p.clone(), *d))
+            .collect()
+    } else {
+        s.workbench
+            .tree
+            .iter()
+            .map(|(p, d, _)| (p.clone(), *d))
+            .collect()
+    };
+    let Some(index) = rows.iter().position(|(p, _)| p == path) else {
+        return false;
+    };
+    let next = match key.key {
+        rune::Key::Down => Some((index + 1).min(rows.len() - 1)),
+        rune::Key::Up => Some(index.saturating_sub(1)),
+        rune::Key::Home => Some(0),
+        rune::Key::End => Some(rows.len() - 1),
+        rune::Key::Right if rows[index].1 => {
+            let open = if changes {
+                !s.workbench.collapsed_changes.contains(path)
+            } else {
+                s.workbench.folders.contains(path)
+            };
+            if !open {
+                super::tree::toggle(s, path, changes);
+            }
+            None
+        }
+        rune::Key::Left => {
+            let open = rows[index].1
+                && if changes {
+                    !s.workbench.collapsed_changes.contains(path)
+                } else {
+                    s.workbench.folders.contains(path)
+                };
+            if open {
+                super::tree::toggle(s, path, changes);
+                None
+            } else {
+                std::path::Path::new(path)
+                    .parent()
+                    .and_then(|p| rows.iter().position(|(r, _)| p == std::path::Path::new(r)))
+            }
+        }
+        _ => return false,
+    };
+    if let Some(next) = next {
+        let (path, dir) = &rows[next];
+        s.workbench.tree_focus = Some(path.clone());
+        tx.focus(path.clone(), true);
+        tx.scroll_into_view(path.clone());
+        if !dir {
+            s.open_workspace_file(path.clone(), changes);
+        }
+    }
+    true
 }
 pub fn empty(s: &State, message: &str) -> El {
     col()

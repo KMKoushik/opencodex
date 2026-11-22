@@ -21,7 +21,21 @@ pub fn trigger(s: &State, index: usize) -> El {
         .label("File actions")
         .focusable(true)
         .expanded(s.workbench.file_actions == Some(index))
-        .on_press(move |s: &mut State| s.workbench.file_actions = Some(index))
+        .on_press(move |s: &mut State| {
+            s.workbench.file_actions = if s.workbench.file_actions == Some(index) {
+                None
+            } else {
+                Some(index)
+            }
+        })
+        .on_key(move |s: &mut State, key, _| {
+            if matches!(key.key, rune::Key::Down | rune::Key::Up) {
+                s.workbench.file_actions = Some(index);
+                true
+            } else {
+                false
+            }
+        })
 }
 pub fn overlay(s: &State) -> El {
     let Some(index) = s.workbench.file_actions else {
@@ -51,6 +65,7 @@ pub fn overlay(s: &State) -> El {
         .role("menuitem")
         .focusable(true)
         .autofocus()
+        .disabled(s.workbench.pending.contains("reveal-file"))
         .on_press_tx(move |s: &mut State, tx| {
             tx.copy(absolute.clone());
             s.workbench.file_actions = None;
@@ -72,6 +87,7 @@ pub fn overlay(s: &State) -> El {
         .key("file-show-finder")
         .role("menuitem")
         .focusable(true)
+        .disabled(s.workbench.pending.contains("reveal-file"))
         .on_press(move |s: &mut State| {
             s.workspace_request(
                 "reveal-file".into(),
@@ -80,7 +96,6 @@ pub fn overlay(s: &State) -> El {
                     path: path.clone(),
                 },
             );
-            s.workbench.file_actions = None;
         });
     t.shadow(
         col()

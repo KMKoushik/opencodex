@@ -1,7 +1,7 @@
 use super::*;
 use crate::Options;
 use std::time::Instant;
-fn state() -> State {
+pub(super) fn state() -> State {
     OPTIONS.get_or_init(|| Options {
         page: String::new(),
         gateway: None,
@@ -49,6 +49,36 @@ fn save_acknowledges_only_captured_revision_and_navigation_preserves_edits() {
     reset(&mut s);
     assert_eq!(s.workbench.docs.len(), 1);
     assert!(s.workbench.docs[0].dirty());
+}
+
+#[test]
+fn one_preview_tab_replaces_clean_previews_and_closing_a_background_tab_keeps_selection() {
+    let mut s = state();
+    for name in ["pinned.txt", "preview.txt"] {
+        documents::receive(
+            &mut s,
+            &format!("file:{name}"),
+            worker::prepare(
+                serde_json::json!({"kind":"text","text":name,"version":"disk","bytes":name.len()}),
+            ),
+        );
+        if name == "pinned.txt" {
+            s.workbench.docs[0].pinned = true;
+        }
+    }
+    s.workbench.selected = Some(0);
+    documents::receive(
+        &mut s,
+        "file:replacement.txt",
+        worker::prepare(
+            serde_json::json!({"kind":"text","text":"replacement","version":"disk","bytes":11}),
+        ),
+    );
+    assert_eq!(s.workbench.docs.len(), 2);
+    assert_eq!(s.workbench.docs[1].path, "replacement.txt");
+    s.close_workspace_document(0);
+    assert_eq!(s.workbench.selected, Some(0));
+    assert_eq!(s.workbench.docs[0].path, "replacement.txt");
 }
 #[test]
 fn file_links_keep_directory_identity_and_large_text_remains_editable() {
@@ -143,4 +173,70 @@ fn large_workspaces_mount_only_visible_rows() {
             values.len()
         );
     }
+}
+
+#[test]
+fn two_mib_native_editor_keeps_input_and_virtualizes_number_rows() {
+    let mut s = state();
+    let mut source = "let value = 1234567890123456789;\n".repeat(70_000);
+    source.truncate(2 * 1024 * 1024);
+    documents::receive(
+        &mut s,
+        "file:large.ts",
+        worker::prepare(
+            serde_json::json!({"kind":"text","text":source,"version":"disk","bytes":source.len(),"__path":"large.ts"}),
+        ),
+    );
+    fn source_view(s: &State, _: &mut rune::Cx<State>) -> rune::El {
+        super::editor::view(s, 0).h_full()
+    }
+    let mut rt = rune::Runtime::new(s, source_view, (800.0, 600.0), rune::Env::new(true, 2.0));
+    rt.frame(0.0);
+    rt.update(|s, tx| {
+        s.workbench.docs[0].edit.anchor = 0;
+        s.workbench.docs[0].edit.focus = 1;
+        tx.focus("workspace-editor", false);
+    });
+    rt.frame(0.0);
+    let mut times = Vec::new();
+    for i in 0..if cfg!(debug_assertions) { 2 } else { 20 } {
+        rt.update(|s, _| {
+            s.workbench.docs[0].edit.anchor = 0;
+            s.workbench.docs[0].edit.focus = 1;
+        });
+        rt.frame(0.0);
+        let start = Instant::now();
+        rt.key(rune::KeyEvent {
+            key: rune::Key::Text(if i % 2 == 0 { "x" } else { "y" }.into()),
+            mods: Default::default(),
+        });
+        rt.frame(0.0);
+        times.push(start.elapsed().as_secs_f64() * 1000.0);
+        rt.update(|s, _| {
+            assert_eq!(s.workbench.docs[0].edit.text.len(), 2 * 1024 * 1024);
+            assert!(s.workbench.error.is_none());
+            assert!(s.workbench.docs[0].dirty());
+        });
+    }
+    let number_rows = rt
+        .elements()
+        .iter()
+        .filter(|e| {
+            e.key
+                .as_deref()
+                .is_some_and(|k| k.starts_with("source-line-"))
+        })
+        .count();
+    assert!(
+        number_rows > 10 && number_rows < 120,
+        "number rows: {number_rows}"
+    );
+    times.sort_by(f64::total_cmp);
+    eprintln!(
+        "2 MiB native key-to-CPU-frame: p50 {:.3} ms; p95 {:.3} ms; max {:.3} ms; n={}; excludes GPU/OS delivery",
+        times[times.len() / 2],
+        times[(times.len() * 95 / 100).min(times.len() - 1)],
+        times[times.len() - 1],
+        times.len()
+    );
 }

@@ -3,7 +3,7 @@ use super::{
     worker::{self, Operation, Payload},
 };
 use crate::{State, sidebar::label};
-use rune::{El, GrowthSpec, ScrollSpec, TextEdit, TextStyle, col, rich, row, text_input};
+use rune::{El, GrowthSpec, ScrollSpec, TextEdit, TextStyle, col, rich, row};
 use rune_kit::{
     diff::{self, DiffMode, DiffState, DiffView},
     syntax::{self, Highlighter, SyntaxTheme},
@@ -22,14 +22,20 @@ pub struct Document {
     pub edit: TextEdit,
     pub editing: bool,
     pub preview: bool,
+    pub rich_preview: Option<super::preview::Host>,
     pub discarding: bool,
     pub revision: u64,
     pub saved_revision: u64,
     pub saving: Option<(u64, String)>,
     pub lines: Vec<(usize, usize)>,
+    pub line_columns: usize,
     pub highlights: Vec<syntax::Highlight>,
+    pub highlight_due: Option<f64>,
+    pub syntax_source: String,
+    pub visible_source: std::ops::Range<usize>,
     pub image: Option<Result<rune::Image, String>>,
     pub image_scale: Option<f32>,
+    pub image_view: super::image::ViewState,
     pub stale: bool,
 }
 impl Document {
@@ -56,6 +62,19 @@ impl State {
         self.open_workspace_target(directory, path, is_diff);
     }
     pub fn open_workspace_target(&mut self, directory: String, path: String, is_diff: bool) {
+        if directory == self.workspace_directory() {
+            let mut parent = std::path::Path::new(&path).parent();
+            let mut parents = Vec::new();
+            while let Some(p) = parent.filter(|p| !p.as_os_str().is_empty()) {
+                parents.push(p.to_string_lossy().into_owned());
+                parent = p.parent();
+            }
+            for parent in parents.into_iter().rev() {
+                self.workbench.folders.insert(parent.clone());
+                self.load_folder(&parent, false);
+            }
+            self.rebuild_workspace_tree();
+        }
         if let Some(i) = self
             .workbench
             .docs
@@ -120,10 +139,19 @@ impl State {
             return;
         }
         self.workbench.docs.remove(index);
+        let selected = self.workbench.selected;
         self.workbench.selected = if self.workbench.docs.is_empty() {
             None
         } else {
-            Some(index.min(self.workbench.docs.len() - 1))
+            selected.map(|current| {
+                if current > index {
+                    current - 1
+                } else if current == index {
+                    index.min(self.workbench.docs.len() - 1)
+                } else {
+                    current
+                }
+            })
         };
     }
 }
@@ -137,6 +165,20 @@ pub fn receive(s: &mut State, tag: &str, mut p: Payload) {
         .map(|v| v[0].clone())
         .unwrap_or_else(|| s.workspace_directory());
     let path = target.as_ref().map(|v| v[1].as_str()).unwrap_or(path);
+    if kind == "highlight" {
+        if let Some(doc) = s.workbench.docs.iter_mut().find(|d| {
+            d.path == path
+                && d.directory == directory
+                && !d.is_diff
+                && p.value["revision"].as_u64() == Some(d.revision)
+        }) {
+            doc.highlights = p
+                .highlights
+                .remove(&worker::hash(p.value["text"].as_str().unwrap_or("")))
+                .unwrap_or_default();
+        }
+        return;
+    }
     if kind == "save" {
         if let Some(doc) = s.workbench.docs.iter_mut().find(|d| {
             d.path == path && d.directory == directory && !d.is_diff && d.saving.is_some()
@@ -189,30 +231,48 @@ pub fn receive(s: &mut State, tag: &str, mut p: Payload) {
     // Long-file viewer remains virtual; only allocate an editable buffer on demand.
     if text.len() <= MAX_EDIT_BYTES {
         edit.replace_text(text);
+        edit.anchor = 0;
+        edit.focus = 0;
     }
     let editing =
         !kind.starts_with("diff") && p.value["kind"] == "text" && text.len() <= MAX_EDIT_BYTES;
+    let syntax_source = super::editor::syntax_prefix(text).to_owned();
+    let rich_preview = p
+        .preview
+        .as_deref()
+        .and_then(|html| super::preview::create(s, html, &directory, path));
     let mut doc = Document {
         path: path.into(),
         directory: directory.clone(),
         is_diff: kind.starts_with("diff"),
-        pinned: false,
+        pinned: s.workbench.pin_target.as_ref().is_some_and(|(d, p, diff)| {
+            d == &directory && p == path && *diff == kind.starts_with("diff")
+        }),
         image_scale: None,
+        image_view: Default::default(),
         value: p.value,
         diff,
         edit,
         editing,
         preview: false,
+        rich_preview,
         discarding: false,
         revision: 0,
         saved_revision: 0,
         saving: None,
         lines: Vec::new(),
+        line_columns: 0,
         highlights,
+        highlight_due: None,
+        syntax_source,
+        visible_source: 0..128,
         image: p.image,
         stale: false,
     };
     reindex(&mut doc);
+    if doc.pinned {
+        s.workbench.pin_target = None;
+    }
     // Never evict an unsaved draft. Both tab count and retained source bytes are bounded.
     let bytes: usize = s.workbench.docs.iter().map(Document::bytes).sum();
     if let Some(index) = s.workbench.docs.iter().position(|d| {
@@ -224,7 +284,7 @@ pub fn receive(s: &mut State, tag: &str, mut p: Payload) {
             );
             return;
         }
-        doc.pinned = s.workbench.docs[index].pinned;
+        doc.pinned |= s.workbench.docs[index].pinned;
         s.workbench.docs[index] = doc;
         s.workbench.selected = Some(index);
         super::review::refresh(s);
@@ -235,22 +295,13 @@ pub fn receive(s: &mut State, tag: &str, mut p: Payload) {
         return;
     }
     let mut bytes = bytes;
-    if let Some(index) = s.workbench.selected.filter(|i| {
-        s.workbench
-            .docs
-            .get(*i)
-            .is_some_and(|d| !d.pinned && !d.dirty() && d.saving.is_none())
-    }) {
-        if bytes.saturating_sub(s.workbench.docs[index].bytes()) + doc.bytes() > 64 * 1024 * 1024 {
-            s.workbench.error = Some(
-                "This preview exceeds the 64 MiB memory budget. Close an open file first.".into(),
-            );
-            return;
+    s.workbench.docs.retain(|existing| {
+        let keep = existing.pinned || existing.dirty() || existing.saving.is_some();
+        if !keep {
+            bytes = bytes.saturating_sub(existing.bytes());
         }
-        s.workbench.docs[index] = doc;
-        super::review::refresh(s);
-        return;
-    }
+        keep
+    });
     while s.workbench.docs.len() >= 12 || bytes + doc.bytes() > 64 * 1024 * 1024 {
         if let Some(i) = s
             .workbench
@@ -268,12 +319,18 @@ pub fn receive(s: &mut State, tag: &str, mut p: Payload) {
     s.workbench.selected = Some(s.workbench.docs.len() - 1);
     super::review::refresh(s);
 }
-fn reindex(doc: &mut Document) {
-    let text = doc.value["text"].as_str().unwrap_or("");
+pub(super) fn reindex(doc: &mut Document) {
+    let text = if doc.editing {
+        &doc.edit.text
+    } else {
+        doc.value["text"].as_str().unwrap_or("")
+    };
     let mut start = 0;
+    doc.line_columns = 0;
     doc.lines = text
         .split('\n')
         .map(|line| {
+            doc.line_columns = doc.line_columns.max(line.chars().count());
             let range = (start, start + line.len());
             start += line.len() + 1;
             range
@@ -282,10 +339,10 @@ fn reindex(doc: &mut Document) {
 }
 pub fn view(s: &State) -> El {
     let Some(index) = s.workbench.selected else {
-        return super::view::empty(s, "Select a file to preview.");
+        return empty_document(s);
     };
     let Some(doc) = s.workbench.docs.get(index) else {
-        return super::view::empty(s, "Select a file to preview.");
+        return empty_document(s);
     };
     let t = &s.theme;
     let mut toolbar = row()
@@ -296,11 +353,7 @@ pub fn view(s: &State) -> El {
         .gap(8.0)
         .center_y()
         .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
-        .child(
-            label(t, &doc.path, 11.5, 400.0, "text-secondary")
-                .truncate()
-                .grow(1.0),
-        );
+        .child(breadcrumbs(s, &doc.path));
     if doc.is_diff {
         let mut layouts = row()
             .gap(2.0)
@@ -352,9 +405,20 @@ pub fn view(s: &State) -> El {
                 &mut s.workbench.docs[i].diff
             },
         )
+        .fold_row(diff::FoldRow::LineInfo)
         .on_comment(|s, range, tx| {
+            if s.chat.comment_editor.is_some() {
+                return;
+            }
             super::review::begin(s, range);
             tx.focus("review-comment", false);
+        })
+        .on_select(|s, _, _| {
+            if s.chat.comment_editor.is_some() {
+                if let Some(index) = s.workbench.selected {
+                    s.workbench.docs[index].diff.set_selection(None);
+                }
+            }
         })
         .annotation(super::review::card)
         .build(s, &super::view::kit(s));
@@ -407,121 +471,85 @@ pub fn view(s: &State) -> El {
         );
         toolbar = toolbar.child(super::actions::save(s, index));
     }
-    let content = if doc.discarding {
-        col()
-            .grow(1.0)
-            .w_full()
-            .padding(24.0)
-            .gap(12.0)
-            .role("dialog")
-            .label("Discard file edits?")
-            .child(label(t, "Discard file edits?", 16.0, 600.0, "text"))
-            .child(
-                label(
-                    t,
-                    format!(
-                        "Replace your unsaved edits to {} with the latest loaded disk version?",
-                        doc.path
-                    ),
-                    14.0,
-                    400.0,
-                    "text",
-                )
-                .wrap(),
-            )
-            .child(
-                row()
-                    .gap(8.0)
-                    .child(
-                        button(s, "Keep editing").on_press(move |s: &mut State| {
-                            s.workbench.docs[index].discarding = false
-                        }),
+    let content =
+        if doc.discarding {
+            col()
+                .grow(1.0)
+                .w_full()
+                .padding(24.0)
+                .gap(12.0)
+                .role("dialog")
+                .label("Discard file edits?")
+                .child(label(t, "Discard file edits?", 16.0, 600.0, "text"))
+                .child(
+                    label(
+                        t,
+                        format!(
+                            "Replace your unsaved edits to {} with the latest loaded disk version?",
+                            doc.path
+                        ),
+                        14.0,
+                        400.0,
+                        "text",
                     )
-                    .child(button(s, "Discard edits").on_press(move |s: &mut State| {
-                        let doc = &mut s.workbench.docs[index];
-                        doc.edit
-                            .replace_text(doc.value["text"].as_str().unwrap_or(""));
-                        doc.saved_revision = doc.revision;
-                        doc.discarding = false;
-                    })),
-            )
-    } else if doc.preview && doc.edit.text.len() <= 200_000 {
-        col()
-            .grow(1.0)
-            .min_h(0.0)
-            .padding(24.0)
-            .scroll(ScrollSpec {
-                stick_bottom: false,
-            })
-            .child(crate::chat::markdown_view(
+                    .wrap(),
+                )
+                .child(
+                    row()
+                        .gap(8.0)
+                        .child(button(s, "Keep editing").on_press(move |s: &mut State| {
+                            s.workbench.docs[index].discarding = false
+                        }))
+                        .child(button(s, "Discard edits").on_press(move |s: &mut State| {
+                            let doc = &mut s.workbench.docs[index];
+                            doc.edit
+                                .replace_text(doc.value["text"].as_str().unwrap_or(""));
+                            doc.saved_revision = doc.revision;
+                            doc.discarding = false;
+                            reindex(doc);
+                        })),
+                )
+        } else if doc.preview {
+            super::markdown::view(s, index)
+        } else if doc.editing {
+            super::editor::view(s, index)
+        } else if doc.value["kind"] == "text" {
+            col()
+                .grow(1.0)
+                .min_h(0.0)
+                .scroll(ScrollSpec {
+                    stick_bottom: false,
+                })
+                .child(col().growth(GrowthSpec::default()).w_full().virtual_rows(
+                    doc.lines.len(),
+                    20.0,
+                    move |_: &State, n| format!("file-{index}-line-{n}").into(),
+                    move |s: &State, n| file_line(s, index, n),
+                ))
+        } else if let Some(host) = &doc.rich_preview {
+            super::preview::view(s, index, host)
+        } else if let Some(Ok(image)) = &doc.image {
+            super::image::view(s, index, image)
+        } else if doc.value["kind"] == "binary" {
+            super::view::empty(
                 s,
-                &doc.edit.text,
-                false,
-                (s.panel_width() - 268.0).max(100.0),
-            ))
-    } else if doc.editing {
-        text_input(&doc.edit, TextStyle::new(12.5, 400.0).mono().lh(20.0))
-            .key("workspace-editor")
-            .grow(1.0)
-            .min_h(0.0)
-            .w_full()
-            .padding(12.0)
-            .color(t.c("text"))
-            .on_edit(move |s: &mut State| &mut s.workbench.docs[index].edit)
-            .on_input_change(move |s: &mut State, _| {
-                let dirty_count = s.workbench.docs.iter().filter(|d| d.dirty()).count();
-                let doc = &mut s.workbench.docs[index];
-                let error = if doc.edit.text.len() > MAX_EDIT_BYTES {
-                    Some("This edit would exceed the file size limit. Keep this document under 2 MiB.")
-                } else if !doc.dirty() && dirty_count >= 8 {
-                    Some("Save or discard an open edit before editing another file (8-file limit).")
-                } else { None };
-                if let Some(error) = error {
-                    doc.edit.undo();
-                    s.workbench.error = Some(error.into());
-                } else {
-                    doc.revision += 1;
-                }
-            })
-            .on_input_key(|s: &mut State, key, tx| {
-                if key.is_command('m') && key.mods.shift {
-                    super::review::source_selection(s);
-                    tx.focus("review-comment", false);
-                    return true;
-                }
-                if key.is_command('s') {
-                    s.save_workspace_file();
-                    tx.instant();
-                    true
-                } else {
-                    false
-                }
-            })
-    } else if doc.value["kind"] == "text" {
-        col()
-            .grow(1.0)
-            .min_h(0.0)
-            .scroll(ScrollSpec {
-                stick_bottom: false,
-            })
-            .child(col().growth(GrowthSpec::default()).w_full().virtual_rows(
-                doc.lines.len(),
-                20.0,
-                move |_: &State, n| format!("file-{index}-line-{n}").into(),
-                move |s: &State, n| file_line(s, index, n),
-            ))
-    } else if let Some(Ok(image)) = &doc.image {
-        super::image::view(s, index, image)
-    } else {
-        super::view::empty(
-            s,
-            doc.image
-                .as_ref()
-                .and_then(|i| i.as_ref().err())
-                .map(String::as_str)
-                .unwrap_or("No preview available for this file."),
-        )
-    };
+                &format!(
+                    "Binary file · {} bytes. Text preview is unavailable.",
+                    super::image::decimal(doc.value["bytes"].as_f64().unwrap_or(0.0))
+                ),
+            )
+        } else if doc.image.as_ref().is_some_and(Result::is_err) {
+            super::view::empty(s, "Could not decode this image.")
+        } else {
+            super::view::empty(
+                s,
+                doc.image
+                    .as_ref()
+                    .and_then(|i| i.as_ref().err())
+                    .map(String::as_str)
+                    .unwrap_or("No preview available for this file."),
+            )
+        };
     col()
         .grow(1.0)
         .min_h(0.0)
@@ -570,6 +598,114 @@ fn tree_toggle(s: &State) -> El {
     )
     .on_press(|s: &mut State| s.workbench.tree_visible = !s.workbench.tree_visible)
 }
+fn empty_document(s: &State) -> El {
+    let changes = s.workbench.panel == Panel::Changes;
+    col()
+        .grow(1.0)
+        .min_h(0.0)
+        .min_w(0.0)
+        .child(
+            row()
+                .w_full()
+                .h(40.0)
+                .pl(12.0)
+                .pr(8.0)
+                .gap(8.0)
+                .center_y()
+                .border_sides([0.0, 0.0, 1.0, 0.0], s.theme.c("border"))
+                .child(breadcrumbs(s, ""))
+                .child(rune::el().grow(1.0))
+                .child(tree_toggle(s)),
+        )
+        .child(
+            col()
+                .grow(1.0)
+                .center()
+                .gap(10.0)
+                .child(
+                    rune::icon(
+                        if changes {
+                            &crate::icons::EDIT
+                        } else {
+                            &crate::chat::icons::SOURCE
+                        },
+                        28.0,
+                    )
+                    .color(s.theme.c("text-tertiary")),
+                )
+                .child(label(
+                    &s.theme,
+                    if changes {
+                        "Review your changes"
+                    } else {
+                        "Your workspace"
+                    },
+                    16.0,
+                    600.0,
+                    "text",
+                ))
+                .child(label(
+                    &s.theme,
+                    "Select a file in the tree to open it.",
+                    12.0,
+                    400.0,
+                    "text-secondary",
+                ))
+                .child(label(
+                    &s.theme,
+                    "Double-click to keep a tab open.",
+                    12.0,
+                    400.0,
+                    "text-tertiary",
+                )),
+        )
+}
+fn breadcrumbs(s: &State, path: &str) -> El {
+    if s.workbench.panel == Panel::Changes {
+        let mut modes = row()
+            .gap(2.0)
+            .padding(2.0)
+            .radius(8.0)
+            .fill(s.theme.c("secondary"))
+            .role("group")
+            .label("Compare changes against");
+        for (mode, name) in [("working", "Uncommitted"), ("branch", "Base branch")] {
+            let button =
+                button(s, name)
+                    .checked(s.workbench.mode == mode)
+                    .on_press(move |s: &mut State| {
+                        if s.workbench.mode == mode {
+                            return;
+                        }
+                        s.workbench.mode = mode.into();
+                        s.workbench.docs.retain(|d| !d.is_diff);
+                        s.workbench.selected = None;
+                        s.load_panel(true);
+                    });
+            modes = modes.child(if s.workbench.mode == mode {
+                s.theme
+                    .shadow(s.theme.paint(button, "glaze"), "glaze-shadow")
+            } else {
+                button
+            });
+        }
+        return modes;
+    }
+    let mut nav = row()
+        .grow(1.0)
+        .min_w(0.0)
+        .center_y()
+        .gap(6.0)
+        .role("navigation")
+        .label("File breadcrumbs");
+    for (index, part) in path.split('/').enumerate() {
+        if index > 0 {
+            nav = nav.child(label(&s.theme, "›", 12.0, 400.0, "text-tertiary"));
+        }
+        nav = nav.child(label(&s.theme, part, 11.5, 400.0, "text-secondary").truncate());
+    }
+    nav
+}
 pub fn button(s: &State, name: &str) -> El {
     label(&s.theme, name, 11.5, 400.0, "text-secondary")
         .px(7.0)
@@ -602,10 +738,9 @@ pub fn capture(
         q,
     )?;
     if !is_diff {
-        let lang = syntax::lang_for_path(path);
         p.highlights.insert(
             worker::hash(p.value["text"].as_str().unwrap_or("")),
-            syntax::builtin(lang, p.value["text"].as_str().unwrap_or("")),
+            worker::source_highlights(path, p.value["text"].as_str().unwrap_or("")),
         );
     }
     receive(

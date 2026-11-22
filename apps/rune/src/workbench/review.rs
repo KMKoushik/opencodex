@@ -47,7 +47,7 @@ pub fn source_selection(s: &mut State) {
     let a = doc.edit.anchor.min(doc.edit.focus);
     let b = doc.edit.anchor.max(doc.edit.focus);
     let text = &doc.edit.text;
-    if a == b || b > text.len() {
+    if b > text.len() {
         return;
     }
     let start = text[..a].bytes().filter(|b| *b == b'\n').count() + 1;
@@ -58,13 +58,17 @@ pub fn source_selection(s: &mut State) {
             .filter(|b| *b == b'\n')
             .count();
     let first = text[..a].rfind('\n').map_or(0, |i| i + 1);
-    let boundary = if text[..b].ends_with('\n') { b - 1 } else { b };
+    let boundary = if b > a && text[..b].ends_with('\n') {
+        b - 1
+    } else {
+        b
+    };
     let last = text[boundary..]
         .find('\n')
         .map_or(text.len(), |i| boundary + i);
     comments::begin(
         s,
-        json!({"path":doc.path,"directory":doc.directory,"start":start,"end":end,"quote":text[first..last].chars().take(8000).collect::<String>()}),
+        json!({"path":doc.path,"directory":doc.directory,"version":doc.value["version"],"start":start,"end":end,"quote":text[first..last].chars().take(8000).collect::<String>()}),
     );
 }
 pub fn refresh(s: &mut State) {
@@ -89,6 +93,24 @@ pub fn refresh(s: &mut State) {
                 || target["diffMode"] != s.workbench.mode
             {
                 continue;
+            }
+            if let Some(start) = target["start"].as_u64() {
+                let side = if target["side"] == "old" {
+                    Side::Old
+                } else {
+                    Side::New
+                };
+                let saved = doc.diff.selection();
+                doc.diff.set_selection(Some(LineRange {
+                    file: 0,
+                    start: LineRef::new(side, start as u32),
+                    end: LineRef::new(side, target["end"].as_u64().unwrap_or(start) as u32),
+                }));
+                let quote = doc.diff.selected_text().unwrap_or_default();
+                doc.diff.set_selection(saved);
+                if quote != target["quote"].as_str().unwrap_or("") {
+                    continue;
+                }
             }
             let Some(line) = target["anchor"]["line"].as_u64() else {
                 continue;

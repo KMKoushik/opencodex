@@ -9,6 +9,16 @@ use std::{
 };
 
 pub enum Operation {
+    Highlight {
+        path: String,
+        text: String,
+        revision: u64,
+    },
+    DiscoverApps,
+    OpenApp {
+        directory: String,
+        id: String,
+    },
     SaveData {
         uri: String,
         destination: std::path::PathBuf,
@@ -57,6 +67,8 @@ pub struct Reply {
     pub result: Result<Payload, String>,
 }
 pub struct Payload {
+    pub preview: Option<String>,
+    pub apps: Vec<super::open_apps::App>,
     pub value: Value,
     pub diff: Vec<PreparedFile>,
     pub highlights: HashMap<u64, Vec<syntax::Highlight>>,
@@ -69,11 +81,16 @@ pub struct PreparedFile {
 pub struct Worker {
     send: mpsc::SyncSender<Request>,
     receive: mpsc::Receiver<Reply>,
+    native_send: mpsc::SyncSender<Reply>,
+    wake: rune::Waker,
+    native_busy: std::sync::Arc<[std::sync::atomic::AtomicBool; 2]>,
 }
 impl Worker {
     pub fn start(client: Gateway, wake: rune::Waker) -> Self {
         let (send, requests) = mpsc::sync_channel::<Request>(16);
         let (replies, receive) = mpsc::sync_channel(16);
+        let native_send = replies.clone();
+        let native_wake = wake.clone();
         std::thread::Builder::new()
             .name("workbench".into())
             .spawn(move || {
@@ -91,7 +108,11 @@ impl Worker {
                         .map(|mut value| {
                             if let Some((kind, path)) = tag.split_once(':') {
                                 if kind == "file" || kind == "save" {
-                                    value["__path"] = Value::String(path.into());
+                                    value["__path"] = Value::String(
+                                        serde_json::from_str::<[String; 2]>(path)
+                                            .map(|v| v[1].clone())
+                                            .unwrap_or_else(|_| path.into()),
+                                    );
                                 }
                             }
                             prepare(value)
@@ -110,9 +131,65 @@ impl Worker {
                 }
             })
             .expect("workbench worker");
-        Self { send, receive }
+        Self {
+            send,
+            receive,
+            native_send,
+            wake: native_wake,
+            native_busy: std::sync::Arc::new([false.into(), false.into()]),
+        }
     }
     pub fn request(&self, request: Request) -> Result<(), String> {
+        // Spotlight/LaunchServices can take seconds. They must not serialize file, diff,
+        // or save requests behind discovery. State's per-tag admission bounds these to
+        // one discovery and one open operation; results still use the bounded mailbox.
+        if matches!(
+            &request.op,
+            Operation::DiscoverApps | Operation::OpenApp { .. }
+        ) {
+            use std::sync::atomic::Ordering;
+            let kind = if matches!(&request.op, Operation::DiscoverApps) {
+                0
+            } else {
+                1
+            };
+            if self.native_busy[kind].swap(true, Ordering::AcqRel) {
+                return Err(
+                    "An application operation is already running. Retry when it finishes.".into(),
+                );
+            }
+            let busy = self.native_busy.clone();
+            let replies = self.native_send.clone();
+            let wake = self.wake.clone();
+            let result = std::thread::Builder::new()
+                .name("open-in-app".into())
+                .spawn(move || {
+                    let result = match request.op {
+                        Operation::DiscoverApps => super::open_apps::discover(),
+                        Operation::OpenApp { directory, id } => {
+                            super::open_apps::open(&directory, &id)
+                        }
+                        _ => unreachable!(),
+                    }
+                    .map(prepare);
+                    busy[kind].store(false, Ordering::Release);
+                    if replies
+                        .send(Reply {
+                            epoch: request.epoch,
+                            tag: request.tag,
+                            result,
+                        })
+                        .is_ok()
+                    {
+                        wake();
+                    }
+                });
+            if let Err(error) = result {
+                self.native_busy[kind].store(false, Ordering::Release);
+                return Err(error.to_string());
+            }
+            return Ok(());
+        }
         self.send
             .try_send(request)
             .map_err(|e| format!("Workspace queue: {e}"))
@@ -123,6 +200,13 @@ impl Worker {
 }
 async fn run(client: &Gateway, op: Operation) -> Result<Value, String> {
     match op {
+        Operation::Highlight {
+            path,
+            text,
+            revision,
+        } => Ok(serde_json::json!({"__path":path,"text":text,"revision":revision})),
+        Operation::DiscoverApps => super::open_apps::discover(),
+        Operation::OpenApp { directory, id } => super::open_apps::open(&directory, &id),
         Operation::SaveData { uri, destination } => {
             use base64::Engine;
             let (_, data) = uri
@@ -189,7 +273,7 @@ pub fn hash(text: &str) -> u64 {
     text.hash(&mut h);
     h.finish()
 }
-pub fn prepare(value: Value) -> Payload {
+pub fn prepare(mut value: Value) -> Payload {
     let mut highlights = HashMap::new();
     let mut prepared = Vec::new();
     if let Some(patch) = value["patch"].as_str() {
@@ -231,9 +315,12 @@ pub fn prepare(value: Value) -> Payload {
     }
     if let Some(text) = value["text"].as_str() {
         // File syntax is prepared separately with the selected path supplied below.
-        let lang = syntax::lang_for_path(value["__path"].as_str().unwrap_or(""));
-        highlights.insert(hash(text), syntax::builtin(lang, text));
+        highlights.insert(
+            hash(text),
+            source_highlights(value["__path"].as_str().unwrap_or(""), text),
+        );
     }
+    let mut natural = None;
     let image = value["uri"]
         .as_str()
         .and_then(|uri| uri.split_once(";base64,"))
@@ -242,6 +329,7 @@ pub fn prepare(value: Value) -> Payload {
             let bytes = base64::engine::general_purpose::STANDARD
                 .decode(data)
                 .map_err(|e| e.to_string())?;
+            natural = super::image::svg_size(&bytes);
             let image = rune::ImageCache::new(std::sync::Arc::new(|| {})).load(bytes);
             image.wait().map_err(|e| e.to_string())?;
             let [w, h] = image.size().ok_or("Image has no dimensions")?;
@@ -250,10 +338,60 @@ pub fn prepare(value: Value) -> Payload {
             }
             Ok(image)
         });
+    if let Some(size) = natural {
+        value["__imageNatural"] = serde_json::json!(size);
+    }
     Payload {
+        preview: super::preview::prepare(&value),
+        apps: value["__apps"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|value| {
+                let icon = prepare(serde_json::json!({"uri":value["icon"]}))
+                    .image
+                    .and_then(Result::ok);
+                super::open_apps::App {
+                    value: value.clone(),
+                    icon,
+                }
+            })
+            .collect(),
         value,
         diff: prepared,
         highlights,
         image,
     }
+}
+pub fn source_highlights(path: &str, text: &str) -> Vec<syntax::Highlight> {
+    let extension = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    // FileEditor loads only these language chunks. Markdown/Python/Rust/etc stay plain.
+    if !matches!(
+        extension.as_str(),
+        "js" | "jsx"
+            | "mjs"
+            | "mjsx"
+            | "cjs"
+            | "cjsx"
+            | "ts"
+            | "tsx"
+            | "mts"
+            | "mtsx"
+            | "cts"
+            | "ctsx"
+            | "json"
+            | "jsonc"
+            | "css"
+            | "html"
+            | "htm"
+    ) {
+        return Vec::new();
+    }
+    let mut spans = syntax::builtin(syntax::lang_for_path(path), text);
+    for (range, paint) in &mut spans {
+        if matches!(&text[range.clone()], "true" | "false" | "null") {
+            *paint = syntax::Paint::Kind(syntax::Syntax::Number);
+        }
+    }
+    spans
 }
