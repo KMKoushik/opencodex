@@ -4,7 +4,7 @@ use rune::{El, TextStyle, icon, row};
 pub fn documents(s: &State) -> El {
     let t = &s.theme;
     let mut tabs = row()
-        .h(40.0)
+        .h(39.0)
         .pl(10.0)
         .gap(4.0)
         .center_y()
@@ -109,5 +109,5 @@ pub fn documents(s: &State) -> El {
             tab
         });
     }
-    row().h(40.0).min_w(0.0).scroll_x().child(tabs)
+    row().h(39.0).min_w(0.0).scroll_x().child(tabs)
 }

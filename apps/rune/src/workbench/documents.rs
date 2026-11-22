@@ -393,21 +393,22 @@ pub fn view(s: &State) -> El {
         .gap(8.0)
         .center_y()
         .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
+        .border_layout()
         .child(breadcrumbs(s, &doc.path));
     if doc.is_diff {
         let mut layouts = row()
             .gap(2.0)
             .padding(2.0)
-            .radius(8.0)
-            .fill(t.c("secondary"))
+            .radius(9.0)
+            .fill(t.c("well"))
             .role("group")
             .label("Diff layout");
         for (split, name, glyph) in [
             (false, "Unified", &crate::chat::icons::UNIFIED),
             (true, "Split", &crate::chat::icons::SPLIT),
         ] {
-            let choice = crate::sidebar::icon_button(t, glyph, name)
-                .size(28.0, 24.0)
+            let choice = crate::sidebar::icon_button_size(t, glyph, name, 14.0)
+                .size(28.0, 26.0)
                 .checked(s.workbench.split == split)
                 .on_press(move |s: &mut State| {
                     s.workbench.split = split;
@@ -425,9 +426,11 @@ pub fn view(s: &State) -> El {
                 choice
             });
         }
-        toolbar = toolbar.child(layouts);
+        toolbar = toolbar
+            .child(rune::el().grow(1.0))
+            .child(s.theme.shadow(layouts, "well-shadow"));
         if doc.value["status"] != "deleted" {
-            toolbar = toolbar.child(
+            toolbar = toolbar.gap(4.0).child(
                 crate::sidebar::icon_button(t, &crate::icons::EDIT, "Edit file").on_press(
                     move |s: &mut State| {
                         let doc = &s.workbench.docs[index];
@@ -491,8 +494,8 @@ pub fn view(s: &State) -> El {
             .min_w(0.0)
             .child(
                 toolbar
-                    .child(super::actions::trigger(s, index))
-                    .child(tree_toggle(s)),
+                    .child(super::actions::trigger(s, index).ml(4.0))
+                    .child(tree_toggle(s).ml(4.0)),
             )
             .child(diff.grow(1.0).min_h(0.0));
     }
@@ -504,11 +507,19 @@ pub fn view(s: &State) -> El {
             )
         });
         if markdown {
-            toolbar = toolbar
+            let modes = row()
+                .gap(2.0)
+                .padding(2.0)
+                .radius(7.0)
+                .fill(t.c("surface-under"))
                 .child(
                     crate::sidebar::icon_button(t, &crate::chat::icons::SOURCE, "Edit source")
                         .checked(!doc.preview)
-                        .fill(t.c(if !doc.preview { "selected" } else { "surface" }))
+                        .fill(t.c(if !doc.preview {
+                            "control"
+                        } else {
+                            "surface-under"
+                        }))
                         .disabled(doc.saving.is_some())
                         .on_press(move |s: &mut State| s.workbench.docs[index].preview = false),
                 )
@@ -519,10 +530,15 @@ pub fn view(s: &State) -> El {
                         "Preview Markdown",
                     )
                     .checked(doc.preview)
-                    .fill(t.c(if doc.preview { "selected" } else { "surface" }))
+                    .fill(t.c(if doc.preview {
+                        "control"
+                    } else {
+                        "surface-under"
+                    }))
                     .disabled(doc.saving.is_some())
                     .on_press(move |s: &mut State| s.workbench.docs[index].preview = true),
                 );
+            toolbar = toolbar.gap(4.0).child(modes);
         }
         if doc.dirty() {
             toolbar = toolbar.child(label(t, "Unsaved edits", 11.0, 400.0, "text-tertiary"));
@@ -620,8 +636,8 @@ pub fn view(s: &State) -> El {
         .min_w(0.0)
         .child(
             toolbar
-                .child(super::actions::trigger(s, index))
-                .child(tree_toggle(s)),
+                .child(super::actions::trigger(s, index).ml(4.0))
+                .child(tree_toggle(s).ml(4.0)),
         )
         .child(content)
 }
@@ -677,6 +693,7 @@ fn empty_document(s: &State) -> El {
                 .gap(8.0)
                 .center_y()
                 .border_sides([0.0, 0.0, 1.0, 0.0], s.theme.c("border"))
+                .border_layout()
                 .child(breadcrumbs(s, ""))
                 .child(rune::el().grow(1.0))
                 .child(tree_toggle(s)),
@@ -685,29 +702,33 @@ fn empty_document(s: &State) -> El {
             col()
                 .grow(1.0)
                 .center()
-                .gap(10.0)
+                .padding(24.0)
                 .child(
                     rune::icon(
                         if changes {
-                            &crate::icons::EDIT
+                            &crate::chat::icons::CHANGES
                         } else {
-                            &crate::chat::icons::SOURCE
+                            &crate::chat::icons::READ
                         },
                         28.0,
                     )
-                    .color(s.theme.c("text-tertiary")),
+                    .color(s.theme.c("text-tertiary"))
+                    .mb(16.0),
                 )
-                .child(label(
-                    &s.theme,
-                    if changes {
-                        "Review your changes"
-                    } else {
-                        "Your workspace"
-                    },
-                    16.0,
-                    600.0,
-                    "text",
-                ))
+                .child(
+                    label(
+                        &s.theme,
+                        if changes {
+                            "Review your changes"
+                        } else {
+                            "Your workspace"
+                        },
+                        14.0,
+                        500.0,
+                        "text",
+                    )
+                    .mb(8.0),
+                )
                 .child(label(
                     &s.theme,
                     "Select a file in the tree to open it.",
@@ -715,13 +736,16 @@ fn empty_document(s: &State) -> El {
                     400.0,
                     "text-secondary",
                 ))
-                .child(label(
-                    &s.theme,
-                    "Double-click to keep a tab open.",
-                    12.0,
-                    400.0,
-                    "text-tertiary",
-                )),
+                .child(
+                    label(
+                        &s.theme,
+                        "Double-click to keep a tab open.",
+                        12.0,
+                        400.0,
+                        "text-tertiary",
+                    )
+                    .mt(8.0),
+                ),
         )
 }
 fn breadcrumbs(s: &State, path: &str) -> El {
@@ -729,23 +753,25 @@ fn breadcrumbs(s: &State, path: &str) -> El {
         let mut modes = row()
             .gap(2.0)
             .padding(2.0)
-            .radius(8.0)
-            .fill(s.theme.c("secondary"))
+            .radius(9.0)
+            .fill(s.theme.c("well"))
             .role("group")
             .label("Compare changes against");
         for (mode, name) in [("working", "Uncommitted"), ("branch", "Base branch")] {
-            let button =
-                button(s, name)
-                    .checked(s.workbench.mode == mode)
-                    .on_press(move |s: &mut State| {
-                        if s.workbench.mode == mode {
-                            return;
-                        }
-                        s.workbench.mode = mode.into();
-                        s.workbench.docs.retain(|d| !d.is_diff);
-                        s.workbench.selected = None;
-                        s.load_panel(true);
-                    });
+            let button = button(s, name)
+                .h(26.0)
+                .px(10.0)
+                .font(TextStyle::new(12.0, 500.0).lh(18.0))
+                .checked(s.workbench.mode == mode)
+                .on_press(move |s: &mut State| {
+                    if s.workbench.mode == mode {
+                        return;
+                    }
+                    s.workbench.mode = mode.into();
+                    s.workbench.docs.retain(|d| !d.is_diff);
+                    s.workbench.selected = None;
+                    s.load_panel(true);
+                });
             modes = modes.child(if s.workbench.mode == mode {
                 s.theme
                     .shadow(s.theme.paint(button, "glaze"), "glaze-shadow")
@@ -753,7 +779,7 @@ fn breadcrumbs(s: &State, path: &str) -> El {
                 button
             });
         }
-        return modes;
+        return s.theme.shadow(modes, "well-shadow");
     }
     let mut nav = row()
         .grow(1.0)

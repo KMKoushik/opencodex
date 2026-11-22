@@ -1,0 +1,7 @@
+The file-tree built-in symbols in icons.rs and the diff status symbols in
+diff/view/chrome.rs are adapted from the installed @pierre/trees and @pierre/diffs
+packages, respectively, under Apache-2.0 (see PIERRE-LICENSE).
+
+Original SVG paths are retained; Rust wrappers and semantic colors are OpenCodex
+adaptations. The Hugeicons controls in icons.rs use the same glyph paths as the
+existing web application and native chat icons.

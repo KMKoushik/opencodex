@@ -152,6 +152,7 @@ pub(super) fn main_status(s: &State) -> El {
 pub fn view(s: &State, id: &str) -> El {
     let t = &s.theme;
     let draft = s.composer.drafts.get(id);
+    let content_width = (s.panel_width() - 1.0 - 32.0 - 24.0).max(0.0);
     let selected = draft
         .model
         .as_ref()
@@ -219,116 +220,126 @@ pub fn view(s: &State, id: &str) -> El {
         card = card.child(attachments);
     }
     let key = id.to_owned();
-    card = card.child(
-        text_input(
-            &s.workbench.side_drafts[id],
-            TextStyle::new(14.0, 400.0).lh(21.0),
-        )
-        .key("side-message")
-        .label("Message")
-        .placeholder("Ask a side question", t.c("text-tertiary"))
-        .w_full()
-        .min_h(52.0)
-        .max_h(240.0)
-        .padding(2.0)
-        .color(t.c("text"))
-        .on_edit(move |s: &mut State| s.workbench.side_drafts.get_mut(&key).expect("side draft"))
-        .on_input_change(|s: &mut State, _| {
-            if let Some(id) = s.workbench.reader.clone() {
-                *s.workbench.side_revisions.entry(id).or_default() += 1;
-            }
-        })
-        .on_input_key(|s: &mut State, key, _| {
-            if key.key == rune::Key::Enter && !key.mods.shift {
-                s.send_workspace_side();
-                true
-            } else {
-                false
-            }
-        })
-        .on_submit(|s: &mut State, _| s.send_workspace_side())
-        .on_input_paste(|s: &mut State, content, _| {
-            let (Some(image), Some(key)) = (content.image(), s.workbench.reader.clone()) else {
-                return false;
-            };
-            s.prompt_request(oc_gateway::prompt::Request::PrepareAttachment {
-                key,
-                item: oc_gateway::prompt::Attachment {
-                    name: "Pasted image.png".into(),
-                    mime: "image/png".into(),
-                    bytes: std::sync::Arc::new(image.png().to_vec()),
-                    thumbnail: None,
-                },
-            });
+    let input = text_input(
+        &s.workbench.side_drafts[id],
+        TextStyle::new(14.0, 400.0).lh(21.0),
+    )
+    .key("side-message")
+    .label("Message")
+    .placeholder("Ask a side question", t.c("text-tertiary"))
+    .w_full()
+    .min_h(52.0)
+    .max_h(240.0)
+    .padding(2.0)
+    .color(t.c("text"))
+    .on_edit(move |s: &mut State| s.workbench.side_drafts.get_mut(&key).expect("side draft"))
+    .on_input_change(|s: &mut State, _| {
+        if let Some(id) = s.workbench.reader.clone() {
+            *s.workbench.side_revisions.entry(id).or_default() += 1;
+        }
+    })
+    .on_input_key(|s: &mut State, key, _| {
+        if key.key == rune::Key::Enter && !key.mods.shift {
+            s.send_workspace_side();
             true
+        } else {
+            false
+        }
+    })
+    .on_submit(|s: &mut State, _| s.send_workspace_side())
+    .on_input_paste(|s: &mut State, content, _| {
+        let (Some(image), Some(key)) = (content.image(), s.workbench.reader.clone()) else {
+            return false;
+        };
+        s.prompt_request(oc_gateway::prompt::Request::PrepareAttachment {
+            key,
+            item: oc_gateway::prompt::Attachment {
+                name: "Pasted image.png".into(),
+                mime: "image/png".into(),
+                bytes: std::sync::Arc::new(image.png().to_vec()),
+                thumbnail: None,
+            },
+        });
+        true
+    });
+    card = card.child(rune::auto_grow(input, 2, 12).min_h(52.0).max_h(240.0));
+    let mut controls = row().grow(1.0).min_w(0.0).gap(4.0).center_y().justify_end();
+    let attach = crate::sidebar::icon_button_size(t, &crate::icons::PLUS, "Attach files", 18.0)
+        .on_press_tx(|s: &mut State, tx| {
+            let Some(key) = s.workbench.reader.clone() else {
+                return;
+            };
+            tx.open_file(
+                rune::FileDialogOptions {
+                    title: "Attach file".into(),
+                    ..Default::default()
+                },
+                move |s: &mut State, result, _| match result {
+                    Ok(Some(path)) => {
+                        s.prompt_request(oc_gateway::prompt::Request::ReadAttachment {
+                            key: key.clone(),
+                            path: path.to_string_lossy().into_owned(),
+                        });
+                    }
+                    Err(e) => s.workbench.error = Some(e.to_string()),
+                    _ => {}
+                },
+            );
+        })
+        .size(30.0, 30.0)
+        .radius(9.0);
+    controls = controls.child(super::side_context::view(
+        s,
+        model.and_then(|m| m.limit["context"].as_u64()),
+    ));
+    controls = controls.child(
+        t.shadow(
+            t.paint(
+                row()
+                    .h(30.0)
+                    .px(8.0)
+                    .gap(8.0)
+                    .shrink()
+                    .min_w(if content_width <= 480.0 { 62.0 } else { 96.0 })
+                    .center_y()
+                    .radius(9.0)
+                    .border(1.0, t.c("chip-border"))
+                    .border_layout(),
+                "chip",
+            ),
+            "chip-shadow",
+        )
+        .child(
+            selected
+                .map(|m| super::subagents::provider(s, &m.provider_id, 18.0))
+                .unwrap_or_else(el),
+        )
+        .child(
+            label(
+                t,
+                model
+                    .map(|m| m.name.as_str())
+                    .or_else(|| selected.map(|m| m.id.as_str()))
+                    .unwrap_or("Choose model"),
+                12.5,
+                500.0,
+                "text",
+            )
+            .min_w(0.0)
+            .shrink()
+            .truncate(),
+        )
+        .child(rune::icon(&crate::icons::DOWN, 14.0).color(t.c("text-tertiary")))
+        .key("side-model")
+        .role("button")
+        .label("Model")
+        .focusable(true)
+        .disabled(s.workbench.side_sending.is_some())
+        .on_press(|s: &mut State| {
+            s.workbench.side_model_search.clear();
+            s.workbench.side_model_open = !s.workbench.side_model_open;
         }),
     );
-    let mut controls = row()
-        .w_full()
-        .gap(8.0)
-        .center_y()
-        .child(
-            icon_button(t, &crate::icons::PLUS, "Attach files").on_press_tx(|s: &mut State, tx| {
-                let Some(key) = s.workbench.reader.clone() else {
-                    return;
-                };
-                tx.open_file(
-                    rune::FileDialogOptions {
-                        title: "Attach file".into(),
-                        ..Default::default()
-                    },
-                    move |s: &mut State, result, _| match result {
-                        Ok(Some(path)) => {
-                            s.prompt_request(oc_gateway::prompt::Request::ReadAttachment {
-                                key: key.clone(),
-                                path: path.to_string_lossy().into_owned(),
-                            });
-                        }
-                        Err(e) => s.workbench.error = Some(e.to_string()),
-                        _ => {}
-                    },
-                );
-            }),
-        )
-        .child(el().grow(1.0))
-        .child(
-            row()
-                .h(28.0)
-                .px(8.0)
-                .gap(6.0)
-                .center_y()
-                .radius(6.0)
-                .fill(t.c("control"))
-                .border(1.0, t.c("border"))
-                .child(
-                    selected
-                        .map(|m| super::subagents::provider(s, &m.provider_id, 14.0))
-                        .unwrap_or_else(el),
-                )
-                .child(
-                    label(
-                        t,
-                        model
-                            .map(|m| m.name.as_str())
-                            .or_else(|| selected.map(|m| m.id.as_str()))
-                            .unwrap_or("Choose model"),
-                        12.0,
-                        400.0,
-                        "text",
-                    )
-                    .truncate(),
-                )
-                .child(rune::icon(&crate::icons::DOWN, 14.0).color(t.c("text-tertiary")))
-                .key("side-model")
-                .role("button")
-                .label("Model")
-                .focusable(true)
-                .disabled(s.workbench.side_sending.is_some())
-                .on_press(|s: &mut State| {
-                    s.workbench.side_model_search.clear();
-                    s.workbench.side_model_open = !s.workbench.side_model_open;
-                }),
-        );
     let has_variants = model.is_some_and(|m| !m.variants.is_empty());
     let variant = selected
         .and_then(|m| m.variant.as_deref())
@@ -341,9 +352,16 @@ pub fn view(s: &State, id: &str) -> El {
         .unwrap_or_default();
     controls = controls.child(
         row()
-            .h(28.0)
+            .h(30.0)
+            .max_w(if content_width <= 480.0 {
+                (content_width - 102.0).max(32.0)
+            } else {
+                240.0
+            })
             .px(8.0)
-            .gap(6.0)
+            .gap(8.0)
+            .border(1.0, rune::Color::TRANSPARENT)
+            .border_layout()
             .center_y()
             .radius(6.0)
             .child(
@@ -354,10 +372,12 @@ pub fn view(s: &State, id: &str) -> El {
                     } else {
                         "No thinking options"
                     },
-                    12.0,
-                    400.0,
-                    "text-secondary",
+                    12.5,
+                    500.0,
+                    "text-tertiary",
                 )
+                .min_w(0.0)
+                .shrink()
                 .truncate(),
             )
             .child(rune::icon(&crate::icons::DOWN, 14.0).color(t.c("text-tertiary")))
@@ -366,12 +386,14 @@ pub fn view(s: &State, id: &str) -> El {
             .label("Thinking level")
             .focusable(true)
             .disabled(!has_variants || s.workbench.side_sending.is_some())
+            .dim(if has_variants { 1.0 } else { 0.45 })
             .on_press(|s: &mut State| {
                 s.workbench.side_thinking_open = !s.workbench.side_thinking_open
             }),
     );
+    let mut actions = row().gap(8.0).center_y();
     if s.workbench.reader_chat.data.running {
-        controls = controls.child(
+        actions = actions.child(
             super::documents::button(s, "Stop").on_press(|s: &mut State| {
                 if let Some(id) = s.workbench.reader.clone() {
                     s.workspace_request(
@@ -385,19 +407,66 @@ pub fn view(s: &State, id: &str) -> El {
             }),
         );
     }
-    controls = controls.child(
-        icon_button(t, &crate::icons::UP, "Send message")
-            .size(34.0, 34.0)
-            .radius(12.0)
-            .disabled(
-                s.workbench.side_sending.is_some()
-                    || s.composer.attachment_pending.contains_key(id)
-                    || (s.workbench.side_drafts[id].text.trim().is_empty()
-                        && draft.attachments.is_empty()),
-            )
-            .on_press(|s: &mut State| s.send_workspace_side()),
+    let enabled = s.workbench.side_sending.is_none()
+        && !s.composer.attachment_pending.contains_key(id)
+        && (!s.workbench.side_drafts[id].text.trim().is_empty() || !draft.attachments.is_empty());
+    actions = actions.child(
+        t.shadow(
+            t.paint(
+                el().size(34.0, 34.0)
+                    .radius(12.0)
+                    .center()
+                    .border(1.0, t.c("chip-border"))
+                    .child(rune::icon(&crate::icons::UP, 16.0).color(t.c(if enabled {
+                        "on-primary"
+                    } else {
+                        "text-tertiary"
+                    })))
+                    .role("button")
+                    .label("Send message")
+                    .focusable(true),
+                if enabled { "primary-glaze" } else { "chip" },
+            ),
+            if enabled {
+                "primary-shadow"
+            } else {
+                "chip-shadow"
+            },
+        )
+        .disabled(
+            s.workbench.side_sending.is_some()
+                || s.composer.attachment_pending.contains_key(id)
+                || (s.workbench.side_drafts[id].text.trim().is_empty()
+                    && draft.attachments.is_empty()),
+        )
+        .on_press(|s: &mut State| s.send_workspace_side()),
     );
-    area = area.child(card.child(controls));
+    let footer = if content_width <= 480.0 {
+        col()
+            .w_full()
+            .mt(8.0)
+            .gap(4.0)
+            .child(controls.grow(0.0).w_full().justify_start())
+            .child(
+                row()
+                    .w_full()
+                    .gap(8.0)
+                    .center_y()
+                    .child(attach)
+                    .child(el().grow(1.0))
+                    .child(actions),
+            )
+    } else {
+        row()
+            .w_full()
+            .mt(8.0)
+            .gap(8.0)
+            .center_y()
+            .child(attach)
+            .child(controls)
+            .child(actions)
+    };
+    area = area.child(card.child(footer));
     if s.workbench.side_model_open {
         let mut menu = col()
             .w(360.0)

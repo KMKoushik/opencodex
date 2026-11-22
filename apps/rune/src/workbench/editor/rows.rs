@@ -4,6 +4,9 @@ use crate::workbench::{
 };
 use crate::{State, sidebar::label};
 use rune::{El, GrowthSpec, Key, TextStyle, col, row, text_input};
+// CodeMirror: 12px SF Mono, line-height 1.7, with 4px block padding.
+const LINE: f32 = 20.3984375;
+const ADVANCE: f32 = 7.224609;
 
 fn ensure(doc: &mut Document, line: usize) {
     if doc.source_input.line != line {
@@ -34,7 +37,7 @@ fn line_at(doc: &Document, y: f32, fallback: usize) -> usize {
 }
 
 fn byte_at_x(text: &str, x: f32) -> usize {
-    let target = (x / 7.5).max(0.0);
+    let target = (x / ADVANCE).max(0.0);
     let mut column = 0;
     for (byte, c) in text.char_indices() {
         let next = column + if c == '\t' { 4 - column % 4 } else { 1 };
@@ -48,7 +51,7 @@ fn byte_at_x(text: &str, x: f32) -> usize {
 
 pub fn view(s: &State, index: usize) -> El {
     let doc = &s.workbench.docs[index];
-    let gutter = 30.0 + (doc.lines.len().max(1).ilog10() + 1) as f32 * 7.5;
+    let gutter = (8.0 + (doc.lines.len().max(1).ilog10() + 1) as f32 * ADVANCE).max(20.0) + 21.0;
     let viewport = if doc.source_viewport > 0.0 {
         doc.source_viewport
     } else {
@@ -60,7 +63,7 @@ pub fn view(s: &State, index: usize) -> El {
             })
         .max(gutter + 40.0)
     };
-    let width = (doc.line_columns as f32 * 7.5 + 16.0).max(viewport - gutter);
+    let width = (doc.line_columns as f32 * ADVANCE + 8.0).max(viewport - gutter);
     col()
         .grow(1.0)
         .min_h(0.0)
@@ -82,7 +85,7 @@ pub fn view(s: &State, index: usize) -> El {
                 .growth(GrowthSpec::default())
                 .virtual_rows(
                     doc.lines.len(),
-                    20.0,
+                    LINE,
                     move |_: &State, n| format!("source-line-{index}-{n}").into(),
                     move |s: &State, n| source_row(s, index, n, gutter, width, viewport),
                 )
@@ -115,11 +118,11 @@ fn source_row(s: &State, index: usize, n: usize, gutter: f32, width: f32, viewpo
         && a <= doc.edit.anchor.max(doc.edit.focus)
         && b >= doc.edit.anchor.min(doc.edit.focus);
     let input = if active {
-        text_input(edit, TextStyle::new(12.5, 400.0).mono().lh(20.0))
+        text_input(edit, TextStyle::new(12.0, 400.0).mono().lh(LINE))
             .key(input_key(index, n))
             .label(format!("{}: line {}", doc.path, n + 1))
             .single_line()
-            .size(width, 20.0)
+            .size(width - 8.0, LINE)
             .px(0.0)
             .py(0.0)
             .color(t.c("text"))
@@ -153,48 +156,56 @@ fn source_row(s: &State, index: usize, n: usize, gutter: f32, width: f32, viewpo
             &doc.edit.text[a..b],
             super::syntax_theme(s).spans(&highlights, 0),
         )
-        .font(TextStyle::new(12.5, 400.0).mono().lh(20.0))
+        .font(TextStyle::new(12.0, 400.0).mono().lh(LINE))
         .color(t.c("text"))
-        .size(width, 20.0)
+        .size(width - 8.0, LINE)
         .inert()
     };
-    let code = col()
-        .w(width)
-        .h(20.0)
-        .child(input)
-        .on_drag(move |s: &mut State, d, tx| {
-            if d.cancelled() {
-                return;
-            }
-            let doc = &mut s.workbench.docs[index];
-            let target = line_at(doc, d.window_point()[1], n).min(doc.lines.len() - 1);
-            if d.phase == rune::Phase::Down {
-                super::activate(doc, n);
-            }
-            let (a, b) = doc.lines[target];
-            let offset = a + byte_at_x(&doc.edit.text[a..b], d.x);
-            if d.phase == rune::Phase::Down {
-                doc.edit.anchor = offset;
-            }
-            doc.edit.focus = offset;
-            let anchor = doc.edit.anchor;
-            super::activate(doc, target);
-            doc.source_input.edit.anchor = anchor.saturating_sub(a).min(b - a);
-            doc.source_input.edit.focus = offset - a;
-            doc.source_input.global_selection = anchor < a || anchor > b;
-            focus_input(s, index, tx);
-        });
+    let code =
+        col()
+            .w(width)
+            .h(LINE)
+            .pl(6.0)
+            .pr(2.0)
+            .child(input)
+            .on_drag(move |s: &mut State, d, tx| {
+                if d.cancelled() {
+                    return;
+                }
+                let doc = &mut s.workbench.docs[index];
+                let target = line_at(doc, d.window_point()[1], n).min(doc.lines.len() - 1);
+                if d.phase == rune::Phase::Down {
+                    super::activate(doc, n);
+                }
+                let (a, b) = doc.lines[target];
+                let offset = a + byte_at_x(&doc.edit.text[a..b], d.x - 6.0);
+                if d.phase == rune::Phase::Down {
+                    doc.edit.anchor = offset;
+                }
+                doc.edit.focus = offset;
+                let anchor = doc.edit.anchor;
+                super::activate(doc, target);
+                doc.source_input.edit.anchor = anchor.saturating_sub(a).min(b - a);
+                doc.source_input.edit.focus = offset - a;
+                doc.source_input.global_selection = anchor < a || anchor > b;
+                focus_input(s, index, tx);
+            });
     let numbers = row()
         .w(gutter)
-        .h(20.0)
+        .h(LINE)
         .center_y()
-        .pr(10.0)
-        .gap(2.0)
+        .pr(24.0)
+        .pl(5.0)
+        .fill(t.c("surface"))
+        .border_sides([0.0, 1.0, 0.0, 0.0], t.c("border"))
+        .border_layout()
         .hover_group()
         .child(
             label(t, "+", 11.0, 400.0, "text-tertiary")
                 .key(format!("source-comment-{index}-{n}"))
-                .w(16.0)
+                .size(20.0, 20.0)
+                .center()
+                .absolute(gutter - 21.0, 0.0)
                 .group_opacity(0.0, 1.0)
                 .role("button")
                 .label(format!("Comment on line {}", n + 1))
@@ -210,8 +221,8 @@ fn source_row(s: &State, index: usize, n: usize, gutter: f32, width: f32, viewpo
                 }),
         )
         .child(
-            label(t, format!("{}", n + 1), 12.5, 400.0, "text-tertiary")
-                .font(TextStyle::new(12.5, 400.0).mono().lh(20.0))
+            label(t, format!("{}", n + 1), 12.0, 400.0, "text-tertiary")
+                .font(TextStyle::new(12.0, 400.0).mono().lh(LINE))
                 .align(rune::Align::End)
                 .grow(1.0)
                 .on_drag(move |s: &mut State, d, tx| {
@@ -234,7 +245,7 @@ fn source_row(s: &State, index: usize, n: usize, gutter: f32, width: f32, viewpo
     let mut result = col().w_full().child(
         row()
             .w_full()
-            .h(20.0)
+            .h(LINE)
             .fill(t.c(if selected {
                 "selected"
             } else if active {

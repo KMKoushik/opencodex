@@ -5,11 +5,6 @@ use crate::{
     sidebar::{icon_button, label},
 };
 use rune::{El, GrowthSpec, ScrollSpec, TextStyle, col, el, icon, row, text_input};
-static EXPAND: rune::Icon = rune::Icon {
-    name: "workspace-expand",
-    view: 24.0,
-    body: r#"<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>"#,
-};
 
 pub fn kit(s: &State) -> rune_kit::Kit {
     let t = &s.theme;
@@ -28,7 +23,10 @@ pub fn kit(s: &State) -> rune_kit::Kit {
     k.c.border_muted = t.c("border");
     k.c.border_strong = t.c("border-heavy");
     k.c.success.fg = t.c("success");
+    k.c.success.icon = t.c("success");
     k.c.danger.fg = t.c("error");
+    k.c.danger.icon = t.c("error");
+    k.c.warning.fg = t.c("warning");
     k.c.hover = t.c("hover");
     k
 }
@@ -36,6 +34,30 @@ pub fn layout(s: &State, main: El, cx: &mut rune::Cx<State>) -> El {
     let mut body = row().grow(1.0).h_full().min_w(0.0).min_h(0.0).child(main);
     if s.selected.is_some() {
         body = body.child(panel(s, cx)).child(rail(s));
+        if s.workbench.open && !s.workbench.expanded {
+            let sidebar = if s.prefs.sidebar_closed {
+                0.0
+            } else {
+                s.sidebar_width()
+            };
+            let drawer = if s.terminal.open {
+                s.terminal.height.min(s.window_size.1 * 0.6)
+            } else {
+                0.0
+            };
+            body = body.child(
+                s.theme
+                    .shadow(
+                        s.theme.paint(el().size(10.0, 56.0).radius(5.0), "glaze"),
+                        "glaze-shadow",
+                    )
+                    .absolute(
+                        s.window_size.0 - sidebar - 44.0 - s.panel_width() - 5.0,
+                        (s.window_size.1 - drawer - 56.0) / 2.0,
+                    )
+                    .a11y_hidden(),
+            );
+        }
     }
     let mut stacked = col().grow(1.0).h_full().min_w(0.0).min_h(0.0).child(body);
     if s.terminal.open {
@@ -129,7 +151,8 @@ fn panel(s: &State, cx: &mut rune::Cx<State>) -> El {
         .gap(8.0)
         .center_y()
         .window_drag()
-        .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"));
+        .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
+        .border_layout();
     if files && !s.workbench.docs.is_empty() {
         header = header.child(super::tabs::documents(s).grow(1.0).min_w(0.0));
     } else if s.workbench.panel == Panel::Canvas {
@@ -149,7 +172,11 @@ fn panel(s: &State, cx: &mut rune::Cx<State>) -> El {
         .child(
             icon_button(
                 t,
-                &EXPAND,
+                if s.workbench.expanded {
+                    &super::icons::RESTORE
+                } else {
+                    &super::icons::EXPAND
+                },
                 if s.workbench.expanded {
                     "Restore workspace panel"
                 } else {
@@ -183,7 +210,24 @@ fn panel(s: &State, cx: &mut rune::Cx<State>) -> El {
             .min_w(0.0)
             .child(documents::view(s))
             .child(if s.workbench.tree_visible {
-                tree(s)
+                if width <= 560.0 {
+                    let tree_width = 250.0_f32.min((width - 1.0) * 0.75);
+                    let drawer = if s.terminal.open {
+                        s.terminal.height.min(s.window_size.1 * 0.6)
+                    } else {
+                        0.0
+                    };
+                    t.shadow(
+                        tree(s)
+                            .w(tree_width)
+                            .h((s.window_size.1 - drawer - 80.0).max(0.0))
+                            .fill(t.c("surface"))
+                            .absolute(width - 1.0 - tree_width, 40.0),
+                        "shadow",
+                    )
+                } else {
+                    tree(s)
+                }
             } else {
                 el()
             }),
@@ -227,7 +271,7 @@ fn panel(s: &State, cx: &mut rune::Cx<State>) -> El {
                             } else {
                                 s.sidebar_width()
                             }
-                            - 364.0)
+                            - 320.0)
                             .max(340.0);
                         s.prefs.workbench_width = Some((d.data - d.dx).clamp(340.0, max));
                         tx.instant();
@@ -257,39 +301,85 @@ fn tree(s: &State) -> El {
     let mut controls = row()
         .h(36.0)
         .w_full()
-        .px(8.0)
-        .gap(4.0)
+        .pl(12.0)
+        .pr(8.0)
         .center_y()
-        .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"));
+        .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
+        .border_layout();
+    let mut segments = row()
+        .grow(1.0)
+        .min_w(0.0)
+        .gap(2.0)
+        .padding(2.0)
+        .radius(9.0)
+        .fill(t.c("well"));
     for (p, name) in [(Panel::Files, "All files"), (Panel::Changes, "Changes")] {
         let name = if p == Panel::Changes {
             format!("Changes {}", s.workbench.changes.len())
         } else {
             name.into()
         };
-        controls = controls.child(
-            documents::button(s, &name)
-                .fill(if s.workbench.panel == p {
-                    t.c("selected")
+        let mut choice = row()
+            .grow(1.0)
+            .h(24.0)
+            .px(8.0)
+            .gap(6.0)
+            .center()
+            .radius(7.0)
+            .child(label(
+                t,
+                if p == Panel::Changes {
+                    "Changes"
                 } else {
-                    rune::Color::TRANSPARENT
-                })
-                .on_press(move |s: &mut State| {
-                    s.workbench.panel = p;
-                    s.load_panel(false);
-                }),
-        );
+                    "All files"
+                },
+                12.0,
+                500.0,
+                if s.workbench.panel == p {
+                    "text"
+                } else {
+                    "text-secondary"
+                },
+            ));
+        if p == Panel::Changes {
+            choice = choice.child(
+                label(
+                    t,
+                    s.workbench.changes.len().to_string(),
+                    10.5,
+                    500.0,
+                    "text-secondary",
+                )
+                .font(TextStyle::new(10.5, 500.0).mono().lh(15.75))
+                .px(5.0)
+                .radius(4.0)
+                .fill(t.c("secondary")),
+            );
+        }
+        let choice = if s.workbench.panel == p {
+            t.shadow(t.paint(choice, "glaze"), "glaze-shadow")
+        } else {
+            choice
+        };
+        segments = segments.child(choice.role("button").label(name).on_press(
+            move |s: &mut State| {
+                s.workbench.panel = p;
+                s.load_panel(false);
+            },
+        ));
     }
+    controls = controls.child(t.shadow(segments, "well-shadow"));
     tree = tree.child(
         controls.child(
-            documents::button(s, "↻")
-                .label("Refresh workspace")
+            crate::sidebar::icon_button_size(t, &super::icons::REFRESH, "Refresh workspace", 14.0)
                 .on_press(|s: &mut State| s.load_panel(true)),
         ),
     );
     tree = tree.child(
         row()
             .w_full()
+            .padding(8.0)
+            .gap(4.0)
             .center_y()
             .child(
                 text_input(&s.workbench.search, TextStyle::new(12.0, 400.0))
@@ -303,8 +393,6 @@ fn tree(s: &State) -> El {
                     .grow(1.0)
                     .min_w(0.0)
                     .h(28.0)
-                    .mx(8.0)
-                    .my(6.0)
                     .px(9.0)
                     .radius(8.0)
                     .border(1.0, t.c("border-heavy"))
@@ -322,6 +410,11 @@ fn tree(s: &State) -> El {
             )
             .child(
                 documents::button(s, "−")
+                    .font(TextStyle::new(12.0, 400.0).lh(18.0))
+                    .px(10.0)
+                    .py(0.0)
+                    .h(28.0)
+                    .center()
                     .label("Collapse folders")
                     .help("Collapse folders")
                     .on_press(super::tree::collapse),
@@ -339,18 +432,24 @@ fn tree(s: &State) -> El {
             .scroll(ScrollSpec {
                 stick_bottom: false,
             })
-            .child(col().growth(GrowthSpec::default()).w_full().virtual_rows(
-                count,
-                24.0,
-                move |s: &State, n| {
-                    if changes {
-                        s.workbench.change_tree[n].0.clone().into()
-                    } else {
-                        s.workbench.tree[n].0.clone().into()
-                    }
-                },
-                move |s: &State, n| tree_row(s, n, changes),
-            )),
+            .child(
+                col()
+                    .growth(GrowthSpec::default())
+                    .w_full()
+                    .px(15.9921875)
+                    .virtual_rows(
+                        count,
+                        24.0,
+                        move |s: &State, n| {
+                            if changes {
+                                s.workbench.change_tree[n].0.clone().into()
+                            } else {
+                                s.workbench.tree[n].0.clone().into()
+                            }
+                        },
+                        move |s: &State, n| tree_row(s, n, changes),
+                    ),
+            ),
     );
     if count == 0 {
         tree = tree.child(
@@ -395,22 +494,33 @@ fn tree(s: &State) -> El {
     tree.child(
         row()
             .w_full()
-            .padding(8.0)
+            .py(8.0)
+            .px(10.0)
             .gap(8.0)
             .border_sides([1.0, 0.0, 0.0, 0.0], t.c("border"))
-            .child(label(
-                t,
-                if changes {
-                    format!("{} changed", s.workbench.changes.len())
-                } else {
-                    "Project files".into()
-                },
-                11.0,
-                400.0,
-                "text-tertiary",
-            ))
-            .child(label(t, format!("+{additions}"), 11.0, 400.0, "success"))
-            .child(label(t, format!("−{deletions}"), 11.0, 400.0, "error")),
+            .child(
+                label(
+                    t,
+                    if changes {
+                        format!("{} changed", s.workbench.changes.len())
+                    } else {
+                        "Project files".into()
+                    },
+                    11.0,
+                    400.0,
+                    "text-tertiary",
+                )
+                .font(TextStyle::new(11.0, 400.0).mono().lh(16.5))
+                .grow(1.0),
+            )
+            .child(
+                label(t, format!("+{additions}"), 11.0, 400.0, "success")
+                    .font(TextStyle::new(11.0, 400.0).mono().lh(16.5)),
+            )
+            .child(
+                label(t, format!("−{deletions}"), 11.0, 400.0, "error")
+                    .font(TextStyle::new(11.0, 400.0).mono().lh(16.5)),
+            ),
     )
     .child(
         el().key("file-tree-resize")
@@ -465,17 +575,22 @@ fn tree_row(s: &State, n: usize, changes: bool) -> El {
         });
     let name = path.rsplit('/').next().unwrap_or(&path);
     let glyph = if dir {
-        if open { &icons::DOWN } else { &icons::RIGHT }
+        &super::icons::TREE_CHEVRON
     } else {
-        rune_theme_opencode::tree_icons::file(&path).icon()
+        match path.rsplit('.').next().unwrap_or("") {
+            "md" | "markdown" => &super::icons::MARKDOWN,
+            "ts" | "tsx" => &super::icons::TYPESCRIPT,
+            "html" | "htm" => &super::icons::HTML,
+            _ => rune_theme_opencode::tree_icons::file(&path).icon(),
+        }
     };
     let mut r = row()
         .key(path.clone())
         .w_full()
         .h(24.0)
-        .pl(12.0 + depth as f32 * 12.0)
-        .pr(10.0)
-        .gap(6.0)
+        .pl(6.4 + depth as f32 * 18.6953125)
+        .pr(6.4)
+        .gap(4.8)
         .center_y()
         .radius(7.0)
         .fill(if selected {
@@ -484,12 +599,29 @@ fn tree_row(s: &State, n: usize, changes: bool) -> El {
             rune::Color::TRANSPARENT
         })
         .hover(t.c("hover"))
-        .child(icon(glyph, 14.0).color(t.c("text-secondary")))
+        .child(
+            icon(glyph, 16.0)
+                .rotate(if dir && !open {
+                    -std::f32::consts::FRAC_PI_2
+                } else {
+                    0.0
+                })
+                .color(t.c("text-secondary")),
+        )
         .child(
             label(t, name, 12.5, 400.0, "text-secondary")
                 .truncate()
                 .grow(1.0),
         );
+    for ancestor in 0..depth {
+        r = r.child(
+            el().size(1.0, 24.0)
+                .fill(t.c("border"))
+                .absolute(13.65 + ancestor as f32 * 18.6953125, 0.0)
+                .a11y_hidden()
+                .inert(),
+        );
+    }
     if let Some(index) = s.workbench.change_lookup.get(&path) {
         let v = &s.workbench.changes[*index];
         let status = v["status"].as_str().unwrap_or("M");
@@ -501,19 +633,37 @@ fn tree_row(s: &State, n: usize, changes: bool) -> El {
             "untracked" => "U",
             _ => status,
         };
-        r = r.child(label(
-            t,
-            short,
-            10.0,
-            500.0,
-            if status == "deleted" || status == "D" {
-                "error"
-            } else if status == "added" || status == "A" || status == "untracked" {
-                "success"
-            } else {
-                "warning"
-            },
-        ));
+        r = r.child(
+            label(
+                t,
+                short,
+                12.5,
+                500.0,
+                if status == "deleted" || status == "D" {
+                    "error"
+                } else if status == "added" || status == "A" || status == "untracked" {
+                    "success"
+                } else {
+                    "warning"
+                },
+            )
+            .w(12.0)
+            .align(rune::Align::Center),
+        );
+    } else {
+        let prefix = format!("{path}/");
+        let changed = dir
+            && s.workbench
+                .change_lookup
+                .range(prefix.clone()..)
+                .next()
+                .is_some_and(|(p, _)| p.starts_with(&prefix));
+        r = r.child(
+            el().w(12.0)
+                .h(24.0)
+                .center()
+                .children(changed.then(|| el().size(6.0, 6.0).radius(3.0).fill(t.c("warning")))),
+        );
     }
     let keyboard_path = path.clone();
     let pin_path = path.clone();

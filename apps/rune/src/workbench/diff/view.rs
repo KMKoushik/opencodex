@@ -765,6 +765,7 @@ impl View {
             .pl(l.metrics.number_padding)
             .pr(l.metrics.number_right)
             .border_sides([0.0, l.metrics.number_border, 0.0, 0.0], l.bg)
+            .border_layout()
             .justify_end()
             .items_start()
             .a11y_hidden();
@@ -777,7 +778,12 @@ impl View {
             } else {
                 l.tints(kind).map_or(l.faint, |t| t.number)
             };
-            c = c.child(text(n.to_string()).font(l.font).color(color));
+            c = c.child(
+                text(n.to_string())
+                    .w(l.adv * (n.max(1).ilog10() + 1) as f32)
+                    .font(l.font)
+                    .color(color),
+            );
         }
         let at = n.map(|n| LineRef::new(side, n)).or_else(|| {
             let other = if side == Side::Old {

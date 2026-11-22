@@ -1,6 +1,7 @@
 //! Workspace presentation. All project data and mutations cross the existing gateway.
 mod actions;
 mod details;
+mod icons;
 mod image;
 mod markdown;
 mod open_apps;
@@ -19,6 +20,7 @@ pub(crate) mod panel_tabs;
 mod reader_requests;
 mod sessions;
 mod side_composer;
+mod side_context;
 mod side_restore;
 mod subagents;
 #[cfg(test)]
@@ -131,6 +133,7 @@ pub struct Workbench {
     pub side_context_revision: Option<u64>,
     pub side_model_open: bool,
     pub side_thinking_open: bool,
+    pub side_context_open: bool,
     pub side_model_search: TextEdit,
     pub side_quote: Option<String>,
     pub side_origin: Option<(String, u64)>,
@@ -188,6 +191,7 @@ impl Default for Workbench {
             side_context_revision: None,
             side_model_open: false,
             side_thinking_open: false,
+            side_context_open: false,
             side_model_search: TextEdit::new(""),
             side_quote: None,
             side_origin: None,
