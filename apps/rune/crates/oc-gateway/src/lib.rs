@@ -1,5 +1,6 @@
 //! The native client talks only to the TypeScript gateway, never to OpenCode.
 mod client;
+pub mod prompt;
 mod snapshot;
 mod sse;
 pub mod types;
