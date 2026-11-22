@@ -18,9 +18,14 @@ pub struct Data {
     pub session: String,
     pub values: Arc<Results>,
     loaded: Option<std::time::Instant>,
+    in_flight: bool,
+    dirty_due: Option<f64>,
 }
 impl Data {
     pub fn request(&mut self, url: &str, session: String, directory: String, wake: Option<Waker>) {
+        if self.session == session && self.in_flight {
+            return;
+        }
         if self.session == session
             && self.loaded.is_some_and(|at| at.elapsed().as_secs() < 15)
             && !self.values.is_empty()
@@ -33,6 +38,7 @@ impl Data {
             self.values = Arc::default();
         }
         self.session = session.clone();
+        self.in_flight = true;
         if let Some(wake) = wake {
             self.pending.set_waker(wake);
         }
@@ -52,6 +58,7 @@ impl Data {
         if session != self.session {
             return false;
         }
+        self.in_flight = false;
         self.values = Arc::new(values);
         self.loaded = Some(std::time::Instant::now());
         true
@@ -165,6 +172,29 @@ fn refresh(s: &mut State) {
         .media
         .details
         .request(url, session, directory, s.waker.clone());
+}
+/// Called only for authoritative completion/workspace events, never token deltas.
+/// One trailing refresh is retained while a request is in flight; events cannot
+/// cancel/restart a cost traversal or enqueue one request per message.
+pub fn invalidate(s: &mut State, clock: f64, tx: &mut rune::Tx) {
+    let data = &mut s.chat.media.details;
+    data.loaded = None;
+    if s.chat.details && data.dirty_due.is_none() {
+        data.dirty_due = Some(clock + 1.0);
+        tx.wake_after(std::time::Duration::from_secs(1));
+    }
+}
+pub fn poll(s: &mut State, clock: f64) {
+    let data = &mut s.chat.media.details;
+    if !s.chat.details {
+        data.dirty_due = None;
+        return;
+    }
+    if !data.in_flight && data.dirty_due.is_some_and(|due| clock >= due) {
+        data.dirty_due = None;
+        data.loaded = None;
+        refresh(s);
+    }
 }
 fn number(n: u64) -> String {
     let n = n.to_string();

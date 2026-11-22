@@ -14,7 +14,7 @@ mod markdown;
 pub(crate) use markdown::render as markdown_view;
 mod attachments;
 mod copy;
-mod details;
+pub(crate) mod details;
 mod media;
 pub mod preview;
 pub mod probe;

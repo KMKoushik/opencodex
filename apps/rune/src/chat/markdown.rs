@@ -58,9 +58,8 @@ fn render_marked(
         .file_link_icon(&super::icons::SOURCE, 13.0, 4.0)
         .inline_code_bg(t.c("code-bg"))
         .inline_code_font(13.0 / 14.0, 400.0)
-        // Rune represents chip padding with sized narrow-space glyphs. Five points
-        // inflates SF Pro's line metrics; keep it below the body's ascender height.
-        .inline_code_pad(2.0)
+        // En-space advance gives CSS's 5pt inset without inflating ascender metrics.
+        .inline_code_pad(5.0)
         .list_markers_outside(true)
         .code_block(t.c("surface-under"), t.c("border"))
         .code_block_font(TextStyle::new(13.0, 400.0).mono().lh(22.75))
@@ -112,6 +111,12 @@ fn render_marked(
     }
     let images = s.chat.media.images.clone();
     let reader_images = s.workbench.reader_chat.media.images.clone();
+    let failures = images.clone();
+    let reader_failures = reader_images.clone();
+    let media_failed =
+        s.chat.media.error.is_some() || s.workbench.reader_chat.media.error.is_some();
+    let ink = t.c("text-secondary");
+    let retry_ink = t.c("text");
     let border = t.c("border");
     if s.find.open {
         highlights.extend(
@@ -133,6 +138,70 @@ fn render_marked(
                 .or_else(|| reader_images.get(source))
                 .and_then(|image| image.as_ref().ok())
                 .cloned()
+        })
+        .missing_image(move |source, alt| {
+            let name = if alt.is_empty() { "Image" } else { alt };
+            if source.is_empty() {
+                return rune::text(format!("Image unavailable: {name}"))
+                    .font(TextStyle::new(12.0, 400.0))
+                    .color(ink);
+            }
+            let failed = media_failed
+                || failures
+                    .get(source)
+                    .or_else(|| reader_failures.get(source))
+                    .is_some_and(Result::is_err);
+            if !failed {
+                return rune::el()
+                    .size(96.0, 76.0)
+                    .radius(10.0)
+                    .border(1.0, border)
+                    .role("image")
+                    .label(name);
+            }
+            let source = source.to_owned();
+            rune::row()
+                .gap(8.0)
+                .center_y()
+                .role("status")
+                .child(
+                    rune::text(format!("Could not load image: {name}"))
+                        .font(TextStyle::new(13.0, 400.0))
+                        .color(ink),
+                )
+                .child(
+                    rune::row()
+                        .min_h(44.0)
+                        .px(8.0)
+                        .center_y()
+                        .child(
+                            rune::rich("Retry", vec![rune::Span::new(0, 5).underline(retry_ink)])
+                                .font(TextStyle::new(13.0, 400.0))
+                                .color(retry_ink),
+                        )
+                        .role("button")
+                        .focusable(true)
+                        .on_press(move |s: &mut State| {
+                            s.chat.disclosure_revision += 1;
+                            s.workbench.reader_chat.disclosure_revision += 1;
+                            if s.workbench.reader_chat.media.images.contains_key(&source) {
+                                let data = s.workbench.reader_chat.data.clone();
+                                s.workbench.reader_chat.media.retry(
+                                    &source,
+                                    data,
+                                    crate::sidecar::url(),
+                                    s.waker.clone(),
+                                );
+                            } else {
+                                s.chat.media.retry(
+                                    &source,
+                                    s.chat.data.clone(),
+                                    crate::sidecar::url(),
+                                    s.waker.clone(),
+                                );
+                            }
+                        }),
+                )
         })
         .image_frame(|body, frame| {
             let source = frame.src.to_owned();

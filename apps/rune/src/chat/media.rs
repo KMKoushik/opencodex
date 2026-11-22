@@ -8,8 +8,9 @@ type Images = BTreeMap<String, Result<Image, String>>;
 #[derive(Default)]
 pub struct Media {
     pub details: super::details::Data,
-    pending: Latest<Images>,
+    pending: Latest<Result<Images, String>>,
     pub images: Arc<Images>,
+    pub error: Option<String>,
     revision: Option<u64>,
 }
 impl Media {
@@ -22,12 +23,25 @@ impl Media {
         if let Some(wake) = wake {
             self.pending.set_waker(wake);
         }
-        let Some(client) = gateway.and_then(|url| Gateway::new(url, None).ok()) else {
+        let Some(url) = gateway.map(str::to_owned) else {
             return;
         };
         let old = self.images.clone();
-        self.pending
-            .request(data, move |data| load(client, &data, old));
+        self.error = None;
+        self.pending.request(data, move |data| {
+            Gateway::new(&url, None).map(|client| load(client, &data, old))
+        });
+    }
+    pub fn retry(
+        &mut self,
+        source: &str,
+        data: Arc<Messages>,
+        gateway: Option<&str>,
+        wake: Option<Waker>,
+    ) {
+        Arc::make_mut(&mut self.images).remove(source);
+        self.revision = None;
+        self.request(data, gateway, wake);
     }
     pub fn capture(&mut self, data: Arc<Messages>, gateway: &str) -> Result<(), String> {
         if let Some(info) = &data.info {
@@ -44,7 +58,14 @@ impl Media {
     }
     pub fn take(&mut self) -> bool {
         let details = self.details.take();
-        if let Some(images) = self.pending.take() {
+        if let Some(result) = self.pending.take() {
+            let images = match result {
+                Ok(images) => images,
+                Err(error) => {
+                    self.error = Some(error);
+                    return true;
+                }
+            };
             if images.is_empty() && self.images.is_empty() {
                 return details;
             }

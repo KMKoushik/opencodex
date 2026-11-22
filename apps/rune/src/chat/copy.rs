@@ -1,4 +1,10 @@
-//! ResponseCopy: acknowledge the clipboard, not merely the queued write.
+//! ResponseCopy: verify readback rather than merely acknowledging a queued write.
+//!
+//! Pinned Rune exposes no ordinary-write completion result. Readback is best effort:
+//! a failed write with identical preexisting clipboard text is indistinguishable from
+//! success (including an empty expected string and an unavailable/empty read).
+//! Another application replacing clipboard contents before readback, or a successful
+//! write followed by an unavailable read, can conversely produce a false failure.
 use crate::{
     State,
     sidebar::{icon_button, label},
@@ -83,6 +89,22 @@ pub fn view(s: &State, id: &str, source: &str, reader: bool) -> El {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn readback_cannot_distinguish_an_identical_preexisting_clipboard() {
+        let mut chat = super::super::Chat::default();
+        chat.copy_pending = Some("answer".into());
+        // No write occurred: this deliberately confirms the fallback's limitation.
+        assert!(acknowledge(&mut chat, "answer".into(), "same", "same", 0.0));
+        chat.copy_pending = Some("answer".into());
+        // An intervening writer can conversely make a completed write look failed.
+        assert!(!acknowledge(
+            &mut chat,
+            "answer".into(),
+            "same",
+            "other app",
+            0.0
+        ));
+    }
     #[test]
     fn response_copy_acknowledges_memory_clipboard_and_reports_unavailable_clipboard() {
         crate::OPTIONS.get_or_init(|| crate::Options {

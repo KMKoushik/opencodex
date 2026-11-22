@@ -221,6 +221,7 @@ impl State {
     }
 }
 fn view(s: &State, cx: &mut Cx<State>) -> El {
+    chat::comments::decorate(s, cx);
     native::coverage(s);
     let t = &s.theme;
     cx.caption_color(if t.dark {
@@ -409,7 +410,11 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
     let mut chat_updated = false;
     if let Some(data) = s.worker.as_ref().and_then(Worker::take_messages) {
         if s.selected.as_deref() == Some(&data.session_id) {
+            let completed = s.chat.data.media_revision != data.media_revision;
             s.chat.accept(data);
+            if completed {
+                chat::details::invalidate(s, clock, tx);
+            }
             if s.find.open {
                 find::refresh(s);
             }
@@ -508,7 +513,14 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
         }
         notifications::snapshot(s, &snapshot);
         let reconnected = snapshot.live && !s.snapshot.live;
+        let details_changed = reconnected
+            || snapshot.workspace_revision != s.snapshot.workspace_revision
+            || snapshot.native_revisions[0] != s.snapshot.native_revisions[0]
+            || snapshot.active != s.snapshot.active;
         s.snapshot = snapshot;
+        if details_changed {
+            chat::details::invalidate(s, clock, tx);
+        }
         if reconnected && s.pages.route != pages::Route::Chat {
             s.open_page(s.pages.route.clone());
         }
@@ -522,6 +534,7 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
             s.command(oc_gateway::Command::Details(directory));
         }
     }
+    chat::details::poll(s, clock);
     if sidebar_changed {
         sidebar::rebuild(s);
     }

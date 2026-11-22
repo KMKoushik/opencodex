@@ -66,18 +66,12 @@ impl Renderer {
                     sp.mono = true;
                     sp.weight = Some(s.inline_code_weight);
                     sp.size = Some(link_base * s.inline_code_scale);
-                    // Code inside a link reads as part of the link's label: it inherits the link's
-                    // colour, underline and hover with no code-pill background or padding.
-                    if in_link.is_none() {
-                        sp = sp.bg(s.code_bg, s.inline_code_pad);
-                    }
+                    sp = sp.bg(s.code_bg, s.inline_code_pad);
                     code.push(sp);
                     continue;
                 }
                 Style::CodePad => {
-                    if in_link.is_none() {
-                        sp.size = Some(pad_size(font, s.inline_code_pad));
-                    }
+                    sp.size = Some(pad_size(font, s.inline_code_pad));
                 }
                 Style::Strong => sp.weight = Some(s.strong_weight),
                 Style::Em => sp.italic = true,

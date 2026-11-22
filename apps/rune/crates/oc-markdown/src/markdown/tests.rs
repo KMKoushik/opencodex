@@ -22,7 +22,7 @@ fn spans_with(src: &str, style: &MarkdownStyle, highlighter: Highlighter) -> Vec
     let r = Renderer { s: style.clone(), highlights: Vec::new(), reveal: 0.0, streaming: false, on_link: None, on_link_secondary: None, link_look: None, link_help: None, link_ring: None, code_link: None, on_task: None,
         tasks_read_only: false, selectable: false, scroll_wide: false, tentative: None, highlighter, sources: sources.clone(),
         next_source: Cell::new(0), tasks, next_task: Cell::new(0), current_block_key: RefCell::new("b0".into()),
-        #[cfg(feature = "mermaid")] diagram_frame: None, code_frame: None, quote_frame: None, link_favicon: None, images: None, on_image: None, flow: Cell::default() };
+        #[cfg(feature = "mermaid")] diagram_frame: None, code_frame: None, quote_frame: None, link_favicon: None, images: None, on_image: None, missing_image: None, flow: Cell::default() };
     let mut found = Vec::new();
     codes(&blocks, &mut found);
     assert_eq!(found.len(), sources.len(), "one source per code block");
@@ -263,7 +263,7 @@ fn a_reference_definition_parses_whole() {
 
 #[test]
 fn link_spans_come_before_inner_inline_styles_so_bold_em_and_code_keep_theirs() {
-    let style = MarkdownStyle::neutral(true);
+    let style = MarkdownStyle::neutral(true).inline_code_pad(5.0);
     let bg = Color { r: 1.0, g: 0.0, b: 0.5, a: 1.0 };
     let look: LinkLook = Rc::new(move |url| {
         url.starts_with("session:").then(|| (Span::new(0, 0).color(Color::WHITE).weight(500.0).bg(bg, 3.0), LinkPaint::new()))
@@ -273,13 +273,21 @@ fn link_spans_come_before_inner_inline_styles_so_bold_em_and_code_keep_theirs() 
     let r = Renderer { s: style.clone(), highlights: Vec::new(), reveal: 0.0, streaming: false, on_link: None, on_link_secondary: None, link_look: Some(look), link_help: None, link_ring: None, code_link: None, on_task: None,
         tasks_read_only: false, selectable: false, scroll_wide: false, tentative: None, highlighter: Highlighter::builtin(), sources,
         next_source: Cell::new(0), tasks, next_task: Cell::new(0), current_block_key: RefCell::new("b0".into()),
-        #[cfg(feature = "mermaid")] diagram_frame: None, code_frame: None, quote_frame: None, link_favicon: None, images: None, on_image: None, flow: Cell::default() };
+        #[cfg(feature = "mermaid")] diagram_frame: None, code_frame: None, quote_frame: None, link_favicon: None, images: None, on_image: None, missing_image: None, flow: Cell::default() };
     let spans = r.spans(inl, style.body);
     // The link span is first so `flatten_spans` applies inner Strong/Em/Code over it.
     assert_eq!((spans[0].start, spans[0].end, spans[0].color, spans[0].weight, spans[0].bg, spans[0].bg_pad), (0, inl.text.len() as u32, Some(Color::WHITE), Some(500.0), Some(bg), 3.0));
     assert!(spans.iter().any(|s| &inl.text[s.start as usize..s.end as usize] == "bold" && s.weight == Some(style.strong_weight)));
     assert!(spans.iter().any(|s| &inl.text[s.start as usize..s.end as usize] == "em" && s.italic && s.color.is_none()));
-    assert!(spans.iter().any(|s| &inl.text[s.start as usize..s.end as usize] == "code" && s.mono && s.size == Some(style.body.size * style.inline_code_scale) && s.bg.is_none()));
+    assert!(spans.iter().any(|s| &inl.text[s.start as usize..s.end as usize] == "code" && s.mono && s.size == Some(style.body.size * style.inline_code_scale) && s.bg.is_some()));
+    for &(a, b, st) in &inl.spans {
+        if st != Style::CodePad { continue; }
+        let pad = spans.iter().find(|s| s.start as usize == a && s.end as usize == b).unwrap();
+        let size = pad.size.unwrap();
+        assert!(size <= style.body.size, "padding must not inflate line metrics: {size}");
+        let advance = rune::text::measure(PAD, &[], TextStyle { size, ..style.body }, None).0;
+        assert!((advance - 5.0).abs() < 0.05, "padding advance: {advance}");
+    }
 }
 
 #[test]

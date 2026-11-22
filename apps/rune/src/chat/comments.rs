@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 
 /// Invoke once from the root view, before constructing the transcript. Rune exposes
 /// line-box geometry and retained selection marks through Cx, not through Tx.
-/// The chat/composer's existing view entry points don't currently receive that Cx.
+/// The root owns this decoration; chat/composer view entry points do not need Cx.
 pub fn decorate(s: &State, cx: &mut rune::Cx<State>) {
     let selecting = s.chat.selected_response.is_some();
     let editing = s

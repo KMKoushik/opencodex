@@ -69,7 +69,12 @@ impl Renderer {
         if let Some((icon, [size, gap])) = self.s.file_link_icon {
             for (at, end, href) in &inl.links {
                 if file_link(href) && inl.text.get(*at..*end).is_some_and(|t| !t.trim().is_empty()) {
-                    e = e.inline_icon(*at, InlineIcon::glyph(icon).color(self.s.accent).size(size).gap(gap));
+                    // Rune refuses an inline icon immediately before whitespace.
+                    // Code labels now retain CSS padding, so skip only that leading
+                    // padding; never drop the local-file adornment on code links.
+                    let label = &inl.text[*at..*end];
+                    let start = *at + label.len() - label.trim_start().len();
+                    e = e.inline_icon(start, InlineIcon::glyph(icon).color(self.s.accent).size(size).gap(gap));
                 }
             }
         }
