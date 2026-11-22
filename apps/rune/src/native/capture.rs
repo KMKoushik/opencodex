@@ -47,6 +47,7 @@ pub fn composite(screenshot: &str, tree: &str) -> Result<(), String> {
     let child = image::load_from_memory(&bytes)
         .map_err(|e| e.to_string())?
         .into_rgba8();
+    let snapshot_pixels = child.dimensions();
     let mut image = image::open(screenshot)
         .map_err(|e| e.to_string())?
         .into_rgba8();
@@ -71,6 +72,6 @@ pub fn composite(screenshot: &str, tree: &str) -> Result<(), String> {
         (rect[1] * scale).round() as i64,
     );
     image.save(screenshot).map_err(|e| e.to_string())?;
-    std::fs::write(format!("{screenshot}.webview.json"), json!({"rect":rect,"scale":scale,"snapshotPixels":child.dimensions(),"source":"WKWebView.takeSnapshot"}).to_string()).map_err(|e| e.to_string())?;
+    std::fs::write(format!("{screenshot}.webview.json"), json!({"rect":rect,"scale":scale,"snapshotPixels":snapshot_pixels,"compositePixels":size,"source":"WKWebView.takeSnapshot"}).to_string()).map_err(|e| e.to_string())?;
     Ok(())
 }

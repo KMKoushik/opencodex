@@ -51,10 +51,12 @@ export function config(state, extras, viewport = { width: 1280 }) {
   if (composer[state]) flags.push('--composer-state', composer[state]);
   if (state.startsWith('question-')) session = 2;
   if (/^chat-.*-(top|middle|bottom)$/.test(state)) flags.push('--scroll', state.split('-').at(-1));
-  if (state === 'chat-long-top' || state === 'chat-long-middle') {
+  if (state === 'chat-long-top') {
     // Electron's history priming starts with a reading gesture. Give Rune the
     // same reading intent on blank viewport space after its capture scroll,
-    // without perturbing the requested top/midpoint or selecting response text.
+    // without perturbing the requested top or selecting response text. Middle's
+    // measurement pass reaches the end (resuming follow) before its final
+    // programmatic midpoint assignment, so it must not acquire this gesture.
     script.push({ t: 0.1, type: 'click', x: viewport.width - 60, y: 100 });
   }
   if (state === 'tools-expanded')
