@@ -8,7 +8,6 @@ pub fn documents(s: &State) -> El {
         .pl(10.0)
         .gap(4.0)
         .center_y()
-        .scroll_x()
         .role("tablist")
         .label("Open files");
     for (index, doc) in s.workbench.docs.iter().enumerate() {
@@ -110,5 +109,5 @@ pub fn documents(s: &State) -> El {
             tab
         });
     }
-    tabs
+    row().h(40.0).min_w(0.0).scroll_x().child(tabs)
 }

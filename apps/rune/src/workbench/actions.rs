@@ -33,7 +33,10 @@ pub fn overlay(s: &State) -> El {
     let t = &s.theme;
     let directory = doc.directory.clone();
     let path = doc.path.clone();
-    let absolute = format!("{}/{}", directory.trim_end_matches('/'), path);
+    let absolute = std::path::Path::new(&directory)
+        .join(&path)
+        .to_string_lossy()
+        .into_owned();
     let copy = row()
         .h(32.0)
         .w_full()
