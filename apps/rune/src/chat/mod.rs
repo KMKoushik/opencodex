@@ -11,6 +11,7 @@ use std::{cell::Cell, collections::BTreeMap, rc::Rc, sync::Arc};
 pub(crate) mod comments;
 pub(crate) mod icons;
 mod markdown;
+mod html;
 pub(crate) use markdown::render as markdown_view;
 mod attachments;
 mod copy;

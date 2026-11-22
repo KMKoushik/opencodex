@@ -17,6 +17,10 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("math", "m
 rune = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de" }
 rune-kit = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de", default-features = false, features = ["markdown"] }
 pulldown-cmark = "0.13"
+html5ever = "0.35"
+markup5ever_rcdom = "0.35"
+serde_json = "1"
+parley = "0.12"
 
 [dev-dependencies]
 rune-theme-opencode = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de" }

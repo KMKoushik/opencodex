@@ -206,7 +206,7 @@ impl Renderer {
                         let pb = pre_slice.and_then(|ps| ps.get(i)).map(Rc::as_ref);
                         let child_open_tail = *open_tail && i + 1 == blocks_slice.len();
                         let is_deep_tail = matches!((b, map), (Block::Para(_), BlockMap::DeepTail { .. }));
-                        let can_memo_here = *allow_memo && !child_open_tail && !(self.streaming && is_deep_tail);
+                        let can_memo_here = *allow_memo && !child_open_tail && !matches!(b, Block::Html(_)) && !(self.streaming && is_deep_tail);
                         if can_memo_here {
                             let (src_at, src_n) = (self.next_source.get(), pb.map_or_else(|| memo::source_count(b), |p| p.src_n as usize));
                             let (task_at, task_n) = (self.next_task.get(), pb.map_or_else(|| memo::task_count(b), |p| p.task_n as usize));
@@ -463,6 +463,7 @@ impl Renderer {
             _ => None,
         };
         match b {
+            Block::Html(nodes) => self.html_nodes(nodes, true, "html"),
             Block::Para(inl) => self.para(inl, inl_map, s.body, self.flow.get().ink.unwrap_or(s.text)),
             Block::Heading(l, inl) => self.para(inl, inl_map, s.headings[(*l as usize).clamp(1, 4) - 1], if *l >= 4 && !s.web_layout { s.muted } else { s.text }).role("heading").level(u32::from(*l)),
             Block::Code(code) => {

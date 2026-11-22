@@ -62,11 +62,15 @@ impl Renderer {
                     continue;
                 }
                 Style::Code => {
-                    let link_base = in_link.and_then(|l| l.size).unwrap_or(base);
+                    let link_base = if s.web_layout {s.body.size} else {in_link.and_then(|l| l.size).unwrap_or(base)};
                     sp.mono = true;
-                    sp.weight = Some(s.inline_code_weight);
+                    sp.weight = Some(if s.web_layout {
+                        if inl.spans.iter().any(|&(x,y,st)|st==Style::Bold && x<=a && b<=y) {700.0}
+                        else if inl.spans.iter().any(|&(x,y,st)|st==Style::Strong && x<=a && b<=y) { s.strong_weight }
+                        else if in_link.is_some() {500.0} else {font.weight}
+                    } else {s.inline_code_weight});
                     sp.size = Some(link_base * s.inline_code_scale);
-                    sp = sp.bg(s.code_bg, s.inline_code_pad);
+                    if s.web_inline.is_none() { sp = sp.bg(s.code_bg, s.inline_code_pad); }
                     code.push(sp);
                     continue;
                 }
@@ -74,6 +78,11 @@ impl Renderer {
                     sp.size = Some(pad_size(font, s.inline_code_pad));
                 }
                 Style::Strong => sp.weight = Some(s.strong_weight),
+                Style::Bold => sp.weight = Some(700.0),
+                Style::Mono => sp.mono = true,
+                Style::Sub | Style::Sup => sp.size = Some(base * 0.75),
+                Style::Small => sp.size = Some(base * 0.5),
+                Style::Underline => sp.underline = Some(s.text),
                 Style::Em => sp.italic = true,
                 Style::Strike | Style::Link => unreachable!(),
             }
@@ -150,6 +159,9 @@ impl Renderer {
     }
 
     pub(in crate::markdown) fn para(&self, inl: &Inline, map: Option<&SpanMap>, style: TextStyle, color: Color) -> El {
+        if self.s.web_inline.is_some() && (inl.spans.iter().any(|s|matches!(s.2, Style::Code | Style::Sub | Style::Sup | Style::Small)) || !inl.links.is_empty()) {
+            return self.web_para(inl, map, style, color);
+        }
         // Lines keep their own 22.4 points, as a page's do, so a long list doesn't drift a
         // point per item.
         let e = self.with_reveal(rich(inl.text.clone(), self.spans(inl, style)).font(style).color(color).exact_lines()).w_full();

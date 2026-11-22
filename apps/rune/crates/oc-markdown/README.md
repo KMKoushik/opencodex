@@ -7,8 +7,9 @@ The source checkout and Cargo cache are never modified.
 Why: that version's public Markdown API supports icons before HTTP links, but not
 icons before local file links as OpenCodex React renders them. Reimplementing or
 rewriting Markdown strings would break reference links, nested markup, copy text,
-streaming prefix stability or bounded parsing. This adapter keeps the exact pinned
+streaming prefix stability or bounded parsing. Ordinary Markdown retains the pinned
 incremental parser, byte-budgeted caches, block memoization and selection mapping.
+HTML5 fragments use the sanitizer/native rendering path documented in [HTML.md](HTML.md).
 `MarkdownStyle::file_link_icon`, included in the style hash, inserts a Rune inline
 vector icon without changing the text or href. Opt-in `web_layout` applies the
 React source's paragraph/list margins, link weight, heading colors, one-point table

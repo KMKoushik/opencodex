@@ -452,10 +452,19 @@ impl Renderer {
                 (None, true, false) => cell.w_frac(natural / total).shrink().min_w(*min),
                 (None, true, true) => cell.w_frac(natural / total).shrink().min_w(*natural),
             };
+            let selected = if self.s.web_inline.is_some() && inl.spans.iter().any(|s|matches!(s.2,Style::Code|Style::Sub|Style::Sup)) || self.s.web_inline.is_some() && !inl.links.is_empty() {
+                let available=self.s.text_width.unwrap_or(total);
+                let outer=widths.and_then(|w|w.get(j)).copied().unwrap_or_else(||if self.s.table_full_width && total>0.0 {available*natural/total}else{*natural});
+                let old=self.flow.get();
+                self.flow.set(super::render::Flow {inset:available-(outer-self.pad_left(j,pad_x)-pad_x),..old});
+                let content=self.web_para(inl,maps.get(j),font,color);
+                self.flow.set(old);
+                content
+            } else {self.select_inline(content,inl,maps.get(j))};
             r = r.child(
                 // Clipped: a word wider than a shrunk column (or a row still streaming in) must
                 // not run into the next column.
-                cell.pl(self.pad_left(j, pad_x)).pr(pad_x).py(pad_y).clip_soft(0.0).child(self.select_inline(content, inl, maps.get(j))),
+                cell.pl(self.pad_left(j, pad_x)).pr(pad_x).py(pad_y).clip_soft(0.0).child(selected),
             );
         }
         r
@@ -522,15 +531,17 @@ impl Renderer {
                 let in_link = |a: usize, b: usize| inl.links.iter().any(|l| l.0 <= a && b <= l.1);
                 let pads = inl.spans.iter().filter(|s| {
                     s.2 == Style::CodePad
-                        && inl.spans.iter().any(|c| c.2 == Style::Code && c.1 == s.0 && !in_link(c.0, c.1))
+                        && inl.spans.iter().any(|c| c.2 == Style::Code && c.1 == s.0 && (self.s.web_layout || !in_link(c.0, c.1)))
                 });
                 let (last, word) = pads.fold((false, false), |(last, word), s| (last || s.1 == inl.text.len(), word || ends_code(s.1)));
                 // Code that ends the cell lost its end padding with the line's trailing space
                 // (`parser::trimmed_len`), but a page still counts it: the cell is as wide as the chip.
-                let ends = inl.spans.iter().any(|c| c.2 == Style::Code && c.1 >= inl.text.len() && !in_link(c.0, c.1));
+                let ends = inl.spans.iter().any(|c| c.2 == Style::Code && c.1 >= inl.text.len() && (self.s.web_layout || !in_link(c.0, c.1)));
                 let (last, word) = (last || ends, word || ends);
-                natural[j] = max + pad(last) + 0.01;
-                fit[j] = min + pad(word) + 0.01;
+                let icon_room=self.s.file_link_icon.map_or(0.0,|(_, [size,gap])|size+gap);
+                let icons=inl.links.iter().filter(|(_,_,href)|super::link_icon::file_link(href)).count();
+                natural[j] = max + pad(last) + icon_room * icons as f32 + 0.01;
+                fit[j] = min + pad(word) + if icons>0 {icon_room} else {0.0} + 0.01;
             }
             let rw = Rc::new(RowWidths { natural: natural.into_boxed_slice(), fit: fit.into_boxed_slice() });
             ROW_WIDTHS.with_borrow_mut(|c| c.insert(rkey, rw.clone(), 8 * n + 48));

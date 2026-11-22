@@ -70,6 +70,7 @@ mod bidi;
 mod cache;
 mod find;
 mod highlight;
+pub mod html;
 mod image;
 mod interrupt;
 mod link_icon;
@@ -113,9 +114,15 @@ pub enum Style {
     /// The narrow no-break spaces around inline code (CSS's `padding: 0 4px`).
     CodePad,
     Strong,
+    Bold,
     Em,
     Strike,
     Link,
+    Mono,
+    Sub,
+    Sup,
+    Underline,
+    Small,
 }
 
 /// Text with styled and linked byte ranges.
@@ -131,6 +138,8 @@ pub struct Inline {
 /// A block of the parsed document.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Block {
+    /// A complete HTML5-parsed and sanitized Markdown fragment.
+    Html(std::sync::Arc<Vec<html::Node>>),
     Para(Inline),
     Heading(u8, Inline),
     Code(String),
@@ -171,6 +180,7 @@ pub(super) struct CodeWire {
     pub(super) wrap_default: bool,
 }
 type QuoteWire = Rc<dyn Fn(El, &QuoteFrame<'_>) -> El>;
+type HtmlDetailsWire = Rc<dyn Fn(El, El, &str, bool) -> El>;
 
 /// A block quote [`Markdown::quote_frame`] is wrapping.
 #[non_exhaustive]
@@ -259,6 +269,8 @@ pub struct Markdown {
     code_frame: Option<CodeFrameFn>,
     code_wrap: Option<CodeWrapFn>,
     quote_frame: Option<QuoteWire>,
+    html_details: Option<HtmlDetailsWire>,
+    prepared_html: Option<(std::sync::Arc<Vec<html::Node>>, usize)>,
     link_favicon: Option<link_icon::FaviconWire>,
     images: Option<image::ImageWire>,
     on_image: Option<image::ImagePress>,
@@ -271,11 +283,27 @@ thread_local! {
 }
 
 impl Markdown {
+    /// HTML5 parsing can be prepared on a worker and shared without cloning its tree.
+    pub fn prepared_html(mut self, nodes: std::sync::Arc<Vec<html::Node>>) -> Self {
+        self.prepared_html = Some((nodes,0));
+        self
+    }
+    /// Prepared HTML tail; retain the ordinary incremental Markdown prefix and
+    /// its exact source maps rather than reparsing finished prose as HTML.
+    pub fn prepared_html_fragment(mut self, nodes: std::sync::Arc<Vec<html::Node>>, start:usize) -> Self {
+        self.prepared_html = Some((nodes,start));
+        self
+    }
+    /// Native disclosure host. `key` is structural (stable while the body streams).
+    pub fn html_details(mut self, f: impl Fn(El, El, &str, bool) -> El + 'static) -> Self {
+        self.html_details = Some(Rc::new(f));
+        self
+    }
     pub fn new(src: impl Into<String>) -> Markdown {
         Markdown { src: src.into(), style: None, block_keys: Vec::new(), highlights: Vec::new(), autolink: true, reveal: -1.0, streaming: false, on_link: None, on_link_secondary: None, link_look: None, link_help: None, link_ring: None, code_link: None,
             on_task: None, tasks_read_only: false, selectable: false, copy_source: false, scroll_wide: false, wrap_code: false, tentative: None, highlighter: Highlighter::builtin(),
             #[cfg(feature = "mermaid")]
-            diagram_frame: None, code_frame: None, code_wrap: None, quote_frame: None, link_favicon: None, images: None, on_image: None, missing_image: None }
+            diagram_frame: None, code_frame: None, code_wrap: None, quote_frame: None, html_details: None, prepared_html: None, link_favicon: None, images: None, on_image: None, missing_image: None }
     }
     /// Highlight UTF-8 byte ranges of the Markdown source string (see [`find`]).
     ///
@@ -512,6 +540,8 @@ impl Markdown {
             && self.code_frame.is_none()
             && self.code_wrap.is_none()
             && self.quote_frame.is_none()
+            && self.html_details.is_none()
+            && self.prepared_html.is_none()
             && self.link_favicon.is_none()
             && self.images.is_none()
             && self.on_image.is_none()
@@ -540,11 +570,13 @@ impl Markdown {
     fn render_uncached(self, style: &MarkdownStyle) -> El {
         #[cfg(test)]
         RENDERS.with(|n| n.set(n.get() + 1));
-        let ((blocks, sources, tasks, starts, maps), meta) = match (self.autolink, self.streaming) {
-            (true, false) => doc_cached_with_meta(&self.src),
-            (true, true) => stream_cached_with_meta(&self.src),
+        let prepared = self.prepared_html;
+        let source = prepared.as_ref().map_or(self.src.as_str(),|(_,start)|&self.src[..*start]);
+        let ((blocks, sources, tasks, starts, maps), meta): (cache::Doc, cache::Meta) = match (self.autolink, self.streaming) {
+            (true, false) => doc_cached_with_meta(source),
+            (true, true) => stream_cached_with_meta(source),
             (false, streaming) => {
-                let (b, s, t, _, st, m) = if streaming { parse_streaming(&self.src, false) } else { parse_doc(&self.src, false) };
+                let (b, s, t, _, st, m) = if streaming { parse_streaming(source, false) } else { parse_doc(source, false) };
                 let meta: Rc<[Rc<memo::PreBlock>]> = b.iter().enumerate().map(|(i, blk)| memo::precompute_block(blk, m.get(i))).collect();
                 ((Rc::new(b), s.into(), t.into(), st.into(), m.into()), meta)
             }
@@ -562,10 +594,15 @@ impl Markdown {
             highlighter: self.highlighter, sources, next_source: Cell::new(0), tasks, next_task: Cell::new(0),
             current_block_key: RefCell::new("b0".into()),
             #[cfg(feature = "mermaid")]
-            diagram_frame: self.diagram_frame, code_frame, quote_frame: self.quote_frame, link_favicon: self.link_favicon, images: self.images, on_image: self.on_image, missing_image: self.missing_image, flow: Cell::default() };
+            diagram_frame: self.diagram_frame, code_frame, quote_frame: self.quote_frame, html_details: self.html_details, link_favicon: self.link_favicon, images: self.images, on_image: self.on_image, missing_image: self.missing_image, flow: Cell::default() };
         // The document reads the way its first words do; until any arrive, the way it was asked.
         let root = memo::with_renderer(&r, || {
-            bidi::directed(r.blocks_with_dirs(&blocks, Some(&meta), &maps, &keys, true, &dirs), root_dir).selection_group(self.selectable)
+            let mut body = bidi::directed(r.blocks_with_dirs(&blocks, Some(&meta), &maps, &keys, true, &dirs), root_dir);
+            if let Some((nodes,_))=&prepared {
+                let heading=nodes.iter().find(|n|!matches!(n,html::Node::Text(t) if t.trim().is_empty())).is_some_and(|n|matches!(n,html::Node::Element {tag,..} if matches!(tag.as_str(),"h1"|"h2"|"h3"|"h4")));
+                body=body.child(r.html_nodes(nodes,true,"html").key(format!("b{}",blocks.len())).mt(if blocks.is_empty(){0.0}else if heading {24.0}else{16.0}));
+            }
+            body.selection_group(self.selectable)
         });
         if !(self.selectable && self.copy_source) { return root; }
         let names: Rc<[String]> = rendered_keys(blocks.len(), &keys).into();

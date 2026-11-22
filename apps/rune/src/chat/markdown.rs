@@ -43,7 +43,12 @@ pub fn response(
             ));
         }
     }
-    render_marked(s, source, streaming, width, marks, row)
+    let scope = if row.is_empty() {
+        format!("reader-{message}-{ordinal}")
+    } else {
+        row.to_owned()
+    };
+    render_marked(s, source, streaming, width, marks, &scope)
 }
 fn render_marked(
     s: &State,
@@ -54,6 +59,14 @@ fn render_marked(
     row: &str,
 ) -> El {
     let t = &s.theme;
+    let prepared = if source.contains('<') {
+        let Some(tree) = super::html::request(source, row, s.waker.clone()) else {
+            return rune::el();
+        };
+        tree
+    } else {
+        None
+    };
     let font_size = s.prefs.chat_font_size.unwrap_or(14.0);
     let mut style = MarkdownStyle::neutral(t.dark)
         .web_layout()
@@ -64,9 +77,10 @@ fn render_marked(
         .link_underline(t.c("link-underline"))
         .file_link_icon(&super::icons::SOURCE, 13.0, 4.0)
         .inline_code_bg(t.c("code-bg"))
-        .inline_code_font(13.0 / 14.0, 400.0)
+        .inline_code_font(13.0 / font_size, 400.0)
         // En-space advance gives CSS's 5pt inset without inflating ascender metrics.
         .inline_code_pad(5.0)
+        .web_inline_metrics(1.0, 1.0, 5.0, 2.0)
         .list_markers_outside(true)
         .code_block(t.c("surface-under"), t.c("border"))
         .code_block_font(TextStyle::new(13.0, 400.0).mono().lh(22.75))
@@ -144,7 +158,45 @@ fn render_marked(
             }),
         );
     }
-    Markdown::new(source)
+    let disclosures = s.chat.disclosures.clone();
+    let row_id = row.to_owned();
+    let font = TextStyle::new(font_size, 400.0).lh(font_size * 1.625);
+    let text_ink = t.c("text");
+    let markdown = Markdown::new(source).html_details(move |header, body, path, default| {
+        let key = format!("html-{row_id}-{path}");
+        let open = disclosures.get(&key).copied().unwrap_or(default);
+        let toggle = key.clone();
+        rune::col()
+            .w_full()
+            .child(
+                rune::row()
+                    .w_full()
+                    .center_y()
+                    .child(
+                        rune::text(if open { "▼" } else { "▶" })
+                            .font(font)
+                            .color(text_ink)
+                            .w(font_size),
+                    )
+                    .child(header.grow(1.0).shrink())
+                    .role("button")
+                    .expanded(open)
+                    .focusable(true)
+                    .cursor(rune::Cursor::Pointer)
+                    .on_press(move |s: &mut State| {
+                        s.chat.disclosures.insert(toggle.clone(), !open);
+                        s.chat.disclosure_revision += 1;
+                        s.workbench.reader_chat.disclosure_revision += 1;
+                    }),
+            )
+            .child(if open { body } else { rune::el() })
+    });
+    let markdown = if let Some(prepared) = prepared {
+        markdown.prepared_html_fragment(prepared.nodes.clone(), prepared.start)
+    } else {
+        markdown
+    };
+    markdown
         .on_link_tx(|s: &mut State, href, tx| s.open_link(href, tx))
         .highlights(highlights)
         .images(move |source| {
@@ -218,7 +270,7 @@ fn render_marked(
                         }),
                 )
         })
-        .image_frame(|body, frame| {
+        .image_frame(move |body, frame| {
             let source = frame.src.to_owned();
             let name = if frame.alt.is_empty() {
                 "Image"
@@ -226,10 +278,12 @@ fn render_marked(
                 frame.alt
             }
             .to_owned();
-            body.size(96.0, 76.0)
-                .max_w(96.0)
-                .radius(10.0)
-                .pixels_fit(frame.image.pixels(), rune::SurfaceFit::Fill)
+            let [w, h] = frame.image.size().unwrap_or([1, 1]);
+            let scale = (width / w as f32).min(560.0 / h as f32).min(1.0);
+            body.size(w as f32 * scale, h as f32 * scale)
+                .max_w(width)
+                .radius(8.0)
+                .pixels_fit(frame.image.pixels(), rune::SurfaceFit::Fit)
                 .role("button")
                 .focusable(true)
                 .on_press_tx(move |s: &mut State, tx| {

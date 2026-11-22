@@ -6,6 +6,8 @@ use super::*;
 mod blocks;
 mod code;
 mod inline;
+mod html;
+mod web_inline;
 
 pub(super) use code::code_overflows_at;
 
@@ -43,6 +45,7 @@ pub(super) struct Renderer {
     pub(super) code_frame: Option<CodeWire>,
     /// `Markdown::quote_frame`.
     pub(super) quote_frame: Option<QuoteWire>,
+    pub(super) html_details: Option<HtmlDetailsWire>,
     /// `Markdown::link_favicon`.
     pub(super) link_favicon: Option<link_icon::FaviconWire>,
     /// `Markdown::images` and `Markdown::on_image`.
@@ -146,6 +149,7 @@ fn block_key(i: usize, keys: &[String], used: &mut Vec<String>) -> String {
 /// (margin-top, margin-bottom) per block, collapsed like CSS margins.
 pub(super) fn margins(b: &Block, s: &MarkdownStyle) -> (f32, f32) {
     match b {
+        Block::Html(_) => (0.0, 0.0),
         Block::Para(_) => (0.0, 12.0),
         Block::Heading(1, _) => (28.0, 12.0),
         Block::Heading(2, _) => (24.0, 10.0),

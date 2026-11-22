@@ -181,6 +181,7 @@ fn plain_iter(
                         let rows: Vec<String> = std::iter::once(row(&t.head)).chain(t.rows.iter().map(|r| row(r))).collect();
                         out.push(Piece { breaks: [1, 1], text: rows.join("\n") });
                     }
+                    (Block::Html(nodes), _) => out.push(Piece { breaks: [2, 2], text: super::html::plain(nodes) }),
                     (Block::Image { .. } | Block::Rule, _) => {}
                 }
             }
