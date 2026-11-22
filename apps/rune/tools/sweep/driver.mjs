@@ -1,3 +1,4 @@
+/* global document, getComputedStyle */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { parseArgs } from 'node:util';
@@ -260,6 +261,44 @@ try {
           row.desktop = await electron.capture(stem + '.electron.png');
           row.versions = { electron: electron.versions.electron, chrome: electron.versions.chrome };
           writeFileSync(stem + '.dom.txt', await page.locator('body').innerText());
+          writeFileSync(
+            stem + '.blocks.json',
+            JSON.stringify(
+              await page.evaluate(() =>
+                [...document.querySelectorAll('.timeline-row, .markdown, .markdown *')].map(
+                  (el) => {
+                    const r = el.getBoundingClientRect();
+                    const s = getComputedStyle(el);
+                    return {
+                      tag: el.tagName,
+                      class: el.className,
+                      text: el.textContent.slice(0, 120),
+                      rect: [r.x, r.y, r.width, r.height],
+                      style: Object.fromEntries(
+                        [
+                          'marginTop',
+                          'marginBottom',
+                          'paddingTop',
+                          'paddingBottom',
+                          'paddingLeft',
+                          'paddingRight',
+                          'lineHeight',
+                          'fontFamily',
+                          'fontSize',
+                          'fontWeight',
+                          'borderTopWidth',
+                          'borderBottomWidth',
+                          'display',
+                        ].map((k) => [k, s[k]]),
+                      ),
+                    };
+                  },
+                ),
+              ),
+              null,
+              2,
+            ),
+          );
           const args = [
             ...c.flags,
             '--screenshot',
@@ -272,6 +311,8 @@ try {
             theme,
             '--at',
             '0.7',
+            '--tree',
+            stem + '.tree.json',
           ];
           if (c.script.length) {
             writeFileSync(fixture + '/script.json', JSON.stringify(c.script));
@@ -293,6 +334,12 @@ try {
           );
         } catch (error) {
           row.reason = String(error.message).slice(0, 1000);
+          if (electron?.page) {
+            writeFileSync(
+              stem + '.failure.dom.txt',
+              await electron.page.locator('body').innerText(),
+            );
+          }
         } finally {
           await electron?.app.close();
           electron = undefined;

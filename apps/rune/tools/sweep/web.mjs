@@ -180,12 +180,16 @@ export async function reach(page, state, c, extras) {
       await page.getByRole('tab', { name: 'Side chat 1', exact: true }).click();
     }
     if (state === 'side-chat-new') {
-      const response = page.waitForResponse(
-        (response) =>
-          response.url().endsWith('/side-chats') && response.request().method() === 'POST',
-      );
-      await click('New side chat');
-      const created = await response;
+      // Attach both rejection handlers immediately: a missing/disabled button
+      // must become a failed state, not an unhandled response-wait rejection
+      // that aborts the entire sweep before its cleanup and evidence capture.
+      const [created] = await Promise.all([
+        page.waitForResponse(
+          (response) =>
+            response.url().endsWith('/side-chats') && response.request().method() === 'POST',
+        ),
+        click('New side chat'),
+      ]);
       if (!created.ok()) throw new Error('New side chat failed');
       const side = await created.json();
       c.flags.push('--file', side.id);

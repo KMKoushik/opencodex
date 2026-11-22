@@ -24,6 +24,8 @@ changes between the two sequential captures. They are **not atomic captures**.
 with `ELECTRON_RENDERER_URL=http://127.0.0.1:4507`, isolated HOME/XDG, a temporary
 `--user-data-dir`, and an ephemeral loopback `--remote-debugging-port`. Playwright
 connects over CDP, and `Page.captureScreenshot` captures the hidden renderer.
+A unique fresh profile is used even when repeating a state under `--keep-env`,
+so persisted workspace toggles cannot invert the setup actions on a rerun.
 A finite temporary bootstrap imports the **actual built desktop main** and only
 sets BrowserWindow content size, theme and hidden state. That main loads its own
 sandboxed preload and registers the real IPC handlers. Preferences are seeded
@@ -62,3 +64,18 @@ path caching. Update observations after reviewing changed app revisions.
 process's actual isolated HOME before killing it and removes `/tmp/ocr-sweep`.
 It never stops OpenCode by executable name or accesses port 49374.
 `--report-only` regenerates Markdown from saved local results and observations.
+
+## Markdown geometry
+
+See [the Markdown follow-up](./MARKDOWN.md) for measured block heights, parity
+results and the remaining virtual-list/viewport differences.
+
+Every scored pair also saves `.blocks.json` (Chromium rectangles and computed
+spacing/font styles) and `.tree.json` (Rune's inspector tree). For extra code-line
+and nested-block probes, retain a seeded environment with `--keep-env`, then run
+`node apps/rune/tools/sweep/markdown-measure.mjs [state]` with the **same**
+`OCR_SWEEP_DIR`, `OCR_SWEEP_OC_PORT` and `OCR_SWEEP_GW_PORT`. It reuses that fixture
+without reseeding or modifying transcript data and measures both themes/sizes.
+The default state is `chat-markdown-top`. Do not run it concurrently with a sweep
+that mutates side chats. Run the environment's `cleanup()` afterwards; `--keep-env`
+is never an instruction to leave the isolated services running indefinitely.

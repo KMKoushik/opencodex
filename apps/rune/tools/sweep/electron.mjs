@@ -3,7 +3,7 @@
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdirSync, openSync, closeSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, openSync, closeSync, readFileSync, writeFileSync } from 'node:fs';
 import { base, root, fixture, env, command, stopProcess, ocPort, gwPort } from './environment.mjs';
 import { prepare } from './web.mjs';
 
@@ -36,7 +36,10 @@ export async function launchElectron(
   width,
   height,
 ) {
-  const userData = fixture + `/electron/${state}-${theme}-${width}x${height}`;
+  mkdirSync(fixture + '/electron', { recursive: true });
+  // A repeated --keep-env run must not inherit an already-open workspace from
+  // its previous capture: reach() uses the real toggle buttons to open panels.
+  const userData = mkdtempSync(fixture + `/electron/${state}-${theme}-${width}x${height}-`);
   const launcher = userData + '/launcher';
   mkdirSync(launcher, { recursive: true });
   // The finite bootstrap only controls the genuine BrowserWindow's size/visibility.
