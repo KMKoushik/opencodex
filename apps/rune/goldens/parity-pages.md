@@ -152,6 +152,14 @@ and `source-find-review-17.png`. The canonical architecture now records both sou
 workers; generated output was inspected and checked. Root checks, formatting and
 the final release workspace build pass, including accessibility metadata.
 
+Fixture cleanup after this continuation: the gateway on 4491, isolated OpenCode
+service on 4961 and its esbuild child were reverified against their fixture HOME
+and OPENCODEX_FIXTURE environment before termination. Both listening ports were
+confirmed closed, then `/tmp/ocr-parity` was deleted. Temporary review sheets are
+therefore no longer present; the ignored final pair PNGs remain in
+`apps/rune/goldens/parity-pages/`. No user service was stopped. The fixture must be
+recreated before further live captures. This cleanup does not imply parity completion.
+
 `tools/parity-pages.mjs` captures real web and Rune output against the same fresh
 `/tmp/ocr-parity` fixture (OpenCode 4961, gateway 4491), using `goldens/seed.ts`.
 It does not mock API data. Source corpus remains `goldens/web` (unchanged).
