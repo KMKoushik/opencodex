@@ -99,12 +99,76 @@ fn matches(s: &State) -> (Vec<String>, usize) {
         .filter_map(|f| crate::composer::fuzzy::score(f, &name).map(|rank| (rank, f.to_owned())))
         .collect();
     if !name.is_empty() {
-        folders.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+        // The gateway already orders names with localeCompare. Stable sorting
+        // retains that order after the web's score and UTF-16-length tie-breaks.
+        folders.sort_by(|a, b| {
+            b.0.cmp(&a.0)
+                .then(a.1.encode_utf16().count().cmp(&b.1.encode_utf16().count()))
+        });
     }
     (
         folders.into_iter().take(50).map(|(_, f)| f).collect(),
         total,
     )
+}
+fn highlights(s: &State, text: &str) -> Vec<rune::Span> {
+    let query = typed(s).map(|(_, name)| name).unwrap_or_default();
+    if query.is_empty() {
+        return vec![];
+    }
+    let smart = query == query.to_lowercase();
+    let hay: Vec<_> = if smart {
+        text.to_lowercase()
+    } else {
+        text.into()
+    }
+    .encode_utf16()
+    .collect();
+    let needle: Vec<_> = query.encode_utf16().collect();
+    let mut at = 0;
+    let Some(end) = hay.iter().position(|c| {
+        if *c == needle[at] {
+            at += 1;
+        }
+        at == needle.len()
+    }) else {
+        return vec![];
+    };
+    let mut start = end;
+    let mut at = needle.len();
+    for i in (0..=end).rev() {
+        if hay[i] == needle[at - 1] {
+            start = i;
+            at -= 1;
+            if at == 0 {
+                break;
+            }
+        }
+    }
+    let mut positions = vec![];
+    for (i, c) in hay.iter().enumerate().take(end + 1).skip(start) {
+        if *c == needle[at] {
+            positions.push(i);
+            at += 1;
+            if at == needle.len() {
+                break;
+            }
+        }
+    }
+    let mut unit = 0;
+    text.char_indices()
+        .filter_map(|(byte, c)| {
+            let selected = positions
+                .iter()
+                .any(|p| *p >= unit && *p < unit + c.len_utf16());
+            unit += c.len_utf16();
+            selected.then(|| {
+                rune::Span::new(byte, byte + c.len_utf8())
+                    .weight(600.0)
+                    .color(s.theme.c("text"))
+            })
+        })
+        .collect()
 }
 fn active(s: &State, items: &[String]) -> isize {
     if s.pages.projects.active_folder >= 0 {
@@ -130,7 +194,10 @@ fn enter(s: &mut State, index: usize, tx: &mut rune::Tx) {
     }
     if let Some(folder) = matches(s).0.get(index) {
         if let Some((parent, _)) = typed(s) {
-            s.pages.projects.directory = TextEdit::new(format!("{parent}{folder}/"));
+            s.pages
+                .projects
+                .directory
+                .replace_text(format!("{parent}{folder}/"));
             load(s);
             tx.focus("Project directory", false);
         }
@@ -149,6 +216,9 @@ pub fn submit(s: &mut State, register: bool) {
     if directory.is_empty() {
         return;
     }
+    if s.pages.projects.directory.text != directory {
+        s.pages.projects.directory.replace_text(&directory);
+    }
     write(
         s,
         if register { "add" } else { "open" },
@@ -163,7 +233,7 @@ pub fn submit(s: &mut State, register: bool) {
     );
 }
 pub fn form(s: &State, register: bool) -> El {
-    let mut body = col().w_full().gap(12.0);
+    let mut body = col().w_full().gap(16.0);
     if register {
         body = body.child(
             label(
@@ -186,10 +256,9 @@ pub fn form(s: &State, register: bool) -> El {
     .role("combobox")
     .single_line()
     .grow(1.0)
-    .h(36.0)
+    .h(34.0)
     .pl(12.0)
-    .pr(4.0)
-    .py(8.0)
+    .pr(0.0)
     .color(s.theme.c("text"))
     .placeholder("~/projects/my-app", s.theme.c("text-tertiary"))
     .on_edit(|s: &mut State| &mut s.pages.projects.directory)
@@ -232,15 +301,16 @@ pub fn form(s: &State, register: bool) -> El {
         }
     });
     let disabled = s.pages.projects.directory.text.trim().is_empty() || s.pages.projects.busy;
-    body=body.child(row().w_full().gap(8.0).center_y()
-        .child(row().key("project-directory-field").grow(1.0).min_w(0.0).center_y().radius(10.0).fill(s.theme.c("control")).border(1.0,s.theme.c(if s.pages.projects.directory.focused{"accent"}else{"border-heavy"})).child(input)
+    let controls=row().w_full().gap(8.0).center_y()
+        .child(row().key("project-directory-field").grow(1.0).min_w(0.0).h(36.0).pr(4.0).center_y().radius(10.0).fill(s.theme.c("control")).border(1.0,s.theme.c("border-heavy")).border_layout().focus_within_ring(1.0,-1.0,s.theme.c("accent")).child(input)
             .on_layout_tx(|s:&mut State,rect,tx|{s.pages.anchors.insert("project-directory-field".into(),rect);tx.live_only();})
             .child(crate::sidebar::icon_button(&s.theme,&crate::icons::FOLDER_OPEN,"Browse for a project folder").disabled(s.pages.projects.busy)
                 .on_press_tx(move|_:&mut State,tx|tx.open_folder(rune::FileDialogOptions{title:"Open project".into(),..Default::default()},move|s:&mut State,result,_|match result{
                     Ok(Some(path))=>{s.pages.projects.directory=TextEdit::new(path.to_string_lossy());s.pages.projects.suggesting=false;submit(s,register);},Err(_)=>s.pages.projects.error=Some("The folder picker could not be opened. Enter the path instead.".into()),_=>{}
                 }))))
-        .child(pages::primary_button(s,if s.pages.projects.busy{"Opening…"}else{"Open"}).h(36.0).disabled(disabled).dim(if disabled{0.45}else{1.0}).on_press(move|s:&mut State|submit(s,register))));
-    with_error(s, body)
+        .child(pages::primary_button(s,if s.pages.projects.busy{"Opening…"}else{"Open"}).h(36.0).disabled(disabled).dim(if disabled{0.5}else{1.0}).on_press(move|s:&mut State|submit(s,register)));
+    body = body.child(col().w_full().gap(8.0).child(controls).child(error(s)));
+    body
 }
 pub fn overlay(s: &State) -> Option<El> {
     if !showing(s) {
@@ -255,12 +325,19 @@ pub fn overlay(s: &State) -> Option<El> {
         .key("project-folders")
         .role("listbox")
         .label("Folders")
+        .on_drag(|_: &mut State, drag, tx| {
+            if drag.phase == rune::Phase::Down {
+                tx.focus("Project directory", false);
+            }
+            tx.live_only();
+        })
         .w(rect[2])
         .h(height)
         .padding(4.0)
         .radius(10.0)
         .fill(s.theme.c("elevated"))
         .border(1.0, s.theme.c("border-heavy"))
+        .border_layout()
         .scroll(rune::ScrollSpec {
             stick_bottom: false,
         });
@@ -295,6 +372,12 @@ pub fn overlay(s: &State) -> Option<El> {
                     .key(format!("project-folder-{n}"))
                     .role("option")
                     .label(item)
+                    .on_drag(|_: &mut State, drag, tx| {
+                        if drag.phase == rune::Phase::Down {
+                            tx.focus("Project directory", false);
+                        }
+                        tx.live_only();
+                    })
                     .checked(active == n as isize)
                     .w_full()
                     .h(30.0)
@@ -323,11 +406,16 @@ pub fn overlay(s: &State) -> Option<El> {
                                 "text-secondary"
                             },
                         )
-                        .font(TextStyle::new(12.5, 400.0).mono())
+                        .font(TextStyle::new(12.5, 400.0).mono().lh(18.75))
+                        .spans(highlights(s, item))
                         .truncate(),
                     )
-                    .on_pointer_move(move |s: &mut State, _| {
-                        s.pages.projects.active_folder = n as isize
+                    .on_pointer_move_local(move |s: &mut State, _, tx| {
+                        if active == n as isize {
+                            tx.live_only();
+                        } else {
+                            s.pages.projects.active_folder = n as isize;
+                        }
                     })
                     .on_press_tx(move |s: &mut State, tx| enter(s, n, tx)),
             );
@@ -372,27 +460,43 @@ pub fn after_frame(rt: &rune::Runtime<State>, handle: &rune::AppHandle<State>) {
     });
 }
 pub fn capture(s: &mut State, page: &str) -> bool {
-    if !matches!(page, "project-folder-suggestions" | "project-folder-empty") {
+    if !matches!(
+        page,
+        "project-folder-suggestions" | "project-folder-empty" | "project-folder-dialog"
+    ) {
         return false;
     }
     let Some(base) = crate::OPTIONS.get().unwrap().gateway.clone() else {
         return true;
     };
-    let parent = "/tmp/ocr-parity/proj/";
-    s.pages.route = pages::Route::ProjectSetup;
+    let parent = format!(
+        "{}/proj/",
+        std::env::var("OPENCODEX_FIXTURE").unwrap_or_else(|_| "/tmp/ocr-parity".into())
+    );
+    s.pages.route = if page == "project-folder-dialog" {
+        pages::Route::Settings("projects".into())
+    } else {
+        pages::Route::ProjectSetup
+    };
+    if page == "project-folder-dialog" {
+        s.pages.projects.dialog = Some(Dialog::Open(true));
+    }
     s.pages.projects.directory = TextEdit::new(if page == "project-folder-empty" {
         format!("{parent}zzzz")
+    } else if page == "project-folder-dialog" {
+        format!("{parent}at")
     } else {
-        parent.into()
+        parent.clone()
     });
     s.pages.projects.suggesting = true;
     s.pages.projects.active_folder = -1;
     s.pages.projects.capture_focus = true;
+    let fetch_parent = parent.clone();
     let result = std::thread::spawn(move || {
-        oc_gateway::capture_page_query(&base, "folders", &[("path", parent)])
+        oc_gateway::capture_page_query(&base, "folders", &[("path", &fetch_parent)])
     })
     .join()
     .unwrap();
-    receive(s, parent, result);
+    receive(s, &parent, result);
     true
 }

@@ -163,24 +163,27 @@ fn bare(s: &State) -> El {
         .radius(12.0)
         .fill(s.theme.c("elevated"))
         .border(1.0, s.theme.c("border"))
+        .border_layout()
 }
 pub fn view(s: &State, mut body: El) -> El {
     let p = preference(s);
-    body = body.child(bare(s).child(
-        super::setting_row(s, "Mode", "Follow your system or keep one appearance.").child(
-            ui::segment(
-                s,
-                "Mode",
-                &p.mode,
-                &[("light", "Light"), ("dark", "Dark"), ("system", "System")],
-                |s, value| {
-                    let mut p = preference(s);
-                    p.mode = value.into();
-                    apply(s, p);
-                },
-            ),
+    body = body.child(
+        bare(s).child(
+            super::setting_row(s, "Mode", "Follow your system or keep one appearance.")
+                .border_sides([0.0; 4], rune::Color::TRANSPARENT)
+                .child(super::controls::segment(
+                    s,
+                    "Mode",
+                    &p.mode,
+                    &[("light", "Light"), ("dark", "Dark"), ("system", "System")],
+                    |s, value| {
+                        let mut p = preference(s);
+                        p.mode = value.into();
+                        apply(s, p);
+                    },
+                )),
         ),
-    ));
+    );
     let size = s.prefs.chat_font_size.unwrap_or(14.0);
     body = body.child(
         super::group_action(
@@ -219,9 +222,12 @@ pub fn view(s: &State, mut body: El) -> El {
                 "text",
             )
             .label("Chat font preview")
+            .font(rune::TextStyle::new(size, 400.0).lh(size * 1.625))
             .w_full()
             .padding(16.0)
-            .border_sides([1.0, 0.0, 0.0, 0.0], s.theme.c("border")),
+            .h(size * 1.625 + 33.0)
+            .border_sides([1.0, 0.0, 0.0, 0.0], s.theme.c("border"))
+            .border_layout(),
         ),
     );
     body = body.child(
@@ -231,7 +237,7 @@ pub fn view(s: &State, mut body: El) -> El {
                 "Placement",
                 "Open the terminal below the workspace or in the right-side panel.",
             )
-            .child(ui::segment(
+            .child(super::controls::segment(
                 s,
                 "Terminal placement",
                 if s.prefs.terminal_right {

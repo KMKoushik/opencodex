@@ -416,6 +416,23 @@ impl Theme {
         }
         el
     }
+    pub fn settings_help(&self, width: f32) -> rune::HelpLook {
+        rune::HelpLook::system(self.dark)
+            .fill(self.c("elevated"))
+            .ink(self.c("text"))
+            .ring(1.0, self.c("border-heavy"))
+            .radius(6.0)
+            .padding(9.0, 5.0)
+            .font(rune::TextStyle::new(12.0, 400.0).lh(16.0))
+            .max_width(Some((width - 34.0).clamp(1.0, 262.0)))
+            .gap(6.0)
+            .margin(8.0)
+            .delay(0.45)
+            .skip_delay(0.4)
+            .on_focus(true)
+            .fade(0.0, 0.0, 1.0)
+            .shadows(self.shadows["shadow"].iter().copied())
+    }
 }
 fn rgb(hex: &str) -> Rgb {
     [1, 3, 5].map(|n| u8::from_str_radix(&hex[n..n + 2], 16).expect("seed hex") as f64)

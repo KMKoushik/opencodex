@@ -118,6 +118,9 @@ pub struct Send {
     pub branch: Option<String>,
 }
 pub enum Request {
+    ProjectPreview {
+        source: String,
+    },
     ProjectIcon {
         source: String,
         local: bool,
@@ -210,6 +213,10 @@ impl PromptWorker {
                     let run = async {
                         while let Some(request) = rx.recv().await {
                             let reply = match request {
+                                Request::ProjectPreview { source } => Reply::Data {
+                                    tag: format!("project-preview:{source}"),
+                                    result: crate::project_icon::preview(&source).await,
+                                },
                                 Request::ProjectIcon {
                                     source,
                                     local,

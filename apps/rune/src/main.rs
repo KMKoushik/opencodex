@@ -207,6 +207,11 @@ impl State {
 fn view(s: &State, cx: &mut Cx<State>) -> El {
     cx.web_focus();
     let t = &s.theme;
+    cx.help_look(if matches!(s.pages.route, pages::Route::Settings(_)) {
+        t.settings_help(s.window_size.0)
+    } else {
+        rune::HelpLook::system(t.dark)
+    });
     cx.caption_color(if t.dark {
         t.c("text-secondary")
     } else {

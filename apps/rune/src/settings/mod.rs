@@ -6,12 +6,15 @@ use crate::{
 };
 use rune::{El, ScrollSpec, col, el, row};
 pub mod appearance;
+pub mod controls;
 pub mod pairing;
 pub mod projects;
+mod qr;
 pub mod remote;
 #[cfg(test)]
 mod tests;
 pub mod usage;
+mod usage_icons;
 
 pub const SECTIONS: &[(&str, &str)] = &[
     ("general", "General"),
@@ -21,6 +24,14 @@ pub const SECTIONS: &[(&str, &str)] = &[
     ("usage", "Usage"),
     ("remote", "Remote access"),
 ];
+pub fn gateway_error(error: String) -> String {
+    if error.starts_with("Gateway ") {
+        if let Some((_, message)) = error.split_once(": ") {
+            return message.to_owned();
+        }
+    }
+    error
+}
 pub fn view(s: &State, section: &str) -> El {
     let title = SECTIONS
         .iter()
@@ -196,6 +207,7 @@ fn setting_row_styled(s: &State, title: &str, description: &str, spans: Vec<rune
         .center_y()
         .border_sides([1.0, 0.0, 0.0, 0.0], s.theme.c("border"))
         .child(content)
+        .border_layout()
 }
 fn general(s: &State, mut body: El) -> El {
     let connection = data(s, "connection");
@@ -471,6 +483,9 @@ pub fn capture(s: &mut State) {
     if page.is_empty() {
         return;
     }
+    if page.contains("project") {
+        projects::images::capture(s);
+    }
     if crate::apps::capture(s, page) {
         return;
     }
@@ -646,7 +661,7 @@ pub fn capture(s: &mut State) {
         "tasks" | "tasks-empty" | "tasks-edit-open" | "tasks-new-open" => Route::Tasks,
         "apps" | "apps-empty" => Route::Apps,
         "usage-limits-open" => Route::Settings("usage".into()),
-        "settings-remote-access" | "settings-remote-pair" => Route::Settings("remote".into()),
+        page if page.starts_with("settings-remote") => Route::Settings("remote".into()),
         _ => Route::Settings(page.trim_start_matches("settings-").into()),
     };
     if matches!(&s.pages.route, Route::Settings(v) if v == "general")
@@ -694,6 +709,7 @@ pub fn capture(s: &mut State) {
     if page == "settings-remote-pair" {
         pairing::capture(s);
     }
+    remote::capture(s, page);
     if page == "tasks-edit-open" {
         if let Some(task) = pages::data(s, "tasks")
             .and_then(serde_json::Value::as_array)

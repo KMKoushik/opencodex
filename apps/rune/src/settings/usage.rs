@@ -17,13 +17,23 @@ pub fn view(s: &State, mut body: El) -> El {
             .child(
                 row()
                     .grow(1.0)
+                    .mb(8.0)
                     .gap(10.0)
-                    .child(label(&s.theme, "Usage", 20.0, 500.0, "text-tertiary"))
-                    .child(label(&s.theme, "/", 20.0, 500.0, "text-tertiary"))
-                    .child(label(&s.theme, "Limits", 20.0, 600.0, "text")),
+                    .child(
+                        label(&s.theme, "Usage", 20.0, 500.0, "text-tertiary")
+                            .font(rune::TextStyle::new(20.0, 500.0).lh(26.0)),
+                    )
+                    .child(
+                        label(&s.theme, "/", 20.0, 500.0, "text-tertiary")
+                            .font(rune::TextStyle::new(20.0, 500.0).lh(26.0)),
+                    )
+                    .child(
+                        label(&s.theme, "Limits", 20.0, 600.0, "text")
+                            .font(rune::TextStyle::new(20.0, 600.0).lh(26.0)),
+                    ),
             )
             .child(
-                crate::sidebar::icon_button(&s.theme, &REFRESH, "Refresh limits")
+                crate::sidebar::icon_button_size(&s.theme, &REFRESH, "Refresh limits", 17.0)
                     .disabled(s.pages.pending.contains("usage/limits") || !s.snapshot.live)
                     .on_press(|s: &mut State| s.page_get("usage/limits")),
             ),
@@ -38,6 +48,13 @@ pub fn view(s: &State, mut body: El) -> El {
         ));
     }
     if let Some(Err(error)) = s.pages.data.get("usage/limits") {
+        body = body.child(
+            label(&s.theme, error, 14.0, 400.0, "error")
+                .role("alert")
+                .wrap(),
+        );
+    }
+    if let Some(error) = s.pages.errors.get("read:usage/limits") {
         body = body.child(
             label(&s.theme, error, 14.0, 400.0, "error")
                 .role("alert")
@@ -96,6 +113,7 @@ fn card(s: &State) -> El {
         .px(32.0)
         .py(20.0)
         .border(1.0, s.theme.c("border-heavy"))
+        .border_layout()
         .radius(14.0)
 }
 fn limit(s: &State, provider: &str, id: &str, window: &Value, now: i64) -> El {
@@ -105,7 +123,7 @@ fn limit(s: &State, provider: &str, id: &str, window: &Value, now: i64) -> El {
     let duration = window["durationMs"].as_f64().unwrap_or(0.0);
     let mut amount = row()
         .gap(10.0)
-        .center_y()
+        .items_end()
         .child(
             label(
                 &s.theme,
@@ -118,9 +136,9 @@ fn limit(s: &State, provider: &str, id: &str, window: &Value, now: i64) -> El {
                     "text"
                 },
             )
-            .font(rune::TextStyle::new(40.0, 500.0).lh(46.0)),
+            .font(rune::TextStyle::new(40.0, 500.0).lh(46.0).tracking(-0.8)),
         )
-        .child(label(&s.theme, "left", 15.0, 400.0, "text-tertiary"));
+        .child(label(&s.theme, "left", 15.0, 400.0, "text-tertiary").mb(4.5));
     if let Some(reset) = reset.filter(|_| duration > 0.0) {
         let elapsed = 1.0 - (reset - now) as f64 / duration;
         if elapsed > 0.0 && elapsed < 1.0 {
@@ -136,15 +154,19 @@ fn limit(s: &State, provider: &str, id: &str, window: &Value, now: i64) -> El {
                 elapsed * 100.0
             );
             amount = amount.child(
-                label(
-                    &s.theme,
-                    if fast { "↗" } else { "↘" },
+                rune::icon(
+                    if fast {
+                        &super::usage_icons::UP
+                    } else {
+                        &super::usage_icons::DOWN
+                    },
                     18.0,
-                    400.0,
-                    "text-tertiary",
                 )
+                .color(s.theme.c("text-tertiary"))
+                .mb(10.0)
                 .role("img")
-                .label(tip),
+                .label(tip.clone())
+                .help(tip),
             );
         }
     }
@@ -154,16 +176,34 @@ fn limit(s: &State, provider: &str, id: &str, window: &Value, now: i64) -> El {
         _ => "text-tertiary",
     });
     let base = s.theme.c("elevated");
+    let mix = |a, b| {
+        rune::color::srgb_decode(
+            rune::color::srgb_encode(a) * 0.4 + rune::color::srgb_encode(b) * 0.6,
+        )
+    };
     let fill = rune::Color {
-        r: tint.r * 0.4 + base.r * 0.6,
-        g: tint.g * 0.4 + base.g * 0.6,
-        b: tint.b * 0.4 + base.b * 0.6,
+        r: mix(tint.r, base.r),
+        g: mix(tint.g, base.g),
+        b: mix(tint.b, base.b),
         a: 1.0,
     };
+    let mut stripes = rune::Shape::new();
+    for n in -4..150 {
+        let x = n as f32 * 7.0 * std::f32::consts::SQRT_2;
+        stripes = stripes.line(
+            [x, 24.0],
+            [x + 24.0, 0.0],
+            1.0,
+            rune::LineCap::Butt,
+            s.theme.c("border-heavy"),
+        );
+    }
     let mut bar = row()
         .w_full()
         .h(24.0)
         .radius(8.0)
+        .clip_rounded(8.0)
+        .shape(stripes)
         .fill(s.theme.c("secondary"))
         .role("meter")
         .label(format!(
@@ -209,14 +249,29 @@ fn limit(s: &State, provider: &str, id: &str, window: &Value, now: i64) -> El {
     );
     if let Some(reset) = reset.filter(|r| *r > now) {
         legend = legend.child(
-            label(
-                &s.theme,
-                &format!("↻ {}", countdown(reset - now)),
-                13.0,
-                400.0,
-                "text-secondary",
-            )
-            .label(format!("Resets in {}", countdown(reset - now))),
+            row()
+                .gap(5.0)
+                .center_y()
+                .child(
+                    rune::icon(&super::usage_icons::RESET, 13.0).color(s.theme.c("text-secondary")),
+                )
+                .child(label(
+                    &s.theme,
+                    countdown(reset - now),
+                    13.0,
+                    400.0,
+                    "text-secondary",
+                ))
+                .label(format!("Resets in {}", countdown(reset - now)))
+                .help(format!(
+                    "Resets {}",
+                    chrono::DateTime::from_timestamp_millis(reset)
+                        .map(|d| d
+                            .with_timezone(&chrono::Local)
+                            .format("%-m/%-d/%Y, %-I:%M:%S %p")
+                            .to_string())
+                        .unwrap_or_default()
+                )),
         );
     }
     let summary = col()
@@ -248,7 +303,22 @@ fn limit(s: &State, provider: &str, id: &str, window: &Value, now: i64) -> El {
                 .w_full()
                 .center_y()
                 .gap(24.0)
-                .child(summary.w_frac(0.2647).min_w(150.0))
+                .child(
+                    summary.w((((s.window_size.0
+                        - if s.prefs.sidebar_closed {
+                            0.0
+                        } else {
+                            s.prefs.sidebar_width.unwrap_or(300.0)
+                        }
+                        - 1.0)
+                        .min(960.0)
+                        - 48.0
+                        - 66.0
+                        - 24.0)
+                        * 0.36
+                        / 1.36)
+                        .max(150.0)),
+                )
                 .child(detail),
         )
     }

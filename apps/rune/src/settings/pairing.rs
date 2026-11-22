@@ -8,6 +8,7 @@ use rune::{El, col, el, row};
 use serde_json::json;
 
 pub fn open(s: &mut State) {
+    s.pages.remote.pair_focus = true;
     s.pages.remote.pairing_at = Some(chrono::Utc::now().timestamp_millis());
     create(s);
 }
@@ -34,7 +35,10 @@ pub fn capture(s: &mut State) {
             .output()
             .map_err(|e| e.to_string())?;
         if !output.status.success() {
-            return Err(String::from_utf8_lossy(&output.stdout).to_string());
+            return Err(serde_json::from_slice::<serde_json::Value>(&output.stdout)
+                .ok()
+                .and_then(|v| v["message"].as_str().map(str::to_owned))
+                .unwrap_or_else(|| String::from_utf8_lossy(&output.stdout).to_string()));
         }
         serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
     })
@@ -67,6 +71,10 @@ fn close(s: &mut State) {
     s.pages.remote.pair = None;
     s.pages.remote.qr.clear();
 }
+fn dismiss(s: &mut State, tx: &mut rune::Tx) {
+    close(s);
+    tx.return_focus("page-action-Add device", false);
+}
 pub fn paired(s: &State) -> Option<&str> {
     let started = s.pages.remote.pairing_at?;
     data(s, "remote")?["devices"]
@@ -96,7 +104,7 @@ pub fn dialog(s: &State) -> Option<El> {
                 500.0,
                 "text",
             ))
-            .child(pages::button(s, "Done").on_press(|s: &mut State| close(s)));
+            .child(pages::primary_button(s, "Done").on_press_tx(dismiss));
     } else if let Some(Err(error)) = s.pages.data.get("remote/codes") {
         content = content.child(label(&s.theme, error, 13.0, 400.0, "error").wrap());
     } else if let Some(pair) = &s.pages.remote.pair {
@@ -124,13 +132,11 @@ pub fn dialog(s: &State) -> Option<El> {
             let start = instructions.find(hostname).unwrap_or(0);
             content = content
                 .child(qr)
-                .child(
-                    note(&instructions).spans(vec![
+                .child(note(&instructions).spans(vec![
                         rune::Span::new(start, start + hostname.len())
                             .weight(500.0)
                             .color(s.theme.c("text")),
-                    ]),
-                )
+                    ]))
                 .child(
                     label(
                         &s.theme,
@@ -149,7 +155,7 @@ pub fn dialog(s: &State) -> Option<El> {
                 )));
         } else {
             content = content.child(note("This code expired.")).child(
-                pages::button(s, "New code")
+                pages::primary_button(s, "New code")
                     .disabled(s.pages.pending.contains("remote/codes"))
                     .on_press(|s: &mut State| create(s)),
             );
@@ -165,26 +171,36 @@ pub fn dialog(s: &State) -> Option<El> {
         .child(label(&s.theme, "Add a device", 16.0, 600.0, "text").grow(1.0))
         .child(
             crate::sidebar::icon_button(&s.theme, &crate::icons::CLOSE, "Close add a device")
-                .on_press(|s: &mut State| close(s)),
+                .key("pair-dialog-close")
+                .on_press_tx(dismiss),
         );
     let panel = col()
+        .on_layout_tx(|s: &mut State, _, tx| {
+            if s.pages.remote.pair_focus {
+                s.pages.remote.pair_focus = false;
+                tx.focus_when_shown("pair-dialog-close", false);
+            } else {
+                tx.live_only();
+            }
+        })
         .w(440.0_f32.min(s.window_size.0 - 32.0))
         .padding(20.0)
         .radius(14.0)
         .fill(s.theme.c("elevated"))
         .border(1.0, s.theme.c("border-heavy"))
+        .border_layout()
         .child(header)
         .child(content);
     Some(
         el().absolute(0.0, 0.0)
             .size(s.window_size.0, s.window_size.1)
             .center()
-            .modal(true, |s: &mut State| close(s))
+            .modal_tx(true, dismiss)
             .child(
                 el().absolute(0.0, 0.0)
                     .size(s.window_size.0, s.window_size.1)
                     .fill(s.theme.c("scrim"))
-                    .on_press(|s: &mut State| close(s)),
+                    .on_press_tx(dismiss),
             )
             .child(s.theme.shadow(panel, "shadow")),
     )

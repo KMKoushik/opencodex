@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 pub mod controls;
 pub mod offline;
 pub fn after_frame(rt: &rune::Runtime<State>, handle: &rune::AppHandle<State>) {
+    crate::settings::projects::images::after_frame(rt, handle);
     crate::settings::projects::folder::after_frame(rt, handle);
     crate::menus::projects::after_frame(rt, handle);
     crate::settings::appearance::after_frame(rt, handle);
@@ -145,6 +146,11 @@ impl State {
     }
 }
 pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) -> bool {
+    let result = if tag.starts_with("page:") || tag.starts_with("page-refresh:") {
+        result.map_err(crate::settings::gateway_error)
+    } else {
+        result
+    };
     if tag.starts_with("menu-thread:") || tag.starts_with("menu-export:") {
         return crate::menus::thread::receive(s, tag, result);
     }
@@ -177,6 +183,17 @@ pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) -> bool 
         if path.ends_with("/instructions") && !s.pages.instructions_dirty {
             if let Ok(value) = &result {
                 s.pages.instructions = TextEdit::new(value["text"].as_str().unwrap_or(""));
+            }
+        }
+        if matches!(path, "usage/limits" | "remote") {
+            let key = format!("read:{path}");
+            if let Err(error) = &result {
+                if data(s, path).is_some() {
+                    s.pages.errors.insert(key, error.clone());
+                    return true;
+                }
+            } else {
+                s.pages.errors.remove(&key);
             }
         }
         s.pages.data.insert(path.into(), result);
@@ -231,6 +248,9 @@ pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) -> bool 
                 }
             }
             Err(e) => {
+                if path == "remote/revoke" {
+                    s.page_get("remote");
+                }
                 s.error = Some(e.clone());
                 s.pages.errors.insert(path.into(), e);
             }

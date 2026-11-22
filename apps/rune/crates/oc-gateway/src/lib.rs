@@ -11,6 +11,13 @@ pub mod types;
 pub use client::Gateway;
 pub use client::terminal;
 pub use snapshot::Snapshot;
+pub fn capture_project_preview(source: &str) -> Result<serde_json::Value, String> {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| e.to_string())?
+        .block_on(project_icon::preview(source))
+}
 
 /// Screenshot-only page fetch. Call before rendering, on a capture worker.
 pub fn capture_page(url: &str, path: &str) -> Result<serde_json::Value, String> {
