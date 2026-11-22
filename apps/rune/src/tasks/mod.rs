@@ -49,8 +49,13 @@ fn setup(s: &State, plugin: &Value) -> El {
             .wrap(),
         );
     } else if state == "loading" {
+        let stalled = s
+            .pages
+            .plugin_checks
+            .get("tasks/plugin")
+            .is_some_and(|(_, count)| *count >= 30);
         content = content.child(
-            label(&s.theme, "Starting Tasks…", 14.0, 400.0, "text-secondary").role("status"),
+            label(&s.theme, if stalled { "OpenCode hasn’t loaded the plugin yet. Restart it with opencode service restart." } else { "Starting Tasks…" }, 14.0, 400.0, "text-secondary").w_full().wrap().align(rune::Align::Center).role("status"),
         );
     } else {
         let pending = s.pages.pending.contains("tasks/plugin");
@@ -67,6 +72,14 @@ fn setup(s: &State, plugin: &Value) -> El {
             .on_press(|s: &mut State| {
                 s.page_write("tasks/plugin", "PUT", json!({}), "tasks/plugin")
             }),
+        );
+    }
+    if let Some(error) = s.pages.errors.get("tasks/plugin") {
+        content = content.child(
+            label(&s.theme, error, 14.0, 400.0, "error")
+                .w_full()
+                .wrap()
+                .role("alert"),
         );
     }
     if let Some(path) = plugin["path"].as_str() {

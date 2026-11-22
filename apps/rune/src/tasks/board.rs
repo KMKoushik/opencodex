@@ -184,6 +184,12 @@ pub fn view(s: &State) -> El {
             .w(200.0),
         );
     let mut body = col()
+        .on_press_tx(|s: &mut State, tx| {
+            save_with_focus(s, tx, false);
+            if s.pages.task_title.text.trim().is_empty() {
+                s.pages.tasks.adding = None;
+            }
+        })
         .on_layout_tx(|s: &mut State, _, tx| {
             if s.pages.tasks.capture_focus {
                 s.pages.tasks.capture_focus = false;
@@ -213,6 +219,7 @@ pub fn view(s: &State) -> El {
             row()
                 .w_full()
                 .padding(8.0)
+                .pl(14.0)
                 .gap(12.0)
                 .center_y()
                 .radius(10.0)
@@ -246,12 +253,16 @@ pub fn view(s: &State) -> El {
     if let Some(error) = s
         .pages
         .errors
-        .get("tasks")
-        .or_else(|| s.pages.errors.get("task-start"))
+        .get("task-start")
+        .or_else(|| s.pages.errors.get("tasks"))
     {
         body = body.child(
             label(&s.theme, error, 13.0, 400.0, "error")
                 .w_full()
+                .padding(8.0)
+                .pl(14.0)
+                .radius(10.0)
+                .border(1.0, s.theme.c("border"))
                 .wrap()
                 .role("alert"),
         );
@@ -299,6 +310,7 @@ pub fn view(s: &State) -> El {
             );
         }
         let mut list = col()
+            .key(format!("task-scroll-{bucket}"))
             .w_full()
             .gap(6.0)
             .min_h(0.0)
@@ -354,11 +366,13 @@ pub fn view(s: &State) -> El {
             list = list.child(new_task(s, bucket));
         } else if entries.is_empty() {
             list = list.child(
-                label(&s.theme, empty, 12.0, 400.0, "text-tertiary")
+                label(&s.theme, empty, 12.5, 400.0, "text-tertiary")
                     .w_full()
                     .wrap()
                     .px(8.0)
-                    .py(16.0),
+                    .pt(14.0)
+                    .pb(6.0)
+                    .align(rune::Align::Center),
             );
         }
         if bucket != "done" && s.pages.tasks.adding.as_deref() != Some(bucket) {
@@ -368,21 +382,21 @@ pub fn view(s: &State) -> El {
                     .label("New task")
                     .focusable(true)
                     .w_full()
-                    .h(30.0)
-                    .px(8.0)
-                    .gap(6.0)
+                    .h(32.0)
+                    .px(10.0)
+                    .gap(8.0)
                     .center_y()
-                    .radius(6.0)
+                    .radius(8.0)
                     .hover(s.theme.c("hover"))
                     .child(rune::icon(&crate::icons::PLUS, 14.0).color(s.theme.c("text-tertiary")))
-                    .child(label(&s.theme, "New task", 12.0, 400.0, "text-tertiary"))
+                    .child(label(&s.theme, "New task", 13.0, 400.0, "text-tertiary"))
                     .on_press_tx(move |s: &mut State, tx| add(s, bucket, tx)),
             );
         }
         columns = columns.child(
             col()
                 .key(format!("task-column-{bucket}"))
-                .on_layout_tx(move |s: &mut State, r, tx| {
+                .on_drawn_layout_tx(move |s: &mut State, r, tx| {
                     s.pages.anchors.insert(format!("task-column-{bucket}"), r);
                     tx.live_only();
                 })
@@ -504,6 +518,7 @@ fn new_task(s: &State, bucket: &'static str) -> El {
                 .key("New task")
                 .label("New task")
                 .single_line()
+                .spellcheck(true)
                 .grow(1.0)
                 .color(s.theme.c("text"))
                 .placeholder("New task", s.theme.c("text-tertiary"))
