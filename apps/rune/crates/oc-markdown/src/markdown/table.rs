@@ -438,14 +438,9 @@ impl Renderer {
                 Align::End if dir.is_some() && dir != table_dir => Align::Start,
                 a => a,
             };
-            let content = self
-                .with_reveal(
-                    rich(inl.text.clone(), self.spans(inl, font))
-                        .font(font)
-                        .color(color)
-                        .align(align).exact_lines(),
-                )
-                .w_full();
+            let content = rich(inl.text.clone(), self.spans(inl, font)).font(font).color(color).align(align);
+            let content = if self.s.web_layout { content.exact_lines() } else { content };
+            let content = self.with_reveal(content).w_full();
             let content = super::bidi::directed(super::bidi::isolated(content, inl), dir);
             // Full width: each column's share of the row is its share of the natural width, so
             // a wider row widens columns in proportion and a narrower one shrinks them as

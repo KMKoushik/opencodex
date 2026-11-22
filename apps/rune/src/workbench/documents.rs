@@ -380,6 +380,8 @@ pub fn view(s: &State) -> El {
             toolbar = toolbar
                 .child(
                     crate::sidebar::icon_button(t, &crate::chat::icons::SOURCE, "Edit source")
+                        .checked(!doc.preview)
+                        .fill(t.c(if !doc.preview { "selected" } else { "surface" }))
                         .disabled(doc.saving.is_some())
                         .on_press(move |s: &mut State| s.workbench.docs[index].preview = false),
                 )
@@ -389,6 +391,8 @@ pub fn view(s: &State) -> El {
                         &crate::chat::icons::PREVIEW,
                         "Preview Markdown",
                     )
+                    .checked(doc.preview)
+                    .fill(t.c(if doc.preview { "selected" } else { "surface" }))
                     .disabled(doc.saving.is_some())
                     .on_press(move |s: &mut State| s.workbench.docs[index].preview = true),
                 );
@@ -402,11 +406,6 @@ pub fn view(s: &State) -> El {
                 .on_press(move |s: &mut State| s.workbench.docs[index].discarding = true),
         );
         toolbar = toolbar.child(super::actions::save(s, index));
-        toolbar = toolbar.child(
-            button(s, "Comment")
-                .disabled(doc.edit.anchor == doc.edit.focus)
-                .on_press(super::review::source_selection),
-        );
     }
     let content = if doc.discarding {
         col()

@@ -8,9 +8,10 @@ license = "MIT"
 [features]
 default = ["markdown"]
 markdown = []
-# Kept for the pinned source's feature guards; the web renderer enables neither.
-math = []
-mermaid = []
+
+# The copied guards are recognized, not exposed as nonfunctional crate features.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("math", "mermaid"))'] }
 
 [dependencies]
 rune = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de" }
