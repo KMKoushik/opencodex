@@ -7,6 +7,7 @@ use crate::{
 use rune::{El, ScrollSpec, col, el, row};
 pub mod appearance;
 pub mod controls;
+mod description;
 pub mod pairing;
 pub mod projects;
 mod qr;
@@ -191,12 +192,7 @@ fn setting_row_styled(s: &State, title: &str, description: &str, spans: Vec<rune
         .gap(2.0)
         .child(label(&s.theme, title, 13.0, 400.0, "text"));
     if !description.is_empty() {
-        content = content.child(
-            label(&s.theme, description, 12.0, 400.0, "text-secondary")
-                .spans(spans)
-                .w_full()
-                .wrap(),
-        );
+        content = content.child(self::description::view(s, title, description, spans));
     }
     row()
         .w_full()
@@ -341,14 +337,26 @@ fn general(s: &State, mut body: El) -> El {
     body = body.child(notifications);
     if let Some(p) = s.project() {
         let id = p.id.clone();
-        body = body.child(group(s, "Project").child(
-            setting_row(s, p.display_name(), &p.canonical).child(
-                button(s, "Close project").on_press(move |s: &mut State| {
-                    projects::close_project(s, &id);
-                    s.open_page(Route::Settings("general".into()));
-                }),
+        body = body.child(
+            group(s, "Project").child(
+                setting_row_styled(
+                    s,
+                    p.display_name(),
+                    &p.canonical,
+                    vec![
+                        rune::Span::new(0, p.canonical.len())
+                            .mono()
+                            .color(s.theme.c("text-tertiary")),
+                    ],
+                )
+                .child(button(s, "Close project").on_press(
+                    move |s: &mut State| {
+                        projects::close_project(s, &id);
+                        s.open_page(Route::Settings("general".into()));
+                    },
+                )),
             ),
-        ));
+        );
     } else {
         body = body.child(group(s, "Project").child(setting_row(s, "No project open", "")));
     }
@@ -689,6 +697,9 @@ pub fn capture(s: &mut State) {
     if matches!(&s.pages.route, Route::Settings(v) if v == "general")
         || s.pages.route == Route::Tasks
     {
+        if matches!(&s.pages.route, Route::Settings(v) if v == "general") {
+            crate::updates::capture(s);
+        }
         let paths: &[&str] = if s.pages.route == Route::Tasks {
             &["tasks/plugin"]
         } else {

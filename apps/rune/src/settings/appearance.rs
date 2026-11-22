@@ -349,15 +349,15 @@ fn color_field(s: &State, dark: bool, field: &'static str, color: &str, name: &s
     let initial = color.to_owned();
     let fallback = TextEdit::new(color);
     let edit = s.pages.appearance.fields.get(&key).unwrap_or(&fallback);
-    row()
-        .h(30.0)
+    let field = row()
+        .h(32.0)
         .pl(4.0)
         .pr(8.0)
-        .gap(6.0)
+        .gap(8.0)
         .center_y()
-        .radius(8.0)
-        .fill(s.theme.c("control"))
-        .border(1.0, s.theme.c("border-heavy"))
+        .radius(9.0)
+        .border(1.0, s.theme.c("chip-border"))
+        .border_layout()
         .child(
             el().key(format!("{key}-swatch"))
                 .role("button")
@@ -398,5 +398,6 @@ fn color_field(s: &State, dark: bool, field: &'static str, color: &str, name: &s
                     }
                     _ => false,
                 }),
-        )
+        );
+    s.theme.shadow(s.theme.paint(field, "chip"), "chip-shadow")
 }
