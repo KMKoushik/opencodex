@@ -20,6 +20,13 @@ pub struct Browser {
     pub error: Option<String>,
 }
 #[derive(Default)]
+struct ChatTabs {
+    browsers: Vec<String>,
+    browser: usize,
+    canvases: Vec<String>,
+    canvas: Option<String>,
+}
+#[derive(Default)]
 pub struct Native {
     pub tooltip: bool,
     pub window: Option<rune::WindowHandle>,
@@ -27,6 +34,7 @@ pub struct Native {
     pub canvases: Vec<Value>,
     pub canvas_tabs: Vec<String>,
     pub selected_canvas: Option<String>,
+    delete_canvas: Option<(String, String)>,
     pub browsers: Vec<Browser>,
     pub browser: usize,
     worker: Option<Worker>,
@@ -35,6 +43,7 @@ pub struct Native {
     list_loaded: bool,
     revision: [u64; 6],
     session: Option<String>,
+    retained: std::collections::HashMap<Option<String>, ChatTabs>,
     pub error: Option<String>,
 }
 pub fn attach_window(s: &mut State, w: rune::WindowHandle) {
@@ -130,6 +139,7 @@ impl State {
             return;
         };
         self.open_page(crate::pages::Route::Chat);
+        sync_chat_tabs(self);
         if let Some(i) = self
             .native
             .browsers
@@ -200,6 +210,7 @@ impl State {
         if !canvas::valid_id(&id) {
             return;
         }
+        sync_chat_tabs(self);
         if !self.native.canvas_tabs.contains(&id) {
             if self.native.canvas_tabs.len() >= 32 {
                 self.native.error = Some("Close a canvas tab before opening another.".into());
@@ -208,7 +219,6 @@ impl State {
             self.native.canvas_tabs.push(id.clone());
         }
         self.native.selected_canvas = Some(id);
-        self.native.session = self.selected.clone();
         self.workbench.open = true;
         self.workbench.panel = Panel::Canvas;
     }
@@ -280,10 +290,8 @@ pub fn address_url(value: &str) -> Option<String> {
 pub fn poll(s: &mut State, tx: &mut Tx) -> bool {
     let mut changed = false;
     if s.native.session != s.selected {
-        s.native.session = s.selected.clone();
-        s.native.list_loaded = false;
-        s.native.selected_canvas = None;
-        s.native.canvas_tabs.clear();
+        sync_chat_tabs(s);
+        changed = true;
     }
     let panel = s.pages.route == crate::pages::Route::Chat && s.workbench.open;
     let canvas_visible = panel && s.workbench.panel == Panel::Canvas;
@@ -321,7 +329,25 @@ pub fn poll(s: &mut State, tx: &mut Tx) -> bool {
         }
         s.native.pending.remove(&r.tag);
         changed = true;
-        if r.tag == "canvases" {
+        if let Some(id) = r.tag.strip_prefix("canvas-delete:") {
+            match r.result {
+                Ok(_) => {
+                    s.native.canvases.retain(|c| c["id"] != id);
+                    s.native.canvas_tabs.retain(|c| c != id);
+                    if s.native.selected_canvas.as_deref() == Some(id) {
+                        s.native.selected_canvas = None;
+                    }
+                    for tabs in s.native.retained.values_mut() {
+                        tabs.canvases.retain(|c| c != id);
+                        if tabs.canvas.as_deref() == Some(id) {
+                            tabs.canvas = None;
+                        }
+                    }
+                    s.native.delete_canvas = None;
+                }
+                Err(error) => s.native.error = Some(error),
+            }
+        } else if r.tag == "canvases" {
             match r.result {
                 Ok(p) => s.native.canvases = p.value.as_array().cloned().unwrap_or_default(),
                 Err(e) => s.native.error = Some(e),
@@ -376,6 +402,36 @@ pub fn poll(s: &mut State, tx: &mut Tx) -> bool {
     }
     changed
 }
+fn sync_chat_tabs(s: &mut State) {
+    if s.native.session == s.selected {
+        return;
+    }
+    let n = &mut s.native;
+    let old = ChatTabs {
+        browsers: n.browsers.iter().map(|b| b.web.state().url).collect(),
+        browser: n.browser,
+        canvases: std::mem::take(&mut n.canvas_tabs),
+        canvas: n.selected_canvas.take(),
+    };
+    n.browsers.clear();
+    let next = n.retained.remove(&s.selected).unwrap_or_default();
+    n.retained.insert(n.session.clone(), old);
+    n.session = s.selected.clone();
+    n.delete_canvas = None;
+    n.browser = next.browser;
+    n.canvas_tabs = next.canvases;
+    n.selected_canvas = next.canvas;
+    n.list_loaded = false;
+    for url in next.browsers {
+        let web = web(s, false);
+        let error = web.load_url(&url).err();
+        s.native.browsers.push(Browser {
+            web,
+            address: TextEdit::new(url),
+            error,
+        });
+    }
+}
 pub fn coverage(s: &State) {
     // Hide before painting Rune overlays; no readbacks, timers or redraw loop.
     let covered = s.native.tooltip
@@ -384,6 +440,11 @@ pub fn coverage(s: &State) {
         || s.chat.preview.is_some()
         || s.chat.details
         || s.chat.context;
+    let covered = covered
+        || s.workbench.file_actions.is_some()
+        || s.chat.comment_editor.is_some()
+        || s.workbench.delete_side.is_some()
+        || s.native.delete_canvas.is_some();
     if let Some(c) = &s.native.canvas {
         c.web.set_covered(covered);
     }
@@ -420,12 +481,42 @@ pub fn canvas_panel(s: &State) -> El {
     }
     for c in own.into_iter().take(200) {
         let id = c["id"].as_str().unwrap_or("").to_owned();
+        let delete_id = id.clone();
+        let title = c["title"].as_str().unwrap_or("Canvas").to_owned();
+        let delete_title = title.clone();
         list = list.child(
-            crate::pages::button(s, c["title"].as_str().unwrap_or("Canvas"))
-                .on_press(move |s: &mut State| s.open_canvas(id.clone())),
+            row()
+                .w_full()
+                .gap(8.0)
+                .child(
+                    crate::pages::button(s, &title)
+                        .grow(1.0)
+                        .on_press(move |s: &mut State| s.open_canvas(id.clone())),
+                )
+                .child(
+                    crate::pages::button(s, "Delete")
+                        .label(format!("Delete {title}"))
+                        .on_press(move |s: &mut State| {
+                            s.native.delete_canvas = Some((delete_id.clone(), delete_title.clone()))
+                        }),
+                ),
         );
     }
-    list
+    list.child(delete_canvas_dialog(s))
+}
+fn delete_canvas_dialog(s: &State) -> El {
+    let Some((id, title)) = &s.native.delete_canvas else {
+        return rune::el();
+    };
+    let id = id.clone();
+    let pending = s.native.pending.contains(&format!("canvas-delete:{id}"));
+    col().w((s.panel_width()-24.0).clamp(220.0,420.0)).padding(20.0).gap(16.0).radius(12.0).fill(s.theme.c("elevated")).border(1.0,s.theme.c("border-heavy"))
+        .role("alertdialog").label("Delete canvas?")
+        .child(label(&s.theme,"Delete canvas?",16.0,600.0,"text"))
+        .child(label(&s.theme,format!("“{title}” and its data files will be deleted. Links to it in chats will stop working."),13.0,400.0,"text-secondary").wrap())
+        .child(row().gap(8.0).child(crate::pages::button(s,"Cancel").autofocus().disabled(pending).on_press(|s: &mut State| s.native.delete_canvas=None))
+            .child(crate::pages::button(s,if pending{"Deleting…"}else{"Delete"}).disabled(pending).on_press(move |s: &mut State| {s.native_request(format!("canvas-delete:{id}"),Operation::Delete(format!("canvases/{id}")));})))
+        .absolute(12.0,80.0).modal(true,|s: &mut State| s.native.delete_canvas=None)
 }
 pub fn canvas_tabs(s: &State) -> El {
     let mut tabs = row().grow(1.0).min_w(0.0).h(40.0).gap(4.0).center_y();

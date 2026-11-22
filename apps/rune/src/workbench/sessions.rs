@@ -106,6 +106,13 @@ pub fn view(s: &State, side: bool) -> El {
         .truncate(),
     );
     if side {
+        if let Some(id) = &s.workbench.reader {
+            let id = id.clone();
+            bar = bar.child(
+                super::documents::button(s, "Delete side chat")
+                    .on_press(move |s: &mut State| s.workbench.delete_side = Some(id.clone())),
+            );
+        }
         bar = bar.child(
             super::documents::button(s, "+ New side chat")
                 .on_press(|s: &mut State| s.create_workspace_side(String::new())),
@@ -182,7 +189,7 @@ pub fn view(s: &State, side: bool) -> El {
                 .padding(12.0),
             );
         }
-        return body;
+        return body.child(delete_dialog(s));
     }
     let items = if side {
         &s.workbench.sides
@@ -230,6 +237,7 @@ pub fn view(s: &State, side: bool) -> El {
                     };
                     let id = v["id"].as_str().unwrap_or("").to_owned();
                     let running = s.snapshot.active.contains(&id);
+                    let delete_id = id.clone();
                     row()
                         .w_full()
                         .min_h(62.0)
@@ -273,6 +281,15 @@ pub fn view(s: &State, side: bool) -> El {
                         .role("button")
                         .focusable(true)
                         .on_press(move |s: &mut State| s.open_workspace_reader(id.clone()))
+                        .child(if side {
+                            super::documents::button(s, "Delete")
+                                .label("Delete side chat")
+                                .on_press(move |s: &mut State| {
+                                    s.workbench.delete_side = Some(delete_id.clone())
+                                })
+                        } else {
+                            rune::el()
+                        })
                 },
             )),
     );
@@ -292,5 +309,57 @@ pub fn view(s: &State, side: bool) -> El {
             }),
         );
     }
-    body
+    body.child(delete_dialog(s))
+}
+fn delete_dialog(s: &State) -> El {
+    let Some(id) = &s.workbench.delete_side else {
+        return rune::el();
+    };
+    let id = id.clone();
+    let pending = s.workbench.pending.contains(&format!("side-delete:{id}"));
+    let width = (s.panel_width() - 24.0).clamp(220.0, 420.0);
+    col()
+        .w(width)
+        .padding(20.0)
+        .gap(16.0)
+        .radius(12.0)
+        .fill(s.theme.c("elevated"))
+        .border(1.0, s.theme.c("border-heavy"))
+        .role("alertdialog")
+        .label("Delete side chat?")
+        .child(label(&s.theme, "Delete side chat?", 16.0, 600.0, "text"))
+        .child(
+            label(
+                &s.theme,
+                "This deletes the side chat and its messages. The main chat isn’t affected.",
+                13.0,
+                400.0,
+                "text-secondary",
+            )
+            .wrap(),
+        )
+        .child(
+            row()
+                .gap(8.0)
+                .child(
+                    super::documents::button(s, "Cancel")
+                        .disabled(pending)
+                        .on_press(|s: &mut State| s.workbench.delete_side = None),
+                )
+                .child(
+                    super::documents::button(s, if pending { "Deleting…" } else { "Delete" })
+                        .disabled(pending)
+                        .autofocus()
+                        .on_press(move |s: &mut State| {
+                            if let Some(parent) = s.selected.clone() {
+                                s.workspace_request(
+                                    format!("side-delete:{id}"),
+                                    Operation::Delete(format!("sessions/{parent}/side-chats/{id}")),
+                                );
+                            }
+                        }),
+                ),
+        )
+        .absolute(12.0, 80.0)
+        .modal(true, |s: &mut State| s.workbench.delete_side = None)
 }

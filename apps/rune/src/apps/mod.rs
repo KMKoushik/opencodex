@@ -127,5 +127,5 @@ pub fn view(s: &State) -> El {
 /// WKWebView integration point: mount the gateway canvas surface in this keyed rectangle.
 /// The embedding agent should keep the native view's frame synchronized to this element.
 pub fn canvas_host(s: &State, id: &str) -> El {
-    crate::native::app_host(s, id).h(360.0)
+    crate::native::app_host(s, id).grow(1.0).min_h(0.0)
 }
