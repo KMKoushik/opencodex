@@ -85,6 +85,12 @@ pub fn load(s: &mut State, more: bool) {
         query,
     }) {
         s.menus.search_pending = Some(search);
+    } else {
+        s.menus.error = Some(
+            s.error
+                .clone()
+                .unwrap_or_else(|| "Gateway is not connected".into()),
+        );
     }
 }
 pub fn receive(s: &mut State, query: &str, result: Result<Value, String>) {
@@ -103,6 +109,8 @@ pub fn receive(s: &mut State, query: &str, result: Result<Value, String>) {
             s.menus.notice = value["searchNotice"].as_str().map(str::to_owned);
             if let Some(rows) = value["sessions"].as_array() {
                 s.menus.results.extend(rows.iter().cloned());
+            } else {
+                s.menus.error = Some("The gateway returned an invalid thread search page.".into());
             }
         }
         Err(error) => s.menus.error = Some(error),
