@@ -1,6 +1,46 @@
 use super::*;
 
 #[test]
+fn native_subagent_readers_cannot_interrupt_but_side_chats_can() {
+    OPTIONS.get_or_init(|| Options {
+        gateway: None,
+        preset: String::new(),
+        dark: true,
+        headless: true,
+        session: None,
+        scroll: "bottom".into(),
+        work: None,
+        composer_state: String::new(),
+    });
+    let mut state = State::new();
+    state.selected = Some("child".into());
+    let data = Arc::make_mut(&mut state.chat.data);
+    data.info = Some(
+        serde_json::from_value(serde_json::json!({
+            "id":"child", "parentID":"parent", "location":{"directory":"/fixture"},
+            "time":{"created":0}
+        }))
+        .unwrap(),
+    );
+    assert!(state.chat.read_only());
+    assert!(!state.can_send());
+    state.stop();
+    assert!(state.error.is_none(), "a reader never attempts a mutation");
+    Arc::make_mut(&mut state.chat.data)
+        .info
+        .as_mut()
+        .unwrap()
+        .metadata = Some(serde_json::json!({"opencodexSideChat":{"parentID":"parent"}}));
+    assert!(!state.chat.read_only());
+    state.stop();
+    assert_eq!(
+        state.error.as_deref(),
+        Some("Gateway is not connected"),
+        "a writable side chat reaches the mutation transport"
+    );
+}
+
+#[test]
 fn long_sidebar_only_mounts_visible_rows() {
     OPTIONS.get_or_init(|| Options {
         gateway: None,

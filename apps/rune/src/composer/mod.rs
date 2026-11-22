@@ -302,39 +302,55 @@ pub fn area(s: &State, width: f32) -> El {
                     .radius(12.0)
                     .center()
                     .border(1.0, t.c("chip-border")),
-                if !running && s.can_send() {
+                if s.can_send() {
                     "primary-glaze"
                 } else {
                     "chip"
                 },
             ),
-            if !running && s.can_send() {
+            if s.can_send() {
                 "primary-shadow"
             } else {
                 "chip-shadow"
             },
         )
-        .child(if running {
-            el().size(12.0, 12.0).radius(2.0).fill(t.c("text"))
+        .child(icon(&i::UP, 16.0).color(t.c(if s.can_send() {
+            "on-primary"
         } else {
-            icon(&i::UP, 16.0).color(t.c(if s.can_send() {
-                "on-primary"
-            } else {
-                "text-tertiary"
-            }))
-        })
+            "text-tertiary"
+        })))
         .key("send-message")
         .role("button")
         .focusable(true)
-        .label(if running { "Stop" } else { "Send message" })
-        .disabled(!running && !s.can_send())
-        .on_press_tx(move |s: &mut State, tx| {
-            if running {
-                s.stop();
-            } else {
-                commands::submit(s, tx);
-            }
-        });
+        .label("Send message")
+        .disabled(!s.can_send())
+        .on_press_tx(commands::submit);
+    let mut actions = row().gap(8.0).center_y();
+    if running {
+        actions = actions.child(
+            t.shadow(
+                t.paint(
+                    el().size(34.0, 34.0)
+                        .radius(12.0)
+                        .center()
+                        .border(1.0, t.c("chip-border")),
+                    "chip",
+                ),
+                "chip-shadow",
+            )
+            .child(
+                el().size(11.0, 11.0)
+                    .radius(2.0)
+                    .border(1.5, t.c("text-secondary")),
+            )
+            .key("stop-message")
+            .role("button")
+            .label("Stop")
+            .focusable(true)
+            .on_press(|s: &mut State| s.stop()),
+        );
+    }
+    let send = actions.child(send);
     let attach = icon_button_size(t, &i::PLUS, "Attach files", 18.0)
         .size(30.0, 30.0)
         .radius(9.0)

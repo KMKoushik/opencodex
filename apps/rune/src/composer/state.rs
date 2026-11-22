@@ -252,6 +252,9 @@ impl State {
         }
     }
     pub fn stop(&mut self) {
+        if self.chat.read_only() {
+            return;
+        }
         if let Some(id) = &self.selected {
             self.prompt_request(Request::Mutate {
                 tag: "stop".into(),

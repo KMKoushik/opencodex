@@ -3,6 +3,9 @@ use crate::State;
 use rune::{Key, KeyEvent, Tx};
 
 pub fn global(s: &mut State, event: &KeyEvent, tx: &mut Tx) -> bool {
+    if s.chat.read_only() {
+        return false;
+    }
     if escape(s, event, tx) {
         return true;
     }
@@ -50,7 +53,8 @@ pub fn global(s: &mut State, event: &KeyEvent, tx: &mut Tx) -> bool {
     false
 }
 pub fn escape(s: &mut State, event: &KeyEvent, tx: &mut Tx) -> bool {
-    if event.key != Key::Escape
+    if s.chat.read_only()
+        || event.key != Key::Escape
         || !s
             .selected
             .as_ref()

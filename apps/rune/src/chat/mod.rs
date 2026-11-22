@@ -178,7 +178,21 @@ pub fn view(s: &State, width: f32) -> El {
                             return history(s);
                         }
                         if n > s.chat.rows.len() {
-                            return el().key("transcript-end").h(52.0).w_full();
+                            let mut end =
+                                col().key("transcript-end").h(52.0).w_full().items_center();
+                            if crate::docks::active(s) {
+                                end = end.child(
+                                    label(
+                                        &s.theme,
+                                        crate::docks::waiting_label(s),
+                                        12.0,
+                                        400.0,
+                                        "text-tertiary",
+                                    )
+                                    .w(width_for_row(s) - 48.0),
+                                );
+                            }
+                            return end;
                         }
                         render_row(s, &s.chat.rows[n - 1])
                     },
@@ -187,7 +201,9 @@ pub fn view(s: &State, width: f32) -> El {
                     s.chat
                         .data
                         .revision
-                        .wrapping_add(s.chat.disclosure_revision),
+                        .wrapping_add(s.chat.disclosure_revision)
+                        .wrapping_mul(2)
+                        .wrapping_add(u64::from(crate::docks::active(s))),
                 ),
         );
     let mut body = col().key("timeline").w_full().grow(1.0).min_h(0.0);
@@ -309,9 +325,8 @@ fn history(s: &State) -> El {
             }
         })
 }
-fn render_row(s: &State, r: &Row) -> El {
-    let t = &s.theme;
-    let width = rune::memo::layout_size("main")
+fn width_for_row(s: &State) -> f32 {
+    rune::memo::layout_size("main")
         .map(|size| size[0] - 44.0)
         .unwrap_or(
             s.window_size.0
@@ -322,7 +337,11 @@ fn render_row(s: &State, r: &Row) -> El {
                 }
                 - 44.0,
         )
-        .min(768.0);
+        .min(768.0)
+}
+fn render_row(s: &State, r: &Row) -> El {
+    let t = &s.theme;
+    let width = width_for_row(s);
     let padding = match &r.kind {
         Kind::Turn { .. } => 12.0,
         Kind::Activity { .. } => 8.0,
@@ -334,6 +353,7 @@ fn render_row(s: &State, r: &Row) -> El {
         (
             r.version,
             s.chat.disclosure_revision,
+            crate::docks::active(s),
             width.to_bits(),
             s.theme.dark,
             &s.theme.preset.id,
@@ -360,10 +380,13 @@ fn render_row(s: &State, r: &Row) -> El {
                     let mut content = col().w_full().gap(14.0).child(markdown::render(
                         s,
                         text,
-                        message.time.completed.is_none(),
+                        message.time.completed.is_none() && !crate::docks::active(s),
                         width - 48.0,
                     ));
-                    if message.time.completed.is_none() && s.chat.data.running {
+                    if message.time.completed.is_none()
+                        && s.chat.data.running
+                        && !crate::docks::active(s)
+                    {
                         content = content.child(el().size(5.0, 15.0).fill(t.c("text-secondary")));
                     }
                     if *copyable {

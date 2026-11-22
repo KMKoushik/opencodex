@@ -15,6 +15,8 @@ pub fn run(url: &str, id: String, duration: Duration) -> Result<(), String> {
     s.waker = Some(Arc::new(move || {
         let _ = send2.try_send(());
     }));
+    let wake = s.waker.clone().expect("probe waker");
+    crate::composer::state::start(&mut s, client.clone(), wake);
     s.worker = Some(Worker::start(client, s.prefs.project.clone(), move || {
         let _ = send.try_send(());
     }));

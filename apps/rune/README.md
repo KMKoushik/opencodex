@@ -117,6 +117,20 @@ discarding per-session drafts. `composer::area(s, width)` sits beneath the trans
 inside the chat's workbench rail and replaces the input with pending question/permission docks.
 Native subagent readers cannot send; side chats remain editable.
 
+The merged app was verified with scripted headless Rune input against isolated OpenCode 4921 /
+gateway 4451 in `/tmp/ocr-merge`, using `opencode/big-pickle`: home typing/send/navigation,
+visible streamed text, completed reply, existing-chat follow-up, Stop during text generation,
+thread/history navigation with a retained draft, and question option → review → submission →
+resumed assistant reply. The temporary smoke harness was removed after validation. No redraw
+loop was added. Eight reviewed 1280×800 (scale 2) captures are in the ignored
+`goldens/merge/final-{home,mid-stream,after-reply,question}-{dark,light}-1280x800.png`.
+Streaming captures render the live worker's actual reduced message state, not a fresh HTTP
+snapshot, because OpenCode may not expose unfinished text through history until completion.
+The composer and question dock occupy the web reference's centered bottom column inside its
+44-point workbench rail; Stop is separate from Send while running. The question wait status
+replaces the streaming caret. Comparison with `goldens/web` still shows native glyph/shadow,
+Markdown spacing, and question radio/footer styling differences, not pixel-identical parity.
+
 The temporary scripted Rune runtime smoke used `opencode/big-pickle` against isolated OpenCode
 4912 / gateway 4442 in `/tmp/ocr-composer`. It verified home send/navigation, question option →
 review → actual reply, existing-session send, model keyboard filtering, image paste/thumbnail,
@@ -137,8 +151,8 @@ question-selected, question-review. Web is left, Rune right.
 
 Visual differences remain: Rune glyph antialiasing/shadows, attachment and mention icons,
 slash/mention ordering and visible row count, filtered-menu height, question radio styling and
-header/row spacing, and the new-worktree branch label. The question captures also show the
-web transcript/workbench rail, which is outside this branch; this shifts its centered dock.
+header/row spacing, and the new-worktree branch label. Those older branch captures predate the
+integrated transcript/workbench rail and have a different dock center from the merged captures.
 The web fixture collapses the second project while Rune expands it. These captures establish
 close composer geometry, not pixel-identical whole-window parity.
 

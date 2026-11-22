@@ -218,6 +218,13 @@ fn advance(s: &mut State) {
 pub fn active(s: &State) -> bool {
     s.selected.is_some() && (!s.docks.forms.is_empty() || !s.docks.permissions.is_empty())
 }
+pub fn waiting_label(s: &State) -> &'static str {
+    if !s.docks.permissions.is_empty() {
+        "Waiting for approval"
+    } else {
+        "Waiting for your answer"
+    }
+}
 pub fn view(s: &State) -> El {
     if !active(s) {
         return el();
@@ -314,7 +321,25 @@ pub fn view(s: &State) -> El {
             .w_full()
             .h(24.0)
             .justify_between()
-            .child(label(t, &header, 12.0, 500.0, "text-secondary"))
+            .child(
+                row()
+                    .gap(10.0)
+                    .center_y()
+                    .child(label(t, &header, 12.0, 500.0, "text-secondary"))
+                    .child(label(
+                        t,
+                        if s.docks.reviewing {
+                            ""
+                        } else {
+                            fs.get(index)
+                                .and_then(|f| f["title"].as_str())
+                                .unwrap_or("")
+                        },
+                        12.0,
+                        400.0,
+                        "text-tertiary",
+                    )),
+            )
             .child(
                 crate::sidebar::icon_button_size(
                     t,
