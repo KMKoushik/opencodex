@@ -78,12 +78,12 @@
 └┼─────────────────────────────────────────────────────┐
  └─────────────────────┐                               │
                        │                               ▼
-     ┌───────────── NATIVE RUNE CLIENT / apps/rune (M1) ─────────────┐
+     ┌──────── NATIVE RUNE CLIENT / apps/rune (M2 composer) ─────────┐
      │                                                               │
-     │ Rust + Rune GPU shell; system fonts; shared theme seeds       │
-     │ oc-gateway worker: typed /api HTTP + /api/events SSE          │
-     │ Live sidebar reduction; reconnect replaces snapshots          │
-     │ Virtual rows; headless PNGs; no bundled gateway yet           │
-     │ UI preferences: OPENCODEX_DATA_DIR, else ~/.opencodex/rune    │
+     │ Rune shell + revisioned drafts + question/permission docks    │
+     │ Snapshot worker: /api + /api/events; reconnect refresh        │
+     │ Prompt worker: sends, worktrees, replies, attachment I/O      │
+     │ Virtual rows; system fonts; headless PNGs; shared themes      │
+     │ UI/model prefs: OPENCODEX_DATA_DIR, else ~/.opencodex/rune    │
      │                                                               │
      └───────────────────────────────────────────────────────────────┘
