@@ -1,0 +1,49 @@
+<!doctype html><meta charset="utf-8" /><title>Canvas bridge check</title>
+<style>
+  html {
+    color-scheme: dark;
+    background: #15171c;
+    color: #e8edf5;
+    font: 16px system-ui;
+  }
+  body {
+    margin: 32px;
+  }
+  h1 {
+    font-size: 28px;
+    letter-spacing: -0.6px;
+  }
+  p {
+    color: #9aa6b8;
+    line-height: 1.6;
+  }
+  iframe {
+    width: 100%;
+    height: 220px;
+    border: 0;
+    border-radius: 16px;
+  }
+  a {
+    color: #8ab5ff;
+  }
+  button {
+    padding: 10px;
+  }
+  .pill {
+    color: #8ab5ff;
+    font-size: 12px;
+    letter-spacing: 2px;
+  }
+</style>
+<div class="pill">OPENCODEX · NATIVE WEB SURFACE</div>
+<h1>A sandboxed canvas, inside Rune.</h1>
+<p>Drag the splitter. Open the Rune popover. This page has an isolated ephemeral profile.</p>
+<iframe
+  sandbox="allow-scripts"
+  srcdoc="<!doctype html><style>html{background:#204f97;color:white;font:17px system-ui}body{padding:24px}p{opacity:.7}</style><h2>Live canvas</h2><p id='status'>Waiting for host…</p><script>addEventListener('message',e=>{document.getElementById('status').textContent='Host bridge round-trip ✓';parent.postMessage({kind:'ack'},'*')});parent.postMessage({kind:'ready'},'*')</script>"
+></iframe>
+<p>
+  <a id="blocked" href="https://disallowed.invalid/blocked">Disallowed origin (blocked)</a> ·
+  <a id="new-tab" target="_blank" href="about:blank">Open tab</a>
+</p>
+<button>First page control</button> <button>Last page control — Tab returns to Rune</button>

@@ -152,7 +152,8 @@ impl Surface {
                 let _: () = msg_send![&*n.container, removeFromSuperview];
                 let _: () = msg_send![&*view, addSubview: &*n.container];
                 if let Some(monitor) = n.monitor.take() {
-                    let _: () = msg_send![AnyClass::get(c"NSEvent").unwrap(), removeMonitor: &*monitor];
+                    let _: () =
+                        msg_send![AnyClass::get(c"NSEvent").unwrap(), removeMonitor: &*monitor];
                 }
                 n.monitor = delegate::key_monitor(&view, &n.view, self.shared.clone());
             }
