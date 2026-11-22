@@ -5,6 +5,7 @@ fn shown(blocks: &[Block]) -> String {
     fn walk(blocks: &[Block], out: &mut Vec<String>) {
         for b in blocks {
             match b {
+                Block::Html(nodes) => out.push(html::plain(nodes)),
                 Block::Para(i) | Block::Heading(_, i) => out.push(i.text.clone()),
                 Block::List { items, .. } => items.iter().for_each(|i| walk(i, out)),
                 Block::Quote(inner) => walk(inner, out),

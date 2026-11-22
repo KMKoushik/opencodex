@@ -236,6 +236,7 @@ pub(super) fn precompute_block(root_b: &Block, root_map: Option<&BlockMap>) -> R
                 _ => {
                     let (mut h, mut flags, mut links, mut table, mut src_n) = (PairHasher::new(), 0u8, Vec::new(), None, 0u32);
                     match (b, map) {
+                        (Block::Html(nodes), _) => (12u8, nodes).hash(&mut h),
                         (Block::Para(inl), Some(BlockMap::DeepTail { lines, .. })) => (11u8, *lines, &inl.text).hash(&mut h),
                         (Block::Para(inl), _) => { 1u8.hash(&mut h); scan_inline(inl, &mut h, &mut flags, &mut links); }
                         (Block::Heading(level, inl), _) => { (2u8, *level).hash(&mut h); scan_inline(inl, &mut h, &mut flags, &mut links); }
@@ -302,7 +303,7 @@ fn compute_base(r: &Renderer) -> (u64, u64) {
         highlighter: _, sources: _, next_source: _, tasks: _, next_task: _, on_task: _,
         #[cfg(feature = "mermaid")]
         diagram_frame: _,
-        code_frame: _, quote_frame: _, images: _, on_image: _, missing_image: _,
+        code_frame: _, quote_frame: _, html_details: _, images: _, on_image: _, missing_image: _,
         tentative: _, current_block_key: _, flow: _,
     } = r;
     let mut h = PairHasher::new();
@@ -456,6 +457,7 @@ impl Renderer {
                     (Block::Mermaid(src), _) => { if !self.can_memo_flags(HAS_MERMAID) { return false; } (5u8, src).hash(h); }
                     (Block::Rule, _) => 6u8.hash(h),
                     (Block::Image { src, alt, title }, _) => { if !self.can_memo_flags(HAS_IMAGE) { return false; } (7u8, src, alt, title).hash(h); }
+                    (Block::Html(_), _) => return false,
                     (Block::Quote(inner), map_opt) => {
                         if !self.can_memo_flags(HAS_QUOTE) { return false; }
                         let inner_maps = match map_opt { Some(BlockMap::Quote(m)) => m.as_slice(), _ => &[][..] };
@@ -621,6 +623,7 @@ impl Renderer {
     ) -> (u64, u64) {
         let mut h = PairHasher::new();
         (n, fkey, inline_code_key, epoch, cells.len().min(n)).hash(&mut h);
+        (self.s.web_layout,self.s.file_link_icon.map(|(_, geometry)|geometry.map(f32::to_bits))).hash(&mut h);
         match pre.filter(|p| cells.len() <= n && (self.code_link.is_none() || p.flags & HAS_INLINE_CODE == 0)) {
             Some(p) => {
                 p.digest.hash(&mut h);

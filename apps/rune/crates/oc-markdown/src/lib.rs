@@ -1,5 +1,5 @@
-//! Pinned Rune-kit Markdown with a narrow local-file-link icon extension.
-//! See ../README.md for provenance and the intentionally unchanged incremental renderer.
+//! Pinned Rune-kit Markdown with web metrics and sanitized native HTML rendering.
+//! See ../README.md and ../HTML.md for provenance, policy and worker boundaries.
 mod budget;
 pub mod markdown;
 pub use markdown::*;

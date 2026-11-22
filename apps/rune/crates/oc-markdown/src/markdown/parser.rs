@@ -79,7 +79,7 @@ pub(super) const LINK_CLOSE: &str = "\u{2069}";
 
 /// `text` without inline code's padding and isolates.
 pub(super) fn unpadded(text: &str) -> String {
-    text.replace(OPEN, "").replace(CLOSE, "").replace(LINK_OPEN, "").replace(LINK_CLOSE, "")
+    text.replace(OPEN, "").replace(CLOSE, "").replace(LINK_OPEN, "").replace(LINK_CLOSE, "").replace('\u{2060}', "")
 }
 
 /// Parses `src` into blocks. Unclosed constructs are closed at the end of input.
@@ -98,6 +98,15 @@ enum SkipMode {
 
 /// [`parse_doc`], and what the source ends inside.
 pub(super) fn parse_doc_tail(src: &str, autolink: bool) -> (ParsedDoc, Tail) {
+    if let Some(start) = html_start(src) {
+        let start=if src.contains("]:") {0} else {start};
+        let (mut prefix,_)=parse_doc_tail(&src[..start],autolink);
+        prefix.3.push(Cut {at:start,blocks:prefix.0.len(),sources:prefix.1.len(),tasks:prefix.2.len()});
+        prefix.0.push(Block::Html(std::sync::Arc::new(super::html::markdown(&src[start..]))));
+        prefix.4.push(start);
+        prefix.5.push(BlockMap::None);
+        return (prefix,Tail::Code);
+    }
     let mut b = Builder::new(autolink);
     let opts = Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS;
     let mut events = super::interrupt::list_interrupts(src, Parser::new_ext(src, opts).into_offset_iter());
@@ -433,6 +442,24 @@ pub(super) fn parse_doc_tail(src: &str, autolink: bool) -> (ParsedDoc, Tail) {
         *maps.last_mut().unwrap() = map;
     }
     ((blocks, b.sources, b.tasks, b.cuts, b.block_starts, maps), b.tail)
+}
+
+/// HTML can reparent from its first containing root block onward, but cannot
+/// change already completed Markdown blocks before that point. Retain that
+/// prefix so the streaming cache still reparses only the active fragment.
+pub(super) fn html_start(src:&str)->Option<usize> {
+    if !src.contains('<') {return None;}
+    let opts=Options::ENABLE_STRIKETHROUGH|Options::ENABLE_TABLES|Options::ENABLE_TASKLISTS;
+    let (mut depth,mut root)=(0usize,0usize);
+    for (event,range) in Parser::new_ext(src,opts).into_offset_iter() {
+        match event {
+            Event::Start(_)=>{if depth==0 {root=range.start;} depth+=1;},
+            Event::End(_)=>depth=depth.saturating_sub(1),
+            Event::Html(_)|Event::InlineHtml(_)=>return Some(if depth==0 {range.start}else{root}),
+            _=>{},
+        }
+    }
+    None
 }
 
 /// Whether a fenced code block's source (from its opening fence) has its closing fence.

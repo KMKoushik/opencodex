@@ -76,6 +76,7 @@ pub struct MarkdownStyle {
     pub(super) link_icon: Option<[f32; 2]>,
     pub(super) file_link_icon: Option<(&'static Icon, [f32; 2])>,
     pub(super) web_layout: bool,
+    pub(super) web_inline: Option<[f32; 4]>,
     pub(super) diff_add: Color,
     pub(super) diff_remove: Color,
     pub(super) diff_add_text: Color,
@@ -224,6 +225,7 @@ impl MarkdownStyle {
             link_icon: None,
             file_link_icon: None,
             web_layout: false,
+            web_inline: None,
             diff_add: tint(c.layer_01, c.success.icon, if k.dark { 0.11 } else { 0.14 }),
             diff_remove: tint(c.layer_01, c.danger.icon, if k.dark { 0.11 } else { 0.14 }),
             diff_add_text: c.text_base,
@@ -414,6 +416,13 @@ impl MarkdownStyle {
     /// space's width; what's left of it is the gap between the chip and the text around it.
     pub fn inline_code_pad(mut self, pad: f32) -> Self {
         self.inline_code_pad = pad;
+        self
+    }
+    /// Chromium inline metrics: extra height on code-bearing lines, code's
+    /// vertical padding/radius, and file-icon bottom below the text baseline.
+    /// Applied per affected line, never as a paragraph-wide line-height fudge.
+    pub fn web_inline_metrics(mut self, line_extra: f32, code_vpad: f32, code_radius: f32, icon_baseline: f32) -> Self {
+        self.web_inline = Some([line_extra, code_vpad, code_radius, icon_baseline]);
         self
     }
     pub fn strong_weight(mut self, w: f32) -> Self {
@@ -635,6 +644,7 @@ impl std::hash::Hash for MarkdownStyle {
             math_scale,
             link_icon,
             file_link_icon,
+            web_inline,
             web_layout,
             diff_add,
             diff_remove,
@@ -665,6 +675,7 @@ impl std::hash::Hash for MarkdownStyle {
         table_frame.map(|TableFrame { fill, ring, pad }| (fill, ring, f32_bits(pad))).hash(state);
         (table_bar, text_width.map(f32_bits), f32_bits(wide_fade), f32_bits(math_scale), link_icon.map(|l| l.map(f32_bits))).hash(state);
         file_link_icon.map(|(icon, geometry)| (icon.name, geometry.map(f32_bits))).hash(state);
+        web_inline.map(|v|v.map(f32_bits)).hash(state);
         web_layout.hash(state);
         match table_body {
             None => 0u8.hash(state),

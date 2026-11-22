@@ -74,7 +74,7 @@ impl Renderer {
                     // padding; never drop the local-file adornment on code links.
                     let label = &inl.text[*at..*end];
                     let start = *at + label.len() - label.trim_start().len();
-                    e = e.inline_icon(start, InlineIcon::glyph(icon).color(self.s.accent).size(size).gap(gap));
+                    e = e.inline_icon(start, InlineIcon::glyph(icon).color(if self.s.web_inline.is_some() {Color::TRANSPARENT} else {self.s.accent}).size(size).gap(gap));
                 }
             }
         }
@@ -93,7 +93,7 @@ impl Renderer {
         e
     }
 }
-fn file_link(href: &str) -> bool {
+pub(super) fn file_link(href: &str) -> bool {
     if href.is_empty() || href.starts_with('#') { return false; }
     let Some((scheme, _)) = href.split_once(':') else { return true; };
     !(scheme.as_bytes().first().is_some_and(u8::is_ascii_alphabetic)

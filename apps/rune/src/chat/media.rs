@@ -7,6 +7,7 @@ use std::{collections::BTreeMap, sync::Arc};
 type Images = BTreeMap<String, Result<Image, String>>;
 #[derive(Default)]
 pub struct Media {
+    html_revision: u64,
     #[cfg(target_os = "macos")]
     pub pasteboard: super::pasteboard::Writer,
     pub document: super::document::Preview,
@@ -60,7 +61,10 @@ impl Media {
         Ok(())
     }
     pub fn take(&mut self) -> bool {
-        let mut details = self.details.take() | self.document.take();
+        let revision = super::html::revision();
+        let mut details =
+            self.details.take() | self.document.take() | (revision != self.html_revision);
+        self.html_revision = revision;
         #[cfg(target_os = "macos")]
         {
             details |= self.pasteboard.take();
@@ -120,8 +124,40 @@ fn load(client: Gateway, data: &Messages, old: Arc<Images>) -> Images {
         {
             for part in parts {
                 if part["type"] == "text" {
-                    if let Some(text) = part["text"].as_str().filter(|s| s.contains("![")) {
-                        collect(&rune_kit::markdown::parse(text), &mut sources);
+                    if let Some(text) = part["text"].as_str() {
+                        if text.contains('<') {
+                            fn images(
+                                nodes: &[oc_markdown::html::Node],
+                                sources: &mut Vec<String>,
+                            ) {
+                                for n in nodes {
+                                    if let oc_markdown::html::Node::Element {
+                                        tag,
+                                        attrs,
+                                        children,
+                                    } = n
+                                    {
+                                        if tag == "img" {
+                                            if let Some(src) = attrs.get("src") {
+                                                sources.push(src.clone());
+                                            }
+                                        }
+                                        images(children, sources);
+                                    }
+                                }
+                            }
+                            if let Some(tree) = super::html::prepare(text) {
+                                images(&tree.nodes, &mut sources);
+                                collect(
+                                    &rune_kit::markdown::parse(&text[..tree.start]),
+                                    &mut sources,
+                                );
+                            } else if text.contains("![") {
+                                collect(&rune_kit::markdown::parse(text), &mut sources);
+                            }
+                        } else if text.contains("![") {
+                            collect(&rune_kit::markdown::parse(text), &mut sources);
+                        }
                     }
                 }
             }

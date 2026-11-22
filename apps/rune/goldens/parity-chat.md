@@ -8,7 +8,7 @@ rendering of its entire surface. `matches` means the named source behavior was c
 Outstanding work is explicitly marked `remaining` rather than falsely describing it as
 impossible in Rune. The requested exhaustive zero-gap audit is **not complete**.
 
-Merged inherited rows before panels2: **57 fixed, 14 matches, 10 remaining, 2 native/capture exceptions**.
+Merged inherited rows: **59 fixed, 14 matches, 8 remaining, 2 native/capture exceptions** (HTML in Markdown and inline code/link geometry fixed in `rune-md`).
 These counts describe individual inherited audit rows, not whole-screen parity.
 
 ## Integration continuation (`rune-port`)
@@ -26,8 +26,8 @@ These counts describe individual inherited audit rows, not whole-screen parity.
   share this boundary; project copy feedback waits for write acknowledgement.
 - DOCX: chat and Files share one module, embedded worker, sanitizer, DOM-find client,
   generator and license copies in `src/docx`.
-- HTML in Markdown: **remaining**; native sanitizer-allowlist rendering is not implemented.
-- Inline code/link 1pt line-box and icon geometry: **remaining**, not a private-API excuse.
+- HTML in Markdown: **fixed** in `rune-md`; HTML5 parsing, installed sanitizer policy and native allowed-element rendering. See `crates/oc-markdown/HTML.md` for the complete element/attribute matrix and oracle regression.
+- Inline code/link 1pt line-box and icon geometry: **fixed** in `rune-md`; configurable per-line code metrics, inherited link weight, and baseline-positioned icons before code padding.
 - Panel follow-up: canvas bridge-to-draft/timestamps are verified; ring rotation and
   reader footer/history mechanics are corrected. Exact side controls and browser
   menu/download/relaunch interaction coverage remain open; see the panels2 notes below.
@@ -200,6 +200,72 @@ asserting pixel parity. Isolated fixture only: `/tmp/ocr-panels2`, service 4979,
 actual Chrome Intl strings (`22 Nov, 23:01` and `23:01` at the fixed epoch), not a
 WebKit-only formatting oracle. Cleanup verified each stopped process's actual isolated
 HOME; ports 4979/4509 have no listeners and the temporary fixture directory was removed.
+| Item                                  | Status           | Concrete gap / next action                                                                                                                                                                                                     |
+| ------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Inline file-link icon                 | fixed            | Verified source icons before local links (not external URLs) in fresh goldens/pc-transcript-final/pair-chat-markdown-*.png pairs, both sizes/appearances.                                                                      |
+| Markdown paragraph/list/table metrics | fixed            | Named code/link discrepancy: configurable per-code-line +1pt, inherited link weight 500, baseline -2pt icons before code padding. Regression preserves a following plain line. `md/pair-links-{dark,light}-v5.png`.            |
+| HTML in Markdown                      | fixed            | HTML5 + installed 5.0.2 policy, 67 same-input web/Rust cases. Native allowed elements, disclosures, table spans, ruby/images; u/mark unwrap, script strips. Full matrix: `crates/oc-markdown/HTML.md`. `md/pair-*-v5.png`.     |
+| Response copy feedback                | fixed            | Actual macOS AppKit BOOL via worker JXA/stdin; no readback. objc2 needs forbidden Cargo.toml edit; unsafe FFI forbidden. Pending/failure/2s success retained; headless/non-macOS fallback remains.                             |
+| User annotations/mentions             | fixed            | Validated UTF-16 own-text/annotations, chip/popover and sent mention pills; overlay paints after rows. Scripted both themes/sizes: goldens/pc-transcript-final/pair-context-*-annotations-final.png.                           |
+| Attachment interactions               | remaining        | Sent DOCX modal + web Mammoth worker/DOMPurify ported. pc-transcript3/pair-docx-*-review2.png omits WK children. Draft click handlers live in composer/mod.rs:572-638, outside allowed src/chat edits.                         |
+| Response selection/review comments    | remaining        | Exact retained native node/ranges avoid first-quote matches. DOM UTF-16 offsets/underline need adapter source-map/decoration APIs; public SelectedText has only selected pieces. Existing editor geometry not exact.           |
+| Jump pill shadow                      | fixed            | Reverified elevated fill/heavy border, ArrowDown02, chip shadow and hover in goldens/pc-transcript-final/ pairs. This verifies fill/shadow, not the separate source CSS appearance delay.                                      |
+| Chat toolbar/details                  | remaining        | Fixed panel/scroller/8pt padding: pc-transcript3/pair-details-*-review2.png. Scoped resource/descendant SSE coalesces 100ms; usage patches cached totals (no HTTP). Expanded-resource interaction parity unverified. No claim. |
+| Pending inbox/running dock            | remaining        | Lists/tabs/attention/output/stop implemented. Shared worker shell invalidation (5-second fallback) and profile disclosure remain out of scope. Pairs: `composer-matrix/pair-{background,shell-output}-*-replay-final.png`.     |
+| Context keyboard/popover              | fixed            | Immediate hover, inside/outside/blank clicks, focused pointer leave, Tab/Escape/re-entry tested; no modal trap. Pairs: `composer-matrix/pair-context-*-replay-final2.png`.                                                     |
+| Slash/mention ordering                | fixed            | Web rank buckets/deduplication, home exclusions, skill/file/recent-chat limits, 80 ms deferred live file requests, icons and height. Pairs: `goldens/composer/pair-*-pc-composer-final2.png`.                                  |
+| Undo attachments                      | fixed            | Worker decodes/validates attachments, prepares thumbnails and restores file/chat/skill mentions before applying undo. Captured revisions protect newer drafts/navigation.                                                      |
+| Full fork dialog                      | fixed            | `/fork`: captured draft, latest/before choices, earlier history, wrapping arrows/Home/End, errors, pending and close. Newer drafts survive. Native thread-menu routing is outside composer ownership.                          |
+| All question field types              | can't-do-in-Rune | No pinned host date/datetime widget or Chromium validity bubble. GPU calendar, local ISO and inline errors substitute; not native parity. Pairs: `composer-matrix/pair-*-replay-final{,2}.png`.                                |
+| Question lifecycle                    | fixed            | Real V2 replay: every field, single/multi/custom, invalid, conditional, review/back/edit. Keyboard/focus/width/style corrected. Pairs: `composer-matrix/pair-*-replay-final{,2}.png`.                                          |
+| Permission card                       | fixed            | Margins/styles/pending/dialog/errors corrected; real once/always/reject/full outcomes. Pairs: `composer-matrix/pair-permission-*-replay-{final,after}.png`; pending delays recorded HTTP replies.                              |
+| Recorded composer request replay      | fixed            | Native V2-authored requests; actual gateway HTTP/SSE, not model output (free model: 429). Tools: `composer-{fixture,decisions,replay,matrix}.mjs`. Archive: `composer-matrix/recorded-requests.tar.gz`.                        |
+| Composer fixture isolation            | matches          | `/tmp/ocr-pc-composer2`; OpenCode 4972, gateway 4502, record 4503, replay 4542. Both themes/sizes, scale 2; scripted input. Whole-window/font differences remain; no pixel-identical sign-off.                                 |
+| Latest composer verification          | matches          | Release build, 56 Rust unit tests, `bun check`, `bun format:check` pass. Fresh final output/full-access pairs: `composer-matrix/pair-{shell-output,permission-full}-*-replay-final3.png`; residual metrics differ.             |
+| Files tree icons                      | fixed            | Uses pinned `rune-theme-opencode::tree_icons::file` rather than generic Rune-kit FileNode glyphs.                                                                                                                              |
+| Files tabs/tree                       | fixed            | Breadcrumbs, search/collapse/resize, hierarchical changes/statuses, keyboard/ancestor navigation, pin/preview/close interactions. Real-gateway pairs and tab regression checked; see src/workbench/VERIFICATION.md.            |
+| File editor toolbar/selection         | fixed            | Virtual no-wrap source rows with native active-line input/IME, cross-line selection/paste/undo and inline cards after the end line. Viewport-width cards map across preceding edits. See src/workbench/VERIFICATION.md.        |
+| Large-editor performance              | fixed            | 2 MiB TypeScript, syntax enabled, 20 native replacement keys: CPU-frame p50 3.935 ms, p95/max 6.465 ms; excludes GPU/OS input. Virtual source rows, worker lexer; actual replacement bytes asserted.                           |
+| Diff surface                          | fixed            | MIT diff vendored at 7286a3c5; configurable web metrics, one unified number column and lazy full-context expansion including unknown trailing ranges. Worker parsing/pairing/highlighting, selection and inline cards kept.    |
+| Image viewer                          | fixed            | Measured viewport; anchored wheel/pinch/button/double-click zoom; drag-pan; keyboard/download; point comments. Native runtime checks fit/scroll/click coordinates. React has point, not rectangular annotations.               |
+| Rich file previews                    | fixed            | Unprivileged WK PDF/video; bounded Mammoth worker, DOMPurify, CSS and DOM find (Chrome/WK smoke passed). HTML stays source; Markdown uses source-parent link base. Native control/capture limits are documented.               |
+| Subagent list/header                  | remaining        | Provider logo, ring, segmented badges/filter keys and intrinsic rows corrected; populated authored pairs in `panels-final/*review5.png`. Ring rotation, attention/history interactions and footer placement still differ.      |
+| Side-chat composer                    | remaining        | Fresh commands/skills; fork-bounded undo restores bytes/mentions off-thread with revision protection. Model search/thinking/status corrected. Grouped picker, context indicator and exact docks still differ.                  |
+| Canvas list/tabs                      | remaining        | Delete hover/focus, tab overflow/close and viewport capture corrected. Populated pairs: `panels-final/*review5.png`; native shared overlay Attach passes. Canvas bridge-to-draft and locale parity remain unverified.          |
+| App canvas height                     | fixed            | Explicit user-requested exception to Apps ownership: native app host grows to available height, replacing fixed 360-point container.                                                                                           |
+| Browser                               | remaining        | Opaque per-guest origins and canonical resources block file/symlink escapes; retained annotation world fixes lost globals. Native local/annotation/history/popup pass; menus, download-save and relaunch checks remain.        |
+| Terminal chrome                       | fixed            | Header/tabs/splitter/pending and capture grid/focus corrected. Scripted resize, real PTY 93×17/Unicode/reopen/close pass; zero idle frames. Four pairs inspected: `panels-final/pair-terminal-*-review5.png`.                  |
+| Successful-response goldens           | fixed            | Reusable explicitly authored UI transcripts imported through isolated V2 API, not represented as model replies/recordings. 40 fresh scale-2 web/Rune pairs captured; no further model calls required.                          |
+| Atomic native-child screenshots       | can't-do-in-Rune | Pinned headless Rune screenshot omits WK child views. Must separately snapshot/composite real WK output, explicitly not an atomic GPU/native frame.                                                                            |
+
+## Verification and images
+
+### Markdown continuation (`rune-md`)
+
+Used only `/tmp/ocr-md`, isolated OpenCode 4978 and gateway 4508. Six explicitly
+authored V2-imported sessions cover every allowed HTML element, a spanning table,
+and plain/code/file/external links in paragraphs and GFM tables; no model calls.
+Chrome (`channel: chrome`) and headless Rune captured the same messages at
+1600×1000, scale 2, dark/light. Twelve final web-left/native-right pairs are
+`md/pair-{inline,blocks,table,headings,spans,links}-{dark,light}-v5.png`.
+Fresh crop copies were read during review. Separate
+`md/pair-disclosures-{dark,light}-v4.png` captures verify pointer close/open and
+Space close/open, with actual final disclosure state `[false,true]` asserted in
+both renderers. Font rasterization and unrelated app/composer/sidebar differences
+are not a whole-window pixel-parity sign-off.
+
+The full element/attribute/component-override matrix is in
+`../crates/oc-markdown/HTML.md`. The Bun oracle runs the actual web plugins on the
+same 67 Rust sanitizer inputs, including every installed element/attribute.
+Two meaningful regressions were added: sanitizer oracle equality and a code line
+followed by an unaffected plain line. Existing incremental parser tests remain.
+HTML5 parsing/sanitization runs on a coalescing worker; the ordinary prefix keeps
+its incremental parser and source maps. No polling/redraw loop was added.
+
+Release workspace build, all 113 Rust unit tests, `bun check` and
+`bun format:check` pass. Local logs, authored fixture/capture sources and paired
+images are retained under ignored `md/`. Only fixture-environment processes were
+stopped, and the temporary fixture was deleted after capture.
 
 ### Current continuation pass
 
