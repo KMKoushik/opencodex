@@ -56,6 +56,16 @@ fn live_rows_reduce_without_refetch_or_token_delta_wakes() {
         json!({"sessionID":"thread"})
     )));
     assert!(s.sessions.is_empty());
+    assert_eq!(
+        s.workspace_revision, 0,
+        "token deltas never invalidate workspace data"
+    );
+    assert!(s.reduce(event(
+        "filesystem.changed",
+        108.0,
+        json!({"path":"source.rs"})
+    )));
+    assert_eq!(s.workspace_revision, 1);
 }
 
 #[test]

@@ -10,14 +10,14 @@
       "y": 80,
       "width": 65,
       "height": 9,
-      "title": "NATIVE RUNE CLIENT / apps/rune (chat + composer)",
+      "title": "NATIVE RUNE CLIENT / apps/rune (chat + workbench)",
       "color": "#7bb8ff",
       "align": "left",
       "lines": [
-        "Rune shell + revisioned drafts + question/permission docks",
+        "Rune shell + drafts + docks + virtual chat/workbench",
         "Live sidebar/chat worker: /api + SSE; reconnect refresh",
-        "Prompt worker: sends, worktrees, replies, attachment I/O",
-        "Virtual transcript; system fonts; headless PNGs; themes",
+        "Prompt/workbench workers: bounded /api + safe writes",
+        "Off-thread diffs; canvas/terminal mount slots; themes",
         "UI/model prefs: OPENCODEX_DATA_DIR, else ~/.opencodex/rune"
       ]
     },
