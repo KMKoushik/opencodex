@@ -356,7 +356,7 @@ fn model(s: &State, app: &Value) -> El {
             )
             .disabled(disabled || models.is_empty())
             .dim(if disabled || models.is_empty() {
-                0.4
+                0.45
             } else {
                 1.0
             }),
@@ -433,7 +433,7 @@ fn model(s: &State, app: &Value) -> El {
                 },
             )
             .disabled(disabled || !has_variants)
-            .dim(if disabled || !has_variants { 0.4 } else { 1.0 }),
+            .dim(if disabled || !has_variants { 0.45 } else { 1.0 }),
         );
         body = body.child(controls);
     } else {

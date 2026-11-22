@@ -44,7 +44,9 @@ The source is the packaged app oracle; Rune currently has no development-name fl
 - Apps Code adds Electron's selected-text Look Up / Search with Google / Copy
   group. Google encoding follows URLSearchParams; Copy keeps whitespace. Look Up
   calls NSView's `showDefinitionForAttributedString:atPoint:`. Its actual system
-  popover is not visually verified while this host is locked.
+  popover is not visually verified while this host is locked. Google currently
+  uses Rune's system URL opener; Electron routes through its application browser
+  host. That routing needs the browser-host integration outside these folders.
 - Link/image/file menus in transcript/workbench and embedded web content remain
   their owning integrations' responsibility. They were not silently replaced by
   the selected-text menu. Electron `links.ts` uses Copy image, then Open link and
