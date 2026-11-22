@@ -10,6 +10,7 @@ fn long_sidebar_only_mounts_visible_rows() {
         session: None,
         scroll: "bottom".into(),
         work: None,
+        composer_state: String::new(),
     });
     let mut state = State::new();
     let project = oc_gateway::types::Project {

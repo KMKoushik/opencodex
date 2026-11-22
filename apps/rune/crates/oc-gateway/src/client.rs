@@ -39,7 +39,7 @@ impl Gateway {
         url.query_pairs_mut().extend_pairs(query.iter().copied());
         url
     }
-    async fn response(
+    pub(crate) async fn response(
         &self,
         path: &str,
         query: &[(&str, &str)],

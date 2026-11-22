@@ -2,6 +2,7 @@
 mod assets;
 mod chat;
 mod composer;
+mod docks;
 mod icons;
 mod profile;
 mod sidebar;
@@ -13,7 +14,7 @@ mod runtime_tests;
 use assets::Assets;
 use oc_gateway::{Gateway, Snapshot, Worker};
 use profile::{Preferences, Profile};
-use rune::{AppSpec, Chrome, Cx, El, TextEdit, Tx, col, el, row};
+use rune::{AppSpec, Chrome, Cx, El, Tx, col, el, row};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, OnceLock};
 use theme::Theme;
@@ -26,6 +27,7 @@ struct Options {
     session: Option<String>,
     scroll: String,
     work: Option<String>,
+    composer_state: String,
 }
 static OPTIONS: OnceLock<Options> = OnceLock::new();
 struct State {
@@ -45,7 +47,8 @@ struct State {
     chat: chat::Chat,
     history: Vec<Option<String>>,
     history_index: usize,
-    draft: TextEdit,
+    composer: composer::state::Composer,
+    docks: docks::Docks,
     error: Option<String>,
     window_size: (f32, f32),
     waker: Option<rune::Waker>,
@@ -75,7 +78,8 @@ impl State {
             chat: chat::Chat::default(),
             history: vec![None],
             history_index: 0,
-            draft: TextEdit::new(""),
+            composer: Default::default(),
+            docks: Default::default(),
             error: None,
             window_size: (1240.0, 840.0),
             waker: None,
@@ -84,6 +88,17 @@ impl State {
         }
     }
     fn project(&self) -> Option<&oc_gateway::types::Project> {
+        if let Some(session) = self
+            .selected
+            .as_ref()
+            .and_then(|id| self.snapshot.sessions.get(id))
+        {
+            if let Some(project) = self.snapshot.projects.iter().find(|p| {
+                session.project_id.as_deref() == Some(&p.id) || session.directory == p.canonical
+            }) {
+                return Some(project);
+            }
+        }
         self.prefs
             .project
             .as_ref()
@@ -105,13 +120,21 @@ impl State {
     }
     fn select_session(&mut self, id: Option<String>) {
         self.chat = chat::Chat::default();
+        self.composer.menu = None;
+        self.docks = Default::default();
         if let Some(id) = &id {
             if let Some(thread) = self.snapshot.sessions.get(id) {
                 self.prefs.project = Some(thread.directory.clone());
             }
             self.command(oc_gateway::Command::OpenSession(id.clone()));
+            self.prompt_request(oc_gateway::prompt::Request::Get {
+                tag: format!("info:{id}"),
+                path: format!("sessions/{id}"),
+                query: vec![],
+            });
         }
         self.selected = id;
+        self.refresh_docks();
     }
     fn navigate(&mut self, forward: bool) {
         let next = if forward {
@@ -147,13 +170,7 @@ impl State {
         }
     }
     fn model_name(&self) -> &str {
-        self.project()
-            .and_then(|p| self.snapshot.models.get(&p.canonical))
-            .and_then(|c| {
-                c.default_model
-                    .as_ref()
-                    .and_then(|default| c.data.iter().find(|m| m.id == default.id))
-            })
+        self.model_info()
             .map(|m| m.name.as_str())
             .unwrap_or("Select model")
     }
@@ -255,9 +272,22 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
             tx.live_only();
         });
     if !s.prefs.sidebar_closed {
-        shell = shell.child(sidebar::view(s));
+        shell = shell.child(rune::memo(
+            "sidebar",
+            (
+                s.rows_revision,
+                s.snapshot.revision,
+                &s.selected,
+                s.sidebar_width().to_bits(),
+                s.prefs.focus,
+            ),
+            || sidebar::view(s),
+        ));
     }
     shell = shell.child(main);
+    if let Some(menu) = composer::menus::view(s) {
+        shell = shell.child(menu);
+    }
     if !s.prefs.sidebar_closed {
         shell = shell.child(
             el().key("sidebar-resize")
@@ -421,6 +451,11 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
     if changed {
         tx.instant();
     }
+    composer::menus::prefetch(s);
+    if composer::state::poll(s) {
+        changed = true;
+        tx.instant();
+    }
     changed
 }
 pub fn unix_ms() -> u128 {
@@ -476,6 +511,7 @@ fn main() {
             session: value("--session"),
             scroll: value("--scroll").unwrap_or_else(|| "bottom".into()),
             work: value("--work"),
+            composer_state: value("--composer-state").unwrap_or_default(),
         })
         .ok();
     if let Some(id) = value("--profile-chat") {
@@ -505,6 +541,9 @@ fn main() {
         ),
         min_size: Some((760.0, 560.0)),
         on_key: Some(|s, ev, tx| {
+            if composer::keys::global(s, ev, tx) {
+                return true;
+            }
             if rune::Chord::parse("mod+b").unwrap().matches_tx(ev, tx) {
                 s.prefs.sidebar_closed = !s.prefs.sidebar_closed;
                 s.save();
@@ -559,8 +598,13 @@ fn main() {
         let mut s = State::new();
         if OPTIONS.get().unwrap().headless {
             if let Some(url) = &OPTIONS.get().unwrap().gateway {
-                match Gateway::new(url, None).and_then(oc_gateway::capture) {
-                    Ok(snapshot) => s.snapshot = Arc::new(snapshot),
+                match Gateway::new(url, None).and_then(|client| {
+                    oc_gateway::capture_directory(client, s.prefs.project.clone())
+                }) {
+                    Ok(mut snapshot) => {
+                        snapshot.live = true;
+                        s.snapshot = Arc::new(snapshot);
+                    }
                     Err(e) => {
                         eprintln!("{e}");
                         std::process::exit(1);
@@ -611,6 +655,7 @@ fn main() {
             if let Some(mode) = &OPTIONS.get().unwrap().work {
                 s.chat.expand(mode);
             }
+            composer::capture::setup(&mut s);
             sidebar::rebuild(&mut s);
         }
         s
@@ -628,6 +673,7 @@ fn main() {
             match &OPTIONS.get().unwrap().gateway {
                 Some(url) => match Gateway::new(url, None) {
                     Ok(client) => {
+                        composer::state::start(s, client.clone(), wake.clone());
                         s.worker =
                             Some(Worker::start(client, s.prefs.project.clone(), move || {
                                 wake()

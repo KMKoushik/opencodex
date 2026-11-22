@@ -8,6 +8,7 @@ pub struct ModelRef {
     pub id: String,
     #[serde(rename = "providerID")]
     pub provider_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub variant: Option<String>,
 }
 
@@ -139,9 +140,28 @@ pub type Active = BTreeMap<String, Value>;
 pub struct ModelCatalog {
     pub data: Vec<Model>,
     pub default_model: Option<ModelRef>,
+    #[serde(default)]
+    pub providers: Vec<Provider>,
 }
 #[derive(Clone, Debug, Deserialize)]
 pub struct Model {
     pub id: String,
     pub name: String,
+    #[serde(rename = "providerID", default)]
+    pub provider_id: String,
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub variants: Vec<Variant>,
+    #[serde(default)]
+    pub limit: Value,
+}
+#[derive(Clone, Debug, Deserialize)]
+pub struct Provider {
+    pub id: String,
+    pub name: String,
+}
+#[derive(Clone, Debug, Deserialize)]
+pub struct Variant {
+    pub id: String,
 }

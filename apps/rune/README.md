@@ -1,4 +1,4 @@
-# OpenCodex Rune — shell and chat transcript
+# OpenCodex Rune — chat and composer
 
 Standalone Rust workspace, pinned to Rune **7286a3c5** with its six required crates.io patches.
 The binary is a native client of the existing TypeScript gateway, not another OpenCode backend.
@@ -56,9 +56,14 @@ fabricated data. Native windows start network/preferences/images from `on_ready`
 - `src/sidebar`: 300-point sidebar (200–480, reserving 360 for content), reset/keyboard resize,
   collapse, project disclosure, four-row expansion, pinned/Focus/Inactive grouping, native folder
   opening, selected/hover/unread/running states, and lazy Rune `virtual_rows`.
-- `src/composer`: shared brand artwork/vector icons, home hero/starters, project selection,
-  editable/IME-capable draft, model label from the gateway, workspace branch, responsive footer,
-  and derived ceramic effects. Sending and selectors are not implemented as pretend actions.
+- `src/composer`: multiline Rune `TextEdit` with native IME, undo/redo, text/image/file paste,
+  revision-safe session drafts, attachment chips/thumbnails, send/create/navigation and stop.
+  Searchable virtualized model picker with provider icons, persisted thinking choices, permissions,
+  slash commands, bounded fuzzy file mentions, and local/new-worktree/branch selection.
+- `src/docks`: permission once/always/reject, question choices, custom/multiple answers,
+  review/back/edit/dismiss and submission through existing gateway routes.
+- `oc-gateway::prompt`: independent bounded worker for admission, worktree creation, mutations,
+  attachment preparation and file indexing; HTTP/encoding never runs on the typing path.
 - `src/profile`: worker-only preference reads/writes. No gateway/session snapshots are persisted.
 - Canonical architecture JSON/PNG/text updated in `docs/architecture`.
 
@@ -104,6 +109,39 @@ The larger web reference corpus and measured oracle are documented in `goldens/R
 Stop only recorded fixture PIDs whose environment contains `/tmp/ocr-m1`, then delete that temp
 directory. Closing Rune never stops the gateway or OpenCode.
 
+## Composer validation and integration
+
+`State::open_session(id: Option<String>)` is the shared bounded navigation path for sidebar,
+home sends, parent links and history. It loads chat history and resets request docks without
+discarding per-session drafts. `composer::area(s, width)` sits beneath the transcript viewport
+inside the chat's workbench rail and replaces the input with pending question/permission docks.
+Native subagent readers cannot send; side chats remain editable.
+
+The temporary scripted Rune runtime smoke used `opencode/big-pickle` against isolated OpenCode
+4912 / gateway 4442 in `/tmp/ocr-composer`. It verified home send/navigation, question option →
+review → actual reply, existing-session send, model keyboard filtering, image paste/thumbnail,
+text-attachment send into a new worktree, interrupt, and session draft preservation. The temporary
+test was removed after passing; only draft-revision and fuzzy-parity tests were added permanently.
+200 headless key-to-CPU-frame samples: p50 **0.137 ms**, p95 **0.153 ms**, max **0.207 ms**.
+These exclude GPU presentation, OS keyboard delivery and IME candidate-window latency.
+
+`tools/composer-compare.mjs` reproduces web/Rune PNGs at 1280×800 and 1600×1000 in both themes.
+It requires the isolated seeded fixture (`sessions.json`, with its third session awaiting a question),
+a built release binary, and a built web UI served by the gateway. Set `OCR_BASE`, `OCR_FIXTURE`,
+`OCR_CAPTURE_VERSION` and optionally comma-separated `OCR_STATES`. Captures live in the ignored
+`goldens/composer` folder. The original web PNG corpus was absent, so these are newly captured
+real-gateway web counterparts. `python3 apps/rune/tools/composer-pairs.py` (Pillow required)
+assembles side-by-side evidence as `pair-<state>-<theme>-<size>-v7.png`.
+States: text, attachment, model, filtered, slash, mention, worktree, new-worktree,
+question-selected, question-review. Web is left, Rune right.
+
+Visual differences remain: Rune glyph antialiasing/shadows, attachment and mention icons,
+slash/mention ordering and visible row count, filtered-menu height, question radio styling and
+header/row spacing, and the new-worktree branch label. The question captures also show the
+web transcript/workbench rail, which is outside this branch; this shifts its centered dock.
+The web fixture collapses the second project while Rune expands it. These captures establish
+close composer geometry, not pixel-identical whole-window parity.
+
 ## Remaining gaps / framework notes
 
 ### Chat transcript
@@ -141,9 +179,8 @@ fabricated presentation markers.
 the fixture directory and gateway URL. `tools/chat-compare.mjs` captures both renderers from
 the same real fixture (Markdown/long, top/middle/bottom, both appearances and sizes).
 
-Composer integration is deliberately a layout-only branch in `composer::view`: the transcript
-occupies the remaining bounded height, and the existing composer stays docked. Sending and
-request docks remain the composer milestone's responsibility. `State::open_session` and
+The transcript occupies the remaining bounded height above the composer or request dock.
+`State::open_session` and
 `State::chat.data` expose the selected session, native info, running state and errors;
 `State::chat.read_only()` distinguishes native subagent readers from side chats. Workspace
 rail entries remain visual shell slots, not implemented panels; thread actions, full session
@@ -152,14 +189,17 @@ paragraph/list spacing and numbered-marker baselines from the web, so these capt
 pixel-identical. A structured standalone diff editor is still a workspace feature; transcript
 diff fences and tool outputs are readable here.
 
-- M2 still owns sending, functional model/thinking/access/attachment controls, and request docks.
-  M4 owns Tasks, Apps, Settings, search/history menus, and embedded HTML surfaces; those
+- M4 owns Tasks, Apps, Settings, search/history menus, and embedded HTML surfaces; those
   navigation rows are visual shell entries only in M1.
+- `/side` opens the native side session as a regular chat;
+  conversation `/undo` restores text but not the original attachment context.
+- Mention search uses a prefetched bounded index instead of the web's debounced live search.
+  It excludes `.git`, `node_modules`, and `target`, and can be stale until the project is reloaded.
 - Project chooser currently uses Rune's native popup, not the web's searchable popover. Custom
   project image URLs, per-project Focus exclusions, and full cross-project Focus pagination remain.
   First launch shows gateway projects; closing one is stored in this client's own profile.
 - CLI theme/preset selection works; saved theme selection and automatic OS-appearance switching
-  are not wired yet. Provider branding in the composer currently matches the free OpenCode model.
+  are not wired yet. Model provider SVGs are decoded asynchronously and cached in memory.
 - Glyph antialiasing and analytic shadow edges are close, not pixel-identical to Chromium; see
   paired metrics. Headless output has no OS traffic lights unless Rune's chrome diagnostics are
   requested. The paired web screenshots enable Electron's macOS titlebar CSS inset, without

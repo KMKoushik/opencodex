@@ -1,7 +1,7 @@
 import { mkdir, writeFile, realpath } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
-const root = process.env.OPENCODEX_FIXTURE ?? '/tmp/ocr-goldens';
-const base = `${process.env.OPENCODEX_GATEWAY ?? 'http://127.0.0.1:4432'}/api`;
+const root = process.env.OPENCODEX_FIXTURE ?? process.env.OCR_FIXTURE ?? '/tmp/ocr-goldens';
+const base = process.env.OCR_API ?? `${process.env.OPENCODEX_GATEWAY ?? 'http://127.0.0.1:4432'}/api`;
 const model = { providerID: 'opencode', id: 'big-pickle' };
 async function api(path: string, body?: unknown) {
   const r = await fetch(

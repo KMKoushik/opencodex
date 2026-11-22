@@ -10,15 +10,15 @@
       "y": 80,
       "width": 65,
       "height": 9,
-      "title": "NATIVE RUNE CLIENT / apps/rune (shell + chat)",
+      "title": "NATIVE RUNE CLIENT / apps/rune (chat + composer)",
       "color": "#7bb8ff",
       "align": "left",
       "lines": [
-        "Rust + Rune GPU shell; system fonts; shared theme seeds",
-        "oc-gateway worker: typed /api HTTP + /api/events SSE",
-        "Live sidebar + chat reduction; reconnect refreshes history",
-        "Virtual transcript rows; headless PNGs; gateway external",
-        "UI preferences: OPENCODEX_DATA_DIR, else ~/.opencodex/rune"
+        "Rune shell + revisioned drafts + question/permission docks",
+        "Live sidebar/chat worker: /api + SSE; reconnect refresh",
+        "Prompt worker: sends, worktrees, replies, attachment I/O",
+        "Virtual transcript; system fonts; headless PNGs; themes",
+        "UI/model prefs: OPENCODEX_DATA_DIR, else ~/.opencodex/rune"
       ]
     },
     {
