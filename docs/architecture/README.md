@@ -10,7 +10,7 @@ This is the project's single maintained architecture diagram. It shows implement
 
 **Main claim:** browser and Electron share the React UI and gateway API; Electron adds native capabilities, while OpenCode owns the agent runtime and durable sessions.
 
-Rune also owns native page navigation, settings, task/app lists, menus, loaded-transcript find, and background OS notifications. Page reads and writes use its existing bounded prompt worker against the same gateway routes; its disposable page cache is not another persistence layer. Theme, font and notification choices share the existing native preference worker. Remote configuration and pairing credentials remain gateway-owned. App canvas embedding is an explicit `apps::canvas_host` loading hook until WKWebView integration lands. The updater is a disabled native-preview state. Thread search currently filters the loaded sidebar snapshot, a presentation limitation rather than a new search index. Notification delivery uses Rune's OS adapter with foreground, muted-root, subagent-reply and app-session-reply exclusions; it requires a bundled native app on macOS.
+Rune also owns native page navigation, settings, task/app lists, menus, loaded-transcript find, and background OS notifications. Page reads and writes use its existing bounded prompt worker against the same gateway routes; its disposable page cache is not another persistence layer. Theme, font and notification choices share the existing native preference worker. Remote configuration and pairing credentials remain gateway-owned. App canvas embedding is an explicit `apps::canvas_host` loading hook until WKWebView integration lands. The updater is a disabled native-preview state. Thread search and Focus use the gateway's paginated global search rather than a second search index. Notification delivery uses Rune's OS adapter with foreground, muted-root, subagent-reply and app-session-reply exclusions; it requires a bundled native app on macOS.
 
 The common path runs downward: shared UI → local gateway → OpenCode. Upward arrows carry native events for live text and snapshot refresh, plus terminal output over WebSocket; terminal input follows the downward path. Ordinary HTTP responses return on their request connection and are omitted for clarity. The desktop-only side branch uses preload IPC for the native bridge and web-content events for OS link, editing, and spelling menus.
 
@@ -202,6 +202,20 @@ Files and skills use OpenCode's native mentions. A file becomes a `file://` atta
 Review comments still reach the model as ordinary prompt text. Chat and page selections are numbered "Annotation N" and code comments "Comment N", so the agent can cite them. Like Codex, the sent message shows them as a compact chip, such as "1 annotation, 2 comments", with the user's own text in the bubble. The chip opens a numbered list with each comment's source, selected text, and comment. The UI sends the character ranges of the user's text, each quote, and each comment in that same prompt text. The gateway stores them in OpenCode's native message `metadata` under `opencodexAnnotations`, so the text is never duplicated. Both the contract and the renderer reject ranges that don't fit the text, so a mismatched message falls back to plain text. Native commands take no metadata, so expanded slash commands render as plain text. Undo still restores the original sent text.
 
 # Rune native controls
+
+Rune's live sidebar requests session pages only for expanded, presentation-owned
+folders, including folders with no native project registration. Service-discovered
+project metadata enriches these folders without owning their open/closed state.
+The preference file stores only folder paths/names, not native IDs, icons, VCS or
+recency snapshots. Focus/search reads remain independently paginated and coalesced.
+Failed sidebar pagination preserves cursors and does not restart SSE.
+
+Thread exports stream through the existing prompt worker into guarded temporary
+files before presenting the native Save dialog, with the same sanitized filename
+as React. Save, cancel and worker shutdown release the temporary file. This is
+disposable client-side download staging, not durable transcript storage or another
+OpenCode export implementation; content still comes from the gateway's export
+route. App shutdown never stops the shared OpenCode service.
 
 `apps/rune/crates/oc-native` is a narrow main-thread AppKit boundary for the
 system color panel. The safe UI remains `forbid(unsafe_code)`. The panel publishes

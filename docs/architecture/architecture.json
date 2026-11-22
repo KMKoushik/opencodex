@@ -15,8 +15,8 @@
       "align": "left",
       "lines": [
         "Shell, chat, drafts, docks; settings/tasks/apps page routes",
-        "Live sidebar/chat worker: /api + SSE; reconnect refresh",
-        "Prompt worker: sends, page reads/writes, attachment I/O",
+        "Live sidebar/chat worker: scoped /api + SSE; reconnect refresh",
+        "Prompt worker: sends/pages, attachment I/O + export tempfiles",
         "App Code workers: source indexing + find; virtual lines",
         "oc-native: AppKit color panel; menus + OS notifications",
         "UI/model/theme prefs: OPENCODEX_DATA_DIR or ~/.opencodex/rune"

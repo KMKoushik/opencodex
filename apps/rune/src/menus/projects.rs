@@ -16,8 +16,80 @@ pub struct OptionRow {
     pub directory: String,
     pub project: Option<oc_gateway::types::Project>,
 }
+fn remember_folder(s: &mut State, directory: &str, name: Option<&str>) {
+    if !s
+        .prefs
+        .opened_projects
+        .iter()
+        .any(|p| p.canonical == directory)
+    {
+        s.prefs.opened_projects.insert(
+            0,
+            oc_gateway::types::Project {
+                id: format!("folder:{directory}"),
+                canonical: directory.into(),
+                name: name.map(str::to_owned),
+                icon: None,
+                vcs: None,
+                time: Default::default(),
+            },
+        );
+    }
+}
+fn select_composer_folder(s: &mut State, directory: String) {
+    if let Some(model) = s.selected_model().cloned() {
+        s.prefs.project_models.insert(directory.clone(), model);
+    }
+    crate::settings::projects::select(s, directory);
+}
+/// The home / composer forms resolve presentation folders. Settings' explicit
+/// Add/Edit operations retain their own registration and mutation ownership.
+pub fn receive_home_folder(s: &mut State, result: Result<Value, String>) -> bool {
+    if matches!(s.pages.route, crate::pages::Route::Settings(_)) {
+        return false;
+    }
+    let active = s.pages.route == crate::pages::Route::ProjectSetup
+        || matches!(
+            s.pages.projects.dialog,
+            Some(crate::settings::projects::Dialog::Open(false))
+        );
+    s.pages.projects.busy = false;
+    if !active {
+        return true;
+    }
+    match result {
+        Err(error) => s.pages.projects.error = Some(error),
+        Ok(value) => {
+            if let Some(path) = value["directory"]
+                .as_str()
+                .or_else(|| value["canonical"].as_str())
+            {
+                remember_folder(s, path, value["name"].as_str());
+                s.pages.projects.dialog = None;
+                if s.pages.route == crate::pages::Route::Chat {
+                    select_composer_folder(s, path.into());
+                } else {
+                    crate::settings::projects::select(s, path.into());
+                }
+                s.command(oc_gateway::Command::Refresh);
+            } else {
+                s.pages.projects.error =
+                    Some("The gateway returned an invalid project folder.".into());
+            }
+        }
+    }
+    true
+}
 pub fn rows(s: &State) -> Vec<OptionRow> {
     let mut projects: Vec<_> = s.snapshot.projects.iter().collect();
+    let mut seen = std::collections::BTreeSet::new();
+    projects.retain(|p| seen.insert(&p.canonical));
+    projects.extend(s.prefs.opened_projects.iter().filter(|p| {
+        !s.snapshot
+            .projects
+            .iter()
+            .any(|native| native.canonical == p.canonical)
+    }));
     projects.sort_by(|a, b| {
         let recent = |p: &oc_gateway::types::Project| {
             p.time
@@ -42,7 +114,7 @@ pub fn rows(s: &State) -> Vec<OptionRow> {
         })
         .collect();
     let path = query.contains(['/', '\\']) || query.starts_with(['~', '.']);
-    if path && !s.snapshot.projects.iter().any(|p| p.canonical == query) {
+    if path && !rows.iter().any(|p| p.directory == query) {
         rows.push(OptionRow {
             directory: query.into(),
             project: None,
@@ -56,7 +128,7 @@ pub fn active(s: &State, rows: &[OptionRow]) -> usize {
         .unwrap_or(0)
 }
 pub fn open(s: &mut State, tx: &mut Tx) {
-    if !s.snapshot.live {
+    if !super::search::connected(s) {
         return;
     }
     let current = s.project().map(|p| p.canonical.clone()).unwrap_or_default();
@@ -73,7 +145,7 @@ pub fn open(s: &mut State, tx: &mut Tx) {
 pub fn close(s: &mut State, tx: &mut Tx) {
     s.menus.open = None;
     s.menus.projects.generation = s.menus.projects.generation.wrapping_add(1);
-    tx.return_focus("Switch project", false);
+    tx.return_focus("Switch project", tx.by_keys());
 }
 fn changed(s: &mut State, tx: &mut Tx) {
     s.menus.projects.active.clear();
@@ -122,7 +194,7 @@ fn choose(s: &mut State, index: usize, tx: &mut Tx) {
         let same = s.project().is_some_and(|p| p.canonical == option.directory);
         close(s, tx);
         if !same {
-            crate::settings::projects::select(s, option.directory);
+            select_composer_folder(s, option.directory);
         }
         return;
     }
@@ -171,14 +243,14 @@ pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) {
     else {
         return;
     };
-    // Existing documented Rune limitation: unknown folders need native metadata.
+    // React resolves unknown folders without registering native project metadata.
+    // The presentation folder is enough for the composer; metadata arrives on send.
     if stage == "resolve" && !s.snapshot.projects.iter().any(|p| p.canonical == directory) {
-        request(s, "register", "projects", json!({"directory":directory}));
-        return;
+        remember_folder(s, directory, value["name"].as_str());
     }
     let directory = directory.to_owned();
     s.menus.open = None;
-    crate::settings::projects::select(s, directory);
+    select_composer_folder(s, directory);
     s.command(oc_gateway::Command::Refresh);
 }
 pub fn after_frame(rt: &rune::Runtime<State>, handle: &rune::AppHandle<State>) {
@@ -251,16 +323,7 @@ pub fn view(s: &State) -> El {
                 rune::Color::TRANSPARENT
             });
         if let Some(project) = &option.project {
-            item = item.child(crate::settings::projects::avatar(
-                s,
-                project.display_name(),
-                project
-                    .icon
-                    .as_ref()
-                    .and_then(|i| i.color.as_deref())
-                    .unwrap_or("gray"),
-                24.0,
-            ));
+            item = item.child(crate::sidebar::images::avatar(s, project, 24.0));
         } else {
             item = item.child(rune::icon(&i::FOLDER_OPEN, 16.0).color(s.theme.c("text-secondary")));
         }
@@ -399,6 +462,9 @@ pub fn view(s: &State) -> El {
                 "text-secondary",
             ))
             .on_press_tx(|s: &mut State, tx| {
+                if s.menus.projects.pending {
+                    return;
+                }
                 close(s, tx);
                 crate::settings::projects::open(
                     s,

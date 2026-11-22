@@ -17,19 +17,39 @@ pub enum Menu {
 }
 #[derive(Default)]
 pub struct Menus {
+    pub sidebar_current: Option<String>,
+    pub sidebar_pages: crate::sidebar::pagination::Pagination,
+    pub sidebar_scopes: Option<std::collections::BTreeSet<String>>,
+    pub project_counts: std::collections::BTreeMap<String, usize>,
+    pub sidebar_focus: Option<String>,
+    pub thread_anchor: Option<(String, [f32; 4])>,
+    pub thread_menu_height: Option<(String, f32)>,
     pub open: Option<Menu>,
     pub search: TextEdit,
+    pub search_before: Option<TextEdit>,
     pub toast: Option<String>,
     pub toast_due: Option<f64>,
     pub point: Option<(f32, f32)>,
-    pub pending: Option<String>,
+    pub thread_pending: std::collections::BTreeSet<String>,
+    pub thread_errors: std::collections::BTreeMap<String, String>,
+    pub export_names: std::collections::BTreeMap<String, String>,
+    pub export_ready: std::collections::VecDeque<thread::Download>,
+    pub export_dialog: bool,
+    pub connection_due: Option<f64>,
+    pub search_due: Option<f64>,
+    pub search_connected: bool,
     pub error: Option<String>,
     pub results: Vec<serde_json::Value>,
     pub search_pending: Option<String>,
     pub cursor: Option<String>,
     pub notice: Option<String>,
     pub search_revision: u64,
+    pub search_generation: u64,
+    pub pagination: search::Pagination,
     pub projects: projects::Picker,
+    pub focus: crate::sidebar::focus::Focus,
+    pub selection: crate::sidebar::selection::Selection,
+    pub images: crate::sidebar::images::Images,
 }
 fn button(s: &State, title: &str) -> El {
     row()
@@ -43,16 +63,24 @@ fn button(s: &State, title: &str) -> El {
         .center_y()
         .radius(5.0)
         .hover(s.theme.c("hover"))
+        .focus_fill(s.theme.c("hover"))
+        .no_focus_ring()
         .child(label(&s.theme, title, 13.0, 400.0, "text"))
 }
 pub fn open_search(s: &mut State, tx: &mut Tx) {
+    if !search::connected(s) {
+        return;
+    }
     s.menus.open = Some(Menu::Search);
-    s.menus.search.clear();
+    s.menus.search_due = None;
+    s.menus.search = Default::default();
+    s.menus.search_generation = s.menus.search_generation.wrapping_add(1);
+    s.menus.pagination = Default::default();
     s.menus.results.clear();
     s.menus.cursor = None;
     s.menus.error = None;
     search::load(s, false);
-    tx.focus("navigation-search", false);
+    tx.focus_when_shown("navigation-search", false);
 }
 pub fn open_projects(s: &mut State, tx: &mut Tx) {
     s.menus.open = None;
@@ -70,10 +98,22 @@ pub fn switch_projects(s: &mut State, tx: &mut Tx) {
     projects::open(s, tx);
 }
 pub fn view(s: &State) -> Option<El> {
+    if s.menus.focus.filter_open {
+        return Some(crate::sidebar::focus::filter(s));
+    }
     if let Some(Menu::Choice(menu)) = s.menus.open.as_ref() {
         return Some(crate::pages::controls::select_overlay(s, menu));
     }
     if let Some(dialog) = crate::settings::projects::dialog(s) {
+        let dialog = if matches!(
+            s.pages.projects.dialog,
+            Some(crate::settings::projects::Dialog::Open(false))
+        ) && s.pages.route == crate::pages::Route::Chat
+        {
+            dialog.focus_return("Switch project")
+        } else {
+            dialog
+        };
         return Some(
             if let Some(folders) = crate::settings::projects::folder::overlay(s) {
                 dialog.child(folders)
@@ -114,7 +154,8 @@ pub fn view(s: &State) -> Option<El> {
             12.0
         })
         .fill(t.c("elevated"))
-        .border(1.0, t.c("border-heavy"));
+        .border(1.0, t.c("border-heavy"))
+        .border_layout();
     let title = match menu {
         Menu::Choice(_) => unreachable!(),
         Menu::Search => "Search threads",
@@ -219,7 +260,7 @@ pub fn view(s: &State) -> Option<El> {
             .is_some_and(|p| !s.prefs.closed_projects.contains(&p.canonical))
         {
             panel = panel.child(button(s, "Close project").on_press(move |s: &mut State| {
-                crate::settings::projects::close_project(s, &close);
+                crate::sidebar::close_project(s, &close);
                 s.menus.open = None;
             }));
         }
@@ -288,6 +329,44 @@ pub fn view(s: &State) -> Option<El> {
     if compact {
         panel = panel.on_key(compact_key);
     }
+    let menu_height = if let Menu::Thread(id) = menu {
+        let identity = format!(
+            "{id}:{}:{}",
+            s.menus.selection.picked.contains(id),
+            s.menus.thread_errors.len()
+        );
+        let estimate = 10.0
+            + 32.0
+                * if s.menus.selection.picked.contains(id) {
+                    2.0
+                } else if thread::pickable(s, id) {
+                    7.0
+                } else {
+                    6.0
+                };
+        let height = s
+            .menus
+            .thread_menu_height
+            .as_ref()
+            .filter(|(key, _)| key == &identity)
+            .map(|(_, height)| *height)
+            .unwrap_or(estimate);
+        panel = panel.on_layout_tx(move |s: &mut State, rect, tx| {
+            if s.menus
+                .thread_menu_height
+                .as_ref()
+                .is_none_or(|(key, height)| key != &identity || (*height - rect[3]).abs() > 0.25)
+            {
+                s.menus.thread_menu_height = Some((identity.clone(), rect[3]));
+                tx.instant();
+            } else {
+                tx.live_only();
+            }
+        });
+        height
+    } else {
+        292.0
+    };
     Some(
         el().key("navigation-overlay")
             .absolute(0.0, 0.0)
@@ -304,8 +383,8 @@ pub fn view(s: &State) -> Option<El> {
                     .on_press(|s: &mut State| s.menus.open = None),
             )
             .child(t.shadow(panel, "shadow").absolute(
-                x.min(s.window_size.0 - width - 8.0),
-                y.min(s.window_size.1 - 300.0),
+                x.clamp(8.0, (s.window_size.0 - width - 8.0).max(8.0)),
+                y.clamp(8.0, (s.window_size.1 - menu_height - 8.0).max(8.0)),
             )),
     )
 }
@@ -337,39 +416,7 @@ fn compact_key(s: &mut State, event: &rune::KeyEvent, tx: &mut Tx) -> bool {
             format!("project-actions-{id}")
         }
         Menu::Thread(id) => {
-            if let Some(t) = s.snapshot.sessions.get(id) {
-                if s.snapshot.live && s.menus.pending.is_none() {
-                    labels.push(
-                        if t.pinned.is_some() {
-                            "Unpin thread"
-                        } else {
-                            "Pin thread"
-                        }
-                        .into(),
-                    );
-                    let done = t.done.is_some_and(|at| at >= t.activity());
-                    if done || !s.snapshot.active.contains(id) {
-                        labels.push(
-                            if done {
-                                "Mark as not done"
-                            } else {
-                                "Mark as done"
-                            }
-                            .into(),
-                        );
-                    }
-                    labels.push("Mark as unread".into());
-                    labels.push(
-                        if t.muted.unwrap_or(false) {
-                            "Unmute notifications"
-                        } else {
-                            "Mute notifications"
-                        }
-                        .into(),
-                    );
-                    labels.extend(["Export as Markdown", "Export as JSON"].map(str::to_owned));
-                }
-            }
+            labels = thread::enabled_labels(s, id);
             format!("thread-{id}")
         }
         Menu::Brand => {
@@ -403,6 +450,15 @@ fn compact_key(s: &mut State, event: &rune::KeyEvent, tx: &mut Tx) -> bool {
         _ => return false,
     };
     if matches!(event.key, rune::Key::Escape | rune::Key::Tab) {
+        let back = if event.key == rune::Key::Tab {
+            if let Menu::Thread(id) = menu {
+                crate::sidebar::selection::tab_target(s, id, event.mods.shift)
+            } else {
+                back
+            }
+        } else {
+            back
+        };
         s.menus.open = None;
         tx.return_focus(back, true);
         return true;
@@ -414,10 +470,11 @@ fn compact_key(s: &mut State, event: &rune::KeyEvent, tx: &mut Tx) -> bool {
     let index = labels
         .iter()
         .position(|l| focused == format!("menu-{l}"))
-        .unwrap_or(0);
+        .map(|n| n as isize)
+        .unwrap_or(-1);
     let next = match event.key {
-        rune::Key::Down => (index + 1) % labels.len(),
-        rune::Key::Up => (index + labels.len() - 1) % labels.len(),
+        rune::Key::Down => ((index + 1) as usize) % labels.len(),
+        rune::Key::Up => (index - 1).rem_euclid(labels.len() as isize) as usize,
         rune::Key::Home => 0,
         rune::Key::End => labels.len() - 1,
         _ => return false,

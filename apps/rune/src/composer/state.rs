@@ -390,6 +390,12 @@ pub fn poll(s: &mut State) -> bool {
                 crate::notifications::receive(s, &tag, result);
             }
             Reply::Data { tag, result } if tag.starts_with("project-") => {
+                if tag == "project-open"
+                    && !matches!(s.pages.route, crate::pages::Route::Settings(_))
+                {
+                    crate::menus::projects::receive_home_folder(s, result);
+                    continue;
+                }
                 crate::settings::projects::receive(s, &tag, result)
             }
             Reply::Data { tag, result } if tag.starts_with("switcher:") => {

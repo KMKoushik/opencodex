@@ -9,6 +9,10 @@ pub struct Snapshot {
     pub active: BTreeSet<String>,
     pub cursors: BTreeMap<String, String>,
     pub project_cursors: BTreeMap<String, String>,
+    pub page_results: BTreeMap<String, (u64, Option<String>)>,
+    pub loaded_directories: BTreeSet<String>,
+    pub project_errors: BTreeMap<String, String>,
+    pub scoped_directories: Option<BTreeSet<String>>,
     pub error: Option<String>,
     pub live: bool,
     pub revision: u64,
@@ -17,28 +21,132 @@ pub struct Snapshot {
     pub attention: BTreeMap<String, String>,
 }
 impl Snapshot {
+    pub fn retain_project_lists(&mut self, directories: &BTreeSet<String>, selected: Option<&str>) {
+        self.scoped_directories = Some(directories.clone());
+        let ids: BTreeSet<_> = self
+            .projects
+            .iter()
+            .filter(|p| directories.contains(&p.canonical))
+            .map(|p| p.id.clone())
+            .collect();
+        self.loaded_directories
+            .retain(|dir| directories.contains(dir));
+        self.cursors.retain(|dir, _| directories.contains(dir));
+        self.project_cursors.retain(|id, _| ids.contains(id));
+        self.project_errors
+            .retain(|dir, _| directories.contains(dir));
+        self.page_results.retain(|dir, _| directories.contains(dir));
+        self.sessions.retain(|id, session| {
+            session.pinned.is_some()
+                || selected == Some(id.as_str())
+                || directories.contains(&session.directory)
+                || session
+                    .project_id
+                    .as_ref()
+                    .is_some_and(|id| ids.contains(id))
+        });
+    }
+    /// Commit both directory/worktree cursors only after the entire page succeeds.
+    /// A failed read must neither advance pagination nor restart the event stream.
+    pub async fn more(&mut self, client: &Gateway, directory: &str) {
+        let result: Result<(), String> = async {
+            let local = if let Some(cursor) = self.cursors.get(directory) {
+                Some(client.sessions(directory, Some(cursor)).await?)
+            } else {
+                None
+            };
+            let id = self
+                .projects
+                .iter()
+                .find(|p| p.canonical == directory)
+                .map(|p| p.id.clone());
+            let tree = if let Some(id) = &id {
+                if let Some(cursor) = self.project_cursors.get(id) {
+                    Some(client.project_sessions(id, Some(cursor)).await?)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            if let Some(page) = local {
+                self.cursors.remove(directory);
+                if let Some(cursor) = page.next_cursor {
+                    self.cursors.insert(directory.into(), cursor);
+                }
+                for session in page.sessions {
+                    self.sessions.insert(session.id.clone(), session);
+                }
+            }
+            if let (Some(id), Some(page)) = (id, tree) {
+                self.project_cursors.remove(&id);
+                if let Some(cursor) = page.next_cursor {
+                    self.project_cursors.insert(id, cursor);
+                }
+                for session in page.sessions {
+                    self.sessions.insert(session.id.clone(), session);
+                }
+            }
+            Ok(())
+        }
+        .await;
+        let entry = self.page_results.entry(directory.into()).or_default();
+        entry.0 = entry.0.wrapping_add(1);
+        entry.1 = result.err();
+    }
     pub async fn load(client: &Gateway) -> Result<Self, String> {
+        Self::load_scoped(client, None).await
+    }
+    /// `None` is reserved for headless capture. Live clients supply only mounted
+    /// project lists, never all service-discovered projects.
+    pub async fn load_scoped(
+        client: &Gateway,
+        directories: Option<&BTreeSet<String>>,
+    ) -> Result<Self, String> {
         let (projects, active) = tokio::try_join!(client.projects(), client.active())?;
         let mut out = Self {
             projects,
             active: active.into_keys().collect(),
+            scoped_directories: directories.cloned(),
             ..Self::default()
         };
         // Parallel requests are bounded; no thousands of simultaneous per-project sockets.
-        use futures_util::{StreamExt, TryStreamExt, stream};
-        let pages: Vec<_> = stream::iter(out.projects.iter().map(|p| async move {
-            let local = client.sessions(&p.canonical, None).await?;
-            let tree = if p.vcs.is_some() {
-                Some(client.project_sessions(&p.id, None).await?)
-            } else {
-                None
-            };
-            Ok::<_, String>((p.id.clone(), p.canonical.clone(), local, tree))
+        use futures_util::{StreamExt, stream};
+        let dirs: Vec<String> = directories
+            .map(|dirs| dirs.iter().cloned().collect())
+            .unwrap_or_else(|| out.projects.iter().map(|p| p.canonical.clone()).collect());
+        let pages: Vec<_> = stream::iter(dirs.iter().map(|directory| {
+            let project = out.projects.iter().find(|p| &p.canonical == directory);
+            async move {
+                let result = async {
+                    let local = client.sessions(directory, None).await?;
+                    let tree = if let Some(p) = project.filter(|p| p.vcs.is_some()) {
+                        Some(client.project_sessions(&p.id, None).await?)
+                    } else {
+                        None
+                    };
+                    Ok::<_, String>((
+                        project.map(|p| p.id.clone()).unwrap_or_default(),
+                        local,
+                        tree,
+                    ))
+                }
+                .await;
+                (directory.clone(), result)
+            }
         }))
         .buffer_unordered(4)
-        .try_collect()
-        .await?;
-        for (id, directory, page, tree) in pages {
+        .collect()
+        .await;
+        for (directory, result) in pages {
+            let (id, page, tree) = match result {
+                Ok(page) => page,
+                Err(error) => {
+                    out.project_errors.insert(directory, error);
+                    continue;
+                }
+            };
+            out.loaded_directories.insert(directory.clone());
             if let Some(cursor) = page.next_cursor {
                 out.cursors.insert(directory, cursor);
             }
@@ -102,6 +210,16 @@ impl Snapshot {
             let Some(directory) = directory else {
                 return false;
             };
+            if let Some(directories) = &self.scoped_directories {
+                let project = data["projectID"].as_str();
+                if !directories.contains(directory)
+                    && !self.projects.iter().any(|p| {
+                        Some(p.id.as_str()) == project && directories.contains(&p.canonical)
+                    })
+                {
+                    return false;
+                }
+            }
             self.sessions.insert(
                 id.into(),
                 Session {

@@ -122,6 +122,10 @@ fn folder_suggestions_overlay_wraps_up_and_does_not_reopen_after_dismissal() {
     });
     let mut state = State::new();
     state.pages.route = pages::Route::ProjectSetup;
+    state.pages.data.insert(
+        "connection".into(),
+        Ok(serde_json::json!({"status":"connected"})),
+    );
     state.pages.projects.directory = rune::TextEdit::new("/fixture/");
     state.pages.projects.suggesting = true;
     state.pages.projects.folders_parent = Some("/fixture/".into());
@@ -211,6 +215,10 @@ fn project_switcher_clamps_arrows_and_ignores_dismissed_resolution() {
         {"id":"new","name":"New project","canonical":"/fixture/new","time":{"active":3,"updated":2}}
     ])).unwrap();
     state.prefs.project = Some("/fixture/old".into());
+    state.pages.data.insert(
+        "connection".into(),
+        Ok(serde_json::json!({"status":"connected"})),
+    );
     let mut rt = rune::Runtime::new(state, view, (1280.0, 800.0), rune::Env::new(true, 2.0));
     rt.update(menus::projects::open);
     rt.frame(0.0);
@@ -477,6 +485,11 @@ fn long_sidebar_only_mounts_visible_rows() {
         snapshot.sessions.insert(thread.id.clone(), thread);
     }
     state.snapshot = Arc::new(snapshot);
+    state.prefs.project = Some("/fixture".into());
+    state.pages.data.insert(
+        "connection".into(),
+        Ok(serde_json::json!({"status":"connected"})),
+    );
     state.visible.insert("fixture".into(), 20_000);
     sidebar::rebuild(&mut state);
     let mut rt = rune::Runtime::new(state, view, (1280.0, 800.0), rune::Env::new(true, 2.0));

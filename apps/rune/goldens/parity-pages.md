@@ -3,7 +3,7 @@
 Scope: `rune-parity-pages`. No workbench/right-rail implementation changes.
 Status units below are **individual audited issues**, not whole screens. A fixed
 issue does not mean that its surrounding page matches. Summary: **2 matches,
-21 fixed, 19 still differing/incompletely verified**.
+23 fixed, 17 still differing/incompletely verified**.
 
 ## Fixed issues
 
@@ -36,8 +36,8 @@ issue does not mean that its surrounding page matches. Summary: **2 matches,
 
 ## Still differs / not fully verified
 
-- **still differs** Thread menus lack React's optional Select/multi-selection, Cmd+Enter done affordance and full arrow/Home/End/Tab/focus-return behavior. Mutation disabling is broader than the independent React mutation states; connection-vs-live handling outside General remains incomplete.
-- **still differs** Export uses a native Save dialog instead of browser automatic download and does not supply the React-sanitized default filename.
+- **fixed** Thread menus implement Select/multi-selection, Shift/Cmd range/toggle selection, bulk done with six-second undo, Cmd+Enter, arrow/Home/End/Tab and focus return. Pending/error state is independent per session/action rather than one menu-wide lock. Runtime regressions cover selection, menu navigation and pending independence; the authentic running/attention matrix remains in the sidebar issue below.
+- **fixed** Export streams real gateway bytes into worker-owned temporary files before opening the native Save dialog, with React's sanitized default filename and default Downloads directory. Electron also uses a native Save dialog (no `will-download` override); it is not an automatic-download parity gap. Save/cancel/worker-shutdown cleanup and composer-draft preservation passed real-worker smoke checks.
 - **still differs** General omits desktop updater integration. Notification toggles persist, but permission-denial messages and actual banner semantics are not validated. Project-close selection behavior needs a complete scenario pass.
 - **still differs** Appearance now implements Mode/System following, Typography reset/range/preview, terminal-placement preference, separate Light/Dark selectors with seed previews, hex/native color fields, Contrast and conditional resets. Variant preference serialization and real runtime keyboard switching/select dismissal pass a regression test. Remaining differences include the web segmented thumb's independently simulated leading/trailing spring motion, native range rendering, and final spacing. Terminal placement is presentation-only here; panel integration belongs to the other branch.
 - **still differs** Projects has the source header/add/search/list/actions and separate Open/Add/Edit/Instructions/Worktree dialogs. Upload preparation/crop and URL validation run off the UI; edits and Unicode instructions passed a real native-worker read/write/restore smoke. Name/URL and task key/paste limits use UTF-16 insertion limits, and editor Enter submits. Folder suggestions now overlay the form, preserve stale parent results without allowing selection, cache eight parents for 30 seconds, separate listing/opening errors, hide dotfolders until requested, and fix Up from no choice. Late listing replies cannot reopen a dismissed list. Saved-icon previews, exact fuzzy highlighting, all folder-cache/blur/keyboard edge cases and independent mutation/error states remain incomplete; dialog styling is not pixel-identical.
@@ -45,18 +45,52 @@ issue does not mean that its surrounding page matches. Summary: **2 matches,
 - **still differs** Remote pairing remains inline, not the real PairDialog; expiration/device completion, dates/last-active, polling cadence, status tones, all error/busy states and real tunnel configuration were not validated. No live tunnel was enabled during this audit.
 - **still differs** Tasks is populated through the real plugin/gateway and has assignee persistence, project filtering, per-column entry, inline editors, project/assignee fields, order/drag handling, day labels, banners and linked chats. Real-worker create/complete/delete passes. Escape and UTF-16 suffix-preserving insertion limits have regression coverage. Markdown notes, wrapping semantic-tone chips, done-title strike, measured note growth and wrapping editor fields are implemented; all Markdown/link interactions, drag/autoscroll, Tab/outside-save/window-blur scenarios, per-mutation pending/error independence and remaining geometry still need verification/completion.
 - **still differs** Apps has a gateway-created app and real run, index/detail, App/Settings/Code tabs, trigger-derived buttons/multi-trigger menu, icon/model/delete dialogs, runs and model-call metadata, plus bounded sidebar app links and live invalidation. Canvas implementation remains explicitly excluded: only frame/loading is drawn for the embedding agent. Model variants/provider controls, code highlighting/find/cross-line selection and full settings/error/schedule/keyboard behavior still need completion; multi-trigger/run-call states need their complete real-data matrix.
-- **still differs** Search dialog still needs full keyboard/focus/length-limit/reconnection behavior and detailed pixel comparison. Normal gateway search is verified, not every paginated UI interaction.
-- **still differs** Sidebar/⌘O Open project correctly clears the selection and shows full-page folder setup. The composer now has the anchored 360px recent-folder popup, active/current indicators, typed-path row, no-results state, and Open project… footer dialog. Native project active/updated metadata drives recent ordering. Clamped arrows, initial search focus, Escape and dismissed/reopened resolution protection pass a runtime test. Unknown resolved folders are still eagerly registered via the existing gateway project operation because Rune requires native metadata; React supports presentation-only folders. Saved icon rendering, merged presentation-only folders, errors/pending/focus/Tab and complete placement verification remain open. That ownership/timing difference is documented, not signed off.
-- **still differs** Focus ranking, per-project exclusions/filter UI, inactive pagination and boundary cases have not been fully ported from `threads/focus.ts`, `threads-view.tsx`, and `project-filter.tsx`.
-- **still differs** Sidebar hidden/hover/selected/unread/running states and Show more need a complete behavioral/pixel matrix. Keyboard focus navigation, shortcut numbers and closed/opened-project ownership are not fully equivalent.
+- **still differs** Search now has modal focus/Escape, UTF-16 insertion and IME limits with suffix/undo preservation, stale-generation rejection, disconnect-retained results, reconnect polling, explicit Retry and staged multipage refresh/queued Show more. Runtime tests cover modal close and keyboard/IME limits including undo/redo. Fresh real-gateway pairs cover the populated dialog in both themes/sizes; full live pagination/error/reconnection interaction and pixel identity are not signed off.
+- **still differs** Sidebar/⌘O Open project clears selection and shows folder setup. The anchored recent-folder popup includes current indicators, typed paths, no-results and Open project… dialog. Unknown home/composer folders are now presentation-only and do not call native registration; native metadata enriches opened folders without being persisted. Saved artwork loads through a bounded worker cache. Keyboard navigation/resolution protection passes runtime tests; real-worker smoke verified unregistered-folder resolution. Fresh four-configuration pairs cover all popup states, but complete errors/Tab/native-dialog interaction and exact glyph/shadow rasterization remain unverified. Settings-origin project registration remains outside this assignment.
+- **still differs** Focus now uses global gateway search (four recent pages automatically), source ranking, request-preserving project exclusions/filter UI, inactive disclosure/pagination and coalesced refresh. Runtime coverage checks exclusions/ranking; fresh four-configuration pairs cover Focus/filter/selection. Complete real running/attention and pagination-boundary scenarios are not signed off.
+- **still differs** Sidebar now owns opened/closed folders, keyboard targets/focus-within actions, shortcut hints, muted/fork indicators and local-vs-remote Show more. Remote disclosure advances only on success, has per-project pending/errors, and failed pages preserve cursors without restarting SSE. The live worker loads only expanded folder lists and releases unpinned closed-list caches; real-worker initial-load/close/reopen smoke passed. Fresh hidden/default/Focus pairs were reviewed in both themes/sizes. Authentic running/attention captures remain blocked by fixture provider quota/account errors; this is a verification blocker, not a Rune rendering impossibility. Pixel identity and the full interaction matrix remain open.
 - **still differs** Find now floats and has the source labels, counter, icon buttons, zero-result disabling, Escape and Mod+G. It still navigates rows rather than individual occurrences, lacks distinct active occurrence highlighting/folded-turn reveal/selection seed/focus restoration, and does not search the exact React projected text.
 - **still differs** Runtime shortcut behavior is incomplete: backgrounding now targets the real session background endpoint only for blocking shell/subagent calls, rather than navigating to a new chat. Compact-menu arrows/Home/End and several dialog Escape boundaries are implemented. Complete menu/input boundaries, sequences and all Focus shortcuts still need the full scripted matrix. Workbench/terminal handlers remain the other branch's responsibility.
 - **still differs** Native standard menu defaults are not proven identical to Electron's version-specific defaults. Text/spelling, selected-text Look Up/Search with Google, file/link and other native context menus are not all implemented/audited.
-- **still differs** Home without an open project and the full checking/disconnected/connection-error screens are not fully equivalent. Only the unreachable retry's GET behavior was corrected.
+- **still differs** Home without a project, checking, disconnected and unreachable screens now use source headings/actions/toolbar and distinguish HTTP connection status from SSE liveness. Retry/check use GET; Connect alone uses POST. Polling is bounded and independently invalidates connection data. Real no-project/checking/unreachable/disconnected pairs were reviewed in both themes/sizes. Exact glyph/shadow rasterization and the complete Connect/error/native-folder-dialog interaction matrix remain unverified. Browser pairs do not expose Electron's native folder-picker bridge, so the native browse affordance is not visually comparable in those pairs.
 - **still differs** Composer model/thinking/access/slash/mention/workspace/branch menus retain previous gaps (ordering, dimensions, counts, exact permission confirmation and live file search). This pass read them but did not complete their 1:1 audit.
 - **still differs** Pixel parity is not achieved: typography/rasterization, border inclusion, disabled styling and shadows remain; transcript/workbench differences are visible behind menus and were deliberately not changed. Not all original golden states received fresh pairs.
 
 ## Continuation evidence (in progress)
+
+### Sidebar assignment (`rune-pp-sidebar`)
+
+The isolated fixture used OpenCode **4973** and gateway **4504**. Port 4503 belonged
+to another worktree and was not touched. Final same-gateway output is under
+`apps/rune/goldens/pp-sidebar/`: **44 pairs** named
+`pair-*-{dark,light}-{1280x800,1600x1000}-sidebar-verified.png` for home,
+search, thread menu, recent-folder popup/path/empty, project setup, Focus,
+hidden sidebar, Focus filter and selection menu; **16 additional pairs** named
+`pair-{home-no-project,connection-checking,connection-offline,connection-disconnected}-*-sidebar-final.png`.
+All four theme/size configurations were reviewed. Checking delays a real request;
+unreachable uses a closed port; disconnected follows termination of the verified
+fixture-owned OpenCode process. No screenshot API responses are mocked.
+
+Required workspace tests pass **23 tests**, including UTF-16 IME composition with
+suffix-preserving undo/redo and failure-safe pagination. Release build, root
+`bun check`, `bun format:check` and `bun architecture:check` pass. The updated
+canonical PNG and connector directions were inspected. A release CPU-frame check
+with **20,000 threads mounted 30 rows in 12.41 ms**; this is a cold CPU frame,
+not a GPU or end-to-end input-latency claim. Sidebar shell and root mailbox polling
+were split out so the assigned files stay below roughly 800 lines.
+
+Temporary real-worker smoke sources (removed) exercised export save/cancel/stop
+cleanup, unregistered folder resolution and scoped session-load/close/cache-release/
+reopen. These checks do **not** establish complete 1:1 parity: remaining interaction
+matrices, authentic running/attention captures and rendering differences are
+explicitly retained in the assigned rows above. Native text/shadow rendering is
+the implemented alternative to Chromium rasterization, not evidence of pixel
+identity or an excuse for unimplemented behavior.
+
+Cleanup: fixture process environments were reverified before terminating OpenCode
+on 4973, gateway on 4504 and its esbuild child. Both fixture ports are closed.
+`/tmp/ocr-pp-sidebar` was removed after validation; ignored pair PNGs remain in
+the worktree. No shared user service or other worktree's process was stopped.
 
 `goldens/seed-pages.ts` adds five real tasks and creates a canvas through the isolated
 gateway, then installs its fixture-only `server.ts`. Its function was executed
