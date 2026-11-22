@@ -288,20 +288,24 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
     }
     if let Some(p) = s.project() {
         toolbar = toolbar
-            .child(rune::icon(&icons::FOLDER, 14.0).color(t.c("text-secondary")))
             .child(
-                sidebar::label(t, p.display_name(), 13.0, 400.0, "text-secondary")
-                    .truncate()
-                    .max_w(if s.workbench.open && w - width - s.panel_width() < 500.0 {
-                        12.0
-                    } else {
-                        180.0
-                    }),
+                row()
+                    .gap(6.0)
+                    .center_y()
+                    .child(rune::icon(&icons::FOLDER, 14.0).color(t.c("text-secondary")))
+                    .child(
+                        sidebar::label(t, p.display_name(), 13.0, 400.0, "text-secondary")
+                            .truncate(),
+                    )
+                    .max_w((w - width) * 0.3),
             )
-            .child(sidebar::label(t, "/", 13.0, 400.0, "text-tertiary"));
+            .child(sidebar::label(t, "/", 13.0, 400.0, "text-tertiary").mx(2.0));
     }
     toolbar = toolbar.child(
         sidebar::label(t, title, 13.0, 500.0, "text")
+            .px(5.0)
+            .h(30.0)
+            .center_y()
             .truncate()
             .min_w(0.0),
     );
@@ -331,7 +335,7 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
         .min_w(0.0)
         .min_h(0.0)
         .fill(t.c("surface"))
-        .border_sides([0.0, 0.0, 0.0, 1.0], t.c("border"))
+        .border_sides([0.0, 0.0, 0.0, 0.5], t.c("border"))
         .border_layout()
         .child(if matches!(s.pages.route, pages::Route::Settings(_)) {
             row()
