@@ -112,6 +112,28 @@ insertion without splitting an emoji or discarding the untouched suffix. Latest
 2,000-task check: 16 mounted cards, 10.86 ms CPU frame. This does not sign off
 the remaining drag/focus/link/geometry matrix.
 
+Apps Code follow-up: source indexing/highlighting runs on an on-demand coalescing
+native worker with latest-only mailboxes and generation rejection. Typed source
+replaces the raw files response, and only viewport lines mount. Release workspace
+tests pass **17 tests**, including cross-line clipboard copying across a blank
+line with a memory clipboard. The focused 20,000-line benchmark mounted 57 lines
+in 10.90 ms CPU before the final gutter-spacing adjustment. This is not a GPU or
+interaction-latency measurement. The canonical architecture includes the worker;
+its generated PNG was inspected and `bun architecture:check` passes.
+
+Pinned Rune limits coloring to the first 128 KiB/32,768 token ranges and virtual
+selection collection to 10,000 unbuilt rows/4 MiB. These are constraints, not a
+demonstrated whole-feature blocker or parity sign-off. Native lexer classifications
+still differ from React's Lezer styles. Find, full keyboard/navigation behavior,
+large/offscreen selection, error/loading refresh scenarios and gutter geometry
+remain open. Initial same-fixture review: `/tmp/ocr-parity/code-review-14.png`.
+The final Code pass adds **eight pairs** (server/index tabs × four configurations)
+at scale 2: `goldens/parity-pages/pair-app-code*-code-final.png`. Fresh final review:
+`/tmp/ocr-parity/code-review-15.png`. Tab typography, source inset, gutter width and
+20.4px line spacing were corrected against the initial pairs. Full release tests,
+release build, root `bun check`, formatting and architecture check pass. Checklist
+counts remain **2 matches, 21 fixed, 19 still differing**.
+
 ## Prior-pass evidence and validation
 
 `tools/parity-pages.mjs` captures real web and Rune output against the same fresh

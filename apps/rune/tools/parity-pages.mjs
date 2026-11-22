@@ -105,6 +105,7 @@ try {
             'app-detail',
             'app-settings',
             'app-code',
+            'app-code-index',
             'app-runs-open',
             'app-icon-open',
             'app-model-open',
@@ -115,8 +116,10 @@ try {
           await page.locator('.apps-tile').filter({ hasText: 'Release dashboard' }).click();
           if (state === 'app-settings')
             await page.getByRole('radio', { name: 'Settings', exact: true }).click();
-          if (state === 'app-code')
+          if (state === 'app-code' || state === 'app-code-index')
             await page.getByRole('radio', { name: 'Code', exact: true }).click();
+          if (state === 'app-code-index')
+            await page.getByRole('tab', { name: 'index.html', exact: true }).click();
           if (state === 'app-runs-open') await page.getByRole('button', { name: /^Runs/ }).click();
           if (state === 'app-icon-open') await click('Change icon');
           if (state === 'app-model-open' || state === 'app-delete-open') {

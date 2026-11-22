@@ -149,6 +149,16 @@ pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) -> bool 
         return crate::menus::thread::receive(s, tag, result);
     }
     if let Some(path) = tag.strip_prefix("page:") {
+        if let Some(id) = path
+            .strip_prefix("canvases/")
+            .and_then(|p| p.strip_suffix("/files"))
+        {
+            s.pages.pending.remove(path);
+            if s.pages.app.as_deref() == Some(id) {
+                crate::apps::code::receive(s, result);
+            }
+            return true;
+        }
         if path == "apps" {
             s.rows_revision += 1;
         }

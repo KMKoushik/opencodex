@@ -5,6 +5,7 @@ use crate::{
 };
 use rune::{El, ScrollSpec, col};
 use serde_json::Value;
+pub(crate) mod code;
 mod detail;
 pub(crate) use detail::run;
 pub fn sidebar(s: &State) -> El {
@@ -78,6 +79,7 @@ mod glyphs;
 mod index;
 #[derive(Default)]
 pub struct Apps {
+    pub code: code::Code,
     pub tab: String,
     pub runs_open: bool,
     pub open_runs: std::collections::BTreeSet<String>,
@@ -206,6 +208,7 @@ pub fn capture(s: &mut State, page: &str) -> bool {
         "app-detail"
             | "app-settings"
             | "app-code"
+            | "app-code-index"
             | "app-runs-open"
             | "app-icon-open"
             | "app-model-open"
@@ -254,8 +257,11 @@ pub fn capture(s: &mut State, page: &str) -> bool {
             s.pages.apps.tab = "settings".into();
             fetch(s, &format!("apps/{id}/runs"));
         }
-        "app-code" => {
+        "app-code" | "app-code-index" => {
             s.pages.apps.tab = "code".into();
+            if page == "app-code-index" {
+                s.pages.apps.selected_file = "index.html".into();
+            }
             fetch(s, &format!("canvases/{id}/files"));
         }
         "app-runs-open" => {

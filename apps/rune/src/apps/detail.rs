@@ -1,6 +1,6 @@
 use super::*;
 use crate::pages::controls as ui;
-use rune::{TextStyle, el, row, text};
+use rune::{TextStyle, el, row};
 use serde_json::json;
 fn tab(s: &State) -> &str {
     if s.pages.apps.tab.is_empty() {
@@ -520,77 +520,5 @@ fn settings(s: &State, app: &Value) -> El {
         .child(body.child(functions))
 }
 fn code(s: &State, id: &str) -> El {
-    let path = format!("canvases/{id}/files");
-    let mut body = col().w_full().grow(1.0).min_h(0.0);
-    let Some(files) = data(s, &path).and_then(|v| v["files"].as_array()) else {
-        return body
-            .child(label(&s.theme, "Loading code…", 13.0, 400.0, "text-tertiary").padding(24.0));
-    };
-    let mut files: Vec<_> = files.iter().collect();
-    files.sort_by_key(|v| {
-        let name = v["name"].as_str().unwrap_or("");
-        (
-            match name {
-                "app.tsx" => 0,
-                "server.ts" => 1,
-                _ => 2,
-            },
-            name,
-        )
-    });
-    let selected = files
-        .iter()
-        .find(|f| f["name"] == s.pages.apps.selected_file)
-        .or(files.first());
-    let mut tabs = row()
-        .w_full()
-        .px(12.0)
-        .py(6.0)
-        .gap(2.0)
-        .role("tablist")
-        .label("Files");
-    for file in &files {
-        let name = file["name"].as_str().unwrap_or("").to_owned();
-        tabs = tabs.child(
-            ui::ghost(s, &name)
-                .role("tab")
-                .fill(if selected.is_some_and(|f| f["name"] == name) {
-                    s.theme.c("selected")
-                } else {
-                    rune::Color::TRANSPARENT
-                })
-                .on_press(move |s: &mut State| s.pages.apps.selected_file = name.clone()),
-        );
-    }
-    body = body.child(tabs);
-    if let Some(file) = selected {
-        let mut lines = col().w_full().padding(12.0);
-        for (n, line) in file["text"].as_str().unwrap_or("").lines().enumerate() {
-            lines = lines.child(
-                row()
-                    .w_full()
-                    .gap(16.0)
-                    .child(
-                        label(&s.theme, (n + 1).to_string(), 12.0, 400.0, "text-tertiary").w(32.0),
-                    )
-                    .child(
-                        text(line.to_owned())
-                            .font(TextStyle::new(12.0, 400.0).mono().lh(20.0))
-                            .color(s.theme.c("text"))
-                            .selectable(true),
-                    ),
-            );
-        }
-        body = body.child(
-            col()
-                .w_full()
-                .grow(1.0)
-                .min_h(0.0)
-                .scroll(ScrollSpec {
-                    stick_bottom: false,
-                })
-                .child(lines),
-        );
-    }
-    body
+    super::code::view(s, id)
 }

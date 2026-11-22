@@ -382,7 +382,10 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
     }
     pages::poll(s, clock, tx);
     notifications::clear_on_focus(s);
-    let mut changed = settings::appearance::receive_color(s) || task_minute != s.pages.tasks.minute;
+    let code_changed = apps::code::poll(s);
+    let mut changed = settings::appearance::receive_color(s)
+        || task_minute != s.pages.tasks.minute
+        || code_changed;
     if s.menus.toast_due.is_some_and(|due| clock >= due) {
         s.menus.toast = None;
         s.menus.toast_due = None;

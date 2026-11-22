@@ -216,3 +216,12 @@ resolution, an unknown folder is therefore registered with the gateway's existin
 owner; this does not create a parallel native project store. React can retain an
 unregistered presentation-only folder until its first chat or metadata edit, so
 this eager-registration difference remains part of the parity audit.
+
+Rune's read-only Apps Code tab projects gateway source on an on-demand native
+worker. Both its input and output mailboxes hold only the latest item; a generation
+check rejects stale results. Source text and indexed line/token ranges replace the
+generic files-page snapshot rather than retaining a second raw API copy. Only the
+visible lines are constructed while scrolling. The worker belongs to the native
+page state and exits after its channel closes; it neither runs app code nor owns
+the shared OpenCode service. Code highlighting uses the pinned Rune lexer and the
+same semantic syntax tokens as the React editor, not a second executable editor.

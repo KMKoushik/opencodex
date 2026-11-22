@@ -1,6 +1,79 @@
 use super::*;
 
 #[test]
+fn app_code_mounts_a_viewport_and_copies_across_blank_lines() {
+    OPTIONS.get_or_init(|| Options {
+        gateway: None,
+        preset: String::new(),
+        dark: true,
+        headless: true,
+        session: None,
+        scroll: "bottom".into(),
+        work: None,
+        composer_state: String::new(),
+        page: String::new(),
+        size: (1280.0, 800.0),
+    });
+    let mut state = State::new();
+    state.pages.route = pages::Route::Apps;
+    state.pages.app = Some("code-test".into());
+    state.pages.apps.tab = "code".into();
+    state.pages.data.insert("apps".into(),Ok(serde_json::json!([{"id":"code-test","title":"Source","running":[],"functions":[],"triggers":{}}])));
+    let source = format!("first\n\nlast\n{}", "const n = 1;\n".repeat(19997));
+    state.pages.apps.code.source = Some(Arc::new(
+        apps::code::prepare(serde_json::json!({"files":[{"name":"app.tsx","text":source}]}))
+            .unwrap(),
+    ));
+    let mut rt = rune::Runtime::new(state, view, (1280.0, 800.0), rune::Env::new(true, 2.0));
+    let clipboard = rune::clipboard::memory();
+    rt.use_clipboard(&clipboard);
+    let start = std::time::Instant::now();
+    rt.frame(0.0);
+    let elements = rt.elements();
+    let mounted = elements
+        .iter()
+        .filter(|e| {
+            e.key
+                .as_deref()
+                .is_some_and(|k| k.starts_with("app-code-text-"))
+        })
+        .count();
+    eprintln!(
+        "20,000-line app source: {mounted} mounted lines; CPU frame {:?}",
+        start.elapsed()
+    );
+    assert!(mounted > 0 && mounted < 150);
+    let first = elements
+        .iter()
+        .find(|e| e.key.as_deref() == Some("app-code-text-0"))
+        .unwrap()
+        .rect;
+    let last = elements
+        .iter()
+        .find(|e| e.key.as_deref() == Some("app-code-text-2"))
+        .unwrap()
+        .rect;
+    rt.pointer_down(first[0] + 0.1, first[1] + first[3] / 2.0);
+    rt.frame(0.1);
+    rt.pointer_move(last[0] + last[2] - 0.1, last[1] + last[3] / 2.0);
+    rt.frame(0.2);
+    rt.pointer_up(last[0] + last[2] - 0.1, last[1] + last[3] / 2.0);
+    rt.frame(0.3);
+    rt.key(rune::KeyEvent {
+        key: rune::Key::Command('c'),
+        mods: rune::Mods {
+            cmd: true,
+            ..Default::default()
+        },
+    });
+    rt.frame(0.4);
+    assert_eq!(
+        clipboard.text().as_deref().map(|text| text.as_str()),
+        Some("first\n\nlast")
+    );
+}
+
+#[test]
 fn folder_suggestions_overlay_wraps_up_and_does_not_reopen_after_dismissal() {
     OPTIONS.get_or_init(|| Options {
         gateway: None,
