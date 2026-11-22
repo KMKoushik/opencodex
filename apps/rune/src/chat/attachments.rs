@@ -119,18 +119,30 @@ pub fn sent(
                     .child(label(t, kind, 12.0, 400.0, "text-secondary"))
                     .role("button")
                     .label(format!(
-                        "Download {}",
+                        "{} {}",
+                        if name.to_ascii_lowercase().ends_with(".docx") {
+                            "Preview"
+                        } else {
+                            "Download"
+                        },
                         if name.is_empty() { "attachment" } else { name }
                     ))
                     .focusable(true)
-                    .on_press_tx(move |_: &mut State, tx| {
+                    .on_press_tx(move |s: &mut State, tx| {
                         if let Some(file) = message
                             .fields
                             .get("files")
                             .and_then(Value::as_array)
                             .and_then(|f| f.get(index))
                         {
-                            download(file, tx);
+                            if file["name"]
+                                .as_str()
+                                .is_some_and(|n| n.to_ascii_lowercase().ends_with(".docx"))
+                            {
+                                super::document::open(s, file.clone());
+                            } else {
+                                download(file, tx);
+                            }
                         }
                     }),
             );

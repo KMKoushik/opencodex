@@ -17,6 +17,7 @@ mod copy;
 #[cfg(target_os = "macos")]
 mod pasteboard;
 pub(crate) mod details;
+mod document;
 mod media;
 pub mod preview;
 pub mod probe;

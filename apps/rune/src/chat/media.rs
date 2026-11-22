@@ -9,6 +9,7 @@ type Images = BTreeMap<String, Result<Image, String>>;
 pub struct Media {
     #[cfg(target_os = "macos")]
     pub pasteboard: super::pasteboard::Writer,
+    pub document: super::document::Preview,
     pub details: super::details::Data,
     pending: Latest<Result<Images, String>>,
     pub images: Arc<Images>,
@@ -59,7 +60,7 @@ impl Media {
         Ok(())
     }
     pub fn take(&mut self) -> bool {
-        let mut details = self.details.take();
+        let mut details = self.details.take() | self.document.take();
         #[cfg(target_os = "macos")]
         {
             details |= self.pasteboard.take();

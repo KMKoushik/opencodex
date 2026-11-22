@@ -5,6 +5,9 @@ use crate::{
 use rune::{El, col, el, row};
 
 pub fn view(s: &State, width: f32, height: f32) -> Option<El> {
+    if let Some(document) = super::document::view(s, width, height) {
+        return Some(document);
+    }
     let source = s.chat.preview.as_ref()?;
     let image = s
         .chat
