@@ -75,6 +75,8 @@ pub enum Menu {
     Slash,
     Mention,
     Fork,
+    ShellOutput,
+    Calendar,
 }
 #[derive(Default)]
 pub struct Composer {
@@ -89,6 +91,7 @@ pub struct Composer {
     pub escape_until: Option<f64>,
     pub attachment_pending: BTreeMap<String, usize>,
     pub access_pending: bool,
+    pub access_error: Option<String>,
     pub providers: BTreeMap<String, rune::Image>,
     pub collapsed_providers: BTreeSet<String>,
     pub drafts: Drafts,
@@ -432,7 +435,9 @@ pub fn poll(s: &mut State) -> bool {
             }
             Reply::Data { tag, result } if tag == "fork-reply" => super::fork::receive(s, result),
             Reply::Data { tag, result }
-                if tag.starts_with("inbox:") || tag.starts_with("background:") =>
+                if tag.starts_with("inbox:")
+                    || tag.starts_with("background:")
+                    || tag.starts_with("running-") =>
             {
                 super::running::receive(s, &tag, result)
             }
@@ -446,9 +451,11 @@ pub fn poll(s: &mut State) -> bool {
             }
             Reply::Data { tag, result } => match result {
                 Err(e) => {
-                    s.error = Some(e);
                     if tag.starts_with("access-") {
+                        s.composer.access_error = Some(e);
                         s.composer.access_pending = false;
+                    } else {
+                        s.error = Some(e);
                     }
                 }
                 Ok(value) => {

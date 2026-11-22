@@ -69,14 +69,19 @@ pub fn dispatch(s: &mut State, event: Event) {
     s.chat.context = s.composer.context_visibility.open();
 }
 pub fn poll(s: &mut State, tx: &mut rune::Tx) -> bool {
+    let running_changed = super::running::poll(s, tx) | crate::docks::date::poll(s);
     // Input is dispatched after poll. Observe its resulting focus once; a no-change
     // wake does not commit or draw, and never schedules another wake of its own.
     if tx.input_waiting() {
         tx.wake_after(std::time::Duration::ZERO);
     }
     let focused = tx.focused();
+    if s.chat.context && s.composer.menu.is_some() {
+        dispatch(s, Event::Dismiss);
+        return true;
+    }
     if s.composer.context_focus.as_deref() == focused {
-        return false;
+        return running_changed;
     }
     let was_trigger = s.composer.context_focus.as_deref() == Some("context-indicator");
     let is_trigger = focused == Some("context-indicator");
@@ -85,7 +90,7 @@ pub fn poll(s: &mut State, tx: &mut rune::Tx) -> bool {
     if was_trigger != is_trigger {
         dispatch(s, Event::Focus(is_trigger));
     }
-    was_open != s.chat.context
+    was_open != s.chat.context || running_changed
 }
 
 fn total(tokens: &serde_json::Value) -> u64 {
@@ -199,8 +204,12 @@ pub fn view(s: &State) -> El {
             }
         });
     if s.chat.context {
+        wrapper = wrapper.fill(t.c("hover"));
         let width = (s.window_size.0 - 24.0).min(280.0);
         let mut panel = col()
+            .key("context-popover")
+            .on_hover_change(|s: &mut State, inside, _| dispatch(s, Event::Hover(inside)))
+            .on_press(|_: &mut State| {})
             .w(width)
             .padding(14.0)
             .radius(12.0)

@@ -76,7 +76,7 @@ pub fn filter(s: &mut State) {
     let query = s.composer.search.text.trim();
     let mut choices = vec![];
     match menu {
-        Menu::ConfirmAccess | Menu::Fork => {}
+        Menu::ConfirmAccess | Menu::Fork | Menu::ShellOutput | Menu::Calendar => {}
         Menu::Models => {
             if let Some(catalog) = s.snapshot.models.get(directory) {
                 if query.is_empty()
@@ -496,6 +496,12 @@ fn choose(s: &mut State, index: usize, tx: &mut Tx) {
     tx.instant();
 }
 pub fn view(s: &State) -> Option<El> {
+    if let Some(calendar) = crate::docks::date::view(s) {
+        return Some(calendar);
+    }
+    if s.composer.running.output.is_some() {
+        return Some(super::running_output::view(s));
+    }
     let menu = s.composer.menu?;
     if menu == Menu::ConfirmAccess {
         return Some(super::access::view(s));

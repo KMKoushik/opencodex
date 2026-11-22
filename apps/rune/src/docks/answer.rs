@@ -1,5 +1,34 @@
 use serde_json::Value;
 
+pub(super) fn restore_input(d: &mut super::Docks) {
+    let Some(field) = super::fields(d).get(d.index).cloned().cloned() else {
+        return;
+    };
+    let key = field["key"].as_str().unwrap_or("");
+    d.active_key = Some(key.into());
+    let value = d.answers.get(key);
+    let options = field["options"].as_array();
+    let custom =
+        |v: &&Value| !options.is_some_and(|options| options.iter().any(|o| o["value"] == **v));
+    let text = match value {
+        Some(Value::Array(items)) => items
+            .iter()
+            .filter(custom)
+            .filter_map(Value::as_str)
+            .collect::<Vec<_>>()
+            .join("\n"),
+        Some(v) if custom(&v) => v
+            .as_str()
+            .map(str::to_owned)
+            .unwrap_or_else(|| v.to_string()),
+        _ => String::new(),
+    };
+    if !text.is_empty() && options.is_some_and(|o| !o.is_empty()) {
+        d.custom_on.insert(key.into());
+    }
+    d.custom.replace_text(text);
+}
+
 pub fn applies(field: &Value, answers: &std::collections::BTreeMap<String, Value>) -> bool {
     field["when"].as_array().is_none_or(|conditions| {
         conditions.iter().all(|c| {

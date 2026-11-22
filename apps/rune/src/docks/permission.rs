@@ -29,6 +29,7 @@ pub fn view(s: &State, request: &Value) -> El {
                 "text"
             },
         )
+        .key(format!("permission-{decision}"))
         .px(10.0)
         .h(28.0)
         .center_y()
@@ -37,22 +38,27 @@ pub fn view(s: &State, request: &Value) -> El {
         .label(name)
         .focusable(true);
         let control = if decision == "once" {
-            t.paint(control, "primary-glaze")
+            t.shadow(t.paint(control, "primary-glaze"), "primary-shadow")
         } else if decision == "always" {
-            t.paint(control, "chip")
+            t.shadow(t.paint(control, "chip"), "chip-shadow")
         } else {
             control.hover(t.c("hover"))
         };
-        actions = actions.child(control.disabled(pending).on_press(move |s: &mut State| {
-            if let Some(session) = &s.selected {
-                reply(
-                    s,
-                    format!("sessions/{session}/permissions/{id}"),
-                    json!({"decision":decision}),
-                    false,
-                );
-            }
-        }));
+        actions = actions.child(
+            control
+                .disabled(pending)
+                .opacity(if pending { 0.45 } else { 1.0 })
+                .on_press(move |s: &mut State| {
+                    if let Some(session) = &s.selected {
+                        reply(
+                            s,
+                            format!("sessions/{session}/permissions/{id}"),
+                            json!({"decision":decision}),
+                            false,
+                        );
+                    }
+                }),
+        );
     }
     actions = actions.child(
         label(t, "Enable full access…", 12.0, 500.0, "text-secondary")
@@ -62,10 +68,16 @@ pub fn view(s: &State, request: &Value) -> El {
             .radius(7.0)
             .hover(t.c("hover"))
             .role("button")
+            .key("permission-full")
             .label("Enable full access for this thread")
             .focusable(true)
             .disabled(pending)
+            .opacity(if pending { 0.45 } else { 1.0 })
             .on_press(|s: &mut State| {
+                if s.composer.access_pending || !s.docks.permission_pending.is_empty() {
+                    return;
+                }
+                s.composer.access_error = None;
                 s.composer.menu = Some(crate::composer::state::Menu::ConfirmAccess)
             }),
     );
@@ -91,7 +103,13 @@ pub fn view(s: &State, request: &Value) -> El {
                 600.0,
                 "text",
             )
-            .mb(8.0),
+            .mb(
+                if request["message"].as_str().is_some_and(|v| !v.is_empty()) {
+                    8.0
+                } else {
+                    0.0
+                },
+            ),
         );
     if let Some(message) = request["message"].as_str().filter(|v| !v.is_empty()) {
         card = card.child(label(t, message, 13.0, 400.0, "text").wrap());

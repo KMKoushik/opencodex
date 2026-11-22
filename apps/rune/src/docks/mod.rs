@@ -1,5 +1,9 @@
 //! Gateway forms and permission requests, replacing the active composer's draft.
 mod answer;
+use answer::restore_input;
+mod controls;
+use controls::{button, indicator};
+pub(crate) mod date;
 mod format;
 mod keyboard;
 mod permission;
@@ -13,6 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Default)]
 pub struct Docks {
+    calendar: Option<date::Calendar>,
     pub revision: u64,
     forms: Vec<Value>,
     permissions: Vec<Value>,
@@ -61,6 +66,10 @@ pub fn receive(s: &mut State, tag: &str, value: Value) {
                 .to_owned();
             let changed = id != s.docks.form_id;
             if changed {
+                s.docks.calendar = None;
+                if s.composer.menu == Some(crate::composer::state::Menu::Calendar) {
+                    s.composer.menu = None;
+                }
                 s.docks.form_id = id;
                 s.docks.answers.clear();
                 s.docks.custom_on.clear();
@@ -117,34 +126,6 @@ fn title(field: &Value) -> &str {
         .or_else(|| field["key"].as_str())
         .unwrap_or("Question")
 }
-fn restore_input(d: &mut Docks) {
-    let Some(field) = fields(d).get(d.index).cloned().cloned() else {
-        return;
-    };
-    let key = field["key"].as_str().unwrap_or("");
-    d.active_key = Some(key.into());
-    let value = d.answers.get(key);
-    let options = field["options"].as_array();
-    let custom =
-        |v: &&Value| !options.is_some_and(|options| options.iter().any(|o| o["value"] == **v));
-    let text = match value {
-        Some(Value::Array(items)) => items
-            .iter()
-            .filter(custom)
-            .filter_map(Value::as_str)
-            .collect::<Vec<_>>()
-            .join("\n"),
-        Some(v) if custom(&v) => v
-            .as_str()
-            .map(str::to_owned)
-            .unwrap_or_else(|| v.to_string()),
-        _ => String::new(),
-    };
-    if !text.is_empty() && options.is_some_and(|o| !o.is_empty()) {
-        d.custom_on.insert(key.into());
-    }
-    d.custom.replace_text(text);
-}
 fn current_index(d: &Docks) -> usize {
     fields(d)
         .iter()
@@ -178,21 +159,6 @@ pub fn replied(s: &mut State, path: &str, result: Result<Value, String>) {
             s.refresh_docks();
         }
     }
-}
-fn button(s: &State, title: &str) -> El {
-    s.theme
-        .paint(
-            label(&s.theme, title, 12.5, 500.0, "text")
-                .px(10.0)
-                .py(7.0)
-                .radius(8.0),
-            "chip",
-        )
-        .hover(s.theme.c("hover"))
-        .role("button")
-        .label(title)
-        .focusable(true)
-        .disabled(s.docks.sending)
 }
 fn reply(s: &mut State, path: String, body: Value, delete: bool) {
     s.docks.revision = s.docks.revision.wrapping_add(1);
@@ -370,11 +336,17 @@ pub fn view(s: &State) -> El {
     );
     let frame = dock;
     let mut dock = col()
+        .key(format!(
+            "question-body-{}-{}-{}",
+            s.docks.form_id,
+            s.docks.active_key.as_deref().unwrap_or(""),
+            s.docks.reviewing
+        ))
         .w_full()
         .px(10.0)
         .pt(4.0)
         .pb(12.0)
-        .gap(3.0)
+        .gap(0.0)
         .max_h((s.window_size.1 * 0.55).min(480.0))
         .scroll(rune::ScrollSpec {
             stick_bottom: false,
@@ -415,11 +387,15 @@ pub fn view(s: &State) -> El {
                                 .child(label(t, title(f), 13.0, 500.0, "text").wrap())
                                 .child(label(t, &answer, 13.0, 400.0, "text-secondary").wrap()),
                         )
-                        .child(button(s, "Edit").on_press(move |s: &mut State| {
-                            s.docks.index = i;
-                            s.docks.reviewing = false;
-                            restore_input(&mut s.docks);
-                        })),
+                        .child(
+                            button(s, "Edit")
+                                .key(format!("question-edit-{i}"))
+                                .on_press(move |s: &mut State| {
+                                    s.docks.index = i;
+                                    s.docks.reviewing = false;
+                                    restore_input(&mut s.docks);
+                                }),
+                        ),
                 );
             }
         } else if let Some(field) = fs.get(index) {
@@ -438,7 +414,25 @@ pub fn view(s: &State) -> El {
                     let selected =
                         s.docks.answers.get(&key).and_then(Value::as_bool) == Some(value);
                     dock = dock.child(
-                        button(s, if value { "Yes" } else { "No" })
+                        row()
+                            .w_full()
+                            .min_h(40.0)
+                            .mb(if i == 0 { 3.0 } else { 0.0 })
+                            .padding(10.0)
+                            .gap(10.0)
+                            .radius(8.0)
+                            .fill(t.c(if selected { "selected" } else { "surface" }))
+                            .hover(t.c("hover"))
+                            .focusable(true)
+                            .label(if value { "Yes" } else { "No" })
+                            .child(indicator(s, selected, false))
+                            .child(label(
+                                t,
+                                if value { "Yes" } else { "No" },
+                                13.0,
+                                400.0,
+                                "text",
+                            ))
                             .key(format!("question-option-{i}"))
                             .role("radio")
                             .checked(selected)
@@ -488,26 +482,39 @@ pub fn view(s: &State) -> El {
                 }
             }
             if let Some(options) = field["options"].as_array() {
-                dock = dock.child(label(
-                    t,
-                    if multi {
-                        "Select one or more answers"
-                    } else {
-                        "Select one answer"
-                    },
-                    12.0,
-                    400.0,
-                    "text-tertiary",
-                ));
+                dock = dock.child(
+                    label(
+                        t,
+                        if multi {
+                            "Select one or more answers"
+                        } else {
+                            "Select one answer"
+                        },
+                        12.0,
+                        400.0,
+                        "text-tertiary",
+                    )
+                    .mx(8.0)
+                    .mt(-4.0)
+                    .mb(8.0),
+                );
                 for (i, option) in options.iter().enumerate() {
                     let value = option["value"].clone();
                     let key = key.clone();
-                    let selected = s.docks.answers.get(&key).is_some_and(|a| {
-                        a == &value || a.as_array().is_some_and(|a| a.contains(&value))
-                    });
-                    let line = row()
+                    let selected = (multi || !s.docks.custom_on.contains(&key))
+                        && s.docks.answers.get(&key).is_some_and(|a| {
+                            a == &value || a.as_array().is_some_and(|a| a.contains(&value))
+                        });
+                    let autofocus = selected || (i == 0 && !s.docks.answers.contains_key(&key));
+                    let mut line = row()
                         .key(format!("question-option-{i}"))
                         .w_full()
+                        .min_h(40.0)
+                        .mb(if i + 1 < options.len() || field["custom"] == true {
+                            3.0
+                        } else {
+                            0.0
+                        })
                         .padding(10.0)
                         .gap(10.0)
                         .radius(8.0)
@@ -541,17 +548,18 @@ pub fn view(s: &State) -> El {
                                         400.0,
                                         "text",
                                     )
+                                    .font(TextStyle::new(13.0, 400.0).lh(18.2))
                                     .wrap(),
                                 )
-                                .child(
-                                    label(
-                                        t,
-                                        option["description"].as_str().unwrap_or(""),
-                                        12.0,
-                                        400.0,
-                                        "text-tertiary",
-                                    )
-                                    .wrap(),
+                                .children(
+                                    option["description"]
+                                        .as_str()
+                                        .filter(|v| !v.is_empty())
+                                        .map(|description| {
+                                            label(t, description, 12.0, 400.0, "text-tertiary")
+                                                .font(TextStyle::new(12.0, 400.0).lh(16.8))
+                                                .wrap()
+                                        }),
                                 ),
                         )
                         .child(label(
@@ -589,6 +597,9 @@ pub fn view(s: &State) -> El {
                             }
                             s.docks.error = None;
                         });
+                    if autofocus {
+                        line = line.autofocus();
+                    }
                     dock = dock.child(line);
                 }
             }
@@ -602,6 +613,7 @@ pub fn view(s: &State) -> El {
                             field["options"].as_array().map_or(0, Vec::len)
                         ))
                         .w_full()
+                        .min_h(40.0)
                         .padding(10.0)
                         .gap(10.0)
                         .radius(8.0)
@@ -649,64 +661,67 @@ pub fn view(s: &State) -> El {
                     .flatten()
                     .map(|o| o["value"].clone())
                     .collect();
-                dock = dock.child(
-                    text_input(&s.docks.custom, TextStyle::new(13.0, 400.0))
-                        .key("question-custom")
-                        .w_full()
-                        .min_h(40.0)
-                        .max_h(140.0)
-                        .mx(8.0)
-                        .my(6.0)
-                        .px(12.0)
-                        .py(10.0)
-                        .fill(t.c("secondary"))
-                        .radius(8.0)
-                        .border(1.0, t.c("border"))
-                        .color(t.c("text"))
-                        .placeholder(
-                            field["placeholder"].as_str().unwrap_or(if multi {
-                                "One answer per line…"
-                            } else {
-                                "Type your answer…"
-                            }),
-                            t.c("text-tertiary"),
-                        )
-                        .disabled(s.docks.sending)
-                        .on_edit(|s: &mut State| &mut s.docks.custom)
-                        .on_input_change(move |s: &mut State, _| {
-                            let text = s.docks.custom.text.clone();
-                            let answer = if multi {
-                                let mut values: Vec<_> = s
-                                    .docks
-                                    .answers
-                                    .get(&key)
-                                    .and_then(Value::as_array)
-                                    .into_iter()
-                                    .flatten()
-                                    .filter(|v| option_values.contains(v))
-                                    .cloned()
-                                    .collect();
-                                for line in text.lines().map(str::trim).filter(|s| !s.is_empty()) {
-                                    let value = json!(line);
-                                    if !values.contains(&value) {
-                                        values.push(value);
-                                    }
+                let input = text_input(&s.docks.custom, TextStyle::new(13.0, 400.0))
+                    .key("question-custom")
+                    .autofocus()
+                    .w_full()
+                    .min_h(if multi || s.docks.custom_on.contains(&key) {
+                        60.0
+                    } else {
+                        40.0
+                    })
+                    .max_h(140.0)
+                    .my(6.0)
+                    .px(12.0)
+                    .py(10.0)
+                    .fill(t.c("secondary"))
+                    .radius(8.0)
+                    .border(1.0, t.c("border"))
+                    .color(t.c("text"))
+                    .placeholder(
+                        field["placeholder"].as_str().unwrap_or(if multi {
+                            "One answer per line…"
+                        } else {
+                            "Type your answer…"
+                        }),
+                        t.c("text-tertiary"),
+                    )
+                    .disabled(s.docks.sending)
+                    .on_edit(|s: &mut State| &mut s.docks.custom)
+                    .on_input_change(move |s: &mut State, _| {
+                        let text = s.docks.custom.text.clone();
+                        let answer = if multi {
+                            let mut values: Vec<_> = s
+                                .docks
+                                .answers
+                                .get(&key)
+                                .and_then(Value::as_array)
+                                .into_iter()
+                                .flatten()
+                                .filter(|v| option_values.contains(v))
+                                .cloned()
+                                .collect();
+                            for line in text.lines().map(str::trim).filter(|s| !s.is_empty()) {
+                                let value = json!(line);
+                                if !values.contains(&value) {
+                                    values.push(value);
                                 }
-                                json!(values)
-                            } else if numeric && !text.is_empty() {
-                                text.parse::<f64>()
-                                    .ok()
-                                    .filter(|n| n.is_finite())
-                                    .map(|n| json!(n))
-                                    .unwrap_or(Value::Null)
-                            } else {
-                                json!(text)
-                            };
-                            s.docks.answers.insert(key.clone(), answer);
-                            s.docks.error = None;
-                        })
-                        .on_input_key(keyboard::handle),
-                );
+                            }
+                            json!(values)
+                        } else if numeric && !text.is_empty() {
+                            text.parse::<f64>()
+                                .ok()
+                                .filter(|n| n.is_finite())
+                                .map(|n| json!(n))
+                                .unwrap_or(Value::Null)
+                        } else {
+                            json!(text)
+                        };
+                        s.docks.answers.insert(key.clone(), answer);
+                        s.docks.error = None;
+                    })
+                    .on_input_key(keyboard::handle);
+                dock = dock.child(date::input(s, field, input));
             }
         }
     }
@@ -731,17 +746,21 @@ pub fn view(s: &State) -> El {
         }))
         .child(el().grow(1.0));
     if (s.docks.reviewing || index > 0) && !s.docks.collapsed && !fs.is_empty() {
-        footer = footer.child(button(s, "Back").on_press(|s: &mut State| {
-            let last = fields(&s.docks).len().saturating_sub(1);
-            s.docks.index = if s.docks.reviewing {
-                last
-            } else {
-                current_index(&s.docks).saturating_sub(1)
-            };
-            s.docks.reviewing = false;
-            s.docks.error = None;
-            restore_input(&mut s.docks);
-        }));
+        footer = footer.child(
+            button(s, "Back")
+                .key("question-back")
+                .on_press(|s: &mut State| {
+                    let last = fields(&s.docks).len().saturating_sub(1);
+                    s.docks.index = if s.docks.reviewing {
+                        last
+                    } else {
+                        current_index(&s.docks).saturating_sub(1)
+                    };
+                    s.docks.reviewing = false;
+                    s.docks.error = None;
+                    restore_input(&mut s.docks);
+                }),
+        );
     }
     footer = footer.child(
         t.paint(
@@ -765,30 +784,6 @@ pub fn view(s: &State) -> El {
         .key("question-next")
         .on_press(advance),
     );
+    let dock = if s.docks.sending { dock.inert() } else { dock };
     out.child(frame.child(dock).child(footer))
-}
-
-fn indicator(s: &State, selected: bool, multi: bool) -> El {
-    let t = &s.theme;
-    let mut mark = el()
-        .size(15.0, 15.0)
-        .mt(2.0)
-        .radius(if multi { 3.0 } else { 7.5 })
-        .border(
-            1.0,
-            t.c(if selected {
-                "accent-text"
-            } else {
-                "text-tertiary"
-            }),
-        )
-        .center();
-    if selected {
-        mark = mark.fill(t.c("accent-text")).child(if multi {
-            label(t, "✓", 11.0, 600.0, "surface")
-        } else {
-            el().size(5.0, 5.0).radius(2.5).fill(t.c("surface"))
-        });
-    }
-    mark
 }

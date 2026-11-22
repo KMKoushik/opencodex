@@ -16,6 +16,7 @@ pub mod keys;
 pub mod menus;
 mod providers;
 pub(crate) mod running;
+mod running_output;
 pub mod state;
 mod undo;
 use state::Menu;
@@ -266,7 +267,23 @@ pub fn area(s: &State, width: f32) -> El {
         .px(8.0)
         .gap(6.0)
         .center_y()
-        .child(icon(&i::SHIELD, 16.0).color(t.c("text-secondary")))
+        .radius(8.0)
+        .hover(t.c("hover"))
+        .child(
+            icon(
+                if s.draft().full_access {
+                    &icons::SHIELD_ENERGY
+                } else {
+                    &i::SHIELD
+                },
+                16.0,
+            )
+            .color(t.c(if s.draft().full_access {
+                "accent"
+            } else {
+                "text-secondary"
+            })),
+        )
         .child(label(
             t,
             if s.draft().full_access {
@@ -276,7 +293,11 @@ pub fn area(s: &State, width: f32) -> El {
             },
             12.5,
             500.0,
-            "text-secondary",
+            if s.draft().full_access {
+                "accent"
+            } else {
+                "text-secondary"
+            },
         ))
         .key("permission-picker")
         .role("button")
@@ -286,8 +307,12 @@ pub fn area(s: &State, width: f32) -> El {
             "Permissions: enable full access"
         })
         .disabled(s.composer.access_pending)
+        .opacity(if s.composer.access_pending { 0.45 } else { 1.0 })
         .focusable(true)
         .on_press_tx(|s: &mut State, tx| {
+            if s.composer.access_pending {
+                return;
+            }
             if s.draft().full_access {
                 access::change(s, false);
             } else {

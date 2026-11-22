@@ -16,6 +16,7 @@ pub fn handle(s: &mut State, event: &KeyEvent, tx: &mut Tx) -> bool {
     if event.mods.cmd
         || event.mods.ctrl
         || event.mods.alt
+        || tx.key_repeat()
         || s.docks.reviewing
         || s.docks.collapsed
         || tx.focused() == Some("question-custom")
