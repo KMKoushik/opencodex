@@ -292,12 +292,18 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
                 row()
                     .gap(6.0)
                     .center_y()
+                    .min_w(0.0)
+                    .shrink()
                     .child(rune::icon(&icons::FOLDER, 14.0).color(t.c("text-secondary")))
                     .child(
                         sidebar::label(t, p.display_name(), 13.0, 400.0, "text-secondary")
                             .truncate(),
                     )
-                    .max_w((w - width) * 0.3),
+                    .max_w(
+                        rune::memo::layout_size("toolbar")
+                            .map(|size| (size[0] - 40.0) * 0.3)
+                            .unwrap_or((w - width - 40.0) * 0.3),
+                    ),
             )
             .child(sidebar::label(t, "/", 13.0, 400.0, "text-tertiary").mx(2.0));
     }
@@ -310,7 +316,10 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
             .min_w(0.0),
     );
     if s.selected.is_some() {
-        toolbar = toolbar.child(el().grow(1.0)).child(chat::toolbar(s));
+        // CSS margin-left:auto doesn't add a flex child (and another gap).
+        toolbar = toolbar
+            .child(el().grow(1.0).ml(-8.0))
+            .child(chat::toolbar(s));
     }
     if menus::search::connected(s)
         && !s.snapshot.live
