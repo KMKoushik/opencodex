@@ -1,0 +1,36 @@
+[workspace]
+resolver = "3"
+members = [".", "crates/oc-gateway"]
+
+[package]
+name = "opencodex"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+rune = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de", features = ["tooling", "native-file-dialog"] }
+rune-kit = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de", default-features = false }
+oc-gateway = { path = "crates/oc-gateway" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[patch.crates-io]
+winit = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de" }
+sctk-adwaita = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de" }
+parley_engine = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de" }
+wgpu-hal = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de" }
+accesskit_windows = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de" }
+accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de" }
+
+[profile.dev]
+debug = "line-tables-only"
+[profile.dev.package."*"]
+debug = false
+[profile.release]
+codegen-units = 16
+incremental = true
+[profile.perf]
+inherits = "release"
+incremental = false
+debug = false
