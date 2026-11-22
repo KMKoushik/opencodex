@@ -8,7 +8,7 @@ rendering of its entire surface. `matches` means the named source behavior was c
 Outstanding work is explicitly marked `remaining` rather than falsely describing it as
 impossible in Rune. The requested exhaustive zero-gap audit is **not complete**.
 
-Merged inherited rows: **57 fixed, 14 matches, 10 remaining, 2 native/capture exceptions**.
+Merged inherited rows before panels2: **57 fixed, 14 matches, 10 remaining, 2 native/capture exceptions**.
 These counts describe individual inherited audit rows, not whole-screen parity.
 
 ## Integration continuation (`rune-port`)
@@ -28,8 +28,9 @@ These counts describe individual inherited audit rows, not whole-screen parity.
   generator and license copies in `src/docx`.
 - HTML in Markdown: **remaining**; native sanitizer-allowlist rendering is not implemented.
 - Inline code/link 1pt line-box and icon geometry: **remaining**, not a private-API excuse.
-- Remaining panel ring/history/footer, side picker/context/docks, canvas bridge-to-draft
-  and timestamp, and browser menu/download/relaunch interactions: **remaining**.
+- Panel follow-up: canvas bridge-to-draft/timestamps are verified; ring rotation and
+  reader footer/history mechanics are corrected. Exact side controls and browser
+  menu/download/relaunch interaction coverage remain open; see the panels2 notes below.
 
 The 69-state review is recorded in `final/README.md`; it is not a 1:1 sign-off.
 
@@ -93,45 +94,112 @@ The 69-state review is recorded in `final/README.md`; it is not a 1:1 sign-off.
 
 ## Outstanding — not hidden as framework impossibility
 
-| Item                                  | Status           | Concrete gap / next action                                                                                                                                                                                                     |
-| ------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Inline file-link icon                 | fixed            | Verified source icons before local links (not external URLs) in fresh goldens/pc-transcript-final/pair-chat-markdown-*.png pairs, both sizes/appearances.                                                                      |
-| Markdown paragraph/list/table metrics | remaining        | Adapter's private exact_lines and inline-icon baseline cannot express CSS's extra 1pt code line box or -2px icon alignment from chat. No global fudge. pc-transcript3/pair-transcript-*-review2.png.                           |
-| HTML in Markdown                      | remaining        | Actual 5.0.2 policy checked (u/mark unwrap; script strips). Native HTML5 tree renderer remains unimplemented, not impossible. Authored fixture: pc-transcript3/pair-html-*-review2.png.                                        |
-| Response copy feedback                | fixed            | Actual macOS AppKit BOOL via worker JXA/stdin; no readback. objc2 needs forbidden Cargo.toml edit; unsafe FFI forbidden. Pending/failure/2s success retained; headless/non-macOS fallback remains.                             |
-| User annotations/mentions             | fixed            | Validated UTF-16 own-text/annotations, chip/popover and sent mention pills; overlay paints after rows. Scripted both themes/sizes: goldens/pc-transcript-final/pair-context-*-annotations-final.png.                           |
-| Attachment interactions               | remaining        | Sent DOCX modal + web Mammoth worker/DOMPurify ported. pc-transcript3/pair-docx-*-review2.png omits WK children. Draft click handlers live in composer/mod.rs:572-638, outside allowed src/chat edits.                         |
-| Response selection/review comments    | remaining        | Exact retained native node/ranges avoid first-quote matches. DOM UTF-16 offsets/underline need adapter source-map/decoration APIs; public SelectedText has only selected pieces. Existing editor geometry not exact.           |
-| Jump pill shadow                      | fixed            | Reverified elevated fill/heavy border, ArrowDown02, chip shadow and hover in goldens/pc-transcript-final/ pairs. This verifies fill/shadow, not the separate source CSS appearance delay.                                      |
-| Chat toolbar/details                  | remaining        | Fixed panel/scroller/8pt padding: pc-transcript3/pair-details-*-review2.png. Scoped resource/descendant SSE coalesces 100ms; usage patches cached totals (no HTTP). Expanded-resource interaction parity unverified. No claim. |
-| Pending inbox/running dock            | remaining        | Lists/tabs/attention/output/stop implemented. Shared worker shell invalidation (5-second fallback) and profile disclosure remain out of scope. Pairs: `composer-matrix/pair-{background,shell-output}-*-replay-final.png`.     |
-| Context keyboard/popover              | fixed            | Immediate hover, inside/outside/blank clicks, focused pointer leave, Tab/Escape/re-entry tested; no modal trap. Pairs: `composer-matrix/pair-context-*-replay-final2.png`.                                                     |
-| Slash/mention ordering                | fixed            | Web rank buckets/deduplication, home exclusions, skill/file/recent-chat limits, 80 ms deferred live file requests, icons and height. Pairs: `goldens/composer/pair-*-pc-composer-final2.png`.                                  |
-| Undo attachments                      | fixed            | Worker decodes/validates attachments, prepares thumbnails and restores file/chat/skill mentions before applying undo. Captured revisions protect newer drafts/navigation.                                                      |
-| Full fork dialog                      | fixed            | `/fork`: captured draft, latest/before choices, earlier history, wrapping arrows/Home/End, errors, pending and close. Newer drafts survive. Native thread-menu routing is outside composer ownership.                          |
-| All question field types              | can't-do-in-Rune | No pinned host date/datetime widget or Chromium validity bubble. GPU calendar, local ISO and inline errors substitute; not native parity. Pairs: `composer-matrix/pair-*-replay-final{,2}.png`.                                |
-| Question lifecycle                    | fixed            | Real V2 replay: every field, single/multi/custom, invalid, conditional, review/back/edit. Keyboard/focus/width/style corrected. Pairs: `composer-matrix/pair-*-replay-final{,2}.png`.                                          |
-| Permission card                       | fixed            | Margins/styles/pending/dialog/errors corrected; real once/always/reject/full outcomes. Pairs: `composer-matrix/pair-permission-*-replay-{final,after}.png`; pending delays recorded HTTP replies.                              |
-| Recorded composer request replay      | fixed            | Native V2-authored requests; actual gateway HTTP/SSE, not model output (free model: 429). Tools: `composer-{fixture,decisions,replay,matrix}.mjs`. Archive: `composer-matrix/recorded-requests.tar.gz`.                        |
-| Composer fixture isolation            | matches          | `/tmp/ocr-pc-composer2`; OpenCode 4972, gateway 4502, record 4503, replay 4542. Both themes/sizes, scale 2; scripted input. Whole-window/font differences remain; no pixel-identical sign-off.                                 |
-| Latest composer verification          | matches          | Release build, 56 Rust unit tests, `bun check`, `bun format:check` pass. Fresh final output/full-access pairs: `composer-matrix/pair-{shell-output,permission-full}-*-replay-final3.png`; residual metrics differ.             |
-| Files tree icons                      | fixed            | Uses pinned `rune-theme-opencode::tree_icons::file` rather than generic Rune-kit FileNode glyphs.                                                                                                                              |
-| Files tabs/tree                       | fixed            | Breadcrumbs, search/collapse/resize, hierarchical changes/statuses, keyboard/ancestor navigation, pin/preview/close interactions. Real-gateway pairs and tab regression checked; see src/workbench/VERIFICATION.md.            |
-| File editor toolbar/selection         | fixed            | Virtual no-wrap source rows with native active-line input/IME, cross-line selection/paste/undo and inline cards after the end line. Viewport-width cards map across preceding edits. See src/workbench/VERIFICATION.md.        |
-| Large-editor performance              | fixed            | 2 MiB TypeScript, syntax enabled, 20 native replacement keys: CPU-frame p50 3.935 ms, p95/max 6.465 ms; excludes GPU/OS input. Virtual source rows, worker lexer; actual replacement bytes asserted.                           |
-| Diff surface                          | fixed            | MIT diff vendored at 7286a3c5; configurable web metrics, one unified number column and lazy full-context expansion including unknown trailing ranges. Worker parsing/pairing/highlighting, selection and inline cards kept.    |
-| Image viewer                          | fixed            | Measured viewport; anchored wheel/pinch/button/double-click zoom; drag-pan; keyboard/download; point comments. Native runtime checks fit/scroll/click coordinates. React has point, not rectangular annotations.               |
-| Rich file previews                    | fixed            | Unprivileged WK PDF/video; bounded Mammoth worker, DOMPurify, CSS and DOM find (Chrome/WK smoke passed). HTML stays source; Markdown uses source-parent link base. Native control/capture limits are documented.               |
-| Subagent list/header                  | remaining        | Provider logo, ring, segmented badges/filter keys and intrinsic rows corrected; populated authored pairs in `panels-final/*review5.png`. Ring rotation, attention/history interactions and footer placement still differ.      |
-| Side-chat composer                    | remaining        | Fresh commands/skills; fork-bounded undo restores bytes/mentions off-thread with revision protection. Model search/thinking/status corrected. Grouped picker, context indicator and exact docks still differ.                  |
-| Canvas list/tabs                      | remaining        | Delete hover/focus, tab overflow/close and viewport capture corrected. Populated pairs: `panels-final/*review5.png`; native shared overlay Attach passes. Canvas bridge-to-draft and locale parity remain unverified.          |
-| App canvas height                     | fixed            | Explicit user-requested exception to Apps ownership: native app host grows to available height, replacing fixed 360-point container.                                                                                           |
-| Browser                               | remaining        | Opaque per-guest origins and canonical resources block file/symlink escapes; retained annotation world fixes lost globals. Native local/annotation/history/popup pass; menus, download-save and relaunch checks remain.        |
-| Terminal chrome                       | fixed            | Header/tabs/splitter/pending and capture grid/focus corrected. Scripted resize, real PTY 93×17/Unicode/reopen/close pass; zero idle frames. Four pairs inspected: `panels-final/pair-terminal-*-review5.png`.                  |
-| Successful-response goldens           | fixed            | Reusable explicitly authored UI transcripts imported through isolated V2 API, not represented as model replies/recordings. 40 fresh scale-2 web/Rune pairs captured; no further model calls required.                          |
-| Atomic native-child screenshots       | can't-do-in-Rune | Pinned headless Rune screenshot omits WK child views. Must separately snapshot/composite real WK output, explicitly not an atomic GPU/native frame.                                                                            |
+| Item                                  | Status           | Concrete gap / next action                                                                                                                                                                                                                                                                   |
+| ------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inline file-link icon                 | fixed            | Verified source icons before local links (not external URLs) in fresh goldens/pc-transcript-final/pair-chat-markdown-*.png pairs, both sizes/appearances.                                                                                                                                    |
+| Markdown paragraph/list/table metrics | remaining        | Adapter's private exact_lines and inline-icon baseline cannot express CSS's extra 1pt code line box or -2px icon alignment from chat. No global fudge. pc-transcript3/pair-transcript-*-review2.png.                                                                                         |
+| HTML in Markdown                      | remaining        | Actual 5.0.2 policy checked (u/mark unwrap; script strips). Native HTML5 tree renderer remains unimplemented, not impossible. Authored fixture: pc-transcript3/pair-html-*-review2.png.                                                                                                      |
+| Response copy feedback                | fixed            | Actual macOS AppKit BOOL via worker JXA/stdin; no readback. objc2 needs forbidden Cargo.toml edit; unsafe FFI forbidden. Pending/failure/2s success retained; headless/non-macOS fallback remains.                                                                                           |
+| User annotations/mentions             | fixed            | Validated UTF-16 own-text/annotations, chip/popover and sent mention pills; overlay paints after rows. Scripted both themes/sizes: goldens/pc-transcript-final/pair-context-*-annotations-final.png.                                                                                         |
+| Attachment interactions               | remaining        | Sent DOCX modal + web Mammoth worker/DOMPurify ported. pc-transcript3/pair-docx-*-review2.png omits WK children. Draft click handlers live in composer/mod.rs:572-638, outside allowed src/chat edits.                                                                                       |
+| Response selection/review comments    | remaining        | Exact retained native node/ranges avoid first-quote matches. DOM UTF-16 offsets/underline need adapter source-map/decoration APIs; public SelectedText has only selected pieces. Existing editor geometry not exact.                                                                         |
+| Jump pill shadow                      | fixed            | Reverified elevated fill/heavy border, ArrowDown02, chip shadow and hover in goldens/pc-transcript-final/ pairs. This verifies fill/shadow, not the separate source CSS appearance delay.                                                                                                    |
+| Chat toolbar/details                  | remaining        | Fixed panel/scroller/8pt padding: pc-transcript3/pair-details-*-review2.png. Scoped resource/descendant SSE coalesces 100ms; usage patches cached totals (no HTTP). Expanded-resource interaction parity unverified. No claim.                                                               |
+| Pending inbox/running dock            | remaining        | Lists/tabs/attention/output/stop implemented. Shared worker shell invalidation (5-second fallback) and profile disclosure remain out of scope. Pairs: `composer-matrix/pair-{background,shell-output}-*-replay-final.png`.                                                                   |
+| Context keyboard/popover              | fixed            | Immediate hover, inside/outside/blank clicks, focused pointer leave, Tab/Escape/re-entry tested; no modal trap. Pairs: `composer-matrix/pair-context-*-replay-final2.png`.                                                                                                                   |
+| Slash/mention ordering                | fixed            | Web rank buckets/deduplication, home exclusions, skill/file/recent-chat limits, 80 ms deferred live file requests, icons and height. Pairs: `goldens/composer/pair-*-pc-composer-final2.png`.                                                                                                |
+| Undo attachments                      | fixed            | Worker decodes/validates attachments, prepares thumbnails and restores file/chat/skill mentions before applying undo. Captured revisions protect newer drafts/navigation.                                                                                                                    |
+| Full fork dialog                      | fixed            | `/fork`: captured draft, latest/before choices, earlier history, wrapping arrows/Home/End, errors, pending and close. Newer drafts survive. Native thread-menu routing is outside composer ownership.                                                                                        |
+| All question field types              | can't-do-in-Rune | No pinned host date/datetime widget or Chromium validity bubble. GPU calendar, local ISO and inline errors substitute; not native parity. Pairs: `composer-matrix/pair-*-replay-final{,2}.png`.                                                                                              |
+| Question lifecycle                    | fixed            | Real V2 replay: every field, single/multi/custom, invalid, conditional, review/back/edit. Keyboard/focus/width/style corrected. Pairs: `composer-matrix/pair-*-replay-final{,2}.png`.                                                                                                        |
+| Permission card                       | fixed            | Margins/styles/pending/dialog/errors corrected; real once/always/reject/full outcomes. Pairs: `composer-matrix/pair-permission-*-replay-{final,after}.png`; pending delays recorded HTTP replies.                                                                                            |
+| Recorded composer request replay      | fixed            | Native V2-authored requests; actual gateway HTTP/SSE, not model output (free model: 429). Tools: `composer-{fixture,decisions,replay,matrix}.mjs`. Archive: `composer-matrix/recorded-requests.tar.gz`.                                                                                      |
+| Composer fixture isolation            | matches          | `/tmp/ocr-pc-composer2`; OpenCode 4972, gateway 4502, record 4503, replay 4542. Both themes/sizes, scale 2; scripted input. Whole-window/font differences remain; no pixel-identical sign-off.                                                                                               |
+| Latest composer verification          | matches          | Release build, 56 Rust unit tests, `bun check`, `bun format:check` pass. Fresh final output/full-access pairs: `composer-matrix/pair-{shell-output,permission-full}-*-replay-final3.png`; residual metrics differ.                                                                           |
+| Files tree icons                      | fixed            | Uses pinned `rune-theme-opencode::tree_icons::file` rather than generic Rune-kit FileNode glyphs.                                                                                                                                                                                            |
+| Files tabs/tree                       | fixed            | Breadcrumbs, search/collapse/resize, hierarchical changes/statuses, keyboard/ancestor navigation, pin/preview/close interactions. Real-gateway pairs and tab regression checked; see src/workbench/VERIFICATION.md.                                                                          |
+| File editor toolbar/selection         | fixed            | Virtual no-wrap source rows with native active-line input/IME, cross-line selection/paste/undo and inline cards after the end line. Viewport-width cards map across preceding edits. See src/workbench/VERIFICATION.md.                                                                      |
+| Large-editor performance              | fixed            | 2 MiB TypeScript, syntax enabled, 20 native replacement keys: CPU-frame p50 3.935 ms, p95/max 6.465 ms; excludes GPU/OS input. Virtual source rows, worker lexer; actual replacement bytes asserted.                                                                                         |
+| Diff surface                          | fixed            | MIT diff vendored at 7286a3c5; configurable web metrics, one unified number column and lazy full-context expansion including unknown trailing ranges. Worker parsing/pairing/highlighting, selection and inline cards kept.                                                                  |
+| Image viewer                          | fixed            | Measured viewport; anchored wheel/pinch/button/double-click zoom; drag-pan; keyboard/download; point comments. Native runtime checks fit/scroll/click coordinates. React has point, not rectangular annotations.                                                                             |
+| Rich file previews                    | fixed            | Unprivileged WK PDF/video; bounded Mammoth worker, DOMPurify, CSS and DOM find (Chrome/WK smoke passed). HTML stays source; Markdown uses source-parent link base. Native control/capture limits are documented.                                                                             |
+| Subagent list/header                  | remaining        | panels2: 10pt/1.5pt/900ms ring, cached-row invalidation, immediate loop removal, visible-only elapsed ticks; scroll-contained footer, Retry, focus return and earlier-history paging corrected. Shared reader history header/spacing and main-tray attention remain open.                    |
+| Side-chat composer                    | remaining        | panels2: permissions now scroll with the transcript; MainChatStatus remains above the question dock. Grouped picker/context/exact shared docks remain open: current main components hard-bind main session/chat/dock state.                                                                  |
+| Canvas list/tabs                      | fixed            | panels2: actual opaque runtime → native bridge → owning draft comment + prepared PNG passed with an explicitly authored annotation payload. Cached Intl plus application-locale/English-literal alignment matches actual Chrome en-GB timestamp/short-time output. Other locales unverified. |
+| App canvas height                     | fixed            | Explicit user-requested exception to Apps ownership: native app host grows to available height, replacing fixed 360-point container.                                                                                                                                                         |
+| Browser                               | remaining        | panels2: persisted opaque WebKit backward/forward history, fresh-view restore check; public NSView menu hook and Downloads save sheet added. Complete Electron menu, overwrite/save/cancel and whole-app disk/relaunch checks remain unverified.                                             |
+| Terminal chrome                       | fixed            | Header/tabs/splitter/pending and capture grid/focus corrected. Scripted resize, real PTY 93×17/Unicode/reopen/close pass; zero idle frames. Four pairs inspected: `panels-final/pair-terminal-*-review5.png`.                                                                                |
+| Successful-response goldens           | fixed            | Reusable explicitly authored UI transcripts imported through isolated V2 API, not represented as model replies/recordings. 40 fresh scale-2 web/Rune pairs captured; no further model calls required.                                                                                        |
+| Atomic native-child screenshots       | can't-do-in-Rune | Pinned headless Rune screenshot omits WK child views. Must separately snapshot/composite real WK output, explicitly not an atomic GPU/native frame.                                                                                                                                          |
 
 ## Verification and images
+
+### panels2 continuation (not a completion sign-off)
+
+Only the dedicated panels2 worktree was edited. This pass does **not** satisfy the
+requested zero-remaining acceptance criterion, and does not label unfinished code as
+impossible in Rune. Exact reuse of the main model/context/question components needs
+session-parameterized entry points in `src/composer` and `src/docks`; their current
+handlers read/write `s.selected`, `s.chat`, and main dock state. Those files were outside
+this panel-only assignment, so the independent side state was retained rather than
+routing a side-chat selection or answer into the main conversation. Similarly, the
+shared `src/chat/reader.rs` has no history-header slot and its row builder is private;
+the missing Beginning of conversation/history-status row remains visible in the pairs.
+Main-tray attention controls are owned by `src/composer/running.rs`, not the subagent list
+(the React list itself has no attention badge/control).
+
+The ring regression check verifies 10×10-point geometry, a quarter turn in 225 ms,
+and no retained loop when idle or hidden. It caught two real lifecycle defects:
+virtual rows needed active-snapshot invalidation, and the replacement Idle text could
+inherit a cooling rotation. The indicator now has a distinct key and no exit transition.
+Earlier reader history is paged from its own worker and stops at a side chat's fork.
+Footer permissions/status now belong to the scroll content, not a fixed bottom bar.
+This corrects ownership/placement, not all typography or the missing shared reader header.
+
+Canvas verification used a gateway-created canvas whose authored page sends an annotation
+when asked to annotate. The real opaque runtime/bridge, native screenshot and attachment
+preparation worker produced a comment plus PNG in the captured owning session's draft.
+This is deliberately an authored transport fixture, **not** OS-pointer selection coverage.
+The finite native driver was removed; its source and fixture scripts remain only in ignored
+`goldens/panels2/`. The WK integration check also compared both date formats with actual
+WebKit Intl at the Chromium application locale, then restored both Back and Forward lists into a fresh native view from
+public `interactionState`. It uses a real isolated HTTP page: loadHTMLString does not
+create restorable native history. Disk persistence and whole-process relaunch are source-
+implemented, but were not exercised by that fresh-view check.
+
+Electron source correction: there is no production `will-download` handler/custom progress
+UI in this checkout (the only handler is a smoke-test override). The native save sheet now
+starts in Downloads and attaches to its owning window. Save/cancel/overwrite still need
+interaction coverage. The public macOS menu hook is **NSView** `willOpenMenu:withEvent:`,
+not WKUIDelegate. The implemented hook preserves native editing/spelling targets and
+normalizes a subset of browser actions; it is not the complete Electron menu. Custom
+system-browser/Google actions, exact order and localized item identification are still
+implementable work, not a claimed WebKit impossibility.
+
+Evidence (web left, Rune right), under `goldens/panels2/`:
+
+- `pair-subagents-{dark,light}-review1.png`
+- `pair-subagent-reader-{dark,light}-review1.png`
+- `pair-canvas-{dark,light}-{1280x800,1600x1000}-review4.png`
+- `pair-side-chat-{dark,light}-{1280x800,1600x1000}-review4.png`
+- `canvas-bridge-wk-reviewed1.png`, `panel-before.png`, `panel-after.png` are real offscreen
+  WK snapshots, not atomic native/GPU screenshots.
+
+The final pairs set `OPENCODEX_LOCALE` to the real web renderer's resolved locale (en-GB).
+An isolated empty HOME has no AppleLanguages preferences; earlier review1/review2 captures
+used the wrong native fallback locale and are not timestamp-parity evidence. The native
+default now uses Apple's bundle matching with Chromium's supported desktop locales (en-AU
+therefore resolves to en-GB), rather than assuming bare WebKit's default locale is Chromium's.
+The English joining literal is normalized via formatToParts from macOS CLDR's `at` to
+Chromium ICU's `, `; actual Chrome-generated expected strings feed the final native check.
+Non-English CLDR-version combinations remain unverified; this is not a universal ICU-parity claim.
+The canvas and side captures show the remaining side-control differences, rather than
+asserting pixel parity. Isolated fixture only: `/tmp/ocr-panels2`, service 4979, gateway
+4509; no model calls, no user OpenCode service/storage. Release workspace/all-targets build,
+112 Rust unit tests, `bun check` and `bun format:check` pass. The final native check uses
+actual Chrome Intl strings (`22 Nov, 23:01` and `23:01` at the fixed epoch), not a
+WebKit-only formatting oracle. Cleanup verified each stopped process's actual isolated
+HOME; ports 4979/4509 have no listeners and the temporary fixture directory was removed.
 
 ### Current continuation pass
 
