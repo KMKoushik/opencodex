@@ -67,13 +67,13 @@ pub(super) struct Source {
     pub(super) open: bool,
 }
 
-pub(super) const PAD: &str = "\u{202f}\u{202f}";
+pub(super) const PAD: &str = "\u{2002}";
 /// Inline code's padding before it, ending in a left-to-right isolate (LRI), and after it,
 /// starting with its end (PDI): `markdown.css` sets `:not(pre) > code { direction: ltr;
 /// unicode-bidi: isolate }`, so code reads left to right and moves as one inside Arabic text.
-pub(super) const OPEN: &str = "\u{202f}\u{202f}\u{2066}";
-pub(super) const CLOSE: &str = "\u{2069}\u{202f}\u{202f}";
-/// Inside a link, inline code keeps its directional isolate without pill padding (`a code { padding: 0 }`).
+pub(super) const OPEN: &str = "\u{2002}\u{2066}";
+pub(super) const CLOSE: &str = "\u{2069}\u{2002}";
+/// Directional isolates are also removed when extracting plain text.
 pub(super) const LINK_OPEN: &str = "\u{2066}";
 pub(super) const LINK_CLOSE: &str = "\u{2069}";
 
@@ -372,7 +372,7 @@ pub(super) fn parse_doc_tail(src: &str, autolink: bool) -> (ParsedDoc, Tail) {
             }
             Event::Code(t) => {
                 let code_src = code_span_content_range(src, range, &t);
-                let (open, close) = if b.in_link() { (LINK_OPEN, LINK_CLOSE) } else { (OPEN, CLOSE) };
+                let (open, close) = (OPEN, CLOSE);
                 let inl = b.inline();
                 let a = inl.1.text.len();
                 inl.1.text.push_str(open);

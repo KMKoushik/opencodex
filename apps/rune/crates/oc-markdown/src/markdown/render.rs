@@ -48,6 +48,7 @@ pub(super) struct Renderer {
     /// `Markdown::images` and `Markdown::on_image`.
     pub(super) images: Option<image::ImageWire>,
     pub(super) on_image: Option<image::ImagePress>,
+    pub(super) missing_image: Option<image::MissingImage>,
     /// Where the blocks being drawn sit: list depth and a quote's text colour.
     pub(super) flow: Cell<Flow>,
 }

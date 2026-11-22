@@ -302,7 +302,7 @@ fn compute_base(r: &Renderer) -> (u64, u64) {
         highlighter: _, sources: _, next_source: _, tasks: _, next_task: _, on_task: _,
         #[cfg(feature = "mermaid")]
         diagram_frame: _,
-        code_frame: _, quote_frame: _, images: _, on_image: _,
+        code_frame: _, quote_frame: _, images: _, on_image: _, missing_image: _,
         tentative: _, current_block_key: _, flow: _,
     } = r;
     let mut h = PairHasher::new();
@@ -399,7 +399,7 @@ impl Renderer {
             if self.diagram_frame.is_some() { return false; }
             if !self.highlighter.is_builtin() { return false; }
         }
-        if flags & HAS_IMAGE != 0 && (self.images.is_some() || self.on_image.is_some()) { return false; }
+        if flags & HAS_IMAGE != 0 && (self.images.is_some() || self.on_image.is_some() || self.missing_image.is_some()) { return false; }
         if flags & HAS_QUOTE != 0 && self.quote_frame.is_some() { return false; }
         if flags & HAS_OPEN_TABLE != 0 && self.streaming { return false; }
         true

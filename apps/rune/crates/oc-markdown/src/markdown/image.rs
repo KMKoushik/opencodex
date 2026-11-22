@@ -10,6 +10,7 @@ use super::*;
 pub(super) type ImageWire = Rc<dyn Fn(&str) -> Option<Image>>;
 /// Wraps a shown image (see [`Markdown::image_frame`]).
 pub(super) type ImagePress = Rc<dyn Fn(El, &ImageFrame<'_>) -> El>;
+pub(super) type MissingImage = Rc<dyn Fn(&str, &str) -> El>;
 
 /// An image [`Markdown::image_frame`] is wrapping.
 #[non_exhaustive]
@@ -34,6 +35,11 @@ thread_local! {
 }
 
 impl Markdown {
+    /// App-owned pending/failure state, including explicit retry controls.
+    pub fn missing_image(mut self, f: impl Fn(&str, &str) -> El + 'static) -> Self {
+        self.missing_image = Some(Rc::new(f));
+        self
+    }
     /// The picture for an image's source as written (`![alt](src)`): a decoded or decoding
     /// [`Image`] from the app's cache, or `None` when it has none. Until it decodes, and without
     /// one, the image shows Chromium's broken-image glyph and its alt text, as a web page does
@@ -55,7 +61,9 @@ impl Markdown {
 impl Renderer {
     pub(super) fn image(&self, src: &str, alt: &str, title: &str) -> El {
         let shown = self.images.as_ref().and_then(|f| f(src)).filter(|i| i.is_ready() && i.error().is_none()).and_then(|i| Some((i.size()?, i)));
-        let Some(([w, _], picture)) = shown else { return self.broken(alt) };
+        let Some(([w, _], picture)) = shown else {
+            return self.missing_image.as_ref().map(|f| f(src, alt)).unwrap_or_else(|| self.broken(alt));
+        };
         // Its own size in points, as a browser draws an image's pixels at 1x, up to the text's width.
         let mut e = el().role("image").label(if alt.is_empty() { "Image preview" } else { alt }).w_full().max_w(w as f32).pixels(picture.pixels()).radius(4.0).cursor(Cursor::ZoomIn);
         if !title.is_empty() {
