@@ -13,6 +13,8 @@ pub struct Tab {
     pub directory: String,
     pub view: TerminalView,
     pub exited: bool,
+    pub cwd: String,
+    pub exit_code: Option<i64>,
 }
 pub struct Drawer {
     pub open: bool,
@@ -100,6 +102,8 @@ impl State {
         };
         if let Some(tab) = self.terminal.tabs.iter_mut().find(|t| t.id == id) {
             tab.exited = value["status"] == "exited";
+            tab.cwd = value["cwd"].as_str().unwrap_or(directory).into();
+            tab.exit_code = value["exitCode"].as_i64();
             return;
         }
         let mut view = TerminalView::new(Palette::from_tokens(|n| self.theme.c(n)));
@@ -109,6 +113,8 @@ impl State {
             directory: directory.into(),
             view,
             exited: value["status"] == "exited",
+            cwd: value["cwd"].as_str().unwrap_or(directory).into(),
+            exit_code: value["exitCode"].as_i64(),
         });
         self.terminal.selected = self.terminal.tabs.len() - 1;
     }
@@ -175,6 +181,11 @@ pub fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
                 } else if let Some(d) = r.tag.strip_prefix("create:") {
                     s.attach_terminal(&p.value, d);
                 } else if let Some(id) = r.tag.strip_prefix("close:") {
+                    if let Some(index) = s.terminal.tabs.iter().position(|t| t.id == id) {
+                        if index < s.terminal.selected {
+                            s.terminal.selected -= 1;
+                        }
+                    }
                     s.terminal.tabs.retain(|t| t.id != id);
                     s.terminal.selected = s
                         .terminal
@@ -250,7 +261,8 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
     let t = &s.theme;
     let directory = s.workspace_directory();
     let current = active(s);
-    let mut header = row().h(40.0).w_full().px(8.0).center_y().gap(4.0);
+    use crate::workbench::panel_tabs as tabs;
+    let mut strip = tabs::strip("Terminals");
     for (number, (i, tab)) in s
         .terminal
         .tabs
@@ -259,62 +271,59 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
         .filter(|(_, tab)| tab.directory == directory)
         .enumerate()
     {
-        header = header.child(
-            row()
-                .h(32.0)
-                .center_y()
-                .radius(6.0)
-                .fill(if current == Some(i) {
-                    t.c("selected")
-                } else {
-                    rune::Color::TRANSPARENT
-                })
-                .child(
-                    row()
-                        .gap(6.0)
-                        .center_y()
-                        .child(
-                            rune::icon(&crate::chat::icons::TERMINAL, 14.0)
-                                .color(t.c("text-secondary")),
-                        )
-                        .child(label(
-                            t,
-                            format!("Terminal {}", number + 1),
-                            12.0,
-                            400.0,
-                            "text",
-                        ))
-                        .child(label(
-                            t,
-                            if tab.exited { "Exited" } else { "" },
-                            10.0,
-                            400.0,
-                            "text-tertiary",
-                        ))
-                        .px(10.0)
-                        .h(30.0)
-                        .center_y()
-                        .focusable(true)
-                        .on_press_tx(move |s: &mut State, tx| {
-                            s.terminal.selected = i;
-                            tx.focus("terminal-host", false);
-                        }),
-                )
-                .child(
-                    icon_button(t, &icons::CLOSE, &format!("Close Terminal {}", number + 1))
-                        .on_press(move |s: &mut State| s.close_terminal_tab(i)),
-                ),
-        );
+        let mut button = tabs::button(
+            s,
+            &format!("Terminal {}", number + 1),
+            &crate::chat::icons::TERMINAL,
+            current == Some(i),
+        )
+        .key(format!("terminal-tab-{i}"))
+        .on_press_tx(move |s: &mut State, tx| {
+            s.terminal.selected = i;
+            tx.focus("terminal-host", false);
+        })
+        .on_key(move |s: &mut State, key, tx| {
+            let indices: Vec<_> = s
+                .terminal
+                .tabs
+                .iter()
+                .enumerate()
+                .filter(|(_, t)| t.directory == s.workspace_directory())
+                .map(|(i, _)| i)
+                .collect();
+            let Some(next) = tabs::next(&key.key, number, indices.len()) else {
+                return false;
+            };
+            s.terminal.selected = indices[next];
+            tx.focus(format!("terminal-tab-{}", indices[next]), false);
+            true
+        });
+        if tab.exited {
+            button = button.child(label(t, "Exited", 10.0, 400.0, "text-tertiary"));
+        }
+        strip = strip.child(tabs::pill(
+            s,
+            current == Some(i),
+            button,
+            tabs::close(s, &format!("Close Terminal {}", number + 1))
+                .help("Close terminal and end shell")
+                .on_press(move |s: &mut State| s.close_terminal_tab(i)),
+        ));
     }
-    header = header
-        .child(el().grow(1.0))
+    let header = row()
+        .h(40.0)
+        .w_full()
+        .pr(8.0)
+        .center_y()
+        .gap(8.0)
+        .child(strip)
         .child(
             icon_button(t, &icons::PLUS, "New terminal")
                 .disabled(s.terminal.creating)
                 .on_press(|s: &mut State| s.create_terminal()),
         )
         .child(
-            icon_button(t, &icons::CLOSE, "Close terminal panel")
+            icon_button(t, &icons::CLOSE, "Hide terminal")
                 .on_press(|s: &mut State| s.terminal.open = false),
         );
     let mut body = col()
@@ -331,16 +340,33 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
     if let Some(i) = active(s) {
         body = body
             .child(
-                label(
-                    t,
-                    &s.terminal.tabs[i].directory,
-                    11.0,
-                    400.0,
-                    "text-tertiary",
-                )
-                .px(12.0)
-                .h(24.0)
-                .center_y(),
+                row()
+                    .w_full()
+                    .px(12.0)
+                    .py(8.0)
+                    .gap(12.0)
+                    .center_y()
+                    .child(
+                        label(t, &s.terminal.tabs[i].cwd, 11.0, 400.0, "text-tertiary")
+                            .truncate()
+                            .grow(1.0),
+                    )
+                    .child(
+                        label(
+                            t,
+                            if s.terminal.tabs[i].exited {
+                                s.terminal.tabs[i]
+                                    .exit_code
+                                    .map_or("Exited".into(), |code| format!("Exited ({code})"))
+                            } else {
+                                s.terminal.tabs[i].view.frame.status.into()
+                            },
+                            11.0,
+                            400.0,
+                            "text-tertiary",
+                        )
+                        .role("status"),
+                    ),
             )
             .child(
                 s.terminal.tabs[i]
@@ -349,6 +375,7 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
                         let i = active(s).expect("mounted terminal");
                         &mut s.terminal.tabs[i].view
                     })
+                    .autofocus()
                     .grow(1.0)
                     .min_h(0.0)
                     .mx(10.0)
@@ -357,15 +384,28 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
             );
     } else {
         body = body.child(
-            crate::pages::button(
+            crate::workbench::empty_state(
                 s,
+                &crate::chat::icons::TERMINAL,
                 if s.terminal.loaded {
-                    "New terminal"
+                    "Your project terminal"
                 } else {
                     "Loading terminals…"
                 },
+                "Open a shell in this project. Add tabs to run commands side by side.",
             )
-            .on_press(|s: &mut State| s.create_terminal()),
+            .child(
+                crate::pages::button(
+                    s,
+                    if s.terminal.creating {
+                        "Opening…"
+                    } else {
+                        "New terminal"
+                    },
+                )
+                .disabled(s.terminal.creating || !s.terminal.loaded)
+                .on_press(|s: &mut State| s.create_terminal()),
+            ),
         );
     }
     body.child(
@@ -375,7 +415,7 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
             .absolute(0.0, 0.0)
             .cursor(rune::Cursor::ResizeRow)
             .role("separator")
-            .label("Resize terminal panel")
+            .label("Resize terminal")
             .focusable(true)
             .on_drag(|s: &mut State, d, tx| match d.phase {
                 rune::Phase::Down => d.data = s.terminal.height,
@@ -481,9 +521,11 @@ pub fn capture(s: &mut State) -> Result<(), String> {
     view.frame = frame;
     s.terminal.tabs.push(Tab {
         id,
+        cwd: directory.clone(),
         directory,
         view,
         exited: false,
+        exit_code: None,
     });
     s.terminal.selected = 0;
     s.terminal.open = true;

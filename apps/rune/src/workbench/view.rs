@@ -145,6 +145,10 @@ fn panel(s: &State, cx: &mut rune::Cx<State>) -> El {
         header = header.child(super::tabs::documents(s).grow(1.0).min_w(0.0));
     } else if s.workbench.panel == Panel::Canvas {
         header = header.child(crate::native::canvas_tabs(s));
+    } else if s.workbench.panel == Panel::Browser {
+        header = header.child(crate::native::browser_tabs(s));
+    } else if s.workbench.panel == Panel::Side {
+        header = header.child(sessions::tabs(s));
     } else {
         header = header.child(
             label(t, s.workbench.panel.label(), 12.0, 400.0, "text")
@@ -493,13 +497,18 @@ pub fn empty_state(s: &State, glyph: &'static rune::Icon, title: &str, message: 
         .w_full()
         .center()
         .padding(24.0)
-        .gap(12.0)
-        .child(icon(glyph, 24.0).color(s.theme.c("text-tertiary")).mb(4.0))
-        .child(label(&s.theme, title, 14.0, 500.0, "text"))
+        .child(icon(glyph, 24.0).color(s.theme.c("text-tertiary")).mb(
+            if matches!(s.workbench.panel, Panel::Side | Panel::Subagents) {
+                8.0
+            } else {
+                16.0
+            },
+        ))
+        .child(label(&s.theme, title, 14.0, 500.0, "text").mb(8.0))
         .child(
             label(&s.theme, message, 12.0, 400.0, "text-secondary")
                 .wrap()
-                .max_w(560.0),
+                .align(rune::Align::Center),
         )
 }
 /// Mount `TerminalView::element("terminal-host", cx, accessor)` here; poll its

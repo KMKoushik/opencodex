@@ -1,7 +1,67 @@
 use super::{Panel, worker::Operation};
 use crate::{State, sidebar::label};
-use rune::{El, GrowthSpec, ScrollSpec, TextEdit, TextStyle, col, row, text_input};
+use rune::{El, GrowthSpec, ScrollSpec, TextEdit, col, row};
 use serde_json::json;
+
+pub fn tabs(s: &State) -> El {
+    use super::panel_tabs as tabs;
+    let mut strip = tabs::strip("Side chats");
+    for (index, v) in s.workbench.sides.iter().enumerate() {
+        let id = v["id"].as_str().unwrap_or("").to_owned();
+        let close = id.clone();
+        let active = s.workbench.reader.as_ref() == Some(&id);
+        let mut button = tabs::button(
+            s,
+            &format!("Side chat {}", index + 1),
+            &crate::chat::icons::CHAT,
+            active,
+        )
+        .key(format!("side-tab-{index}"))
+        .help(v["title"].as_str().unwrap_or("Side chat"))
+        .on_press(move |s: &mut State| {
+            if s.workbench.reader.as_ref() != Some(&id) {
+                s.open_workspace_reader(id.clone());
+            }
+        })
+        .on_key(move |s: &mut State, key, tx| {
+            let Some(next) = tabs::next(&key.key, index, s.workbench.sides.len()) else {
+                return false;
+            };
+            if let Some(id) = s.workbench.sides[next]["id"].as_str().map(str::to_owned) {
+                if s.workbench.reader.as_ref() != Some(&id) {
+                    s.open_workspace_reader(id);
+                }
+                tx.focus(format!("side-tab-{next}"), false);
+            }
+            true
+        });
+        if v["id"]
+            .as_str()
+            .is_some_and(|id| s.snapshot.active.contains(id))
+        {
+            button = button.child(super::subagents::activity(s, "Responding"));
+        }
+        strip = strip.child(tabs::pill(
+            s,
+            active,
+            button,
+            tabs::close(s, &format!("Delete side chat {}", index + 1))
+                .on_press(move |s: &mut State| s.workbench.delete_side = Some(close.clone())),
+        ));
+    }
+    if s.workbench.sides.is_empty() {
+        strip = strip.child(label(&s.theme, "Side chat", 12.0, 400.0, "text-tertiary"));
+    }
+    strip.child(
+        crate::sidebar::icon_button(&s.theme, &crate::icons::PLUS, "New side chat")
+            .disabled(
+                s.workbench.sides.len() >= 8
+                    || s.workbench.pending.contains("side-create")
+                    || s.workbench.pending.contains("sides"),
+            )
+            .on_press(|s: &mut State| s.create_workspace_side(String::new())),
+    )
+}
 
 impl State {
     pub fn open_workspace_reader(&mut self, id: String) {
@@ -51,28 +111,52 @@ impl State {
             return;
         };
         let text = edit.text.clone();
-        if text.trim().is_empty() {
+        let draft = self.composer.drafts.get(&id);
+        if self.composer.attachment_pending.contains_key(&id) {
             return;
         }
-        let model = self
-            .model_info()
-            .map(|m| json!({"providerID":m.provider_id,"id":m.id}));
+        if text.trim().is_empty() && draft.attachments.is_empty() && draft.comments.is_empty() {
+            return;
+        }
+        let model = draft
+            .model
+            .as_ref()
+            .or_else(|| {
+                self.workbench
+                    .reader_chat
+                    .data
+                    .info
+                    .as_ref()
+                    .and_then(|i| i.model.as_ref())
+            })
+            .or_else(|| self.selected_model())
+            .cloned();
         let Some(model) = model else {
-            self.workbench.error = Some("Select a model in the main composer first.".into());
+            self.workbench.error = Some("Select a model before sending.".into());
             return;
         };
         let revision = self.workbench.side_revisions.get(&id).copied().unwrap_or(0);
+        let (text, annotations) = crate::chat::comments::annotated(&text, &draft.comments);
+        let attachments = draft.attachments.clone();
+        self.workbench.side_context_revision = Some(draft.revision);
+        if super::side_composer::slash(self, &id, &text, revision) {
+            return;
+        }
         self.workbench.side_sending = Some((id.clone(), revision));
         self.workspace_request(
             "side-send".into(),
             Operation::SendSide {
                 id,
-                body: json!({"text":text,"model":model,"files":[],"mentions":[]}),
+                body: json!({"text":text,"model":model,"mentions":[],"annotations":annotations}),
+                attachments,
             },
         );
     }
 }
 pub fn view(s: &State, side: bool) -> El {
+    if !side {
+        return super::subagents::view(s);
+    }
     let t = &s.theme;
     let mut body = col().grow(1.0).min_h(0.0).w_full();
     let mut bar = row()
@@ -118,64 +202,32 @@ pub fn view(s: &State, side: bool) -> El {
                 .on_press(|s: &mut State| s.create_workspace_side(String::new())),
         );
     }
-    if !side || !s.workbench.sides.is_empty() || s.workbench.reader.is_some() {
+    if !side {
         body = body.child(bar);
     }
     if let Some(id) = &s.workbench.reader {
-        body = body.child(crate::chat::reader(
+        let data = &s.workbench.reader_chat.data;
+        let empty = side
+            && data.info.as_ref().is_some_and(|info| info.revert.is_none())
+            && data.visible().is_empty()
+            && !data.running
+            && data.error.is_none()
+            && s.workbench.requests.permissions.is_empty();
+        body = body.child(if empty {
+            let start = data.info.as_ref().map(|info| oc_webview::short_time(info.time.created))
+                .unwrap_or_else(|| "now".into());
+            col().grow(1.0).w_full().px(16.0).py(24.0)
+                .child(label(t, "Side chat", 14.0, 500.0, "text").mb(8.0))
+                .child(label(t, format!("It knows the main chat up to {start}. Questions here don’t interrupt the main chat. Edits ask for approval first."), 14.0, 400.0, "text-secondary").wrap())
+        } else { crate::chat::reader(
             s,
             &s.workbench.reader_chat,
             s.panel_width().max(340.0),
-        ));
+        ) });
         if side {
-            let edit = &s.workbench.side_drafts[id];
-            let id = id.clone();
-            body = body.child(
-                col()
-                    .w_full()
-                    .padding(12.0)
-                    .gap(8.0)
-                    .child(
-                        text_input(edit, TextStyle::new(14.0, 400.0).lh(21.0))
-                            .key("side-message")
-                            .label("Message side chat")
-                            .placeholder("Ask a follow-up…", t.c("text-tertiary"))
-                            .w_full()
-                            .min_h(52.0)
-                            .max_h(160.0)
-                            .padding(12.0)
-                            .radius(14.0)
-                            .fill(t.c("surface-under"))
-                            .color(t.c("text"))
-                            .on_edit(move |s: &mut State| {
-                                s.workbench.side_drafts.get_mut(&id).expect("side draft")
-                            })
-                            .on_input_change(|s: &mut State, _| {
-                                if let Some(id) = s.workbench.reader.clone() {
-                                    *s.workbench.side_revisions.entry(id).or_default() += 1;
-                                }
-                            })
-                            .on_submit(|s: &mut State, _| s.send_workspace_side()),
-                    )
-                    .child(
-                        row()
-                            .w_full()
-                            .child(super::documents::button(s, "Open in main view").on_press(
-                                |s: &mut State| s.open_session(s.workbench.reader.clone()),
-                            ))
-                            .child(rune::el().grow(1.0))
-                            .child(
-                                super::documents::button(
-                                    s,
-                                    if s.workbench.side_sending.is_some() {
-                                        "Sending…"
-                                    } else {
-                                        "Send ↑"
-                                    },
-                                )
-                                .on_press(|s: &mut State| s.send_workspace_side()),
-                            ),
-                    ),
+            body = body.child(super::reader_requests::permissions(s)).child(
+                super::reader_requests::form(s)
+                    .unwrap_or_else(|| super::side_composer::view(s, id)),
             );
         } else {
             body = body.child(
@@ -199,7 +251,7 @@ pub fn view(s: &State, side: bool) -> El {
     if items.is_empty() {
         if side {
             return body.child(super::view::empty_state(s,&crate::chat::icons::CHAT,"Ask on the side","A side chat starts from this chat’s history, so you can ask questions or explore without interrupting the main chat.")
-                .child(super::documents::button(s,"New side chat").mt(4.0).border(1.0,t.c("border-heavy")).fill(t.c("secondary")).on_press(|s:&mut State|s.create_workspace_side(String::new()))));
+                .child(super::documents::button(s,"New side chat").mt(12.0).border(1.0,t.c("border-heavy")).fill(t.c("secondary")).on_press(|s:&mut State|s.create_workspace_side(String::new()))));
         }
         return body.child(super::view::empty_state(
             s,

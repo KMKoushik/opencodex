@@ -9,6 +9,7 @@ use std::{
 };
 
 pub enum Operation {
+    LocalHTML(String),
     SaveData {
         uri: String,
         destination: std::path::PathBuf,
@@ -44,6 +45,7 @@ pub enum Operation {
     SendSide {
         id: String,
         body: Value,
+        attachments: Vec<oc_gateway::prompt::Attachment>,
     },
 }
 pub struct Request {
@@ -123,6 +125,31 @@ impl Worker {
 }
 async fn run(client: &Gateway, op: Operation) -> Result<Value, String> {
     match op {
+        Operation::LocalHTML(value) => {
+            let url = url::Url::parse(&value).map_err(|e| e.to_string())?;
+            if url.scheme() != "file" || url.host_str().is_some_and(|h| h != "localhost") {
+                return Err("Choose a local HTML file.".into());
+            }
+            let path = url
+                .to_file_path()
+                .map_err(|_| "Choose a local HTML file.")?
+                .canonicalize()
+                .map_err(|e| e.to_string())?;
+            if !path.is_file()
+                || !path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+                    e.eq_ignore_ascii_case("html") || e.eq_ignore_ascii_case("htm")
+                })
+            {
+                return Err("Choose a local HTML file.".into());
+            }
+            let root =
+                url::Url::from_directory_path(path.parent().ok_or("Missing preview folder")?)
+                    .map_err(|_| "Invalid preview folder")?;
+            let mut file = url::Url::from_file_path(path).map_err(|_| "Invalid preview file")?;
+            file.set_query(url.query());
+            file.set_fragment(url.fragment());
+            Ok(serde_json::json!({"url":file.as_str(),"root":root.as_str()}))
+        }
         Operation::SaveData { uri, destination } => {
             use base64::Engine;
             let (_, data) = uri
@@ -179,7 +206,14 @@ async fn run(client: &Gateway, op: Operation) -> Result<Value, String> {
                 .post(&format!("sessions/{id}/side-chats"), serde_json::json!({}))
                 .await
         }
-        Operation::SendSide { id, body } => {
+        Operation::SendSide {
+            id,
+            mut body,
+            attachments,
+        } => {
+            use base64::Engine;
+            oc_gateway::prompt::validate_attachments(&attachments)?;
+            body["files"]=Value::Array(attachments.iter().map(|a|serde_json::json!({"name":a.name,"uri":format!("data:{};base64,{}",a.mime,base64::engine::general_purpose::STANDARD.encode(a.bytes.as_slice()))})).collect());
             client.post(&format!("sessions/{id}/prompt"), body).await
         }
     }

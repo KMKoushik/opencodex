@@ -63,8 +63,9 @@ impl Worker {
                 };
                 tokio::select! {
                     result = run => {
+                        engine.connection_status(if result.is_ok() { "Shell exited" } else { "Disconnected" });
                         let mut frame = engine.snapshot();
-                        frame.error = Some(result.err().unwrap_or_else(|| "Shell exited".into()));
+                        frame.error = result.err();
                         publish(frame);
                     }
                     _ = stopped => {}
@@ -149,9 +150,8 @@ async fn pump(
                 if failures > 3 {
                     return Err(error);
                 }
-                let mut frame = engine.snapshot();
-                frame.error = Some(format!("Reconnecting… {error}"));
-                publish(frame);
+                engine.connection_status("Reconnecting…");
+                publish(engine.snapshot());
                 tokio::time::sleep(Duration::from_secs(1 << (failures - 1))).await;
                 continue;
             }
@@ -159,6 +159,8 @@ async fn pump(
         gateway
             .resize_terminal(directory, id, size.cols, size.rows)
             .await?;
+        engine.connection_status("");
+        publish(engine.snapshot());
         let mut replay = true;
         let mut due = None;
         let mut resize_due = None;
@@ -210,6 +212,7 @@ async fn pump(
                 }
             }
         };
+        engine.connection_status("Reconnecting…");
         publish(engine.snapshot());
         failures += 1;
         if failures > 3 {
