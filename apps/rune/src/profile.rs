@@ -19,6 +19,46 @@ pub struct Preferences {
     pub accent: Option<String>,
     pub chat_font_size: Option<f32>,
     pub notifications: std::collections::BTreeMap<String, bool>,
+    pub theme: Option<ThemePreference>,
+    pub terminal_right: bool,
+    pub task_assignee: String,
+}
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[serde(default)]
+pub struct VariantPreference {
+    pub preset: String,
+    pub surface: Option<String>,
+    pub ink: Option<String>,
+    pub accent: Option<String>,
+    pub contrast: Option<f64>,
+}
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(default)]
+pub struct ThemePreference {
+    pub mode: String,
+    pub light: VariantPreference,
+    pub dark: VariantPreference,
+}
+impl Default for ThemePreference {
+    fn default() -> Self {
+        Self {
+            mode: "system".into(),
+            light: Default::default(),
+            dark: Default::default(),
+        }
+    }
+}
+impl ThemePreference {
+    pub fn variant(&self, dark: bool) -> &VariantPreference {
+        if dark { &self.dark } else { &self.light }
+    }
+    pub fn variant_mut(&mut self, dark: bool) -> &mut VariantPreference {
+        if dark {
+            &mut self.dark
+        } else {
+            &mut self.light
+        }
+    }
 }
 pub struct Profile {
     pub loaded: Arc<Mutex<Option<Preferences>>>,

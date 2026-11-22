@@ -19,6 +19,13 @@ pub struct Project {
     pub canonical: String,
     pub icon: Option<ProjectIcon>,
     pub vcs: Option<String>,
+    #[serde(default)]
+    pub time: ProjectTime,
+}
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+pub struct ProjectTime {
+    pub active: Option<f64>,
+    pub updated: f64,
 }
 impl Project {
     pub fn display_name(&self) -> &str {

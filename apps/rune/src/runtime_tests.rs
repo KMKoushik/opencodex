@@ -1,6 +1,412 @@
 use super::*;
 
 #[test]
+fn app_code_mounts_a_viewport_and_copies_across_blank_lines() {
+    OPTIONS.get_or_init(|| Options {
+        gateway: None,
+        preset: String::new(),
+        dark: true,
+        headless: true,
+        session: None,
+        scroll: "bottom".into(),
+        work: None,
+        composer_state: String::new(),
+        page: String::new(),
+        panel: None,
+        file: None,
+        size: (1280.0, 800.0),
+    });
+    let mut state = State::new();
+    state.pages.route = pages::Route::Apps;
+    state.pages.app = Some("code-test".into());
+    state.pages.apps.tab = "code".into();
+    state.pages.data.insert("apps".into(),Ok(serde_json::json!([{"id":"code-test","title":"Source","running":[],"functions":[],"triggers":{}}])));
+    let source = format!(
+        "first\n\nlast\n{}OffscreenNeedle",
+        "const n = 1;\n".repeat(19997)
+    );
+    state.pages.apps.code.source = Some(Arc::new(
+        apps::code::prepare(serde_json::json!({"files":[{"name":"app.tsx","text":source}]}))
+            .unwrap(),
+    ));
+    let mut rt = rune::Runtime::new(state, view, (1280.0, 800.0), rune::Env::new(true, 2.0));
+    let clipboard = rune::clipboard::memory();
+    rt.use_clipboard(&clipboard);
+    let start = std::time::Instant::now();
+    rt.frame(0.0);
+    let elements = rt.elements();
+    let mounted = elements
+        .iter()
+        .filter(|e| {
+            e.key
+                .as_deref()
+                .is_some_and(|k| k.starts_with("app-code-text-"))
+        })
+        .count();
+    eprintln!(
+        "20,000-line app source: {mounted} mounted lines; CPU frame {:?}",
+        start.elapsed()
+    );
+    assert!(mounted > 0 && mounted < 150);
+    let first = elements
+        .iter()
+        .find(|e| e.key.as_deref() == Some("app-code-text-0"))
+        .unwrap()
+        .rect;
+    let last = elements
+        .iter()
+        .find(|e| e.key.as_deref() == Some("app-code-text-2"))
+        .unwrap()
+        .rect;
+    rt.pointer_down(first[0] + 0.1, first[1] + first[3] / 2.0);
+    rt.frame(0.1);
+    rt.pointer_move(last[0] + last[2] - 0.1, last[1] + last[3] / 2.0);
+    rt.frame(0.2);
+    rt.pointer_up(last[0] + last[2] - 0.1, last[1] + last[3] / 2.0);
+    rt.frame(0.3);
+    rt.key(rune::KeyEvent {
+        key: rune::Key::Command('c'),
+        mods: rune::Mods {
+            cmd: true,
+            ..Default::default()
+        },
+    });
+    rt.frame(0.4);
+    assert_eq!(
+        clipboard.text().as_deref().map(|text| text.as_str()),
+        Some("first\n\nlast")
+    );
+    rt.update(crate::find::open);
+    rt.frame(0.5);
+    rt.frame(0.6);
+    assert!(
+        !rt.state.find.open,
+        "source find must not open transcript find"
+    );
+    rt.key(rune::KeyEvent {
+        key: rune::Key::Text("offscreen".into()),
+        mods: Default::default(),
+    });
+    rt.frame(0.7);
+    rt.frame(1.5);
+    assert!(
+        rt.elements()
+            .iter()
+            .any(|element| element.label.as_deref() == Some("Find in file"))
+    );
+    assert!(
+        rt.elements()
+            .iter()
+            .any(|element| element.key.as_deref() == Some("app-code-text-20000")),
+        "find must reveal source beyond the mounted viewport"
+    );
+    rt.key(rune::KeyEvent {
+        key: rune::Key::Escape,
+        mods: Default::default(),
+    });
+    rt.frame(1.6);
+    assert!(!rt.state.pages.apps.code.find.open);
+}
+
+#[test]
+fn folder_suggestions_overlay_wraps_up_and_does_not_reopen_after_dismissal() {
+    OPTIONS.get_or_init(|| Options {
+        gateway: None,
+        preset: String::new(),
+        dark: true,
+        headless: true,
+        session: None,
+        scroll: "bottom".into(),
+        work: None,
+        composer_state: String::new(),
+        page: String::new(),
+        panel: None,
+        file: None,
+        size: (1280.0, 800.0),
+    });
+    let mut state = State::new();
+    state.pages.route = pages::Route::ProjectSetup;
+    state.pages.projects.directory = rune::TextEdit::new("/fixture/");
+    state.pages.projects.suggesting = true;
+    state.pages.projects.folders_parent = Some("/fixture/".into());
+    state.pages.projects.folders = Some(serde_json::json!({"folders":["alpha","beta",".hidden"]}));
+    state.pages.projects.active_folder = -1;
+    let mut rt = rune::Runtime::new(state, view, (1280.0, 800.0), rune::Env::new(true, 2.0));
+    rt.frame(0.0);
+    rt.update(|_, tx| tx.focus("Project directory", false));
+    rt.frame(0.1);
+    let elements = rt.elements();
+    let field = elements
+        .iter()
+        .find(|e| e.key.as_deref() == Some("project-directory-field"))
+        .unwrap();
+    let folders = elements
+        .iter()
+        .find(|e| e.key.as_deref() == Some("project-folders"))
+        .unwrap();
+    assert!(
+        folders.rect[1] >= field.rect[1] + field.rect[3],
+        "suggestions are an anchored overlay"
+    );
+    assert!(
+        !elements
+            .iter()
+            .any(|e| e.label.as_deref() == Some(".hidden"))
+    );
+    rt.key(rune::KeyEvent {
+        key: rune::Key::Up,
+        mods: Default::default(),
+    });
+    rt.frame(0.2);
+    assert_eq!(
+        rt.state.pages.projects.active_folder, 1,
+        "Up from no choice selects the final visible folder"
+    );
+    rt.key(rune::KeyEvent {
+        key: rune::Key::Escape,
+        mods: Default::default(),
+    });
+    rt.frame(0.3);
+    assert!(!rt.state.pages.projects.suggesting);
+    settings::projects::folder::receive(
+        &mut rt.state,
+        "/fixture/",
+        Ok(serde_json::json!({"folders":["alpha","beta"]})),
+    );
+    assert!(
+        !rt.state.pages.projects.suggesting,
+        "an async reply cannot reopen a dismissed list"
+    );
+    rt.state.pages.projects.error = Some("Keep the form's opening error".into());
+    settings::projects::folder::receive(
+        &mut rt.state,
+        "/fixture/",
+        Err("Folder listing failed".into()),
+    );
+    assert_eq!(
+        rt.state.pages.projects.error.as_deref(),
+        Some("Keep the form's opening error")
+    );
+    assert_eq!(
+        rt.state.pages.projects.folder_error.as_deref(),
+        Some("Folder listing failed")
+    );
+}
+
+#[test]
+fn project_switcher_clamps_arrows_and_ignores_dismissed_resolution() {
+    OPTIONS.get_or_init(|| Options {
+        gateway: None,
+        preset: String::new(),
+        dark: true,
+        headless: true,
+        session: None,
+        scroll: "bottom".into(),
+        work: None,
+        composer_state: String::new(),
+        page: String::new(),
+        panel: None,
+        file: None,
+        size: (1280.0, 800.0),
+    });
+    let mut state = State::new();
+    let snapshot = Arc::make_mut(&mut state.snapshot);
+    snapshot.live = true;
+    snapshot.projects=serde_json::from_value(serde_json::json!([
+        {"id":"old","name":"Old project","canonical":"/fixture/old","time":{"active":0,"updated":1}},
+        {"id":"new","name":"New project","canonical":"/fixture/new","time":{"active":3,"updated":2}}
+    ])).unwrap();
+    state.prefs.project = Some("/fixture/old".into());
+    let mut rt = rune::Runtime::new(state, view, (1280.0, 800.0), rune::Env::new(true, 2.0));
+    rt.update(menus::projects::open);
+    rt.frame(0.0);
+    rt.frame(0.1);
+    assert_eq!(
+        menus::projects::rows(&rt.state)[0].directory,
+        "/fixture/new"
+    );
+    assert!(
+        rt.elements()
+            .iter()
+            .any(|e| e.key.as_deref() == Some("project-switcher-search") && e.focused)
+    );
+    let key = |key| rune::KeyEvent {
+        key,
+        mods: Default::default(),
+    };
+    rt.key(key(rune::Key::Down));
+    rt.frame(0.2);
+    assert_eq!(
+        rt.state.menus.projects.active, "/fixture/old",
+        "Down at the end must not wrap"
+    );
+    rt.key(key(rune::Key::Up));
+    rt.frame(0.3);
+    rt.key(key(rune::Key::Up));
+    rt.frame(0.4);
+    assert_eq!(rt.state.menus.projects.active, "/fixture/new");
+    let generation = rt.state.menus.projects.generation;
+    rt.key(key(rune::Key::Escape));
+    rt.frame(0.5);
+    assert!(rt.state.menus.open.is_none());
+    rt.update(menus::projects::open);
+    rt.frame(0.6);
+    menus::projects::receive(
+        &mut rt.state,
+        &format!("switcher:{generation}:resolve"),
+        Ok(serde_json::json!({"directory":"/fixture/new"})),
+    );
+    assert_eq!(rt.state.prefs.project.as_deref(), Some("/fixture/old"));
+    rt.update(|s, _| s.menus.projects.query = rune::TextEdit::new("~/new-folder"));
+    rt.frame(0.7);
+    let rows = menus::projects::rows(&rt.state);
+    assert_eq!(rows.len(), 1);
+    assert!(rows[0].project.is_none());
+}
+
+#[test]
+fn task_drag_container_does_not_swallow_card_controls_or_escape() {
+    OPTIONS.get_or_init(|| Options {
+        gateway: None,
+        preset: String::new(),
+        dark: true,
+        headless: true,
+        session: None,
+        scroll: "bottom".into(),
+        work: None,
+        composer_state: String::new(),
+        page: String::new(),
+        panel: None,
+        file: None,
+        size: (1280.0, 800.0),
+    });
+    let mut state = State::new();
+    state.pages.route = pages::Route::Tasks;
+    state.pages.data.insert(
+        "tasks/plugin".into(),
+        Ok(serde_json::json!({"state":"active"})),
+    );
+    state.pages.data.insert("tasks".into(),Ok(serde_json::json!([{"id":"a","title":"Review changes","bucket":"today","order":1,"time":{"moved":0}}])));
+    let mut rt = rune::Runtime::new(state, view, (1280.0, 800.0), rune::Env::new(true, 2.0));
+    rt.frame(0.0);
+    let rect = rt
+        .elements()
+        .iter()
+        .find(|e| e.key.as_deref() == Some("task-title-a"))
+        .unwrap()
+        .visible;
+    let (x, y) = (rect[0] + rect[2] / 2.0, rect[1] + rect[3] / 2.0);
+    rt.pointer_down(x, y);
+    rt.frame(0.1);
+    rt.pointer_up(x, y);
+    rt.frame(0.2);
+    assert!(
+        rt.state.pages.tasks.editor.is_some(),
+        "the title click must reach the editor, not its parent drag handler"
+    );
+    rt.key(rune::KeyEvent {
+        key: rune::Key::Escape,
+        mods: Default::default(),
+    });
+    rt.frame(0.3);
+    assert!(rt.state.pages.tasks.editor.is_none());
+    assert_eq!(rt.state.pages.route, pages::Route::Tasks);
+    assert!(rt.state.error.is_none(), "cancel never sends a task update");
+    let mut bounded = rune::TextEdit::new("ab-tail");
+    bounded.set_selection(1, 2);
+    assert!(pages::controls::limit_input(&mut bounded, "😀x", 8));
+    assert_eq!(
+        bounded.text, "a😀-tail",
+        "UTF-16 limits retain the untouched suffix and do not split a scalar"
+    );
+    rt.update(|s,_|{s.pages.data.insert("tasks".into(),Ok(serde_json::Value::Array((0..2000).map(|n|serde_json::json!({"id":format!("task-{n}"),"title":format!("Review change {n}"),"notes":"Check the API and update its documentation.","bucket":"today","order":n,"time":{"moved":0}})).collect())));});
+    let start = std::time::Instant::now();
+    rt.frame(0.4);
+    let mounted = rt
+        .elements()
+        .iter()
+        .filter(|e| {
+            e.key
+                .as_deref()
+                .is_some_and(|k| k.starts_with("task-title-"))
+        })
+        .count();
+    eprintln!(
+        "2,000-task board: {mounted} mounted cards; CPU frame {:?}",
+        start.elapsed()
+    );
+    assert!(
+        mounted > 0 && mounted < 40,
+        "card construction must stay bounded by the viewport"
+    );
+}
+
+#[test]
+fn appearance_keyboard_preserves_each_variant_and_dismisses_the_select() {
+    OPTIONS.get_or_init(|| Options {
+        gateway: None,
+        preset: String::new(),
+        dark: true,
+        headless: true,
+        session: None,
+        scroll: "bottom".into(),
+        work: None,
+        composer_state: String::new(),
+        page: String::new(),
+        panel: None,
+        file: None,
+        size: (1280.0, 800.0),
+    });
+    let mut state = State::new();
+    state.pages.route = pages::Route::Settings("appearance".into());
+    state.pages.appearance.system_dark = Some(true);
+    let mut rt = rune::Runtime::new(state, view, (1280.0, 800.0), rune::Env::new(true, 2.0));
+    rt.frame(0.0);
+    rt.update(|_, tx| tx.focus("Mode-system", true));
+    rt.frame(0.1);
+    rt.key(rune::KeyEvent {
+        key: rune::Key::Right,
+        mods: Default::default(),
+    });
+    rt.frame(0.2);
+    assert_eq!(settings::appearance::preference(&rt.state).mode, "light");
+    assert!(!rt.state.theme.dark);
+    rt.update(|s, tx| {
+        s.pages.appearance.fields.insert(
+            "appearance-light-accent".into(),
+            rune::TextEdit::new("#1256ab"),
+        );
+        settings::appearance::commit(s, "appearance-light-accent");
+        tx.focus("Light theme", true);
+    });
+    rt.frame(0.3);
+    rt.key(rune::KeyEvent {
+        key: rune::Key::Down,
+        mods: Default::default(),
+    });
+    rt.frame(0.4);
+    assert!(matches!(rt.state.menus.open, Some(menus::Menu::Choice(_))));
+    rt.key(rune::KeyEvent {
+        key: rune::Key::Escape,
+        mods: Default::default(),
+    });
+    rt.frame(0.5);
+    assert!(rt.state.menus.open.is_none());
+    rt.update(|s, _| {
+        let mut p = settings::appearance::preference(s);
+        p.mode = "dark".into();
+        settings::appearance::apply(s, p);
+    });
+    rt.frame(0.6);
+    assert!(rt.state.theme.dark);
+    let preferences: profile::Preferences =
+        serde_json::from_str(&serde_json::to_string(&rt.state.prefs).unwrap()).unwrap();
+    let saved = preferences.theme.unwrap();
+    assert_eq!(saved.light.accent.as_deref(), Some("#1256ab"));
+    assert!(saved.dark.accent.is_none());
+}
+
+#[test]
 fn native_subagent_readers_cannot_interrupt_but_side_chats_can() {
     OPTIONS.get_or_init(|| Options {
         gateway: None,
@@ -62,6 +468,7 @@ fn long_sidebar_only_mounts_visible_rows() {
     });
     let mut state = State::new();
     let project = oc_gateway::types::Project {
+        time: Default::default(),
         id: "fixture".into(),
         name: Some("Example".into()),
         canonical: "/fixture".into(),

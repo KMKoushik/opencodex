@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = [".", "crates/oc-gateway", "crates/oc-terminal", "crates/oc-webview", "crates/oc-markdown"]
+members = [".", "crates/oc-gateway", "crates/oc-terminal", "crates/oc-webview", "crates/oc-markdown", "crates/oc-native"]
 
 [package]
 name = "opencodex"
@@ -24,6 +24,9 @@ qrcode = { version = "0.14", default-features = false }
 tokio = { version = "1", features = ["rt", "time", "sync"] }
 base64 = "0.22"
 regress = "0.12"
+oc-native = { path = "crates/oc-native" }
+chrono = "0.4"
+regex = "1"
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3"

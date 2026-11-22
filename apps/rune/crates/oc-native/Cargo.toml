@@ -1,0 +1,13 @@
+[package]
+name = "oc-native"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+rune = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-app-kit = "0.3"

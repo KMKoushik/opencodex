@@ -441,8 +441,23 @@ pub fn poll(s: &mut State) -> bool {
             {
                 super::running::receive(s, &tag, result)
             }
+            Reply::Data { tag, result } if tag.starts_with("project-") => {
+                crate::settings::projects::receive(s, &tag, result)
+            }
+            Reply::Data { tag, result } if tag.starts_with("switcher:") => {
+                crate::menus::projects::receive(s, &tag, result)
+            }
+            Reply::Data { tag, result } if tag.starts_with("app-") => {
+                crate::apps::receive(s, &tag, result)
+            }
+            Reply::Data { tag, result } if tag.starts_with("menu-search:") => {
+                crate::menus::search::receive(s, tag.strip_prefix("menu-search:").unwrap(), result);
+            }
             Reply::Data { tag, result }
-                if tag.starts_with("page:") || tag.starts_with("page-refresh:") =>
+                if tag.starts_with("page:")
+                    || tag.starts_with("page-refresh:")
+                    || tag.starts_with("menu-thread:")
+                    || tag.starts_with("menu-export:") =>
             {
                 crate::pages::receive(s, &tag, result);
             }

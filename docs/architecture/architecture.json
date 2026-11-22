@@ -20,6 +20,8 @@
         "Native menus/notifications/find; oc-terminal PTY drawer",
         "oc-webview: sandbox canvas/apps bridge + isolated browser",
         "Bundled gateway child (--parent-stdin): dies with the app",
+        "App Code workers: source indexing + find; virtual lines",
+        "oc-native: AppKit color panel; menus + OS notifications",
         "UI/model/theme prefs: OPENCODEX_DATA_DIR or ~/.opencodex/rune"
       ]
     },
@@ -725,6 +727,7 @@
     }
   ],
   "requiredLabels": [
+    "App Code workers: source indexing + find; virtual lines",
     "OPENCODEX ARCHITECTURE",
     "SHARED UI / apps/web",
     "BROWSER",

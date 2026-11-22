@@ -258,9 +258,6 @@ pub fn view(s: &State, width: f32) -> El {
                 ),
         );
     let mut body = col().key("timeline").w_full().grow(1.0).min_h(0.0);
-    if s.find.open {
-        body = body.child(crate::find::view(s));
-    }
     if let Some(info) = &s.chat.data.info {
         let side = info
             .metadata
@@ -342,6 +339,9 @@ pub fn view(s: &State, width: f32) -> El {
                 .py(8.0)
                 .wrap(),
         );
+    }
+    if s.find.open {
+        body = body.child(crate::find::view(s));
     }
     body.child(user::popover(s, false))
 }

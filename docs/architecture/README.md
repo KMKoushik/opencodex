@@ -229,3 +229,31 @@ closing/crashing the native host closes it, and the gateway shuts down its own r
 the shared OpenCode service. Explicit gateway URLs remain externally owned.
 Gateway stderr rotates between two 1 MiB files in the Rune presentation-data directory.
 No OpenCode snapshots or backend state are copied into that directory.
+# Rune native controls
+
+`apps/rune/crates/oc-native` is a narrow main-thread AppKit boundary for the
+system color panel. The safe UI remains `forbid(unsafe_code)`. The panel publishes
+only its latest color and wakes Rune; appearance preferences (separate light/dark
+seeds and system mode) stay in the existing presentation profile, not the gateway.
+There is no polling of OS appearance: Rune's environment change redraw notifies
+the client, which updates once if the system variant changed.
+
+Rune's current composer still requires native project metadata. After folder
+resolution, an unknown folder is therefore registered with the gateway's existing
+`POST /api/projects` operation before selecting it. OpenCode remains the registry
+owner; this does not create a parallel native project store. React can retain an
+unregistered presentation-only folder until its first chat or metadata edit, so
+this eager-registration difference remains part of the parity audit.
+
+Rune's read-only Apps Code tab projects gateway source on an on-demand native
+worker. Both its input and output mailboxes hold only the latest item; a generation
+check rejects stale results. Source text and indexed line/token ranges replace the
+generic files-page snapshot rather than retaining a second raw API copy. Only the
+visible lines are constructed while scrolling. The worker belongs to the native
+page state and exits after its channel closes; it neither runs app code nor owns
+the shared OpenCode service. Code highlighting uses the pinned Rune lexer and the
+same semantic syntax tokens as the React editor, not a second executable editor.
+Source Find uses a second lazy coalescing worker over the immutable indexed source,
+not transcript rows or mounted text. It keeps at most 2,000 match ranges and labels
+truncated counts explicitly; navigation beyond that cap and CodeMirror's exact
+normalization/selection semantics remain parity gaps. Neither worker persists data.

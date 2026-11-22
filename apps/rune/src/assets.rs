@@ -7,6 +7,17 @@ pub struct Assets {
     pub wordmark: Image,
 }
 impl Assets {
+    pub fn retint(&self, theme: &Theme, waker: Waker) -> Self {
+        let cache = ImageCache::new(waker);
+        let svg = include_str!("../assets/wordmark.svg")
+            .replace("MUTED", &theme.tokens["wordmark-muted"])
+            .replace("INK", &theme.tokens["text"]);
+        Self {
+            small: self.small.clone(),
+            hero: self.hero.clone(),
+            wordmark: cache.svg(svg.as_bytes(), 96.0, 2.0),
+        }
+    }
     pub fn load(theme: &Theme, waker: Waker, wait: bool) -> Self {
         let cache = ImageCache::new(waker);
         let catppuccin = theme.preset.art.as_deref() == Some("catppuccin");

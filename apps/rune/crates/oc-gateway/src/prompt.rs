@@ -119,6 +119,21 @@ pub struct Send {
     pub branch: Option<String>,
 }
 pub enum Request {
+    ProjectIcon {
+        source: String,
+        local: bool,
+        favicon: bool,
+    },
+    DeleteQuery {
+        tag: String,
+        path: String,
+        query: Vec<(String, String)>,
+    },
+    Export {
+        session: String,
+        format: String,
+        destination: String,
+    },
     Write {
         tag: String,
         path: String,
@@ -196,6 +211,47 @@ impl PromptWorker {
                     let run = async {
                         while let Some(request) = rx.recv().await {
                             let reply = match request {
+                                Request::ProjectIcon {
+                                    source,
+                                    local,
+                                    favicon,
+                                } => Reply::Data {
+                                    tag: "project-icon".into(),
+                                    result: crate::project_icon::prepare(&source, local, favicon)
+                                        .await,
+                                },
+                                Request::DeleteQuery { tag, path, query } => {
+                                    let query: Vec<_> = query
+                                        .iter()
+                                        .map(|(k, v)| (k.as_str(), v.as_str()))
+                                        .collect();
+                                    let result = client
+                                        .response(
+                                            &path,
+                                            &query,
+                                            reqwest::Method::DELETE,
+                                            None,
+                                            false,
+                                        )
+                                        .await
+                                        .map(|_| Value::Null);
+                                    Reply::Data { tag, result }
+                                }
+                                Request::Export {
+                                    session,
+                                    format,
+                                    destination,
+                                } => Reply::Data {
+                                    tag: format!("menu-export:{session}"),
+                                    result: client
+                                        .composer_action(
+                                            &session,
+                                            "export",
+                                            &format,
+                                            Some(destination),
+                                        )
+                                        .await,
+                                },
                                 Request::PrepareAttachment { key, mut item } => {
                                     item.preview();
                                     Reply::Attachment {

@@ -1,6 +1,7 @@
 //! The native client talks only to the TypeScript gateway, never to OpenCode.
 mod client;
 pub mod messages;
+mod project_icon;
 pub mod prompt;
 mod snapshot;
 mod sse;
@@ -23,12 +24,19 @@ pub fn connect_blocking(client: &Gateway) -> Result<(), String> {
 
 /// Screenshot-only page fetch. Call before rendering, on a capture worker.
 pub fn capture_page(url: &str, path: &str) -> Result<serde_json::Value, String> {
+    capture_page_query(url, path, &[])
+}
+pub fn capture_page_query(
+    url: &str,
+    path: &str,
+    query: &[(&str, &str)],
+) -> Result<serde_json::Value, String> {
     let client = Gateway::new(url, None)?;
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| e.to_string())?
-        .block_on(client.get(path, &[]))
+        .block_on(client.get(path, query))
 }
 
 #[cfg(test)]
@@ -54,6 +62,7 @@ pub enum Command {
 pub struct Worker {
     latest: Arc<Mutex<Option<Arc<Snapshot>>>>,
     chat: Arc<Mutex<Option<Arc<messages::Messages>>>>,
+    page_changes: Arc<Mutex<std::collections::BTreeSet<String>>>,
     commands: mpsc::Sender<Command>,
     stop: Option<tokio::sync::oneshot::Sender<()>>,
 }
@@ -67,6 +76,8 @@ impl Worker {
         let mailbox = latest.clone();
         let chat = Arc::new(Mutex::new(None));
         let chat_mailbox = chat.clone();
+        let page_changes = Arc::new(Mutex::new(std::collections::BTreeSet::new()));
+        let pages_mailbox = page_changes.clone();
         let (commands, mut receiver) = mpsc::channel(16);
         let (stop, stopped) = tokio::sync::oneshot::channel();
         std::thread::Builder::new().name("gateway".into()).spawn(move || {
@@ -81,6 +92,7 @@ impl Worker {
                     *chat_mailbox.lock().expect("chat mailbox") = Some(Arc::new(s.clone()));
                     wake();
                 };
+                let invalidate=|key:String|{let mut changes=pages_mailbox.lock().expect("page events");if changes.len()>=64{changes.clear();changes.insert("all".into());}else{changes.insert(key);}drop(changes);wake();};
                 let run = async {
                     let mut snapshot = Snapshot::default();
                     let mut transcript: Option<messages::Messages> = None;
@@ -121,6 +133,8 @@ impl Worker {
                                                 }
                                                 "opencode" => {
                                                     let event: types::Event = serde_json::from_str(&data).map_err(|e| format!("Invalid gateway event: {e}"))?;
+                                                    if event.r#type.starts_with("rpc.opencodex.tasks."){invalidate("tasks".into());}
+                                                    if matches!(event.r#type.as_str(),"worktree.updated"|"worktree.resolved") {if let Some(id)=event.data["projectID"].as_str(){invalidate(format!("worktree:{id}"));}}
                                                     if let Some(chat) = &mut transcript {
                                                         let (changed, refresh) = chat.reduce(&event);
                                                         if changed { publish_chat(chat); }
@@ -137,6 +151,7 @@ impl Worker {
                                                     let value:serde_json::Value=serde_json::from_str(&data).map_err(|e|e.to_string())?;
                                                     let index=match value["type"].as_str(){Some("list")=>Some(0),Some("source")=>Some(1),Some("data")=>Some(2),Some("app")=>Some(3),_=>None};
                                                     if let Some(i)=index {snapshot.native_revisions[i]=snapshot.native_revisions[i].wrapping_add(1);publish(&mut snapshot);}
+                                                    match value["type"].as_str(){Some("list")=>invalidate("apps".into()),Some("app")|Some("source")=>{if let Some(id)=value["id"].as_str(){invalidate(format!("{}:{id}",value["type"].as_str().unwrap()));}},_=>{}}
                                                 },
                                                 "tasks" => {snapshot.native_revisions[4]=snapshot.native_revisions[4].wrapping_add(1);publish(&mut snapshot);},
                                                 "unavailable" => return Err("OpenCode is unavailable".into()),
@@ -220,6 +235,7 @@ impl Worker {
         Self {
             latest,
             chat,
+            page_changes,
             commands,
             stop: Some(stop),
         }
@@ -229,6 +245,11 @@ impl Worker {
     }
     pub fn take_messages(&self) -> Option<Arc<messages::Messages>> {
         self.chat.lock().expect("chat mailbox").take()
+    }
+    pub fn take_page_changes(&self) -> Vec<String> {
+        std::mem::take(&mut *self.page_changes.lock().expect("page events"))
+            .into_iter()
+            .collect()
     }
     pub fn command(&self, command: Command) -> Result<(), String> {
         self.commands.try_send(command).map_err(|e| e.to_string())

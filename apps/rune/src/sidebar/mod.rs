@@ -140,6 +140,17 @@ pub fn rebuild(s: &mut State) {
     s.rows = rows;
     s.rows_revision += 1;
 }
+/// React starts with only the current project's disclosure expanded.
+pub fn initialize(s: &mut State) {
+    let current = s.project().map(|p| p.id.clone());
+    s.folded = s
+        .snapshot
+        .projects
+        .iter()
+        .filter(|p| Some(&p.id) != current.as_ref())
+        .map(|p| p.id.clone())
+        .collect();
+}
 pub fn label(t: &Theme, value: impl Into<String>, size: f32, weight: f32, token: &str) -> El {
     text(value)
         .font(TextStyle::new(size, weight).lh(size * 1.5))
@@ -278,13 +289,19 @@ pub fn view(s: &State) -> El {
         )
         .child(
             nav(t, &i::APPS, "Apps")
-                .fill(if s.pages.route == crate::pages::Route::Apps {
-                    t.c("selected")
-                } else {
-                    rune::Color::TRANSPARENT
-                })
-                .on_press(|s: &mut State| s.open_page(crate::pages::Route::Apps)),
-        );
+                .fill(
+                    if s.pages.route == crate::pages::Route::Apps && s.pages.app.is_none() {
+                        t.c("selected")
+                    } else {
+                        rune::Color::TRANSPARENT
+                    },
+                )
+                .on_press(|s: &mut State| {
+                    s.pages.app = None;
+                    s.open_page(crate::pages::Route::Apps)
+                }),
+        )
+        .child(crate::apps::sidebar(s));
     let list = col()
         .key("project-list")
         .w_full()
@@ -349,10 +366,9 @@ fn render_item(s: &State, n: usize) -> El {
         Item::Heading(title) => {
             let heading = row()
                 .w_full()
-                .h(34.0)
+                .h(28.0)
                 .pl(8.0)
                 .pr(2.0)
-                .pb(6.0)
                 .center_y()
                 .justify_between()
                 .child(label(t, title, 12.0, 500.0, "text-tertiary"));
@@ -414,15 +430,11 @@ fn render_item(s: &State, n: usize) -> El {
             let id = id.clone();
             let close = id.clone();
             let new = id.clone();
-            let actions = id.clone();
             row()
                 .key(format!("folder-{id}"))
-                .on_secondary_press(move |s: &mut State, point, _| {
-                    s.menus.point = Some((point.x, point.y));
-                    s.menus.open = Some(crate::menus::Menu::Project(actions.clone()))
-                })
                 .w_full()
-                .h(32.0)
+                .h(36.0)
+                .pt(4.0)
                 .hover_group()
                 .center_y()
                 .child(
@@ -463,10 +475,13 @@ fn render_item(s: &State, n: usize) -> El {
                         )
                         .child(label(t, p.display_name(), 13.0, 400.0, "text-secondary").truncate())
                         .on_press(move |s: &mut State| {
-                            if !s.folded.remove(&id) {
+                            let expanding = s.folded.remove(&id);
+                            if !expanding {
                                 s.folded.insert(id.clone());
                             }
-                            if let Some(p) = s.snapshot.projects.iter().find(|p| p.id == id) {
+                            if expanding
+                                && let Some(p) = s.snapshot.projects.iter().find(|p| p.id == id)
+                            {
                                 s.prefs.project = Some(p.canonical.clone());
                             }
                             rebuild(s);
@@ -474,7 +489,7 @@ fn render_item(s: &State, n: usize) -> El {
                         }),
                 )
                 .child(
-                    icon_button(t, &i::PLUS, "New chat in project")
+                    icon_button(t, &i::PLUS, &format!("New chat in {}", p.display_name()))
                         .w(24.0)
                         .group_opacity(0.0, 1.0)
                         .on_press(move |s: &mut State| {
@@ -488,15 +503,11 @@ fn render_item(s: &State, n: usize) -> El {
                         }),
                 )
                 .child(
-                    icon_button(t, &i::CLOSE, "Close project")
+                    icon_button(t, &i::CLOSE, &format!("Close project {}", p.display_name()))
                         .w(24.0)
                         .group_opacity(0.0, 1.0)
                         .on_press(move |s: &mut State| {
-                            if let Some(p) = s.snapshot.projects.iter().find(|p| p.id == close) {
-                                s.prefs.closed_projects.push(p.canonical.clone());
-                            }
-                            rebuild(s);
-                            s.save();
+                            crate::settings::projects::close_project(s, &close);
                         }),
                 )
         }

@@ -1,5 +1,5 @@
 //! Find searches only loaded transcript rows; history pagination remains gateway-owned.
-use crate::{State, pages::button, sidebar::label};
+use crate::{State, sidebar::label};
 use oc_gateway::timeline::Kind;
 use rune::{El, TextEdit, TextStyle, Tx, row, text_input};
 #[derive(Default)]
@@ -12,6 +12,10 @@ pub struct Find {
     counts: std::collections::BTreeMap<String, (u64, usize)>,
 }
 pub fn open(s: &mut State, tx: &mut Tx) {
+    if crate::apps::code::find::scoped(s) {
+        crate::apps::code::find::open(s, tx);
+        return;
+    }
     s.find.open = true;
     s.chat.disclosure_revision += 1;
     tx.focus("chat-find", false);
@@ -80,7 +84,7 @@ pub fn highlights(s: &State, text: &str) -> Vec<rune::Span> {
         .into_iter()
         .map(|range| {
             let mut span = rune::Span::new(range.start, range.end);
-            span.bg = Some(s.theme.c("accent").alpha(0.25));
+            span.bg = Some(s.theme.c("warning").alpha(0.30));
             span
         })
         .collect()
@@ -94,15 +98,19 @@ fn next(s: &mut State, tx: &mut Tx, back: bool) {
     tx.scroll_into_view(s.find.rows[s.find.current].clone());
 }
 pub fn view(s: &State) -> El {
-    row()
+    let bar = row()
         .key("find-bar")
-        .w_full()
-        .h(44.0)
-        .px(12.0)
-        .gap(8.0)
+        .role("search")
+        .label("Find in chat")
+        .w(340.0)
+        .h(38.0)
+        .pl(12.0)
+        .pr(4.0)
+        .gap(2.0)
         .center_y()
         .fill(s.theme.c("elevated"))
-        .border_sides([0.0, 0.0, 1.0, 0.0], s.theme.c("border"))
+        .border(1.0, s.theme.c("border-heavy"))
+        .radius(10.0)
         .child(
             text_input(&s.find.query, TextStyle::new(13.0, 400.0))
                 .key("chat-find")
@@ -110,7 +118,7 @@ pub fn view(s: &State) -> El {
                 .single_line()
                 .grow(1.0)
                 .color(s.theme.c("text"))
-                .placeholder("Find in chat…", s.theme.c("text-tertiary"))
+                .placeholder("Find in chat", s.theme.c("text-tertiary"))
                 .on_input_change(|s: &mut State, tx| {
                     refresh(s);
                     if let Some(id) = s.find.rows.first() {
@@ -118,7 +126,14 @@ pub fn view(s: &State) -> El {
                     }
                 })
                 .on_input_key(|s: &mut State, event, tx| {
-                    if event.key == rune::Key::Enter {
+                    if event.key == rune::Key::Escape {
+                        s.find.open = false;
+                        s.chat.disclosure_revision += 1;
+                        true
+                    } else if event.key == rune::Key::Enter
+                        || ((event.mods.cmd || event.mods.ctrl)
+                            && matches!(&event.key, rune::Key::Text(key) if key.eq_ignore_ascii_case("g")))
+                    {
                         next(s, tx, event.mods.shift);
                         true
                     } else {
@@ -126,21 +141,49 @@ pub fn view(s: &State) -> El {
                     }
                 }),
         )
-        .child(label(
-            &s.theme,
-            if s.find.rows.is_empty() {
-                "0 of 0".into()
-            } else {
-                format!("{} of {}", s.find.current + 1, s.find.rows.len())
-            },
-            12.0,
-            400.0,
-            "text-secondary",
-        ))
-        .child(button(s, "Previous").on_press_tx(|s: &mut State, tx| next(s, tx, true)))
-        .child(button(s, "Next").on_press_tx(|s: &mut State, tx| next(s, tx, false)))
-        .child(button(s, "Close").on_press(|s: &mut State| {
-            s.find.open = false;
-            s.chat.disclosure_revision += 1;
-        }))
+        .child(
+            label(
+                &s.theme,
+                if s.find.query.text.is_empty() {
+                    "".into()
+                } else if s.find.rows.is_empty() {
+                    "No results".into()
+                } else {
+                    format!("{}/{}", s.find.current + 1, s.find.rows.len())
+                },
+                12.0,
+                400.0,
+                if !s.find.query.text.is_empty() && s.find.rows.is_empty() {
+                    "error"
+                } else {
+                    "text-tertiary"
+                },
+            )
+            .px(4.0),
+        )
+        .child(
+            find_button(s, &crate::icons::FIND_UP, "Previous match")
+                .disabled(s.find.rows.is_empty())
+                .on_press_tx(|s: &mut State, tx| next(s, tx, true)),
+        )
+        .child(
+            find_button(s, &crate::icons::DOWN, "Next match")
+                .disabled(s.find.rows.is_empty())
+                .on_press_tx(|s: &mut State, tx| next(s, tx, false)),
+        )
+        .child(
+            find_button(s, &crate::icons::CLOSE, "Close find").on_press(|s: &mut State| {
+                s.find.open = false;
+                s.chat.disclosure_revision += 1;
+            }),
+        );
+    row()
+        .absolute(0.0, 10.0)
+        .w_full()
+        .pr(12.0)
+        .justify_end()
+        .child(bar)
+}
+fn find_button(s: &State, icon: &'static rune::Icon, title: &str) -> El {
+    crate::sidebar::icon_button_size(&s.theme, icon, title, 14.0).size(26.0, 26.0)
 }
