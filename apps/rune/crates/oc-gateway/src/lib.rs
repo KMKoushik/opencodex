@@ -14,12 +14,19 @@ pub use snapshot::Snapshot;
 
 /// Screenshot-only page fetch. Call before rendering, on a capture worker.
 pub fn capture_page(url: &str, path: &str) -> Result<serde_json::Value, String> {
+    capture_page_query(url, path, &[])
+}
+pub fn capture_page_query(
+    url: &str,
+    path: &str,
+    query: &[(&str, &str)],
+) -> Result<serde_json::Value, String> {
     let client = Gateway::new(url, None)?;
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| e.to_string())?
-        .block_on(client.get(path, &[]))
+        .block_on(client.get(path, query))
 }
 
 #[cfg(test)]

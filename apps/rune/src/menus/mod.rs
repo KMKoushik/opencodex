@@ -74,10 +74,19 @@ pub fn view(s: &State) -> Option<El> {
         return Some(crate::pages::controls::select_overlay(s, menu));
     }
     if let Some(dialog) = crate::settings::projects::dialog(s) {
-        return Some(dialog);
+        return Some(
+            if let Some(folders) = crate::settings::projects::folder::overlay(s) {
+                dialog.child(folders)
+            } else {
+                dialog
+            },
+        );
     }
     if let Some(dialog) = crate::apps::dialog(s) {
         return Some(dialog);
+    }
+    if let Some(folders) = crate::settings::projects::folder::overlay(s) {
+        return Some(folders);
     }
     let menu = s.menus.open.as_ref()?;
     if matches!(menu, Menu::Search) {

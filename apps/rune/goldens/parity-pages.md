@@ -40,7 +40,7 @@ issue does not mean that its surrounding page matches. Summary: **2 matches,
 - **still differs** Export uses a native Save dialog instead of browser automatic download and does not supply the React-sanitized default filename.
 - **still differs** General omits desktop updater integration. Notification toggles persist, but permission-denial messages and actual banner semantics are not validated. Project-close selection behavior needs a complete scenario pass.
 - **still differs** Appearance now implements Mode/System following, Typography reset/range/preview, terminal-placement preference, separate Light/Dark selectors with seed previews, hex/native color fields, Contrast and conditional resets. Variant preference serialization and real runtime keyboard switching/select dismissal pass a regression test. Remaining differences include the web segmented thumb's independently simulated leading/trailing spring motion, native range rendering, and final spacing. Terminal placement is presentation-only here; panel integration belongs to the other branch.
-- **still differs** Projects now has the source header/add/search/list/actions and separate Open/Add/Edit/Instructions/Worktree dialogs. Upload preparation/crop and URL validation run off the UI; edits and Unicode instructions passed a real native-worker read/write/restore smoke. Source input-length limits, exact icon-preview behavior for previously saved icons, all folder suggestion edge cases and editor Enter behavior still need completion; dialog styling is not yet pixel-identical.
+- **still differs** Projects has the source header/add/search/list/actions and separate Open/Add/Edit/Instructions/Worktree dialogs. Upload preparation/crop and URL validation run off the UI; edits and Unicode instructions passed a real native-worker read/write/restore smoke. Name/URL and task key/paste limits use UTF-16 insertion limits, and editor Enter submits. Folder suggestions now overlay the form, preserve stale parent results without allowing selection, cache eight parents for 30 seconds, separate listing/opening errors, hide dotfolders until requested, and fix Up from no choice. Late listing replies cannot reopen a dismissed list. Saved-icon previews, exact fuzzy highlighting, all folder-cache/blur/keyboard edge cases and independent mutation/error states remain incomplete; dialog styling is not pixel-identical.
 - **still differs** Usage lacks the Usage / Limits breadcrumb/icon refresh, source card layout/provider logos, limited/pace/legend/reset states, minute updates and refresh cadence. The empty paragraph matches, but the page does not.
 - **still differs** Remote pairing remains inline, not the real PairDialog; expiration/device completion, dates/last-active, polling cadence, status tones, all error/busy states and real tunnel configuration were not validated. No live tunnel was enabled during this audit.
 - **still differs** Tasks is now populated through the real plugin/gateway and has assignee persistence, project filtering, per-column entry, inline editors, project/assignee fields, order/drag handling, day labels, banners and linked chats. Real-worker create/complete/delete passes. Card title/notes keyboard dismissal, outside-save behavior, drag interactions and large-board performance are being exercised; Markdown notes, limits, overflow and remaining chip/editor geometry are not yet fully equivalent.
@@ -91,6 +91,15 @@ States: picker open, typed path, no matching projects, and footer Open project
 dialog. Fresh review: `/tmp/ocr-parity/switcher-review-09.png` (light 1600×1000),
 plus the initial dark 1280×800 review. Release workspace tests now pass **15 tests**.
 These captures do not establish complete switcher or project parity.
+
+Folder follow-up: **eight additional pairs** (suggestions/no matches × four
+configurations), `goldens/parity-pages/pair-project-folder-*-folders-final.png`.
+They use a real folder listing from the isolated gateway. Fresh reviews:
+`/tmp/ocr-parity/folders-review-10.png` and `folders-review-11.png`. Folder overlays
+use Rune's native anchored-fit placement rather than moving form content.
+Release workspace tests pass **16 tests**, including Up-from-no-choice, hidden
+folders, separate listing/open errors and late-reply dismissal. Focus observation
+is scoped to folder forms, not the chat streaming path.
 
 ## Prior-pass evidence and validation
 

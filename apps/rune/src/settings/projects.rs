@@ -27,9 +27,13 @@ pub struct Projects {
     pub busy: bool,
     pub error: Option<String>,
     pub folders: Option<Value>,
+    pub folders_parent: Option<String>,
+    pub folder_error: Option<String>,
+    pub folder_cache: std::collections::BTreeMap<String, (std::time::Instant, Value)>,
     pub folder_pending: Option<String>,
     pub suggesting: bool,
     pub active_folder: isize,
+    pub directory_focused: bool,
     pub removing: Option<String>,
     pub capture_focus: bool,
 }
@@ -132,6 +136,14 @@ pub fn close_project(s: &mut State, id: &str) {
 }
 pub fn setup(s: &State) -> El {
     let mut content = col()
+        .on_layout_tx(|s: &mut State, _, tx| {
+            if s.pages.projects.capture_focus {
+                s.pages.projects.capture_focus = false;
+                tx.focus_when_shown("Project directory", false);
+            } else {
+                tx.live_only();
+            }
+        })
         .w_full()
         .max_w(520.0)
         .px(24.0)

@@ -1,6 +1,89 @@
 use super::*;
 
 #[test]
+fn folder_suggestions_overlay_wraps_up_and_does_not_reopen_after_dismissal() {
+    OPTIONS.get_or_init(|| Options {
+        gateway: None,
+        preset: String::new(),
+        dark: true,
+        headless: true,
+        session: None,
+        scroll: "bottom".into(),
+        work: None,
+        composer_state: String::new(),
+        page: String::new(),
+        size: (1280.0, 800.0),
+    });
+    let mut state = State::new();
+    state.pages.route = pages::Route::ProjectSetup;
+    state.pages.projects.directory = rune::TextEdit::new("/fixture/");
+    state.pages.projects.suggesting = true;
+    state.pages.projects.folders_parent = Some("/fixture/".into());
+    state.pages.projects.folders = Some(serde_json::json!({"folders":["alpha","beta",".hidden"]}));
+    state.pages.projects.active_folder = -1;
+    let mut rt = rune::Runtime::new(state, view, (1280.0, 800.0), rune::Env::new(true, 2.0));
+    rt.frame(0.0);
+    rt.update(|_, tx| tx.focus("Project directory", false));
+    rt.frame(0.1);
+    let elements = rt.elements();
+    let field = elements
+        .iter()
+        .find(|e| e.key.as_deref() == Some("project-directory-field"))
+        .unwrap();
+    let folders = elements
+        .iter()
+        .find(|e| e.key.as_deref() == Some("project-folders"))
+        .unwrap();
+    assert!(
+        folders.rect[1] >= field.rect[1] + field.rect[3],
+        "suggestions are an anchored overlay"
+    );
+    assert!(
+        !elements
+            .iter()
+            .any(|e| e.label.as_deref() == Some(".hidden"))
+    );
+    rt.key(rune::KeyEvent {
+        key: rune::Key::Up,
+        mods: Default::default(),
+    });
+    rt.frame(0.2);
+    assert_eq!(
+        rt.state.pages.projects.active_folder, 1,
+        "Up from no choice selects the final visible folder"
+    );
+    rt.key(rune::KeyEvent {
+        key: rune::Key::Escape,
+        mods: Default::default(),
+    });
+    rt.frame(0.3);
+    assert!(!rt.state.pages.projects.suggesting);
+    settings::projects::folder::receive(
+        &mut rt.state,
+        "/fixture/",
+        Ok(serde_json::json!({"folders":["alpha","beta"]})),
+    );
+    assert!(
+        !rt.state.pages.projects.suggesting,
+        "an async reply cannot reopen a dismissed list"
+    );
+    rt.state.pages.projects.error = Some("Keep the form's opening error".into());
+    settings::projects::folder::receive(
+        &mut rt.state,
+        "/fixture/",
+        Err("Folder listing failed".into()),
+    );
+    assert_eq!(
+        rt.state.pages.projects.error.as_deref(),
+        Some("Keep the form's opening error")
+    );
+    assert_eq!(
+        rt.state.pages.projects.folder_error.as_deref(),
+        Some("Folder listing failed")
+    );
+}
+
+#[test]
 fn project_switcher_clamps_arrows_and_ignores_dismissed_resolution() {
     OPTIONS.get_or_init(|| Options {
         gateway: None,

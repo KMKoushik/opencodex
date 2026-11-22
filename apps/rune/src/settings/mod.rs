@@ -493,6 +493,9 @@ pub fn capture(s: &mut State) {
     if crate::apps::capture(s, page) {
         return;
     }
+    if projects::folder::capture(s, page) {
+        return;
+    }
     if matches!(
         page.as_str(),
         "project-add-open"

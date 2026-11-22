@@ -156,6 +156,13 @@ try {
           }
         }
         if (state === 'project-open-dialog') await page.keyboard.press('Meta+o');
+        if (state === 'project-folder-suggestions' || state === 'project-folder-empty') {
+          await page.keyboard.press('Meta+o');
+          await page
+            .getByRole('combobox', { name: 'Project directory', exact: true })
+            .fill('/tmp/ocr-parity/proj/' + (state === 'project-folder-empty' ? 'zzzz' : ''));
+          await page.getByRole('listbox', { name: 'Folders', exact: true }).waitFor();
+        }
         if (state === 'app-menu-open') await click('OpenCodex menu');
         if (state === 'thread-search-open') await click('Search threads');
         const chat = state === 'thread-context-menu' || state === 'find-chat-open';
