@@ -387,13 +387,23 @@ Reviewed 1280×800 (scale 2) screenshots live in ignored `goldens/integration/`:
 - `browser-{dark,light}-1280x800-composite.png`
 - `review-pair-{terminal,canvas}-{dark,light}-final.png` (web oracle left)
 
-Headless Rune cannot capture native children. The composites place real WK `takeSnapshot`
+At this integration checkpoint, headless Rune could not capture native children. The composites place real WK `takeSnapshot`
 PNGs at their measured native rects (canvas 576,40,660,760; browser 576,112,660,688).
 They prove content and geometry, not atomic native/GPU presentation. Browser headless
 chrome shows an initial tab label, not the native page's asynchronously fetched title.
 The seeded conversation/sidebar differs from the old oracle; these are visual reviews,
 not valid pixel-identical scores. Terminal drawer geometry matches the oracle's bottom
 layout; tab buttons, icons, typography and existing inspector/chat styling still differ.
+
+Canvas export is now automated: with `OPENCODEX_CANVAS=<id>`, the normal
+`--panel canvas --session <id> --screenshot <path>` capture composites an actual
+offscreen WKWebView snapshot at its laid-out host rect. It writes the original
+child PNG and placement/scale JSON beside the screenshot and automatically
+exports a layout tree if none was requested. This works without a visible
+window or a redraw loop; it does not claim atomic Metal/native presentation.
+The fresh same-data Electron comparison, rather than the older integration
+composites above, is documented in [`tools/sweep/LAST.md`](tools/sweep/LAST.md).
+Browser-child export is not yet wired into this CLI path.
 
 ### Remaining integration gaps
 
