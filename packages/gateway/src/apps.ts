@@ -58,12 +58,16 @@ class Worker {
     private readonly handle: (worker: Worker, request: Request) => Promise<unknown>,
     private readonly log: (call: string | undefined, line: string) => void,
   ) {
-    this.child = spawn(process.execPath, ['-e', CANVAS_SERVER_HOST], {
-      cwd,
-      // Electron runs the gateway; this makes its binary behave as plain Node.
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-      stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-    });
+    this.child = spawn(
+      process.execPath,
+      process.env.OPENCODEX_COMPILED === '1' ? ['--canvas-host'] : ['-e', CANVAS_SERVER_HOST],
+      {
+        cwd,
+        // Electron runs the gateway; this makes its binary behave as plain Node.
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+        stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+      },
+    );
     this.child.stderr?.on('data', (chunk: Buffer) => {
       this.stderr = (this.stderr + chunk.toString()).slice(-4000);
     });

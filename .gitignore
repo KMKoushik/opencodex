@@ -2,6 +2,7 @@
 .references/
 node_modules/
 dist/
+packages/gateway/dist/
 out/
 release/
 coverage/

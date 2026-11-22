@@ -71,6 +71,6 @@
   RUNTIME HOSTING
 
   DEV          Vite :5173 proxies /api to :4310; macOS launches cached OpenCodex.app.
-  WEB BUILD    Node gateway serves the UI and API on one loopback origin.
+  STANDALONE   Node / compiled Bun sidecar: loopback API, optional UI; parent stdin owns sidecar lifetime.
   DESKTOP      Electron main hosts the gateway and built UI on a free loopback port.
   REMOTE       Built gateways also serve UI + API on :4317, paired devices only.

@@ -12,6 +12,7 @@
     "packages/*"
   ],
   "scripts": {
+    "gateway:compile": "bun scripts/gateway-compile.mjs",
     "dev": "bun run canvas && concurrently -k -n gateway,web 'bun run --cwd packages/gateway dev' 'bun run --cwd apps/web dev'",
     "dev:desktop": "bun run canvas && concurrently -k -n gateway,desktop 'bun run --cwd packages/gateway dev' 'bun run --cwd apps/desktop dev'",
     "build": "bun run canvas && bun run --cwd apps/web build && bun run --cwd apps/desktop build",

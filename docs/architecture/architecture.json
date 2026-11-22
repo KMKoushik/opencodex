@@ -607,13 +607,13 @@
     {
       "x": 2,
       "y": 73,
-      "value": "WEB BUILD",
+      "value": "STANDALONE",
       "color": "#5eead4"
     },
     {
       "x": 15,
       "y": 73,
-      "value": "Node gateway serves the UI and API on one loopback origin."
+      "value": "Node / compiled Bun sidecar: loopback API, optional UI; parent stdin owns sidecar lifetime."
     },
     {
       "x": 2,
