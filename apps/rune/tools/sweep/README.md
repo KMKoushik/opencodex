@@ -58,6 +58,20 @@ Full-resolution outputs: `<state>-<theme>.electron.png`, `.rune.png`, `.diff.png
 It records `reference: "electron"` and runtime/bridge evidence. Old Chrome
 `.web.png` files, if present locally, are never read by the corrected metrics.
 DOM text and native capture logs accompany each pair.
+Each scored pair additionally emits `.electron-alignment.json` (visible DOM text
+runs, real CSS baselines, SVG/image rectangles, inputs, font/weight/color and open
+shadow roots) and `.alignment.json` (matched native runs/icons and all coverage
+gaps). `ALIGNMENT.md` lists every x offset over 1 logical point, baseline/icon
+center offset over 0.5 points, and font, color or vector mismatch, independently
+of whole-image MAE. Repeated React text nodes in one inline run are coalesced.
+The native dump includes already-shaped line baselines and text origins, icon
+geometry, clipping and painted placeholder metrics. A disposable copy of the
+**pinned** Rune revision adds inspector-only fields for this measuring build;
+neither Cargo's checkout nor the app's source/lockfile is patched. No layout or
+paint correction is applied. Unmatched items remain explicit, never implicit
+passes. Diagnostic coordinates retain fractional points; screenshots are still
+scored without registration. The three original/instrumented baseline captures
+had identical whole-image metrics.
 Each pair also writes `.geometry.json` with live Electron root, row and trigger
 rectangles and computed padding, radius, border, shadow and typography, plus
 `.rune-tree.json` with the native element geometry. Custom service ports are reported
@@ -73,7 +87,8 @@ path caching. Update observations after reviewing changed app revisions.
 `--keep-env` retains services only for diagnosis. Default cleanup verifies each
 process's actual isolated HOME before killing it and removes `/tmp/ocr-sweep`.
 It never stops OpenCode by executable name or accesses port 49374.
-`--report-only` regenerates Markdown from saved local results and observations.
+`--report-only` recomputes alignment from saved raw evidence with the current
+comparator and regenerates Markdown from local results and observations.
 
 ## Markdown geometry
 

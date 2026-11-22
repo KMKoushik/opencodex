@@ -6,6 +6,7 @@ import { createServer } from 'node:net';
 import { mkdirSync, mkdtempSync, openSync, closeSync, readFileSync, writeFileSync } from 'node:fs';
 import { base, root, fixture, env, command, stopProcess, ocPort, gwPort } from './environment.mjs';
 import { prepare } from './web.mjs';
+import { measureAlignment } from './alignment-dom.mjs';
 
 export function installElectron() {
   const require = createRequire(root + '/apps/desktop/package.json');
@@ -171,6 +172,10 @@ import(${JSON.stringify('file://' + root + '/apps/desktop/out/main/index.js')}).
           captureBeyondViewport: false,
         });
         writeFileSync(path, Buffer.from(image.data, 'base64'));
+        writeFileSync(
+          path.replace(/\.electron\.png$/, '.electron-alignment.json'),
+          JSON.stringify(await page.evaluate(measureAlignment), null, 2),
+        );
         return {
           ...evidence,
           mainContentSize: runtime.contentSize,

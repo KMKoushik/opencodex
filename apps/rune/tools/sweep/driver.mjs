@@ -17,6 +17,8 @@ import { seed, api, beginState } from './fixture.mjs';
 import { states, config } from './states.mjs';
 import { reach } from './web.mjs';
 import { installElectron, launchElectron } from './electron.mjs';
+import { buildAlignment } from './instrument.mjs';
+import { compareAlignment, alignmentReport } from './alignment.mjs';
 const { values } = parseArgs({
   options: {
     states: { type: 'string' },
@@ -58,6 +60,7 @@ for (const file of sourceFiles)
   sourceFingerprint.update(file).update(readFileSync(root + '/' + file));
 const sourceKey = sourceFingerprint.digest('hex');
 function report(rows) {
+  alignmentReport(out, rows);
   const review = existsSync(reviewPath) ? JSON.parse(readFileSync(reviewPath)) : {};
   const groups = new Map();
   for (const row of rows) {
@@ -68,31 +71,41 @@ function report(rows) {
     row.classification = row.reason
       ? 'not capturable'
       : (r?.classification ??
-        (row.blurMAE < 0.7 && row.meanRGB < 1.5
-          ? 'equivalent (only rasterization)'
-          : row.blurMAE < 5
-            ? 'small layout differences'
-            : 'missing/extra UI'));
+        (row.alignment?.flagged > 0
+          ? 'small layout differences (alignment)'
+          : row.blurMAE < 0.7 && row.meanRGB < 1.5
+            ? 'metric-equivalent (not visual sign-off)'
+            : row.blurMAE < 5
+              ? 'small layout differences'
+              : 'missing/extra UI'));
+    if (row.alignment?.flagged > 0 && /equivalent/.test(row.classification))
+      row.classification = 'small layout differences (alignment)';
     row.description =
       row.reason ??
       r?.description ??
-      'Unreviewed metric-based classification; not a visual sign-off.';
+      (row.alignment
+        ? `${row.alignment.flagged} alignment flags / ${row.alignment.matched} matched items; ${row.alignment.unmatched} unmatched Electron items. See ALIGNMENT.md; uncovered items are not passes.`
+        : 'Unreviewed metric-based classification; not a visual sign-off.');
     const old = groups.get(row.state);
     if (
       !old ||
       (row.reason && !old.reason) ||
-      (!old.reason && (row.blurMAE ?? -1) > (old.blurMAE ?? -1))
+      (!row.reason && !old.reason && row.alignment?.flagged > 0 && !(old.alignment?.flagged > 0)) ||
+      (!old.reason &&
+        row.alignment?.flagged > 0 === old.alignment?.flagged > 0 &&
+        (row.blurMAE ?? -1) > (old.blurMAE ?? -1))
     )
       groups.set(row.state, row);
   }
   const worst = [...groups.values()].sort((a, b) => (b.blurMAE ?? -1) - (a.blurMAE ?? -1));
   const counts = {};
   for (const row of worst) counts[row.classification] = (counts[row.classification] ?? 0) + 1;
+  const fingerprints = [...new Set(rows.map((row) => row.source ?? sourceKey))];
   const lines = [
     '# Same-data Electron / Rune parity sweep',
     '',
     `Revision: \`${command('git', ['rev-parse', 'HEAD']).toString().trim()}\`. Clock: ${new Date(now).toISOString()}.`,
-    `UI/backend source fingerprint: \`${rows[0]?.source ?? sourceKey}\`. Reviewed observations are used only for matching fingerprints.`,
+    `UI/backend source fingerprint${fingerprints.length === 1 ? '' : 's'}: ${fingerprints.map((key) => '`' + key + '`').join(', ')}. Reviewed observations are used only for matching fingerprints. Targeted recaptures retain their own per-row source provenance.`,
     '',
     `**${worst.length} states; ${rows.length} state/theme/size attempts.** ${Object.entries(counts)
       .map(([k, v]) => `${v} ${k}`)
@@ -111,7 +124,8 @@ function report(rows) {
     '- Each pair brackets capture with a SHA-256 digest of the same gateway projects, session info/history, forms, permissions, children, side forks, tasks, apps and canvas data. A changing digest invalidates the pair (no score). Captures are sequential over an unchanged snapshot, **not atomic simultaneous GPU presentation**.',
     '- RGB MAE is 0–255; over16 is the percentage of pixels whose maximum channel error exceeds 16. Structural metric is grayscale MAE after a 2-physical-pixel Gaussian blur and 2× downsampling (lower is better). No alignment correction, masks or cropping. Heatmap magnifies errors 4×.',
     '- Classification is manually reviewed where noted in the driver review file; otherwise thresholds are provisional: equivalent requires RGB <1.5 and blurred MAE <0.7; small layout <5; larger errors missing/extra. State classification uses the worst theme/size. Metrics alone never prove semantic equivalence.',
-    '- See tools/sweep/LAST.md for the final fix measurements, geometry checks and inspected caveats. In particular, a new side fork may return empty history; its introduction can meet numerical thresholds while retaining locale-time/plugin-hint text differences. It must not be called pixel-equivalent or substituted with an older populated-fork capture.',
+    '- Alignment is checked separately at the text-run/icon level. Any flagged pair prevents an unreviewed screen from being classified equivalent, even when its whole-image error is small. See ALIGNMENT.md for thresholds, every offset and explicit matching-coverage gaps.',
+    '- See tools/sweep/ALIGNMENT-NOTES.md for this alignment follow-up and tools/sweep/LAST.md for the earlier transcript/native-child work. In particular, a new side fork may return empty history; its introduction can meet numerical thresholds while retaining locale-time/plugin-hint text differences. It must not be called pixel-equivalent or substituted with an older populated-fork capture.',
     '- Native canvas capture composites the real WKWebView takeSnapshot export at its laid-out host rectangle; adjacent child PNG/JSON preserve pixels and placement provenance. It uses the same gateway runtime, source, data and theme, waiting for document/fonts and the snapshot paint fence. No blank-child substitute, image mask or alignment correction. Unsupported run states remain unscored with explicit reasons; chat-streaming is an active-run limitation, not a second canvas.',
     '',
     '## States, worst first (worst theme/size shown)',
@@ -151,10 +165,21 @@ function report(rows) {
     '',
   );
   writeFileSync(out + '/REPORT.md', lines.join('\n'));
-  command('bunx', ['prettier', '--write', out + '/REPORT.md']);
+  command('bunx', ['prettier', '--write', out + '/REPORT.md', out + '/ALIGNMENT.md']);
 }
 if (values['report-only']) {
-  report(JSON.parse(readFileSync(resultPath)));
+  const saved = JSON.parse(readFileSync(resultPath));
+  for (const row of saved) {
+    const stem = out + '/' + row.stem;
+    if (
+      !row.reason &&
+      existsSync(stem + '.electron-alignment.json') &&
+      existsSync(stem + '.tree.json')
+    )
+      row.alignment = compareAlignment(stem);
+  }
+  report(saved);
+  writeFileSync(resultPath, JSON.stringify(saved, null, 2));
   process.exit(0);
 }
 Object.assign(process.env, env);
@@ -174,6 +199,7 @@ try {
     '--manifest-path',
     'apps/rune/Cargo.toml',
   ]);
+  buildAlignment();
   command('clang', [
     '-dynamiclib',
     import.meta.dirname + '/clock.c',
@@ -422,6 +448,7 @@ try {
             DYLD_INSERT_LIBRARIES: fixture + '/clock.dylib',
           });
           writeFileSync(stem + '.log', log);
+          row.alignment = compareAlignment(stem);
           if (state === 'subagent-conversation') {
             // A tiny status label can move hundreds of pixels while remaining
             // below whole-window MAE thresholds. Guard this scroll boundary

@@ -5,3 +5,4 @@
 !/goldens/sweep/
 /goldens/sweep/*
 !/goldens/sweep/REPORT.md
+!/goldens/sweep/ALIGNMENT.md

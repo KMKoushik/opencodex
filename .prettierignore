@@ -20,6 +20,7 @@ apps/ios/OpenCodex/Core/Theme/themes.json
 apps/rune/target/
 apps/rune/goldens/sweep/*
 !apps/rune/goldens/sweep/REPORT.md
+!apps/rune/goldens/sweep/ALIGNMENT.md
 apps/rune/assets/wordmark.svg
 bench/.build/
 bench/results/
