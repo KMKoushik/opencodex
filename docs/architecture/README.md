@@ -23,7 +23,7 @@ guests are destroyed and their URLs restored on return, not kept running indefin
 
 **Main claim:** browser and Electron share the React UI and gateway API; Electron adds native capabilities, while OpenCode owns the agent runtime and durable sessions.
 
-Rune owns native page navigation, settings, task/app lists, menus, transcript find, and background OS notifications. Page reads and writes use its bounded prompt worker against the same gateway routes; the disposable cache is not persistence. Theme, font and notification choices share the native preference worker. Remote configuration and pairing credentials remain gateway-owned. `apps::canvas_host` and the Canvas inspector mount WKWebView surfaces; a separate native PTY drawer sits below chat and inspector. The updater is a disabled native-preview state. Thread search and Focus use gateway paginated global search, not another index. Notifications apply foreground, muted-root, subagent-reply and app-session-reply exclusions and require a macOS bundle.
+Rune owns native page navigation, settings, task/app lists, menus, transcript find, and background OS notifications. Page reads and writes use its bounded prompt worker against the same gateway routes; the disposable cache is not persistence. Theme, font and notification choices share the native preference worker. Remote configuration and pairing credentials remain gateway-owned. `apps::canvas_host` and the Canvas inspector mount WKWebView surfaces; a separate native PTY drawer sits below chat and inspector. The native updater uses explicit verified download/restart and private parent stdio, described below. Thread search and Focus use gateway paginated global search, not another index. Notifications apply foreground, muted-root, subagent-reply and app-session-reply exclusions and require a macOS bundle.
 
 Saved project icons use that existing prompt worker for disposable previews, not a second catalog or persistence owner. Like the web image element, a preview can read the saved HTTP(S) URL or embedded image; local-file URLs and embedded credentials are rejected. Downloads are bounded at 6 MiB, raster decoding at 64 MiB, and thumbnails at 128×128. The UI retains at most 128 previews, requests visible rows and the current editor, and evicts offscreen entries without writing the prepared bytes back to the project. Pairing QR encoding is native presentation code matching the web's byte segmentation and mask scoring; pairing codes, expiry and device authorization remain existing gateway operations. Screenshot-only response fixtures are external local proxies, never application routes or production fallback data. These changes reuse existing workers and transports without adding a runtime host or channel.
 
@@ -231,6 +231,26 @@ closing/crashing the native host closes it, and the gateway shuts down its own r
 the shared OpenCode service. Explicit gateway URLs remain externally owned.
 Gateway stderr rotates between two 1 MiB files in the Rune presentation-data directory.
 No OpenCode snapshots or backend state are copied into that directory.
+
+Rune owns its native updater, not OpenCode execution. An on-ready worker checks
+GitHub Releases after 15 seconds and hourly, with explicit download and restart.
+It bounds metadata/archive/expanded bytes, verifies the GitHub SHA-256 digest and
+the installed application's stable designated certificate requirement, identifier
+and version, and re-verifies the staged bundle before launching a finite installer.
+Development/ad-hoc builds are disabled rather than trusting unverified replacement
+code. The helper waits for Rune exit and swaps on the installation filesystem with
+rollback on failure. No install occurs on ordinary quit. Release asset/signing
+requirements are in `apps/rune/README.md`; release CI is unchanged.
+
+The gateway child receives `{"update":DesktopUpdateState}` records on its owned
+stdin and emits `OPENCODEX_HOST_UPDATE {"action":...}` on stdout. Existing host
+update HTTP routes expose that adapter to authenticated paired devices, without
+another port or credential store. EOF ownership remains unchanged. Electron still
+injects its own in-process `HostUpdates` object. Native copy actions use the narrow
+`oc-native` AppKit writer; responses use its actual BOOL acknowledgement, not a
+subprocess or clipboard readback. Chat and Files share one embedded DOCX conversion
+worker, sanitizer and preview document in `src/docx`; no privileged guest bridge.
+
 # Rune native controls
 
 Rune's live sidebar requests session pages only for expanded, presentation-owned
@@ -254,12 +274,10 @@ seeds and system mode) stay in the existing presentation profile, not the gatewa
 There is no polling of OS appearance: Rune's environment change redraw notifies
 the client, which updates once if the system variant changed.
 
-Rune's current composer still requires native project metadata. After folder
-resolution, an unknown folder is therefore registered with the gateway's existing
-`POST /api/projects` operation before selecting it. OpenCode remains the registry
-owner; this does not create a parallel native project store. React can retain an
-unregistered presentation-only folder until its first chat or metadata edit, so
-this eager-registration difference remains part of the parity audit.
+Unknown home/composer folders remain presentation-only until first chat or metadata
+editing. Native project metadata enriches opened folders when available. Explicit
+Settings project registration still uses the gateway's existing `POST /api/projects`
+operation; OpenCode remains the registry owner, with no parallel native project store.
 
 Rune's read-only Apps Code tab projects gateway source on an on-demand native
 worker. Both its input and output mailboxes hold only the latest item; a generation

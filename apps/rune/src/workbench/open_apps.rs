@@ -251,7 +251,7 @@ pub fn overlay(s: &State) -> El {
                 .key("open-app-copy")
                 .autofocus()
                 .on_press_tx(|s: &mut State, tx| {
-                    tx.copy(s.workspace_directory());
+                    oc_native::clipboard::copy(tx, s.workspace_directory());
                     s.workbench.apps_menu = false;
                     s.menus.toast = Some("Project path copied".into());
                     s.menus.toast_due = Some(tx.clock() + 2.0);

@@ -422,6 +422,7 @@ direct permission confirmation, attachment formatting, question-collapse behavio
 editing/discard/Markdown controls, rail order/glaze, and Menlo 13 terminal text. Many visual and
 behavioral gaps remain, including local-link icons, selection/comments, side composer parity,
 browser profiles/local HTML, canvas deletion and precise editor/diff/terminal chrome.
+
 ## Source parity correction pass (rune-parity-pages)
 
 This pass corrects invented thread/app/native-menu content, real thread mutations
@@ -438,3 +439,27 @@ gateway 4491. Evidence is under `goldens/parity-pages/`, web on the left. The to
 requires the seed fixture, built web assets and the release Rune binary. No user
 OpenCode state or service is used. Screenshot layout now initializes from `--size`;
 this corrects percentage/modal placement without requiring redraw loops.
+
+# Native updates and release asset contract
+
+Installed macOS Rune builds check GitHub Releases 15 seconds after startup and
+hourly thereafter. Downloads and restart/install are explicit. Development and
+ad-hoc bundles are disabled because their cdhash requirement cannot identify a
+future release. Signed builds pin their current designated certificate requirement
+(including self-signed releases using the same certificate); they never trust the
+download merely because it came from GitHub.
+
+Release workflow contract (CI is intentionally unchanged): publish a stable `v<semver>`
+release in `KMKoushik/opencodex` containing **`OpenCodex-Rune-<version>-arm64.zip`**.
+GitHub must supply its `sha256:` asset digest. The ZIP must contain
+`OpenCodex Rune.app` at the root, signed with the installed app's stable identity,
+bundle identifier `dev.opencodex.rune`, matching `CFBundleShortVersionString`, and
+no symlinks (the Rune bundle has no embedded frameworks). Downloads, metadata,
+expanded bytes and entry counts are bounded. Digest, signature, identifier and
+version are verified before Ready and again before staging restart. The helper
+waits for Rune to exit, swaps on the same filesystem and retains rollback on failure.
+Unsaved changes require confirmation in the native UI; phone install requests are
+explicit commands, as in Electron. The updater never stops OpenCode.
+
+The sidecar's private stdio update adapter exposes the same `/api/host/update`
+state/actions to paired phones; see `packages/gateway/README.md`.

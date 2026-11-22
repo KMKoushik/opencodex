@@ -120,7 +120,7 @@ impl DiffState {
             }
             _ if ev.is_command('c') => match self.selected_text() {
                 Some(text) => {
-                    tx.copy(text);
+                    oc_native::clipboard::copy(tx, text);
                     true
                 }
                 None => false,

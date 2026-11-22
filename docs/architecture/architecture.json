@@ -1,7 +1,7 @@
 {
   "canvas": {
     "width": 119,
-    "height": 91
+    "height": 95
   },
   "boxes": [
     {
@@ -9,7 +9,7 @@
       "x": 5,
       "y": 80,
       "width": 65,
-      "height": 9,
+      "height": 13,
       "title": "NATIVE RUNE CLIENT / apps/rune",
       "color": "#7bb8ff",
       "align": "left",
@@ -19,9 +19,11 @@
         "Prompt/workbench workers: bounded /api, safe writes, diffs, exports",
         "Native menus/notifications/find; oc-terminal PTY drawer",
         "oc-webview: sandbox canvas/apps bridge + isolated browser",
-        "Bundled gateway child (--parent-stdin): dies with the app",
+        "Gateway child lifetime + private host-update stdio channel",
         "App Code workers: source indexing + find; virtual lines",
-        "oc-native: AppKit color panel; menus + OS notifications",
+        "oc-native: AppKit clipboard/color/menu/notification boundary",
+        "Shared DOCX worker + unprivileged WebKit preview document",
+        "Explicit signed GitHub ZIP update; verified restart helper",
         "UI/model/theme prefs: OPENCODEX_DATA_DIR or ~/.opencodex/rune"
       ]
     },
@@ -142,6 +144,15 @@
     }
   ],
   "connectors": [
+    {
+      "points": [
+        [70, 85],
+        [118, 85],
+        [118, 4],
+        [117, 4]
+      ],
+      "color": "#f6c177"
+    },
     {
       "points": [
         [23, 80],

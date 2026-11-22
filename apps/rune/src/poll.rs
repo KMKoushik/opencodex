@@ -1,4 +1,4 @@
-//! Root worker-mailbox integration; rendering stays in main.
+//! Root worker mailbox integration; rendering stays in main.
 use super::*;
 
 pub(crate) fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
@@ -8,6 +8,7 @@ pub(crate) fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
     let connection_changed = pages::offline::poll(s, clock, tx)
         | sidebar::focus::poll(s, clock, tx)
         | sidebar::images::take(s);
+    let settings_clock = (s.pages.remote.minute, s.pages.remote.clock_second);
     let task_minute = s.pages.tasks.minute;
     if let Some(worker) = &s.worker {
         let changes = worker.take_page_changes();
@@ -15,10 +16,32 @@ pub(crate) fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
     }
     pages::poll(s, clock, tx);
     notifications::clear_on_focus(s);
+    let mut changed = composer::context::poll(s, tx);
+    if let Some(success) = s.menus.path_copy.take() {
+        s.pages.project_notice = Some(
+            if success {
+                "Project path copied."
+            } else {
+                "Could not copy project path."
+            }
+            .into(),
+        );
+        changed = true;
+    }
+    changed |= composer::attachment_preview::poll(s, tx);
+    changed |= connection_changed;
+    for chat in [&mut s.chat, &mut s.workbench.reader_chat] {
+        if chat.copied.as_ref().is_some_and(|(_, due)| clock >= *due) {
+            chat.copied = None;
+            changed = true;
+        }
+    }
     let code_changed = apps::code::poll(s);
     let source_find_changed = apps::code::find::poll(s, tx);
-    let mut changed = connection_changed
-        || settings::appearance::receive_color(s)
+    let notification_changed = notifications::poll(s);
+    changed |= settings::appearance::receive_color(s)
+        || notification_changed
+        || settings_clock != (s.pages.remote.minute, s.pages.remote.clock_second)
         || task_minute != s.pages.tasks.minute
         || code_changed
         || source_find_changed;
@@ -27,22 +50,24 @@ pub(crate) fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
         s.menus.toast_due = None;
         changed = true;
     }
-    let mut sidebar_changed = false;
+    let mut sidebar_changed = connection_changed;
     let mut chat_updated = false;
     if let Some(data) = s.worker.as_ref().and_then(Worker::take_messages) {
         if s.selected.as_deref() == Some(&data.session_id) {
+            let completed = s.chat.data.media_revision != data.media_revision;
             s.chat.accept(data);
+            if completed {
+                chat::details::invalidate(s, clock, tx);
+            }
             if s.find.open {
                 find::refresh(s);
             }
             if let Some(info) = &s.chat.data.info {
                 s.prefs.project = Some(info.location.directory.clone());
             }
-            s.chat.media.request(
-                s.chat.data.clone(),
-                OPTIONS.get().unwrap().gateway.as_deref(),
-                s.waker.clone(),
-            );
+            s.chat
+                .media
+                .request(s.chat.data.clone(), sidecar::url(), s.waker.clone());
             changed = true;
             chat_updated = true;
             s.chat_settled = false;
@@ -118,6 +143,9 @@ pub(crate) fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
         sidebar_changed = true;
     }
     if let Some(snapshot) = s.worker.as_ref().and_then(Worker::take) {
+        if snapshot.live && !s.snapshot.live {
+            bench::mark("sidebar_loaded");
+        }
         if std::env::var("OPENCODEX_FRAME_LOG").as_deref() == Ok("1") {
             eprintln!(
                 "OPENCODEX_SNAPSHOT {} {} {} {} {:?}",
@@ -130,6 +158,10 @@ pub(crate) fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
         }
         notifications::snapshot(s, &snapshot);
         let reconnected = snapshot.live && !s.snapshot.live;
+        let details_changed = reconnected
+            || snapshot.workspace_revision != s.snapshot.workspace_revision
+            || snapshot.native_revisions[0] != s.snapshot.native_revisions[0]
+            || snapshot.active != s.snapshot.active;
         let first_projects = s.snapshot.projects.is_empty() && !snapshot.projects.is_empty();
         let new_focus_thread = s.prefs.focus
             && snapshot
@@ -146,6 +178,9 @@ pub(crate) fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
         }
         if new_focus_thread || (reconnected && s.prefs.focus) {
             sidebar::focus::load(s, false);
+        }
+        if details_changed {
+            chat::details::invalidate(s, clock, tx);
         }
         if first_projects {
             sidebar::initialize(s);
@@ -166,6 +201,7 @@ pub(crate) fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
             s.command(oc_gateway::Command::Details(directory));
         }
     }
+    chat::details::poll(s, clock);
     if sidebar_changed {
         sidebar::rebuild(s);
     }
@@ -174,6 +210,16 @@ pub(crate) fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
     }
     composer::menus::prefetch(s);
     if composer::state::poll(s) {
+        changed = true;
+        tx.instant();
+    }
+    if workbench::poll(s, clock, tx) {
+        changed = true;
+        tx.instant();
+    }
+    let terminal_changed = terminal::poll(s, clock, tx);
+    let native_changed = native::poll(s, tx);
+    if terminal_changed || native_changed {
         changed = true;
         tx.instant();
     }

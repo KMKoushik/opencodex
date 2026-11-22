@@ -77,6 +77,7 @@ pub struct Pages {
     pub instructions_project: Option<String>,
     pub project_notice: Option<String>,
     pub remote: crate::settings::remote::Remote,
+    pub update_confirming: bool,
 }
 impl State {
     pub fn page_write(&mut self, path: &str, method: &str, body: Value, refresh: &str) {

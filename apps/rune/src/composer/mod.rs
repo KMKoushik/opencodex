@@ -4,6 +4,7 @@ use crate::{
 };
 use rune::{El, TextStyle, col, el, icon, row, text_input};
 mod access;
+pub(crate) mod attachment_preview;
 pub mod capture;
 mod commands;
 pub(crate) mod context;
@@ -161,8 +162,12 @@ pub fn area(s: &State, width: f32) -> El {
             t.c("text-tertiary"),
         )
         .on_edit(|s: &mut State| &mut s.draft_mut().edit)
-        .on_input_change(menus::changed)
+        .on_input_change(|s: &mut State, tx| {
+            s.composer.escape_until = None;
+            menus::changed(s, tx);
+        })
         .on_input_key(|s: &mut State, ev, tx| {
+            crate::shortcuts::observe(s, ev);
             crate::bench::input();
             if menus::keys(s, ev, tx) {
                 return true;
@@ -178,6 +183,7 @@ pub fn area(s: &State, width: f32) -> El {
         })
         .on_submit(commands::submit)
         .on_input_paste(|s: &mut State, content, _| {
+            s.composer.escape_until = None;
             let Some(image) = content.image() else {
                 return false;
             };
@@ -627,6 +633,8 @@ fn attachments(s: &State) -> El {
             12.0
         });
     for (i, item) in s.draft().attachments.iter().enumerate() {
+        let thumbnail = item.clone();
+        let details = item.clone();
         out = out.child(
             row()
                 .key(format!("attachment-{i}"))
@@ -638,18 +646,34 @@ fn attachments(s: &State) -> El {
                 .border(1.0, s.theme.c("border"))
                 .fill(s.theme.c("secondary"))
                 .center_y()
-                .child(if let Some(Some(image)) = s.draft().images.get(i) {
-                    el().size(44.0, 44.0).radius(6.0).pixels(image.pixels())
-                } else {
-                    el().size(44.0, 44.0)
-                        .radius(6.0)
-                        .fill(s.theme.c("control"))
-                        .center()
-                        .child(
-                            icon(&crate::chat::icons::ATTACHMENT, 20.0)
-                                .color(s.theme.c("text-secondary")),
-                        )
-                })
+                .child(
+                    (if let Some(Some(image)) = s.draft().images.get(i) {
+                        el().size(44.0, 44.0).radius(6.0).pixels(image.pixels())
+                    } else {
+                        el().size(44.0, 44.0)
+                            .radius(6.0)
+                            .fill(s.theme.c("control"))
+                            .center()
+                            .child(
+                                icon(&crate::chat::icons::ATTACHMENT, 20.0)
+                                    .color(s.theme.c("text-secondary")),
+                            )
+                    })
+                    .role("button")
+                    .label(format!(
+                        "{} {}",
+                        if item.mime.starts_with("image/")
+                            || item.name.to_ascii_lowercase().ends_with(".docx")
+                        {
+                            "Preview"
+                        } else {
+                            "Download"
+                        },
+                        item.name
+                    ))
+                    .focusable(true)
+                    .on_press(move |s: &mut State| attachment_preview::open(s, thumbnail.clone())),
+                )
                 .child(
                     col()
                         .grow(1.0)
@@ -663,7 +687,12 @@ fn attachments(s: &State) -> El {
                             11.0,
                             400.0,
                             "text-tertiary",
-                        )),
+                        ))
+                        .on_press(move |s: &mut State| {
+                            if !details.mime.starts_with("image/") {
+                                attachment_preview::open(s, details.clone());
+                            }
+                        }),
                 )
                 .child(
                     label(&s.theme, "×", 14.0, 500.0, "text-tertiary")

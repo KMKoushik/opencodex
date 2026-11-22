@@ -3,7 +3,7 @@ use std::{
     collections::BTreeMap,
     io::{BufRead, BufReader, Read, Write},
     path::PathBuf,
-    process::{Child, ChildStdin, Command, Stdio},
+    process::{Child, Command, Stdio},
     sync::{OnceLock, mpsc},
     time::{Duration, Instant},
 };
@@ -24,11 +24,11 @@ pub fn data_dir() -> PathBuf {
 }
 pub struct Sidecar {
     child: Option<Child>,
-    stdin: Option<ChildStdin>,
+    stdin: crate::updates::Pipe,
 }
 impl Drop for Sidecar {
     fn drop(&mut self) {
-        self.stdin.take();
+        self.stdin.lock().unwrap().take();
         if let Some(mut child) = self.child.take() {
             std::thread::spawn(move || {
                 let until = Instant::now() + Duration::from_secs(12);
@@ -62,6 +62,7 @@ pub fn start(handle: rune::AppHandle<crate::State>) {
 /// Starts every gateway client once the gateway is known: from `OPENCODEX_GATEWAY` at launch,
 /// or when the bundled gateway reports ready.
 pub fn attach(s: &mut crate::State, client: oc_gateway::Gateway) {
+    oc_native::clipboard::enable();
     let wake = s.waker.clone().expect("setup waker");
     crate::composer::state::start(s, client.clone(), wake.clone());
     crate::workbench::start(s, client.clone(), wake.clone());
@@ -76,6 +77,21 @@ pub fn attach(s: &mut crate::State, client: oc_gateway::Gateway) {
     ));
     if let Some(id) = &crate::OPTIONS.get().unwrap().session {
         s.open_session(Some(id.clone()));
+    }
+    if let Some(panel) = crate::OPTIONS
+        .get()
+        .unwrap()
+        .panel
+        .as_deref()
+        .and_then(crate::workbench::Panel::parse)
+    {
+        s.select_panel(panel);
+    }
+    if let Ok(id) = std::env::var("OPENCODEX_CANVAS") {
+        s.open_canvas(id);
+    }
+    if let Ok(url) = std::env::var("OPENCODEX_BROWSER_URL") {
+        s.open_browser(&url);
     }
 }
 fn executable() -> Result<PathBuf, String> {
@@ -99,7 +115,7 @@ fn launch() -> Result<(Sidecar, oc_gateway::Gateway), String> {
     let path = executable()?;
     let env = shell_environment();
     let mut child = Command::new(path)
-        .args(["--port", "0", "--parent-stdin"])
+        .args(["--port", "0", "--parent-stdin", "--host-updates"])
         .envs(env)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -108,7 +124,8 @@ fn launch() -> Result<(Sidecar, oc_gateway::Gateway), String> {
         .map_err(|e| format!("Gateway launch: {e}"))?;
     let stdout = child.stdout.take().unwrap();
     let stderr = child.stderr.take().unwrap();
-    let stdin = child.stdin.take();
+    let stdin = std::sync::Arc::new(std::sync::Mutex::new(child.stdin.take()));
+    crate::updates::attach(stdin.clone());
     let owned = Sidecar {
         child: Some(child),
         stdin,
@@ -128,6 +145,13 @@ fn launch() -> Result<(Sidecar, oc_gateway::Gateway), String> {
                             .and_then(|v| v["url"].as_str().map(str::to_owned))
                             .ok_or_else(|| "Invalid gateway READY record".to_string());
                         let _ = send.try_send(result);
+                    }
+                    if let Some(json) = line.strip_prefix("OPENCODEX_HOST_UPDATE ") {
+                        if let Ok(message) = serde_json::from_str::<serde_json::Value>(json) {
+                            if let Some(action) = message["action"].as_str() {
+                                crate::updates::command(action);
+                            }
+                        }
                     }
                 }
             }

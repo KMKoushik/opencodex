@@ -52,7 +52,7 @@ pub fn own<'a>(text: &'a str, fields: &Fields) -> &'a str {
         .map(|end| text[..end].trim_end())
         .unwrap_or(text)
 }
-pub fn spans(s: &State, text: &str, fields: &Fields) -> Vec<Span> {
+pub fn spans(s: &State, text: &str, fields: &Fields, row: &str) -> Vec<Span> {
     let mut mentions = Vec::new();
     for key in ["files", "skills"] {
         for item in fields
@@ -81,7 +81,7 @@ pub fn spans(s: &State, text: &str, fields: &Fields) -> Vec<Span> {
     }
     mentions.sort_by_key(|v| v.0);
     let mut end = 0;
-    let mut spans = crate::find::highlights(s, text);
+    let mut spans = crate::find::highlights(s, text, row);
     for (from, to) in mentions {
         if from < end {
             continue;

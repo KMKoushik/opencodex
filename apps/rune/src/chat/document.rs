@@ -56,23 +56,11 @@ pub fn open(s: &mut State, file: Value) {
     if let Some(wake) = s.waker.clone() {
         preview.pending.set_waker(wake);
     }
-    preview.pending.request(file["data"].as_str().unwrap_or("").to_owned(), |data| {
-        format!(r#"<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; worker-src blob:; style-src 'unsafe-inline'; img-src data:; connect-src 'none'"><style>
-*{{box-sizing:border-box}}html,body{{margin:0;width:100%;height:100%;overflow:hidden;background:var(--surface);color:var(--text);font:13px -apple-system,BlinkMacSystemFont,sans-serif}}body{{display:flex;flex-direction:column}}#status{{padding:24px}}.wb-docx-scroll{{min-height:0}}{css}</style></head><body><div class="wb-docx-viewer"><div class="wb-subtoolbar">Word document · Read-only preview</div><div id="status" role="status">Loading document…</div><div class="wb-docx-scroll" tabindex="0"><article class="wb-docx-page" id="document"></article></div></div>
-<script>{sanitizer}</script><script>
-const worker=new Worker(URL.createObjectURL(new Blob([{worker}],{{type:'text/javascript'}})));
-const status=document.getElementById('status');
-const timeout=setTimeout(()=>fail('This document took too long to preview. Download it to open in Word.'),15000);
-function fail(message){{clearTimeout(timeout);worker.terminate();status.textContent=message;status.setAttribute('role','alert');}}
-worker.onerror=()=>fail('Could not preview this Word document.');
-worker.onmessage=e=>{{clearTimeout(timeout);worker.terminate();if(e.data.error){{fail(e.data.error);return;}}document.getElementById('document').innerHTML=DOMPurify.sanitize(e.data.html??'',{{ALLOWED_TAGS:['p','br','strong','em','u','s','sup','sub','h1','h2','h3','h4','h5','h6','ul','ol','li','table','thead','tbody','tr','td','th','blockquote','pre','code','img'],ALLOWED_ATTR:['colspan','rowspan','src','alt']}});status.remove();}};
-worker.postMessage({data});addEventListener('pagehide',()=>{{clearTimeout(timeout);worker.terminate();}});
-</script></body></html>"#,
-            css=include_str!("../../../web/src/features/workbench/docx-viewer.css"),
-            sanitizer=include_str!("preview-sanitizer.asset"),
-            worker=serde_json::to_string(include_str!("preview-worker.asset")).unwrap().replace('<',"\\u003c"),
-            data=serde_json::to_string(&data).unwrap().replace('<',"\\u003c"))
-    });
+    preview
+        .pending
+        .request(file["data"].as_str().unwrap_or("").to_owned(), |data| {
+            crate::docx::page(&data, true)
+        });
     preview.file = Some(file);
     s.chat.media.document = preview;
 }

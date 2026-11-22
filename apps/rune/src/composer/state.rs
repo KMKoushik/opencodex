@@ -80,6 +80,8 @@ pub enum Menu {
 }
 #[derive(Default)]
 pub struct Composer {
+    pub attachment_preview: rune::Latest<crate::workbench::worker::Payload>,
+    pub preview_image: Option<String>,
     pub context_visibility: super::context::Visibility,
     pub context_focus: Option<String>,
     pub recent_chats: Vec<Value>,

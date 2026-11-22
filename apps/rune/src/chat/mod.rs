@@ -18,6 +18,8 @@ mod detail_events;
 mod detail_usage;
 pub(crate) mod details;
 mod document;
+pub(crate) use attachments::download as download_attachment;
+pub(crate) use document::open as open_document;
 mod media;
 #[cfg(target_os = "macos")]
 mod pasteboard;
@@ -461,6 +463,7 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
                             width - 48.0,
                             &message_id,
                             ordinal,
+                            if reader { "" } else { &r.id },
                         )
                         .key(response_key.clone()),
                     );
@@ -534,7 +537,12 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
                     if !txt.is_empty() {
                         bubble = bubble.child(
                             text(txt)
-                                .spans(user::spans(s, txt, &m.fields))
+                                .spans(user::spans(
+                                    s,
+                                    txt,
+                                    &m.fields,
+                                    if reader { "" } else { &r.id },
+                                ))
                                 .font(
                                     TextStyle::new(s.prefs.chat_font_size.unwrap_or(14.0), 400.0)
                                         .lh(s.prefs.chat_font_size.unwrap_or(14.0) * 1.625),

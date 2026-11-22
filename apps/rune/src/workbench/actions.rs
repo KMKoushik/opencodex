@@ -67,7 +67,7 @@ pub fn overlay(s: &State) -> El {
         .autofocus()
         .disabled(s.workbench.pending.contains("reveal-file"))
         .on_press_tx(move |s: &mut State, tx| {
-            tx.copy(absolute.clone());
+            oc_native::clipboard::copy(tx, absolute.clone());
             s.workbench.file_actions = None;
             s.menus.toast = Some("File path copied".into());
             s.menus.toast_due = Some(tx.clock() + 2.0);

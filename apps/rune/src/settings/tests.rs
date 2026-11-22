@@ -96,7 +96,9 @@ fn project_editor_errors_are_independent_and_instructions_limit_preserves_suffix
 fn folder_pointer_keeps_input_focus_and_enter_uses_the_ranked_choice() {
     let mut s = state();
     std::sync::Arc::make_mut(&mut s.snapshot).live = true;
-    s.pages.data.insert("connection".into(), Ok(json!({"status":"connected"})));
+    s.pages
+        .data
+        .insert("connection".into(), Ok(json!({"status":"connected"})));
     s.pages.route = Route::ProjectSetup;
     s.pages.projects.directory = rune::TextEdit::new("/fixture/a");
     s.pages.projects.suggesting = true;

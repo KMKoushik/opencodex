@@ -44,7 +44,7 @@ pub fn selected_text(_: &mut State, press: rune::PointerPress, tx: &mut rune::Tx
                 form_component(&selection)
             ));
         }
-        Some("copy") => tx.copy(original.clone()),
+        Some("copy") => oc_native::clipboard::copy(tx, original.clone()),
         _ => {}
     });
 }

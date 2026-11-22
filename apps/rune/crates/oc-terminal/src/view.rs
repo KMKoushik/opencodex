@@ -120,7 +120,7 @@ impl TerminalView {
             && (cfg!(target_os = "macos") || ev.mods.shift)
             && !self.frame.selection.is_empty()
         {
-            tx.copy(&self.frame.selection);
+            oc_native::clipboard::copy(tx, self.frame.selection.clone());
             return true;
         }
         if ev.is_command('v') && (cfg!(target_os = "macos") || ev.mods.shift) {

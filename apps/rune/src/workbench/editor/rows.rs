@@ -543,7 +543,7 @@ fn key_input(
             doc.edit.anchor.min(doc.edit.focus),
             doc.edit.anchor.max(doc.edit.focus),
         );
-        tx.copy(doc.edit.text[a..b].to_owned());
+        oc_native::clipboard::copy(tx, doc.edit.text[a..b].to_owned());
         if key.is_command('x') {
             replace(s, index, a, b, "", tx);
             sync(&mut s.workbench.docs[index]);

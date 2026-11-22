@@ -3,7 +3,7 @@ use oc_markdown::{Markdown, MarkdownStyle};
 use rune::{El, TextStyle};
 
 pub fn render(s: &State, source: &str, streaming: bool, width: f32) -> El {
-    render_marked(s, source, streaming, width, Vec::new())
+    render_marked(s, source, streaming, width, Vec::new(), "")
 }
 pub fn response(
     s: &State,
@@ -12,6 +12,7 @@ pub fn response(
     width: f32,
     message: &str,
     ordinal: usize,
+    row: &str,
 ) -> El {
     let mut marks = Vec::new();
     for comment in &s.draft().comments {
@@ -42,7 +43,7 @@ pub fn response(
             ));
         }
     }
-    render_marked(s, source, streaming, width, marks)
+    render_marked(s, source, streaming, width, marks, row)
 }
 fn render_marked(
     s: &State,
@@ -50,6 +51,7 @@ fn render_marked(
     streaming: bool,
     width: f32,
     mut highlights: Vec<(Vec<std::ops::Range<usize>>, oc_markdown::Highlight)>,
+    row: &str,
 ) -> El {
     let t = &s.theme;
     let font_size = s.prefs.chat_font_size.unwrap_or(14.0);
@@ -131,7 +133,15 @@ fn render_marked(
                 oc_markdown::Case::Insensitive,
             )
             .into_iter()
-            .map(|ranges| (ranges, oc_markdown::Highlight::new())),
+            .enumerate()
+            .map(|(occurrence, ranges)| {
+                (
+                    ranges,
+                    oc_markdown::Highlight::new()
+                        .current_match(crate::find::active(s, row) == Some(occurrence))
+                        .key(oc_markdown::Markdown::highlight_key(occurrence)),
+                )
+            }),
         );
     }
     Markdown::new(source)

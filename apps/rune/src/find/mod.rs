@@ -147,16 +147,25 @@ pub fn refresh(s: &mut State) {
         }
     }
 }
-pub fn highlights(s: &State, text: &str) -> Vec<rune::Span> {
+pub fn highlights(s: &State, text: &str, row: &str) -> Vec<rune::Span> {
     if !s.find.open {
         return vec![];
     }
     rune_kit::search::Fold::default()
         .find(text, s.find.query.text.trim())
         .into_iter()
-        .map(|range| {
+        .enumerate()
+        .map(|(occurrence, range)| {
             let mut span = rune::Span::new(range.start, range.end);
-            span.bg = Some(s.theme.c("warning").alpha(0.30));
+            span.bg = Some(
+                s.theme
+                    .c("warning")
+                    .alpha(if active(s, row) == Some(occurrence) {
+                        0.65
+                    } else {
+                        0.30
+                    }),
+            );
             span
         })
         .collect()
@@ -169,6 +178,14 @@ pub fn next(s: &mut State, tx: &mut Tx, back: bool) {
     s.find.current = (s.find.current + if back { count - 1 } else { 1 }) % count;
     s.chat.disclosure_revision += 1;
     reveal(s, tx);
+}
+pub fn active(s: &State, row: &str) -> Option<usize> {
+    s.find
+        .open
+        .then(|| target(s))
+        .flatten()
+        .filter(|(id, _)| *id == row)
+        .map(|(_, occurrence)| occurrence)
 }
 fn target(s: &State) -> Option<(&str, usize)> {
     let unit = s

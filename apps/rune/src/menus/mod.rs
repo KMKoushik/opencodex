@@ -17,6 +17,7 @@ pub enum Menu {
 }
 #[derive(Default)]
 pub struct Menus {
+    pub path_copy: rune::Latest<bool>,
     pub sidebar_current: Option<String>,
     pub sidebar_pages: crate::sidebar::pagination::Pagination,
     pub sidebar_scopes: Option<std::collections::BTreeSet<String>>,
@@ -247,9 +248,29 @@ pub fn view(s: &State) -> Option<El> {
             let path = p.canonical.clone();
             panel = panel.child(
                 button(s, "Copy path").on_press_tx(move |s: &mut State, tx| {
-                    tx.copy(path.clone());
                     s.menus.open = None;
-                    s.pages.project_notice = Some("Project path copied.".into());
+                    if cfg!(target_os = "macos")
+                        && !crate::OPTIONS.get().is_some_and(|o| o.headless)
+                    {
+                        if let Some(wake) = &s.waker {
+                            s.menus.path_copy.set_waker(wake.clone());
+                        }
+                        s.menus
+                            .path_copy
+                            .request(path.clone(), |text| oc_native::clipboard::write(&text));
+                    } else {
+                        tx.copy(path.clone());
+                        tx.read_clipboard(|s: &mut State, content, _| {
+                            s.pages.project_notice = Some(
+                                if content.text().is_empty() {
+                                    "Could not copy project path."
+                                } else {
+                                    "Project path copied."
+                                }
+                                .into(),
+                            );
+                        });
+                    }
                 }),
             );
         }

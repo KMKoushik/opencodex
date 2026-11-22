@@ -210,6 +210,7 @@ fn setting_row_styled(s: &State, title: &str, description: &str, spans: Vec<rune
         .border_layout()
 }
 fn general(s: &State, mut body: El) -> El {
+    body = body.child(crate::updates::view::settings(s));
     let connection = data(s, "connection");
     let connected = connection.is_some_and(|v| v["status"] == "connected");
     let status = match s.pages.data.get("connection") {
@@ -504,6 +505,24 @@ pub fn capture(s: &mut State) {
     }
     match page.as_str() {
         "home-empty" => return,
+        "home-no-project" => {
+            s.prefs.project = None;
+            s.selected = None;
+            s.prefs
+                .closed_projects
+                .extend(s.snapshot.projects.iter().map(|p| p.id.clone()));
+            s.prefs.opened_projects.clear();
+            return;
+        }
+        "session-details-open" => {
+            s.chat.details = true;
+            return;
+        }
+        "project-copy-feedback" => {
+            s.pages.route = Route::Settings("projects".into());
+            s.pages.project_notice = Some("Project path copied.".into());
+            return;
+        }
         "sidebar-project-collapsed" => {
             if let Some(id) = s.project().map(|p| p.id.clone()) {
                 s.folded.insert(id);
@@ -649,6 +668,9 @@ pub fn capture(s: &mut State) {
             let snapshot = std::sync::Arc::make_mut(&mut s.snapshot);
             snapshot.live = false;
             snapshot.error = Some("Gateway unavailable".into());
+            s.pages
+                .data
+                .insert("connection".into(), Err("Gateway unavailable".into()));
             return;
         }
         "find-chat-open" | "find-markdown-open" | "find-long-open" => {

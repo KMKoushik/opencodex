@@ -11,31 +11,16 @@ pub struct Host {
 }
 pub fn prepare(value: &Value) -> Option<String> {
     let kind = value["kind"].as_str()?;
+    if kind == "docx" {
+        return Some(crate::docx::page(
+            value["data"].as_str().unwrap_or(""),
+            false,
+        ));
+    }
     if !matches!(kind, "docx" | "video" | "pdf") {
         return None;
     }
-    let body = if kind == "docx" {
-        format!(
-            r#"<div id="status" role="status">Loading document…</div><div class="wb-docx-scroll" tabindex="0"><article class="wb-docx-page" id="document"></article></div>
-<script>{sanitizer}</script><script>
-const worker = new Worker(URL.createObjectURL(new Blob([{worker}],{{type:'text/javascript'}})));
-const status = document.getElementById('status');
-const timeout=setTimeout(()=>fail('This document took too long to preview. Download it to open in Word.'),15000);
-function fail(message){{clearTimeout(timeout);worker.terminate();status.textContent=message;status.setAttribute('role','alert');}}
-worker.onerror=()=>fail('Could not preview this Word document.');
-worker.onmessage=e=>{{clearTimeout(timeout);worker.terminate();if(e.data.error){{fail(e.data.error);return;}}
-document.getElementById('document').innerHTML=DOMPurify.sanitize(e.data.html??'',{{ALLOWED_TAGS:['p','br','strong','em','u','s','sup','sub','h1','h2','h3','h4','h5','h6','ul','ol','li','table','thead','tbody','tr','td','th','blockquote','pre','code','img'],ALLOWED_ATTR:['colspan','rowspan','src','alt']}});status.remove();}};
-worker.postMessage({data});
-addEventListener('pagehide',()=>{{clearTimeout(timeout);worker.terminate();}});
-</script><script>{client}</script>"#,
-            sanitizer = include_str!("preview-sanitizer.asset"),
-            worker = serde_json::to_string(include_str!("preview-worker.asset"))
-                .ok()?
-                .replace('<', "\\u003c"),
-            data = serde_json::to_string(value["data"].as_str().unwrap_or("")).ok()?,
-            client = include_str!("preview-client.asset"),
-        )
-    } else {
+    let body: String = {
         // The URL is set after the owning directory/path is known; no file:// or filesystem bridge.
         if kind == "pdf" {
             "<iframe id=media title=\"PDF preview\" class=wb-pdf-frame></iframe>".into()
@@ -57,8 +42,7 @@ addEventListener('pagehide',()=>{{clearTimeout(timeout);worker.terminate();}});
     ))
 }
 pub fn create(s: &State, html: &str, directory: &str, path: &str) -> Option<Host> {
-    let base = crate::sidecar::url()
-        .or_else(|| crate::OPTIONS.get().and_then(|o| o.gateway.as_deref()))?;
+    let base = crate::sidecar::url()?;
     let base = url::Url::parse(base).ok()?;
     let wake = s.waker.clone();
     let web = oc_webview::WebView::new(oc_webview::Options {

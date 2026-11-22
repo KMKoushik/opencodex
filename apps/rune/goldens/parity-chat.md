@@ -8,7 +8,30 @@ rendering of its entire surface. `matches` means the named source behavior was c
 Outstanding work is explicitly marked `remaining` rather than falsely describing it as
 impossible in Rune. The requested exhaustive zero-gap audit is **not complete**.
 
-Checklist counts: **41 fixed, 12 matches, 25 remaining, 1 pinned-framework capture limitation**.
+Merged inherited rows: **57 fixed, 14 matches, 10 remaining, 2 native/capture exceptions**.
+These counts describe individual inherited audit rows, not whole-screen parity.
+
+## Integration continuation (`rune-port`)
+
+- Native updater: implemented explicit GitHub check/download/restart, bounded archive,
+  SHA-256 and designated-certificate verification, private sidecar stdio/phone API.
+  Signed release-to-release installation is not yet verified; ad-hoc disable/IPC is.
+- Apps canvas: real shared `oc-webview` host retained through all page merges.
+- Find: renderer receives row identity; current Markdown and user-text occurrences
+  use distinct highlights, with stable per-occurrence scroll keys.
+- Composer: consumed input/IME/paste breaks shortcut sequences; draft image/file/DOCX
+  click routes use worker preparation. Full native interaction matrix remains unverified.
+- Clipboard: `oc-native` now writes directly to NSPasteboard and returns the actual
+  AppKit BOOL. This supersedes the older JXA evidence below. Explicit copy actions
+  share this boundary; project copy feedback waits for write acknowledgement.
+- DOCX: chat and Files share one module, embedded worker, sanitizer, DOM-find client,
+  generator and license copies in `src/docx`.
+- HTML in Markdown: **remaining**; native sanitizer-allowlist rendering is not implemented.
+- Inline code/link 1pt line-box and icon geometry: **remaining**, not a private-API excuse.
+- Remaining panel ring/history/footer, side picker/context/docks, canvas bridge-to-draft
+  and timestamp, and browser menu/download/relaunch interactions: **remaining**.
+
+The 69-state review is recorded in `final/README.md`; it is not a 1:1 sign-off.
 
 ## Corrected defects
 

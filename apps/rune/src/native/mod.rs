@@ -584,6 +584,7 @@ pub fn poll(s: &mut State, tx: &mut Tx) -> bool {
 pub fn coverage(s: &State) {
     // Hide before painting Rune overlays; no readbacks, timers or redraw loop.
     let covered = s.native.tooltip
+        || s.pages.update_confirming
         || s.menus.open.is_some()
         || s.composer.menu.is_some()
         || s.chat.preview.is_some()

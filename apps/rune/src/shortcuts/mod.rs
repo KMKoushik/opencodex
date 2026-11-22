@@ -2,6 +2,7 @@
 use crate::{State, pages::Route};
 use rune::{KeyEvent, Tx};
 pub fn global(s: &mut State, event: &KeyEvent, tx: &mut Tx) -> bool {
+    observe(s, event);
     if event.is_command('l')
         && s.workbench.open
         && s.workbench.panel == crate::workbench::Panel::Browser
@@ -13,23 +14,13 @@ pub fn global(s: &mut State, event: &KeyEvent, tx: &mut Tx) -> bool {
         s.save_workspace_file();
         return true;
     }
-    // Any intervening key breaks the web registry's double-Escape sequence.
-    if event.key != rune::Key::Escape
-        || event.mods.cmd
-        || event.mods.ctrl
-        || event.mods.alt
-        || event.mods.shift
-    {
-        s.composer.escape_until = None;
-    }
     if dispatch(s, event, tx) {
         return true;
     }
     if s.pages.route != Route::Chat || s.menus.open.is_some() {
         return false;
     }
-    // The catalog above owns modified chords. Don't let the composer's legacy
-    // letter checks accept extra modifiers after an exact catalog match failed.
+    // The catalog owns modified chords; do not accept extra modifiers.
     if event.mods.cmd
         || event.mods.ctrl
         || matches!(event.key, rune::Key::Command(_))
@@ -38,6 +29,17 @@ pub fn global(s: &mut State, event: &KeyEvent, tx: &mut Tx) -> bool {
         return false;
     }
     crate::composer::keys::global(s, event, tx)
+}
+/// Inputs consume keys before the global handler. They must still break sequences.
+pub fn observe(s: &mut State, event: &KeyEvent) {
+    if event.key != rune::Key::Escape
+        || event.mods.cmd
+        || event.mods.ctrl
+        || event.mods.alt
+        || event.mods.shift
+    {
+        s.composer.escape_until = None;
+    }
 }
 pub const COMMANDS: &[(&str, &str, &str)] = &[
     ("Toggle workspace panel", "mod+i", "workspace.toggle"),
