@@ -392,6 +392,9 @@ pub fn poll(s: &mut State) -> bool {
             Reply::Data { tag, result } if tag.starts_with("project-") => {
                 crate::settings::projects::receive(s, &tag, result)
             }
+            Reply::Data { tag, result } if tag.starts_with("switcher:") => {
+                crate::menus::projects::receive(s, &tag, result)
+            }
             Reply::Data { tag, result } if tag.starts_with("app-") => {
                 crate::apps::receive(s, &tag, result)
             }

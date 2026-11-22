@@ -1,6 +1,7 @@
 use crate::{State, sidebar::label};
-use rune::{El, ScrollSpec, TextEdit, TextStyle, Tx, col, el, row, text_input};
+use rune::{El, TextEdit, Tx, col, el, row};
 pub mod native;
+pub(crate) mod projects;
 pub(crate) mod search;
 pub(crate) mod thread;
 #[derive(Clone)]
@@ -28,6 +29,7 @@ pub struct Menus {
     pub cursor: Option<String>,
     pub notice: Option<String>,
     pub search_revision: u64,
+    pub projects: projects::Picker,
 }
 fn button(s: &State, title: &str) -> El {
     row()
@@ -65,9 +67,7 @@ pub fn open_projects(s: &mut State, tx: &mut Tx) {
     tx.focus_when_shown("Project directory", false);
 }
 pub fn switch_projects(s: &mut State, tx: &mut Tx) {
-    s.menus.open = Some(Menu::Projects);
-    s.menus.search.clear();
-    tx.focus("navigation-search", false);
+    projects::open(s, tx);
 }
 pub fn view(s: &State) -> Option<El> {
     if let Some(Menu::Choice(menu)) = s.menus.open.as_ref() {
@@ -82,6 +82,9 @@ pub fn view(s: &State) -> Option<El> {
     let menu = s.menus.open.as_ref()?;
     if matches!(menu, Menu::Search) {
         return Some(search::dialog(s));
+    }
+    if matches!(menu, Menu::Projects) {
+        return Some(projects::view(s));
     }
     let t = &s.theme;
     let compact = matches!(
@@ -125,85 +128,6 @@ pub fn view(s: &State) -> Option<El> {
                         .on_press(|s: &mut State| s.menus.open = None),
                 ),
         );
-    }
-    if matches!(menu, Menu::Search | Menu::Projects) {
-        panel = panel.child(
-            text_input(&s.menus.search, TextStyle::new(13.0, 400.0))
-                .key("navigation-search")
-                .on_edit(|s: &mut State| &mut s.menus.search)
-                .placeholder(
-                    if matches!(menu, Menu::Search) {
-                        "Search titles and messages…"
-                    } else {
-                        "Search…"
-                    },
-                    t.c("text-tertiary"),
-                )
-                .on_input_change(|s: &mut State, _| {
-                    if matches!(s.menus.open, Some(Menu::Search)) {
-                        search::load(s, false);
-                    }
-                })
-                .w_full()
-                .h(36.0)
-                .px(10.0)
-                .color(t.c("text"))
-                .border(1.0, t.c("border"))
-                .radius(6.0),
-        );
-        let query = s.menus.search.text.to_lowercase();
-        let mut list = col().w_full().max_h(380.0).gap(2.0).scroll(ScrollSpec {
-            stick_bottom: false,
-        });
-        match menu {
-            Menu::Search => {
-                list = search::view(s, list);
-            }
-            Menu::Projects => {
-                for project in s
-                    .snapshot
-                    .projects
-                    .iter()
-                    .filter(|v| {
-                        v.display_name().to_lowercase().contains(&query)
-                            || v.canonical.to_lowercase().contains(&query)
-                    })
-                    .take(100)
-                {
-                    let path = project.canonical.clone();
-                    list = list.child(button(s, project.display_name()).w_full().on_press(
-                        move |s: &mut State| {
-                            s.prefs.project = Some(path.clone());
-                            s.prefs.closed_projects.retain(|p| p != &path);
-                            s.menus.open = None;
-                            s.open_session(None);
-                            crate::sidebar::rebuild(s);
-                            s.save();
-                        },
-                    ));
-                }
-                list = list.child(
-                    button(s, "Choose folder…").on_press_tx(|s: &mut State, tx| {
-                        s.menus.open = None;
-                        tx.open_folder(
-                            rune::FileDialogOptions {
-                                title: "Open project".into(),
-                                ..Default::default()
-                            },
-                            |s: &mut State, result, _| match result {
-                                Ok(Some(path)) => s.command(oc_gateway::Command::AddProject(
-                                    path.to_string_lossy().into_owned(),
-                                )),
-                                Err(e) => s.error = Some(e.to_string()),
-                                _ => {}
-                            },
-                        );
-                    }),
-                );
-            }
-            _ => {}
-        }
-        panel = panel.child(list);
     }
     if let Menu::Thread(id) = menu {
         panel = thread::view(s, id, panel);

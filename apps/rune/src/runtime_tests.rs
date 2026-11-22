@@ -1,6 +1,75 @@
 use super::*;
 
 #[test]
+fn project_switcher_clamps_arrows_and_ignores_dismissed_resolution() {
+    OPTIONS.get_or_init(|| Options {
+        gateway: None,
+        preset: String::new(),
+        dark: true,
+        headless: true,
+        session: None,
+        scroll: "bottom".into(),
+        work: None,
+        composer_state: String::new(),
+        page: String::new(),
+        size: (1280.0, 800.0),
+    });
+    let mut state = State::new();
+    let snapshot = Arc::make_mut(&mut state.snapshot);
+    snapshot.live = true;
+    snapshot.projects=serde_json::from_value(serde_json::json!([
+        {"id":"old","name":"Old project","canonical":"/fixture/old","time":{"active":0,"updated":1}},
+        {"id":"new","name":"New project","canonical":"/fixture/new","time":{"active":3,"updated":2}}
+    ])).unwrap();
+    state.prefs.project = Some("/fixture/old".into());
+    let mut rt = rune::Runtime::new(state, view, (1280.0, 800.0), rune::Env::new(true, 2.0));
+    rt.update(menus::projects::open);
+    rt.frame(0.0);
+    rt.frame(0.1);
+    assert_eq!(
+        menus::projects::rows(&rt.state)[0].directory,
+        "/fixture/new"
+    );
+    assert!(
+        rt.elements()
+            .iter()
+            .any(|e| e.key.as_deref() == Some("project-switcher-search") && e.focused)
+    );
+    let key = |key| rune::KeyEvent {
+        key,
+        mods: Default::default(),
+    };
+    rt.key(key(rune::Key::Down));
+    rt.frame(0.2);
+    assert_eq!(
+        rt.state.menus.projects.active, "/fixture/old",
+        "Down at the end must not wrap"
+    );
+    rt.key(key(rune::Key::Up));
+    rt.frame(0.3);
+    rt.key(key(rune::Key::Up));
+    rt.frame(0.4);
+    assert_eq!(rt.state.menus.projects.active, "/fixture/new");
+    let generation = rt.state.menus.projects.generation;
+    rt.key(key(rune::Key::Escape));
+    rt.frame(0.5);
+    assert!(rt.state.menus.open.is_none());
+    rt.update(menus::projects::open);
+    rt.frame(0.6);
+    menus::projects::receive(
+        &mut rt.state,
+        &format!("switcher:{generation}:resolve"),
+        Ok(serde_json::json!({"directory":"/fixture/new"})),
+    );
+    assert_eq!(rt.state.prefs.project.as_deref(), Some("/fixture/old"));
+    rt.update(|s, _| s.menus.projects.query = rune::TextEdit::new("~/new-folder"));
+    rt.frame(0.7);
+    let rows = menus::projects::rows(&rt.state);
+    assert_eq!(rows.len(), 1);
+    assert!(rows[0].project.is_none());
+}
+
+#[test]
 fn task_drag_container_does_not_swallow_card_controls_or_escape() {
     OPTIONS.get_or_init(|| Options {
         gateway: None,
@@ -189,6 +258,7 @@ fn long_sidebar_only_mounts_visible_rows() {
     });
     let mut state = State::new();
     let project = oc_gateway::types::Project {
+        time: Default::default(),
         id: "fixture".into(),
         name: Some("Example".into()),
         canonical: "/fixture".into(),

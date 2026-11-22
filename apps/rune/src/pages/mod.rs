@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 pub mod controls;
 pub mod offline;
 pub fn after_frame(rt: &rune::Runtime<State>, handle: &rune::AppHandle<State>) {
+    crate::menus::projects::after_frame(rt, handle);
     crate::settings::appearance::after_frame(rt, handle);
     crate::tasks::board::after_frame(rt, handle);
 }

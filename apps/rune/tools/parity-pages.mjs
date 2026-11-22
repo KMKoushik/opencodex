@@ -72,6 +72,31 @@ try {
         if (state === 'apps-empty' || state === 'apps') await click('Apps');
         if (
           [
+            'project-picker-open',
+            'project-picker-path',
+            'project-picker-empty',
+            'project-switcher-dialog',
+          ].includes(state)
+        ) {
+          await click('Switch project');
+          if (state === 'project-picker-path')
+            await page
+              .getByRole('combobox', {
+                name: 'Search projects or enter a folder path',
+                exact: true,
+              })
+              .fill('/tmp/ocr-parity/proj/new-folder');
+          if (state === 'project-picker-empty')
+            await page
+              .getByRole('combobox', {
+                name: 'Search projects or enter a folder path',
+                exact: true,
+              })
+              .fill('no-matching-project');
+          if (state === 'project-switcher-dialog') await click('Open project…');
+        }
+        if (
+          [
             'app-detail',
             'app-settings',
             'app-code',

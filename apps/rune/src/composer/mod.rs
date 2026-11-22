@@ -85,8 +85,22 @@ pub fn view(s: &State, width: f32, height: f32) -> El {
             )
             .child(icon(&i::DOWN, 14.0).color(t.c("text-tertiary")))
             .role("button")
-            .label("Choose project")
+            .key("Switch project")
+            .label("Switch project")
             .focusable(true)
+            .disabled(!s.snapshot.live)
+            .on_layout_tx(|s: &mut State, rect, tx| {
+                s.pages.anchors.insert("Switch project".into(), rect);
+                tx.live_only();
+            })
+            .on_key(|s: &mut State, event, tx| {
+                if matches!(event.key, rune::Key::Down | rune::Key::Up) {
+                    crate::menus::switch_projects(s, tx);
+                    true
+                } else {
+                    false
+                }
+            })
             .on_press_tx(|s: &mut State, tx| {
                 crate::menus::switch_projects(s, tx);
             }),

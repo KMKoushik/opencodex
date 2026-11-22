@@ -46,7 +46,7 @@ issue does not mean that its surrounding page matches. Summary: **2 matches,
 - **still differs** Tasks is now populated through the real plugin/gateway and has assignee persistence, project filtering, per-column entry, inline editors, project/assignee fields, order/drag handling, day labels, banners and linked chats. Real-worker create/complete/delete passes. Card title/notes keyboard dismissal, outside-save behavior, drag interactions and large-board performance are being exercised; Markdown notes, limits, overflow and remaining chip/editor geometry are not yet fully equivalent.
 - **still differs** Apps now has a gateway-created app and real run, index/detail, App/Settings/Code tabs, trigger-derived buttons, icon/model/delete dialogs, and runs. Canvas implementation remains explicitly excluded: only frame/loading is drawn for the embedding agent. Model variants/provider controls, multi-trigger dropdown, all run-call metadata, code highlighting/find/selection, sidebar app links and full settings/error-state parity still need completion.
 - **still differs** Search dialog still needs full keyboard/focus/length-limit/reconnection behavior and detailed pixel comparison. Normal gateway search is verified, not every paginated UI interaction.
-- **still differs** Sidebar/⌘O Open project now correctly clears the selection and shows full-page folder setup; only the switcher's footer should open a dialog. The composer Switch project picker still uses the previous centered list and invented Choose folder action instead of the anchored recent-folder popup. Unknown resolved folders are eagerly registered via the existing gateway project operation because Rune still requires native metadata; React supports presentation-only folders. That ownership/timing difference is documented, not signed off.
+- **still differs** Sidebar/⌘O Open project correctly clears the selection and shows full-page folder setup. The composer now has the anchored 360px recent-folder popup, active/current indicators, typed-path row, no-results state, and Open project… footer dialog. Native project active/updated metadata drives recent ordering. Clamped arrows, initial search focus, Escape and dismissed/reopened resolution protection pass a runtime test. Unknown resolved folders are still eagerly registered via the existing gateway project operation because Rune requires native metadata; React supports presentation-only folders. Saved icon rendering, merged presentation-only folders, errors/pending/focus/Tab and complete placement verification remain open. That ownership/timing difference is documented, not signed off.
 - **still differs** Focus ranking, per-project exclusions/filter UI, inactive pagination and boundary cases have not been fully ported from `threads/focus.ts`, `threads-view.tsx`, and `project-filter.tsx`.
 - **still differs** Sidebar hidden/hover/selected/unread/running states and Show more need a complete behavioral/pixel matrix. Keyboard focus navigation, shortcut numbers and closed/opened-project ownership are not fully equivalent.
 - **still differs** Find now floats and has the source labels, counter, icon buttons, zero-result disabling, Escape and Mod+G. It still navigates rows rather than individual occurrences, lacks distinct active occurrence highlighting/folded-turn reveal/selection seed/focus restoration, and does not search the exact React projected text.
@@ -84,6 +84,13 @@ Open project/icon-picker/Appearance/Tasks pairs were inspected in the fresh
 `/tmp/ocr-parity/settled-review-07.png`; all initial-pass overview sheets were
 also inspected. The last eager-registration change postdates these screenshots
 and only changes unknown-folder selection behavior, not these captured states.
+
+Switcher follow-up: **16 additional pairs** (four states × four configurations),
+`goldens/parity-pages/pair-project-*-{dark,light}-{1280x800,1600x1000}-switcher-final.png`.
+States: picker open, typed path, no matching projects, and footer Open project
+dialog. Fresh review: `/tmp/ocr-parity/switcher-review-09.png` (light 1600×1000),
+plus the initial dark 1280×800 review. Release workspace tests now pass **15 tests**.
+These captures do not establish complete switcher or project parity.
 
 ## Prior-pass evidence and validation
 

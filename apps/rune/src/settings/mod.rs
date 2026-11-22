@@ -528,8 +528,24 @@ pub fn capture(s: &mut State) {
             s.pages.route = Route::ProjectSetup;
             return;
         }
-        "project-picker-open" => {
+        "project-picker-open"
+        | "project-picker-path"
+        | "project-picker-empty"
+        | "project-switcher-dialog" => {
+            s.menus.projects.active = s.project().map(|p| p.canonical.clone()).unwrap_or_default();
+            s.menus.projects.focus_on_show = true;
             s.menus.open = Some(crate::menus::Menu::Projects);
+            if page == "project-picker-path" {
+                s.menus.projects.query = rune::TextEdit::new("/tmp/ocr-parity/proj/new-folder");
+            }
+            if page == "project-picker-empty" {
+                s.menus.projects.query = rune::TextEdit::new("no-matching-project");
+            }
+            if page == "project-switcher-dialog" {
+                s.menus.open = None;
+                s.pages.projects.dialog = Some(projects::Dialog::Open(false));
+                s.pages.projects.capture_focus = true;
+            }
             return;
         }
         "app-menu-open" => {
