@@ -20,9 +20,35 @@ pub struct Data {
     loaded: Option<std::time::Instant>,
     in_flight: bool,
     dirty_due: Option<f64>,
+    watch: Option<super::detail_events::Watch>,
+    usage: BTreeMap<String, Value>,
 }
 impl Data {
     pub fn request(&mut self, url: &str, session: String, directory: String, wake: Option<Waker>) {
+        if self.session != session {
+            self.watch = None;
+            self.usage.clear();
+        }
+        if self.watch.is_none() && !crate::OPTIONS.get().is_some_and(|o| o.headless) {
+            let watch = super::detail_events::Watch::start(
+                url.to_owned(),
+                session.clone(),
+                directory.clone(),
+                wake.clone(),
+            );
+            if self.session == session {
+                watch.descendants(
+                    self.values
+                        .get("costs")
+                        .and_then(|v| v.as_ref().ok())
+                        .and_then(|v| v["ids"].as_array())
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|v| v.as_str().map(str::to_owned)),
+                );
+            }
+            self.watch = Some(watch);
+        }
         if self.session == session && self.in_flight {
             return;
         }
@@ -52,14 +78,38 @@ impl Data {
             });
     }
     pub fn take(&mut self) -> bool {
+        if let Some(watch) = &self.watch {
+            self.usage.extend(watch.take_usage());
+        }
         let Some((session, values)) = self.pending.take() else {
-            return false;
+            return !self.in_flight
+                && super::detail_usage::apply(
+                    Arc::make_mut(&mut self.values),
+                    &self.session,
+                    std::mem::take(&mut self.usage),
+                );
         };
         if session != self.session {
             return false;
         }
         self.in_flight = false;
         self.values = Arc::new(values);
+        super::detail_usage::apply(
+            Arc::make_mut(&mut self.values),
+            &self.session,
+            std::mem::take(&mut self.usage),
+        );
+        if let Some(watch) = &self.watch {
+            watch.descendants(
+                self.values
+                    .get("costs")
+                    .and_then(|v| v.as_ref().ok())
+                    .and_then(|v| v["ids"].as_array())
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|v| v.as_str().map(str::to_owned)),
+            );
+        }
         self.loaded = Some(std::time::Instant::now());
         true
     }
@@ -106,6 +156,7 @@ async fn costs(client: &Gateway, session: &str) -> Result<Value, String> {
     let mut pending = VecDeque::from([session.to_owned()]);
     let mut children = Vec::new();
     let mut total = 0.0;
+    let mut by_id = BTreeMap::new();
     let mut count = 0;
     let mut more = false;
     while let Some(parent) = pending.pop_front() {
@@ -136,6 +187,7 @@ async fn costs(client: &Gateway, session: &str) -> Result<Value, String> {
                 }
                 count += 1;
                 total += child["cost"].as_f64().unwrap_or(0.0);
+                by_id.insert(id.to_owned(), child["cost"].as_f64().unwrap_or(0.0));
                 if preview {
                     children.push(child.clone());
                 }
@@ -155,7 +207,7 @@ async fn costs(client: &Gateway, session: &str) -> Result<Value, String> {
             }
         }
     }
-    Ok(json!({"cost":total,"count":count,"children":children,"more":more}))
+    Ok(json!({"cost":total,"count":count,"children":children,"more":more,"ids":seen,"byID":by_id}))
 }
 pub fn toggle(s: &mut State) {
     s.chat.details = !s.chat.details;
@@ -188,7 +240,14 @@ pub fn poll(s: &mut State, clock: f64) {
     let data = &mut s.chat.media.details;
     if !s.chat.details {
         data.dirty_due = None;
+        data.watch = None;
         return;
+    }
+    if data.watch.as_ref().is_some_and(|watch| watch.take()) {
+        data.loaded = None;
+        // The stream already coalesces its mailbox. An in-flight request keeps
+        // exactly one trailing invalidation; completion wakes the main loop.
+        data.dirty_due.get_or_insert(clock);
     }
     if !data.in_flight && data.dirty_due.is_some_and(|due| clock >= due) {
         data.dirty_due = None;
@@ -251,6 +310,7 @@ fn section(s: &State) -> El {
         .py(8.0)
         .gap(6.0)
         .border_sides([1.0, 0.0, 0.0, 0.0], s.theme.c("border"))
+        .border_layout()
 }
 fn disclosure(
     s: &State,
@@ -261,7 +321,7 @@ fn disclosure(
 ) -> El {
     let key = format!("session-detail-{title}");
     let open = s.chat.open(&key);
-    let mut section = section(s).gap(8.0).child(
+    let mut section = section(s).gap(0.0).child(
         row()
             .w_full()
             .min_h(20.0)
@@ -288,7 +348,7 @@ fn disclosure(
             .on_press(move |s: &mut State| s.chat.toggle(&key)),
     );
     if open {
-        section = section.child(content);
+        section = section.child(content.pt(14.0));
     }
     section
 }
@@ -340,18 +400,9 @@ pub fn view(s: &State, width: f32) -> El {
         .filter(|(_, max)| *max > 0)
         .map(|(n, max)| n as f32 / max as f32);
     let mut popup = col()
-        .key("session-details")
-        .w(panel_width)
+        .key("session-details-content")
+        .w_full()
         .px(12.0)
-        .max_h(s.window_size.1 - 72.0)
-        .scroll(rune::ScrollSpec {
-            stick_bottom: false,
-        })
-        .radius(12.0)
-        .fill(t.c("surface"))
-        .border(1.0, t.c("border-heavy"))
-        .role(if inline { "region" } else { "dialog" })
-        .label("Session details")
         .child(
             row()
                 .w_full()
@@ -497,6 +548,7 @@ pub fn view(s: &State, width: f32) -> El {
                                 )),
                         ),
                 )
+                .py(4.0)
                 .role("button")
                 .focusable(true)
                 .label("Open working-tree changes")
@@ -714,6 +766,20 @@ pub fn view(s: &State, width: f32) -> El {
                     .on_press(refresh),
             );
     }
+    let popup = col()
+        .key("session-details")
+        .w(panel_width)
+        .max_h(s.window_size.1 - 72.0)
+        .radius(12.0)
+        .fill(t.c("surface"))
+        .border(1.0, t.c("border-heavy"))
+        .border_layout()
+        .scroll(rune::ScrollSpec {
+            stick_bottom: false,
+        })
+        .role(if inline { "region" } else { "dialog" })
+        .label("Session details")
+        .child(popup);
     if inline {
         popup.absolute((width - panel_width - 16.0).max(12.0), 16.0)
     } else {

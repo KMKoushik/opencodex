@@ -16,6 +16,8 @@ mod attachments;
 mod copy;
 #[cfg(target_os = "macos")]
 mod pasteboard;
+mod detail_events;
+mod detail_usage;
 pub(crate) mod details;
 mod document;
 mod media;
