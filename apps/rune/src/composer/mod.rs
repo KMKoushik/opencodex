@@ -7,7 +7,7 @@ mod icons;
 
 pub fn view(s: &State, width: f32, height: f32) -> El {
     let t = &s.theme;
-    let column = width.min(768.0);
+    let column = (width - if s.selected.is_some() { 44.0 } else { 0.0 }).min(768.0);
     let inner = (column - 48.0).max(200.0);
     let project = s.project();
     let title = project
@@ -245,9 +245,26 @@ pub fn view(s: &State, width: f32, height: f32) -> El {
         .w(column)
         .px(24.0)
         .py(12.0)
-        .child(composer)
-        .child(workspace);
+        .child(composer);
     // CSS .chat[data-empty]: center in toolbar's remaining space, reserving 14vh below.
+    if s.selected.is_some() {
+        return row()
+            .w_full()
+            .h_full()
+            .min_h(0.0)
+            .child(
+                col()
+                    .key("chat")
+                    .grow(1.0)
+                    .h_full()
+                    .min_w(0.0)
+                    .min_h(0.0)
+                    .items_center()
+                    .child(crate::chat::view(s, width - 44.0))
+                    .child(area),
+            )
+            .child(crate::chat::rail(s));
+    }
     col()
         .key("home")
         .w_full()
@@ -256,7 +273,7 @@ pub fn view(s: &State, width: f32, height: f32) -> El {
         .center()
         .pb(height * 0.14)
         .child(hero)
-        .child(area)
+        .child(area.child(workspace))
 }
 fn starters(s: &State, width: f32) -> El {
     let t = &s.theme;

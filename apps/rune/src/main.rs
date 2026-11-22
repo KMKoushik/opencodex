@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 mod assets;
+mod chat;
 mod composer;
 mod icons;
 mod profile;
@@ -22,6 +23,9 @@ struct Options {
     preset: String,
     dark: bool,
     headless: bool,
+    session: Option<String>,
+    scroll: String,
+    work: Option<String>,
 }
 static OPTIONS: OnceLock<Options> = OnceLock::new();
 struct State {
@@ -38,10 +42,15 @@ struct State {
     inactive_open: bool,
     inactive_visible: usize,
     selected: Option<String>,
+    chat: chat::Chat,
+    history: Vec<Option<String>>,
+    history_index: usize,
     draft: TextEdit,
     error: Option<String>,
     window_size: (f32, f32),
     waker: Option<rune::Waker>,
+    chat_settle_due: Option<f64>,
+    chat_settled: bool,
 }
 impl State {
     fn new() -> Self {
@@ -63,10 +72,15 @@ impl State {
             inactive_open: false,
             inactive_visible: 10,
             selected: None,
+            chat: chat::Chat::default(),
+            history: vec![None],
+            history_index: 0,
             draft: TextEdit::new(""),
             error: None,
             window_size: (1240.0, 840.0),
             waker: None,
+            chat_settle_due: None,
+            chat_settled: false,
         }
     }
     fn project(&self) -> Option<&oc_gateway::types::Project> {
@@ -75,6 +89,50 @@ impl State {
             .as_ref()
             .and_then(|d| self.snapshot.projects.iter().find(|p| &p.canonical == d))
             .or_else(|| self.snapshot.projects.first())
+    }
+    fn open_session(&mut self, id: Option<String>) {
+        if self.selected == id {
+            return;
+        }
+        self.history.truncate(self.history_index + 1);
+        self.history.push(id.clone());
+        if self.history.len() > 64 {
+            self.history.remove(0);
+            self.history_index = self.history_index.saturating_sub(1);
+        }
+        self.history_index += 1;
+        self.select_session(id);
+    }
+    fn select_session(&mut self, id: Option<String>) {
+        self.chat = chat::Chat::default();
+        if let Some(id) = &id {
+            if let Some(thread) = self.snapshot.sessions.get(id) {
+                self.prefs.project = Some(thread.directory.clone());
+            }
+            self.command(oc_gateway::Command::OpenSession(id.clone()));
+        }
+        self.selected = id;
+    }
+    fn navigate(&mut self, forward: bool) {
+        let next = if forward {
+            (self.history_index + 1).min(self.history.len() - 1)
+        } else {
+            self.history_index.saturating_sub(1)
+        };
+        if next != self.history_index {
+            self.history_index = next;
+            self.select_session(self.history[next].clone());
+        }
+    }
+    fn load_earlier(&mut self) {
+        if let Some(id) = self
+            .selected
+            .clone()
+            .filter(|_| self.chat.data.cursor.is_some())
+        {
+            self.chat.loading_earlier = true;
+            self.command(oc_gateway::Command::EarlierMessages(id));
+        }
     }
     fn sidebar_width(&self) -> f32 {
         self.prefs
@@ -127,6 +185,7 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
         .as_ref()
         .and_then(|id| s.snapshot.sessions.get(id))
         .map(|t| t.title.as_str())
+        .or_else(|| s.chat.data.info.as_ref().and_then(|i| i.title.as_deref()))
         .unwrap_or("New thread");
     let mut toolbar = row()
         .key("toolbar")
@@ -159,6 +218,9 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
             .child(sidebar::label(t, "/", 13.0, 400.0, "text-tertiary"));
     }
     toolbar = toolbar.child(sidebar::label(t, title, 13.0, 500.0, "text"));
+    if s.selected.is_some() {
+        toolbar = toolbar.child(el().grow(1.0)).child(chat::toolbar(s));
+    }
     if let Some(error) = s.error.as_ref().or(s.snapshot.error.as_ref()) {
         toolbar = toolbar
             .child(el().grow(1.0))
@@ -240,10 +302,83 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
                 }),
         );
     }
+    if let Some(preview) = chat::preview::view(s, w, h) {
+        shell = shell.child(preview);
+    }
     shell
 }
-fn poll(s: &mut State, _: f64, tx: &mut Tx) -> bool {
+fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
     let mut changed = false;
+    let mut sidebar_changed = false;
+    let mut chat_updated = false;
+    if let Some(data) = s.worker.as_ref().and_then(Worker::take_messages) {
+        if s.selected.as_deref() == Some(&data.session_id) {
+            s.chat.accept(data);
+            if let Some(info) = &s.chat.data.info {
+                s.prefs.project = Some(info.location.directory.clone());
+            }
+            s.chat.media.request(
+                s.chat.data.clone(),
+                OPTIONS.get().unwrap().gateway.as_deref(),
+                s.waker.clone(),
+            );
+            changed = true;
+            chat_updated = true;
+            s.chat_settled = false;
+            s.chat_settle_due = Some(clock + 0.5);
+            tx.wake_after(std::time::Duration::from_millis(500));
+        }
+    }
+    if s.chat.media.take() {
+        s.chat.disclosure_revision += 1;
+        changed = true;
+    }
+    if s.chat.data.running {
+        if s.chat.tick_due.is_none_or(|due| clock >= due) {
+            s.chat.tick_due = Some(clock + 1.0);
+            s.chat.now_ms = unix_ms() as f64;
+            tx.wake_after(std::time::Duration::from_secs(1));
+            changed = true;
+        }
+    } else {
+        s.chat.tick_due = None;
+    }
+    if s.chat_settle_due.is_some_and(|due| clock >= due) {
+        s.chat_settle_due = None;
+        s.chat_settled = true;
+        changed = true;
+    }
+    if s.selected.is_some() && !s.chat.rows.is_empty() {
+        let at = s.chat.position.get();
+        let away = at.max[1] - at.offset[1] > 40.0;
+        if s.chat.jump != away {
+            s.chat.jump = away;
+            changed = true;
+        }
+        if at.viewport[1] > 0.0 && !s.chat.scroll_applied {
+            let scroll = &OPTIONS.get().unwrap().scroll;
+            if scroll == "top" {
+                tx.scroll_to_instant(chat::scroll_key(s), 0.0, 0.0);
+            }
+            if scroll == "middle" {
+                tx.scroll_to_instant(chat::scroll_key(s), 0.0, at.max[1] * 0.5);
+            }
+            s.chat.scroll_applied = true;
+            changed = true;
+        }
+        if !chat_updated
+            && s.worker.is_some()
+            && at.viewport[1] > 0.0
+            && at.offset[1] < 240.0
+            && s.chat.scroll_applied
+            && !s.chat.loading_earlier
+            && s.chat.data.error.is_none()
+            && s.chat.data.cursor.is_some()
+        {
+            s.load_earlier();
+            changed = true;
+        }
+    }
     if let Some(prefs) = s
         .profile
         .as_ref()
@@ -255,6 +390,7 @@ fn poll(s: &mut State, _: f64, tx: &mut Tx) -> bool {
             s.prefs.project = bench;
         }
         changed = true;
+        sidebar_changed = true;
     }
     if let Some(snapshot) = s.worker.as_ref().and_then(Worker::take) {
         if std::env::var("OPENCODEX_FRAME_LOG").as_deref() == Ok("1") {
@@ -269,6 +405,7 @@ fn poll(s: &mut State, _: f64, tx: &mut Tx) -> bool {
         }
         s.snapshot = snapshot;
         changed = true;
+        sidebar_changed = true;
         if let Some(directory) = s
             .project()
             .filter(|p| !s.snapshot.models.contains_key(&p.canonical))
@@ -277,8 +414,10 @@ fn poll(s: &mut State, _: f64, tx: &mut Tx) -> bool {
             s.command(oc_gateway::Command::Details(directory));
         }
     }
-    if changed {
+    if sidebar_changed {
         sidebar::rebuild(s);
+    }
+    if changed {
         tx.instant();
     }
     changed
@@ -333,8 +472,27 @@ fn main() {
             preset: value("--preset").unwrap_or_default(),
             dark,
             headless,
+            session: value("--session"),
+            scroll: value("--scroll").unwrap_or_else(|| "bottom".into()),
+            work: value("--work"),
         })
         .ok();
+    if let Some(id) = value("--profile-chat") {
+        let url = OPTIONS
+            .get()
+            .unwrap()
+            .gateway
+            .as_deref()
+            .expect("OPENCODEX_GATEWAY");
+        let ms = value("--probe-ms")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1500);
+        if let Err(error) = chat::probe::run(url, id, std::time::Duration::from_millis(ms)) {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     let spec = AppSpec {
         poll: Some(poll),
         setup: Some(|s, waker| s.waker = Some(waker)),
@@ -352,7 +510,7 @@ fn main() {
                 return true;
             }
             if ev.is_command('n') {
-                s.selected = None;
+                s.open_session(None);
                 tx.focus("message", false);
                 return true;
             }
@@ -370,8 +528,28 @@ fn main() {
         });
     let handle = app.handle();
     let bench = std::env::var("OPENCODEX_BENCH").as_deref() == Ok("1");
+    if bench && !headless {
+        let signal_handle = handle.clone();
+        std::thread::spawn(move || {
+            if let Ok(mut signals) =
+                signal_hook::iterator::Signals::new([signal_hook::consts::SIGUSR1])
+            {
+                for _ in signals.forever() {
+                    if let Ok(id) = std::env::var("OPENCODEX_BENCH_SESSION") {
+                        signal_handle.update(move |s, tx| {
+                            s.open_session(Some(id.clone()));
+                            tx.settle();
+                        });
+                    }
+                }
+            }
+        });
+    }
     let frame_log = std::env::var("OPENCODEX_FRAME_LOG").as_deref() == Ok("1");
     let mut marked = false;
+    let mut session_marked: Option<String> = None;
+    let mut settled_marked: Option<String> = None;
+    let mut reply_marked = false;
     app.init(|| {
         let mut s = State::new();
         if OPTIONS.get().unwrap().headless {
@@ -384,7 +562,50 @@ fn main() {
                     }
                 }
             }
+            if let Some(id) = &OPTIONS.get().unwrap().session {
+                s.selected = Some(id.clone());
+                if let Some(thread) = s.snapshot.sessions.get(id) {
+                    s.prefs.project = Some(thread.directory.clone());
+                }
+                if let Some(url) = &OPTIONS.get().unwrap().gateway {
+                    match Gateway::new(url, None).and_then(|client| {
+                        oc_gateway::capture_messages(
+                            client,
+                            id.clone(),
+                            OPTIONS.get().unwrap().scroll != "bottom",
+                        )
+                    }) {
+                        Ok(data) => s.chat.accept(Arc::new(data)),
+                        Err(e) => {
+                            eprintln!("{e}");
+                            std::process::exit(1);
+                        }
+                    }
+                    if let Err(error) = s.chat.media.capture(s.chat.data.clone(), url) {
+                        s.error = Some(error);
+                    }
+                }
+                if let Some(directory) = s.project().map(|p| p.canonical.clone()) {
+                    if !s.snapshot.models.contains_key(&directory) {
+                        // Capture-only snapshot details still run on a worker, never in a frame.
+                        if let Some(url) = &OPTIONS.get().unwrap().gateway {
+                            let client = Gateway::new(url, None).expect("capture gateway");
+                            s.snapshot = Arc::new(
+                                oc_gateway::capture_details(
+                                    client,
+                                    directory,
+                                    (*s.snapshot).clone(),
+                                )
+                                .expect("capture details"),
+                            );
+                        }
+                    }
+                }
+            }
             s.assets = Some(Assets::load(&s.theme, Arc::new(|| {}), true));
+            if let Some(mode) = &OPTIONS.get().unwrap().work {
+                s.chat.expand(mode);
+            }
             sidebar::rebuild(&mut s);
         }
         s
@@ -402,9 +623,13 @@ fn main() {
             match &OPTIONS.get().unwrap().gateway {
                 Some(url) => match Gateway::new(url, None) {
                     Ok(client) => {
-                        s.worker = Some(Worker::start(client, s.prefs.project.clone(), move || {
-                            wake()
-                        }))
+                        s.worker =
+                            Some(Worker::start(client, s.prefs.project.clone(), move || {
+                                wake()
+                            }));
+                        if let Some(id) = &OPTIONS.get().unwrap().session {
+                            s.open_session(Some(id.clone()));
+                        }
                     }
                     Err(e) => s.error = Some(e),
                 },
@@ -420,6 +645,38 @@ fn main() {
         }
     })
     .on_frame_drawn(move |rt| {
+        if bench {
+            if let Some(id) = &rt.state.selected {
+                let mounted = rt.elements().iter().any(|e| {
+                    if e.visible[2] <= 0.0 || e.visible[3] <= 0.0 {
+                        return false;
+                    }
+                    e.key
+                        .as_ref()
+                        .is_some_and(|key| rt.state.chat.rows.iter().any(|row| &row.id == key))
+                });
+                if mounted && session_marked.as_ref() != Some(id) {
+                    eprintln!("OPENCODEX_BENCH session_first_row {}", unix_ms());
+                    eprintln!("OPENCODEX_BENCH session_loaded {}", unix_ms());
+                    session_marked = Some(id.clone());
+                }
+                if mounted && rt.state.chat_settled && settled_marked.as_ref() != Some(id) {
+                    eprintln!("OPENCODEX_BENCH session_settled {}", unix_ms());
+                    settled_marked = Some(id.clone());
+                }
+                if !reply_marked
+                    && rt.elements().iter().any(|e| {
+                        e.path.contains(":text:")
+                            && e.visible[2] > 0.0
+                            && e.visible[3] > 0.0
+                            && e.text.as_deref().is_some_and(|t| t.contains("BENCH-END"))
+                    })
+                {
+                    eprintln!("OPENCODEX_BENCH reply_rendered {}", unix_ms());
+                    reply_marked = true;
+                }
+            }
+        }
         if frame_log {
             eprintln!(
                 "OPENCODEX_SIDEBAR {} {} {}",

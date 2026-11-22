@@ -191,8 +191,20 @@ pub fn view(s: &State) -> El {
         .child(
             row()
                 .gap(2.0)
-                .child(icon_button_size(t, &i::BACK, "Go back", 14.0).dim(0.45))
-                .child(icon_button_size(t, &i::FORWARD, "Go forward", 14.0).dim(0.45)),
+                .child(
+                    icon_button_size(t, &i::BACK, "Go back", 14.0)
+                        .on_press(|s: &mut State| s.navigate(false))
+                        .dim(if s.history_index > 0 { 1.0 } else { 0.45 }),
+                )
+                .child(
+                    icon_button_size(t, &i::FORWARD, "Go forward", 14.0)
+                        .on_press(|s: &mut State| s.navigate(true))
+                        .dim(if s.history_index + 1 < s.history.len() {
+                            1.0
+                        } else {
+                            0.45
+                        }),
+                ),
         )
         .child(
             icon_button(t, &i::SIDEBAR, "Hide sidebar").on_press(|s: &mut State| {
@@ -223,7 +235,7 @@ pub fn view(s: &State) -> El {
         .w_full()
         .mb(16.0)
         .child(nav(t, &i::EDIT, "New thread").on_press(|s: &mut State| {
-            s.selected = None;
+            s.open_session(None);
         }))
         .child(
             nav(t, &i::FOLDER_OPEN, "Open project").on_press_tx(|_: &mut State, tx| {
@@ -425,7 +437,7 @@ fn render_item(s: &State, n: usize) -> El {
                             if let Some(p) = s.snapshot.projects.iter().find(|p| p.id == new) {
                                 s.prefs.project = Some(p.canonical.clone());
                             }
-                            s.selected = None;
+                            s.open_session(None);
                             s.folded.remove(&new);
                             rebuild(s);
                             s.save();
@@ -578,7 +590,7 @@ fn render_item(s: &State, n: usize) -> El {
                     if let Some(t) = s.snapshot.sessions.get(&id) {
                         s.prefs.project = Some(t.directory.clone());
                     }
-                    s.selected = Some(id.clone());
+                    s.open_session(Some(id.clone()));
                     s.save();
                 }))
         }

@@ -7,6 +7,9 @@ fn long_sidebar_only_mounts_visible_rows() {
         preset: String::new(),
         dark: true,
         headless: true,
+        session: None,
+        scroll: "bottom".into(),
+        work: None,
     });
     let mut state = State::new();
     let project = oc_gateway::types::Project {
