@@ -128,6 +128,9 @@ pub enum Request {
         temporary: String,
         destination: Option<String>,
     },
+    ProjectPreview {
+        source: String,
+    },
     ProjectIcon {
         source: String,
         local: bool,
@@ -255,6 +258,10 @@ impl PromptWorker {
                                         result: result.map(|_| Value::Null),
                                     }
                                 }
+                                Request::ProjectPreview { source } => Reply::Data {
+                                    tag: format!("project-preview:{source}"),
+                                    result: crate::project_icon::preview(&source).await,
+                                },
                                 Request::ProjectIcon {
                                     source,
                                     local,

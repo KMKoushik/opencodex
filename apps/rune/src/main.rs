@@ -236,6 +236,11 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
     // globals.css resets native outlines; individual web controls opt back in.
     cx.focus_ring(0.0, 0.0, rune::Color::TRANSPARENT);
     let t = &s.theme;
+    cx.help_look(if matches!(s.pages.route, pages::Route::Settings(_)) {
+        t.settings_help(s.window_size.0)
+    } else {
+        rune::HelpLook::system(t.dark)
+    });
     cx.caption_color(if t.dark {
         t.c("text-secondary")
     } else {
@@ -457,6 +462,7 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
     let connection_changed = pages::offline::poll(s, clock, tx)
         | sidebar::focus::poll(s, clock, tx)
         | sidebar::images::take(s);
+    let settings_clock = (s.pages.remote.minute, s.pages.remote.clock_second);
     let task_minute = s.pages.tasks.minute;
     if let Some(worker) = &s.worker {
         let changes = worker.take_page_changes();
@@ -474,7 +480,10 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
     }
     let code_changed = apps::code::poll(s);
     let source_find_changed = apps::code::find::poll(s, tx);
+    let notification_changed = notifications::poll(s);
     changed |= settings::appearance::receive_color(s)
+        || notification_changed
+        || settings_clock != (s.pages.remote.minute, s.pages.remote.clock_second)
         || task_minute != s.pages.tasks.minute
         || code_changed
         || source_find_changed;

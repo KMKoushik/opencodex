@@ -7,6 +7,8 @@ use rune::{El, TextEdit, TextStyle, col, el, row, text_input};
 use serde_json::{Value, json};
 pub mod editor;
 pub mod folder;
+pub mod images;
+mod instructions;
 #[derive(Clone, PartialEq)]
 pub enum Dialog {
     Open(bool),
@@ -16,6 +18,7 @@ pub enum Dialog {
 }
 #[derive(Default)]
 pub struct Projects {
+    pub images: std::collections::BTreeMap<String, images::Preview>,
     pub search: TextEdit,
     pub dialog: Option<Dialog>,
     pub directory: TextEdit,
@@ -24,6 +27,11 @@ pub struct Projects {
     pub color: String,
     pub image: String,
     pub preview: Option<rune::Image>,
+    pub preparing: Option<&'static str>,
+    pub instructions_height: f32,
+    pub editor_save_error: Option<String>,
+    pub upload_error: Option<String>,
+    pub url_error: Option<String>,
     pub busy: bool,
     pub error: Option<String>,
     pub folders: Option<Value>,
@@ -45,9 +53,12 @@ pub fn open(s: &mut State, dialog: Dialog, tx: &mut rune::Tx) {
         Dialog::Open(_) => {
             s.pages.projects.directory.clear();
             s.pages.projects.suggesting = false;
-            tx.focus_when_shown("Project directory", false);
+            tx.focus_when_shown("project-dialog-close", false);
         }
         Dialog::Edit(id) => {
+            s.pages.projects.editor_save_error = None;
+            s.pages.projects.upload_error = None;
+            s.pages.projects.url_error = None;
             s.pages.projects.preview = None;
             if let Some(p) = s.snapshot.projects.iter().find(|p| &p.id == id) {
                 s.pages.projects.name = TextEdit::new(p.display_name());
@@ -71,6 +82,7 @@ pub fn open(s: &mut State, dialog: Dialog, tx: &mut rune::Tx) {
             }
         }
         Dialog::Instructions(id) => {
+            s.pages.projects.instructions_height = 260.0;
             s.pages.instructions_project = Some(id.clone());
             s.pages.instructions.clear();
             s.pages.instructions_dirty = false;
@@ -279,6 +291,7 @@ pub fn view(s: &State, mut body: El) -> El {
         let name = p.display_name();
         list = list.child(
             row()
+                .key(format!("settings-project-{id}"))
                 .w_full()
                 .min_h(56.0)
                 .gap(8.0)
@@ -297,15 +310,21 @@ pub fn view(s: &State, mut body: El) -> El {
                         .role("button")
                         .label(name)
                         .focusable(true)
-                        .child(avatar(
-                            s,
-                            name,
-                            p.icon
-                                .as_ref()
-                                .and_then(|i| i.color.as_deref())
-                                .unwrap_or("gray"),
-                            20.0,
-                        ))
+                        .child(
+                            images::source(p.icon.as_ref())
+                                .and_then(|source| images::view(s, source, 20.0))
+                                .unwrap_or_else(|| {
+                                    avatar(
+                                        s,
+                                        name,
+                                        p.icon
+                                            .as_ref()
+                                            .and_then(|i| i.color.as_deref())
+                                            .unwrap_or("gray"),
+                                        20.0,
+                                    )
+                                }),
+                        )
                         .child(label(&s.theme, name, 14.0, 500.0, "text").truncate())
                         .on_press_tx(move |s: &mut State, tx| {
                             open(s, Dialog::Edit(edit.clone()), tx)
@@ -341,23 +360,27 @@ pub fn avatar(s: &State, name: &str, color: &str, size: f32) -> El {
         "gray"
     };
     el().size(size, size)
-        .radius(size / 4.0)
+        .radius(if size >= 48.0 { 10.0 } else { size / 4.0 })
         .center()
         .fill(s.theme.c(&format!("project-{color}")))
         .border(1.0, s.theme.c("border-heavy"))
         .child(label(
             &s.theme,
-            name.chars()
+            name.trim()
+                .chars()
                 .next()
                 .unwrap_or('?')
                 .to_uppercase()
                 .to_string(),
-            size * 0.65,
+            if size >= 48.0 { 26.0 } else { size * 0.65 },
             500.0,
             "on-project",
         ))
 }
 pub fn dialog(s: &State) -> Option<El> {
+    if s.pages.remote.pairing_at.is_some() {
+        return super::pairing::dialog(s);
+    }
     let dialog = s.pages.projects.dialog.as_ref()?;
     let (title, width, content): (String, f32, El) = match dialog {
         Dialog::Open(register) => (
@@ -374,7 +397,7 @@ pub fn dialog(s: &State) -> Option<El> {
         Dialog::Instructions(id) => (
             format!("{} instructions", project_name(s, id)),
             600.0,
-            instructions(s, id),
+            instructions::view(s, id),
         ),
         Dialog::Worktrees(id) => (
             format!("Worktrees · {}", project_name(s, id)),
@@ -408,7 +431,7 @@ pub fn dialog(s: &State) -> Option<El> {
             tx.focus_when_shown(
                 match s.pages.projects.dialog {
                     Some(Dialog::Instructions(_)) => "project-instructions",
-                    Some(Dialog::Open(_)) => "Project directory",
+                    Some(Dialog::Open(_)) if s.pages.projects.suggesting => "Project directory",
                     _ => "project-dialog-close",
                 },
                 false,
@@ -420,6 +443,7 @@ pub fn dialog(s: &State) -> Option<El> {
         .radius(14.0)
         .fill(s.theme.c("elevated"))
         .border(1.0, s.theme.c("border-heavy"))
+        .border_layout()
         .scroll(rune::ScrollSpec {
             stick_bottom: false,
         })
@@ -463,13 +487,28 @@ pub fn write(s: &mut State, tag: &str, path: String, method: &str, body: Value) 
     }
 }
 pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) {
+    let result = result.map_err(super::gateway_error);
+    if let Some(source) = tag.strip_prefix("project-preview:") {
+        images::receive(s, source, result);
+        return;
+    }
     if let Some(parent) = tag.strip_prefix("project-folders:") {
         folder::receive(s, parent, result);
         return;
     }
     s.pages.projects.busy = false;
     match result {
-        Err(error) => s.pages.projects.error = Some(error),
+        Err(error) => match tag {
+            "project-save" => s.pages.projects.editor_save_error = Some(error),
+            "project-icon" => {
+                if s.pages.projects.preparing == Some("upload") {
+                    s.pages.projects.upload_error = Some(error);
+                } else {
+                    s.pages.projects.url_error = Some(error);
+                }
+            }
+            _ => s.pages.projects.error = Some(error),
+        },
         Ok(value) => match tag {
             "project-open" => {
                 if let Some(path) = value["directory"]
@@ -561,47 +600,6 @@ fn footer(s: &State, enabled: bool, save: impl Fn(&mut State) + 'static) -> El {
             .disabled(!enabled || s.pages.projects.busy)
             .on_press(save),
         )
-}
-fn instructions(s: &State, id: &str) -> El {
-    let path = format!("projects/{id}/instructions");
-    let ready = pages::data(s, &path).is_some();
-    let savepath = path.clone();
-    let mut body=col().w_full().gap(12.0).child(label(&s.theme,"Sent with every chat in this project, on desktop and iPhone. They're saved on this computer, not in the repo; for instructions your team shares, use the repo's AGENTS.md.",13.0,400.0,"text-secondary").w_full().wrap());
-    if let Some(Err(error)) = s.pages.data.get(&path) {
-        let retry = path.clone();
-        body = body
-            .child(label(&s.theme, error, 13.0, 400.0, "error").w_full().wrap())
-            .child(pages::button(s, "Retry").on_press(move |s: &mut State| s.page_get(&retry)));
-    } else {
-        let save = savepath.clone();
-        body=body.child(text_input(&s.pages.instructions,TextStyle::new(13.0,400.0).lh(20.15)).key("project-instructions").label("Project instructions").w_full().h(260.0).px(12.0).py(10.0).radius(8.0).color(s.theme.c("text")).fill(s.theme.c("control")).border(1.0,s.theme.c("border-heavy"))
-        .disabled(!ready||s.pages.projects.busy).placeholder(if ready{"For example: Use pnpm, not npm. Run pnpm test before saying a change works. Ask before touching the database schema."}else{"Loading…"},s.theme.c("text-tertiary"))
-        .on_edit(|s:&mut State|&mut s.pages.instructions)
-        .on_input_change(|s:&mut State,_|s.pages.instructions_dirty=true)
-        .on_input_key(move|s:&mut State,e,_|{if e.key==rune::Key::Escape{close(s);true}else if e.key==rune::Key::Enter&&(e.mods.cmd||e.mods.ctrl){if s.pages.instructions.text.encode_utf16().count()<=50000{write(s,"instructions",save.clone(),"PUT",json!({"text":s.pages.instructions.text}));}true}else{false}}));
-    }
-    let count = s.pages.instructions.text.encode_utf16().count();
-    with_error(s, body)
-        .child(label(
-            &s.theme,
-            if count > 45000 {
-                format!("{count} of 50,000 characters.")
-            } else {
-                "Open chats use the new instructions from their next message.".into()
-            },
-            12.0,
-            400.0,
-            "text-tertiary",
-        ))
-        .child(footer(s, ready && count <= 50000, move |s: &mut State| {
-            write(
-                s,
-                "instructions",
-                savepath.clone(),
-                "PUT",
-                json!({"text":s.pages.instructions.text}),
-            )
-        }))
 }
 fn worktrees(s: &State, id: &str) -> El {
     let path = format!("projects/{id}/worktrees");

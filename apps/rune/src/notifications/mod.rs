@@ -4,6 +4,46 @@ use serde_json::Value;
 #[derive(Default)]
 pub struct Notifications {
     pub shown: std::collections::BTreeSet<String>,
+    pub requesting: Option<String>,
+    pub error: Option<(String, String)>,
+}
+pub fn change(s: &mut State, kind: &str, enabled: bool) {
+    if s.notifications.requesting.is_some() {
+        return;
+    }
+    s.notifications.error = None;
+    if !enabled {
+        s.prefs.notifications.insert(kind.into(), false);
+        s.save();
+        return;
+    }
+    let Some(wake) = s.waker.clone() else {
+        return;
+    };
+    s.notifications.requesting = Some(kind.into());
+    oc_native::notifications::request_permission(wake);
+}
+pub fn poll(s: &mut State) -> bool {
+    let Some(result) = oc_native::notifications::take_permission() else {
+        return false;
+    };
+    let Some(kind) = s.notifications.requesting.take() else {
+        return false;
+    };
+    match result {
+        Ok(true) => {
+            s.prefs.notifications.insert(kind, true);
+            s.save();
+        }
+        Ok(false) => {
+            s.notifications.error = Some((
+                kind,
+                "Notifications are blocked. Allow them in your browser or system settings.".into(),
+            ))
+        }
+        Err(error) => s.notifications.error = Some((kind, error)),
+    }
+    true
 }
 pub fn clear_on_focus(s: &mut State) {
     if !s.notifications.shown.is_empty() && rune_notify::app_focused() {

@@ -6,8 +6,15 @@ use crate::{
 };
 use rune::{El, ScrollSpec, col, el, row};
 pub mod appearance;
+pub mod controls;
+pub mod pairing;
 pub mod projects;
+mod qr;
 pub mod remote;
+#[cfg(test)]
+mod tests;
+pub mod usage;
+mod usage_icons;
 
 pub const SECTIONS: &[(&str, &str)] = &[
     ("general", "General"),
@@ -17,6 +24,14 @@ pub const SECTIONS: &[(&str, &str)] = &[
     ("usage", "Usage"),
     ("remote", "Remote access"),
 ];
+pub fn gateway_error(error: String) -> String {
+    if error.starts_with("Gateway ") {
+        if let Some((_, message)) = error.split_once(": ") {
+            return message.to_owned();
+        }
+    }
+    error
+}
 pub fn view(s: &State, section: &str) -> El {
     let title = SECTIONS
         .iter()
@@ -25,12 +40,18 @@ pub fn view(s: &State, section: &str) -> El {
         .unwrap_or("Settings");
     let mut body = col()
         .w_full()
-        .max_w(if section == "projects" { 900.0 } else { 720.0 })
+        .max_w(if section == "projects" {
+            900.0
+        } else if section == "usage" {
+            960.0
+        } else {
+            720.0
+        })
         .px(24.0)
         .pt(24.0)
         .pb(64.0)
         .gap(16.0);
-    if section != "projects" {
+    if section != "projects" && section != "usage" {
         body = body.child(
             label(&s.theme, title, 20.0, 600.0, "text")
                 .font(rune::TextStyle::new(20.0, 600.0).lh(26.0))
@@ -102,7 +123,7 @@ pub fn view(s: &State, section: &str) -> El {
             )
         }
         "projects" => projects::view(s, body),
-        "usage" => usage(s, body),
+        "usage" => usage::view(s, body),
         "remote" => remote::view(s, body),
         _ => general(s, body),
     };
@@ -186,6 +207,7 @@ fn setting_row_styled(s: &State, title: &str, description: &str, spans: Vec<rune
         .center_y()
         .border_sides([1.0, 0.0, 0.0, 0.0], s.theme.c("border"))
         .child(content)
+        .border_layout()
 }
 fn general(s: &State, mut body: El) -> El {
     let connection = data(s, "connection");
@@ -299,24 +321,30 @@ fn general(s: &State, mut body: El) -> El {
                 option
             };
             toggle = toggle.child(option.on_press(move |s: &mut State| {
-                s.prefs.notifications.insert(kind.into(), value);
-                s.save();
+                crate::notifications::change(s, kind, value);
             }));
         }
-        notifications = notifications.child(setting_row(s, title, description).child(toggle));
+        let error = s
+            .notifications
+            .error
+            .as_ref()
+            .filter(|(k, _)| k == kind)
+            .map(|(_, e)| e.as_str());
+        let description = error.unwrap_or(description);
+        let spans = error
+            .map(|_| vec![rune::Span::new(0, description.len()).color(s.theme.c("error"))])
+            .unwrap_or_default();
+        notifications =
+            notifications.child(setting_row_styled(s, title, description, spans).child(toggle));
     }
     body = body.child(notifications);
     if let Some(p) = s.project() {
-        let directory = p.canonical.clone();
+        let id = p.id.clone();
         body = body.child(group(s, "Project").child(
             setting_row(s, p.display_name(), &p.canonical).child(
                 button(s, "Close project").on_press(move |s: &mut State| {
-                    s.prefs.closed_projects.push(directory.clone());
-                    s.prefs.project = None;
-                    s.open_session(None);
+                    projects::close_project(s, &id);
                     s.open_page(Route::Settings("general".into()));
-                    crate::sidebar::rebuild(s);
-                    s.save();
                 }),
             ),
         ));
@@ -450,45 +478,13 @@ pub fn restored_theme(prefs: &crate::profile::Preferences, dark: bool) -> Theme 
         theme
     }
 }
-fn usage(s: &State, mut body: El) -> El {
-    if let Some(status) = pages::status(s, "usage/limits") {
-        return body.child(status);
-    }
-    if let Some(value) = data(s, "usage/limits") {
-        let providers = value["providers"].as_array();
-        if providers.is_none_or(Vec::is_empty) {
-            body=body.child(label(&s.theme,"No plan limits to show. Sign in with ChatGPT or add an OpenCode Go key in OpenCode, or sign in to Claude Code, to see your remaining usage here.",13.0,400.0,"text-secondary"));
-        }
-        for provider in providers.into_iter().flatten() {
-            let mut card = group(s, provider["name"].as_str().unwrap_or("Provider"));
-            if let Some(error) = provider["error"].as_str() {
-                card = card.child(label(&s.theme, error, 12.0, 400.0, "error").padding(16.0));
-            }
-            for window in provider["windows"].as_array().into_iter().flatten() {
-                let left =
-                    (100.0 - window["usedPercent"].as_f64().unwrap_or(0.0)).clamp(0.0, 100.0);
-                card = card
-                    .child(setting_row(
-                        s,
-                        window["label"].as_str().unwrap_or("Limit"),
-                        &format!("{left:.0}% left"),
-                    ))
-                    .child(
-                        el().h(6.0)
-                            .w_full()
-                            .fill(s.theme.c("hover"))
-                            .child(el().h(6.0).w(left as f32 * 4.0).fill(s.theme.c("accent"))),
-                    );
-            }
-            body = body.child(card);
-        }
-    }
-    body.child(button(s, "Refresh").on_press(|s: &mut State| s.page_get("usage/limits")))
-}
 pub fn capture(s: &mut State) {
     let page = &crate::OPTIONS.get().unwrap().page;
     if page.is_empty() {
         return;
+    }
+    if page.contains("project") {
+        projects::images::capture(s);
     }
     if crate::apps::capture(s, page) {
         return;
@@ -665,7 +661,7 @@ pub fn capture(s: &mut State) {
         "tasks" | "tasks-empty" | "tasks-edit-open" | "tasks-new-open" => Route::Tasks,
         "apps" | "apps-empty" => Route::Apps,
         "usage-limits-open" => Route::Settings("usage".into()),
-        "settings-remote-access" => Route::Settings("remote".into()),
+        page if page.starts_with("settings-remote") => Route::Settings("remote".into()),
         _ => Route::Settings(page.trim_start_matches("settings-").into()),
     };
     if matches!(&s.pages.route, Route::Settings(v) if v == "general")
@@ -710,6 +706,10 @@ pub fn capture(s: &mut State) {
         };
         pages::receive(s, &format!("page:{path}"), result);
     }
+    if page == "settings-remote-pair" {
+        pairing::capture(s);
+    }
+    remote::capture(s, page);
     if page == "tasks-edit-open" {
         if let Some(task) = pages::data(s, "tasks")
             .and_then(serde_json::Value::as_array)

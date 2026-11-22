@@ -11,6 +11,13 @@ pub mod types;
 pub use client::Gateway;
 pub use client::terminal;
 pub use snapshot::Snapshot;
+pub fn capture_project_preview(source: &str) -> Result<serde_json::Value, String> {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| e.to_string())?
+        .block_on(project_icon::preview(source))
+}
 
 /// Native sidecar bootstrap; call only on a startup worker.
 pub fn connect_blocking(client: &Gateway) -> Result<(), String> {
