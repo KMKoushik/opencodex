@@ -15,7 +15,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
-pub enum Command { Refresh, More(String), AddProject(String), Details(String) }
+pub enum Command {
+    Refresh,
+    More(String),
+    AddProject(String),
+    Details(String),
+}
 
 /// A capacity-one latest snapshot mailbox; streaming cannot build a UI work backlog.
 pub struct Worker {
@@ -24,7 +29,11 @@ pub struct Worker {
     stop: Option<tokio::sync::oneshot::Sender<()>>,
 }
 impl Worker {
-    pub fn start(client: Gateway, wake: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn start(
+        client: Gateway,
+        initial_directory: Option<String>,
+        wake: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
         let latest = Arc::new(Mutex::new(None));
         let mailbox = latest.clone();
         let (commands, mut receiver) = mpsc::channel(16);
@@ -58,7 +67,7 @@ impl Worker {
                                                     snapshot.live = true;
                                                     delay = Duration::from_millis(500);
                                                     publish(&mut snapshot);
-                                                    let directory = std::env::var("OPENCODEX_BENCH_PROJECT").ok()
+                                                    let directory = initial_directory.clone()
                                                         .or_else(|| snapshot.projects.first().map(|p| p.canonical.clone()));
                                                     if let Some(directory) = directory {
                                                         if let Err(e) = snapshot.details(&client, &directory).await { snapshot.error=Some(e); }
@@ -66,8 +75,13 @@ impl Worker {
                                                     }
                                                 }
                                                 "opencode" => {
-                                                    let event = serde_json::from_str(&data).map_err(|e| format!("Invalid gateway event: {e}"))?;
-                                                    if snapshot.reduce(event) { publish(&mut snapshot); }
+                                                    let event: types::Event = serde_json::from_str(&data).map_err(|e| format!("Invalid gateway event: {e}"))?;
+                                                    let requests=event.r#type.starts_with("permission.") || event.r#type.starts_with("form.");
+                                                    let projects=event.r#type.starts_with("project.");
+                                                    let mut changed=snapshot.reduce(event);
+                                                    if requests { changed|=snapshot.refresh_attention(&client).await?; }
+                                                    if projects { snapshot.projects=client.projects().await?;changed=true; }
+                                                    if changed { publish(&mut snapshot); }
                                                 }
                                                 "unavailable" => return Err("OpenCode is unavailable".into()),
                                                 _ => {}
@@ -78,7 +92,8 @@ impl Worker {
                                         let Some(command) = command else { return Ok(()); };
                                         match command {
                                             Command::Details(directory) => {
-                                                if !snapshot.models.contains_key(&directory) { snapshot.details(&client,&directory).await?; }
+                                                if snapshot.models.contains_key(&directory) { continue; }
+                                                snapshot.details(&client,&directory).await?;
                                             }
                                             Command::Refresh => {
                                                 snapshot = Snapshot::load(&client).await?;
@@ -93,8 +108,16 @@ impl Worker {
                                                 if let Some(cursor) = snapshot.cursors.get(&directory) {
                                                     let page = client.sessions(&directory, Some(cursor)).await?;
                                                     snapshot.cursors.remove(&directory);
-                                                    if let Some(cursor) = page.next_cursor { snapshot.cursors.insert(directory, cursor); }
+                                                    if let Some(cursor) = page.next_cursor { snapshot.cursors.insert(directory.clone(), cursor); }
                                                     for s in page.sessions { snapshot.sessions.insert(s.id.clone(), s); }
+                                                }
+                                                if let Some(id) = snapshot.projects.iter().find(|p| p.canonical==directory).map(|p| p.id.clone()) {
+                                                    if let Some(cursor) = snapshot.project_cursors.get(&id) {
+                                                        let page = client.project_sessions(&id, Some(cursor)).await?;
+                                                        snapshot.project_cursors.remove(&id);
+                                                        if let Some(cursor) = page.next_cursor { snapshot.project_cursors.insert(id, cursor); }
+                                                        for s in page.sessions { snapshot.sessions.insert(s.id.clone(), s); }
+                                                    }
                                                 }
                                             }
                                         }
@@ -115,25 +138,42 @@ impl Worker {
                 tokio::select! { _ = run => {}, _ = stopped => {} }
             });
         }).expect("gateway worker");
-        Self { latest, commands, stop: Some(stop) }
+        Self {
+            latest,
+            commands,
+            stop: Some(stop),
+        }
     }
-    pub fn take(&self) -> Option<Arc<Snapshot>> { self.latest.lock().expect("mailbox").take() }
-    pub fn command(&self, command: Command) -> Result<(), String> { self.commands.try_send(command).map_err(|e| e.to_string()) }
+    pub fn take(&self) -> Option<Arc<Snapshot>> {
+        self.latest.lock().expect("mailbox").take()
+    }
+    pub fn command(&self, command: Command) -> Result<(), String> {
+        self.commands.try_send(command).map_err(|e| e.to_string())
+    }
 }
 impl Drop for Worker {
-    fn drop(&mut self) { if let Some(stop) = self.stop.take() { let _ = stop.send(()); } }
+    fn drop(&mut self) {
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
+    }
 }
 
 /// Headless capture waits for real data before its virtual clock starts; never used by a window.
 pub fn capture(client: Gateway) -> Result<Snapshot, String> {
     std::thread::spawn(move || {
-        tokio::runtime::Builder::new_current_thread().enable_all().build()
-            .map_err(|e| e.to_string())?.block_on(async {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| e.to_string())?
+            .block_on(async {
                 let mut snapshot = Snapshot::load(&client).await?;
                 if let Some(directory) = snapshot.projects.first().map(|p| p.canonical.clone()) {
-                    snapshot.details(&client,&directory).await?;
+                    snapshot.details(&client, &directory).await?;
                 }
                 Ok(snapshot)
             })
-    }).join().map_err(|_| "Gateway capture worker panicked".to_owned())?
+    })
+    .join()
+    .map_err(|_| "Gateway capture worker panicked".to_owned())?
 }

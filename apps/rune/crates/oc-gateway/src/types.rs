@@ -21,9 +21,15 @@ pub struct Project {
 }
 impl Project {
     pub fn display_name(&self) -> &str {
-        self.name.as_deref().filter(|n| !n.is_empty()).unwrap_or_else(|| {
-            self.canonical.rsplit('/').find(|n| !n.is_empty()).unwrap_or(&self.canonical)
-        })
+        self.name
+            .as_deref()
+            .filter(|n| !n.is_empty())
+            .unwrap_or_else(|| {
+                self.canonical
+                    .rsplit('/')
+                    .find(|n| !n.is_empty())
+                    .unwrap_or(&self.canonical)
+            })
     }
 }
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -57,7 +63,9 @@ pub struct Session {
     pub fork: Option<Value>,
 }
 impl Session {
-    pub fn activity(&self) -> f64 { self.time.idle.unwrap_or(self.time.created) }
+    pub fn activity(&self) -> f64 {
+        self.time.idle.unwrap_or(self.time.created)
+    }
     pub fn unread(&self) -> bool {
         self.unread.is_some() || self.time.idle.unwrap_or(0.0) > self.time.viewed.unwrap_or(0.0)
     }
@@ -70,7 +78,9 @@ pub struct SessionPage {
     pub search_notice: Option<String>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Location { pub directory: String }
+pub struct Location {
+    pub directory: String,
+}
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionInfo {
@@ -97,7 +107,10 @@ pub struct MessagePage {
     pub cursor: Option<Cursor>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Cursor { pub previous: Option<String>, pub next: Option<String> }
+pub struct Cursor {
+    pub previous: Option<String>,
+    pub next: Option<String>,
+}
 /// Unknown message/part kinds and fields survive decoding for future capabilities.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Message {
@@ -125,4 +138,7 @@ pub struct ModelCatalog {
     pub default_model: Option<ModelRef>,
 }
 #[derive(Clone, Debug, Deserialize)]
-pub struct Model { pub id: String, pub name: String }
+pub struct Model {
+    pub id: String,
+    pub name: String,
+}

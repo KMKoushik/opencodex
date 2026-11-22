@@ -15,14 +15,24 @@ impl Parser {
         let mut events = Vec::new();
         let mut consumed = 0;
         for (index, byte) in self.buffer.iter().enumerate() {
-            if *byte != b'\n' { continue; }
+            if *byte != b'\n' {
+                continue;
+            }
             let line = std::str::from_utf8(&self.buffer[consumed..index])
-                .map_err(|e| e.to_string())?.trim_end_matches('\r');
+                .map_err(|e| e.to_string())?
+                .trim_end_matches('\r');
             consumed = index + 1;
             if line.is_empty() {
                 if !self.data.is_empty() {
                     self.data.pop();
-                    events.push((if self.name.is_empty() { "message".into() } else { std::mem::take(&mut self.name) }, std::mem::take(&mut self.data)));
+                    events.push((
+                        if self.name.is_empty() {
+                            "message".into()
+                        } else {
+                            std::mem::take(&mut self.name)
+                        },
+                        std::mem::take(&mut self.data),
+                    ));
                 }
                 self.name.clear();
             } else if !line.starts_with(':') {
@@ -30,7 +40,10 @@ impl Parser {
                 let value = value.strip_prefix(' ').unwrap_or(value);
                 match field {
                     "event" => self.name = value.into(),
-                    "data" => { self.data.push_str(value); self.data.push('\n'); }
+                    "data" => {
+                        self.data.push_str(value);
+                        self.data.push('\n');
+                    }
                     _ => {}
                 }
             }
