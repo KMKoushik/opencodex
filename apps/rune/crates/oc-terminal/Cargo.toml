@@ -1,0 +1,18 @@
+[package]
+name = "oc-terminal"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+rune = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de", features = ["tooling"] }
+oc-gateway = { path = "../oc-gateway" }
+alacritty_terminal = { version = "0.26", default-features = false }
+tokio = { version = "1", features = ["rt", "time", "sync", "macros", "net"] }
+tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3"
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+cpu-time = "1"
