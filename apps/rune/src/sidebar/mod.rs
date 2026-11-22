@@ -1,5 +1,17 @@
 use crate::{State, icons as i, theme::Theme};
 use rune::{Color, El, GrowthSpec, ScrollSpec, TextStyle, col, el, icon, row, text};
+pub(crate) mod focus;
+mod glyphs;
+pub(crate) mod images;
+pub(crate) mod pagination;
+mod shell;
+mod visuals;
+pub use shell::view;
+use visuals::project_badge;
+pub use visuals::resize;
+pub(crate) mod selection;
+#[cfg(test)]
+mod tests;
 
 #[derive(Clone)]
 pub enum Item {
@@ -11,6 +23,7 @@ pub enum Item {
     Inactive,
     MoreInactive,
     Note(String),
+    FocusRetry,
 }
 impl Item {
     pub fn key(&self) -> String {
@@ -23,11 +36,50 @@ impl Item {
             Self::Inactive => "inactive".into(),
             Self::MoreInactive => "more-inactive".into(),
             Self::Note(s) => format!("note-{s}"),
+            Self::FocusRetry => "focus-retry".into(),
         }
     }
 }
 pub fn rebuild(s: &mut State) {
+    if !crate::menus::search::connected(s) {
+        s.rows.clear();
+        s.rows_revision += 1;
+        return;
+    }
+    images::request(s);
+    if let Some((native_id, current)) = s.project().map(|p| {
+        (
+            p.id.clone(),
+            oc_gateway::types::Project {
+                id: format!("folder:{}", p.canonical),
+                name: Some(p.display_name().into()),
+                canonical: p.canonical.clone(),
+                icon: None,
+                vcs: None,
+                time: Default::default(),
+            },
+        )
+    }) {
+        if s.menus.sidebar_current.as_deref() != Some(&current.canonical) {
+            s.folded.remove(&native_id);
+        }
+        if s.selected.is_some() {
+            s.prefs
+                .closed_projects
+                .retain(|path| path != &current.canonical);
+        }
+        if !s
+            .prefs
+            .opened_projects
+            .iter()
+            .any(|p| p.canonical == current.canonical)
+        {
+            s.prefs.opened_projects.insert(0, current);
+        }
+    }
+    s.menus.sidebar_current = s.project().map(|p| p.canonical.clone());
     let mut rows = Vec::new();
+    let mut project_counts = std::collections::BTreeMap::new();
     let mut pinned: Vec<_> = s
         .snapshot
         .sessions
@@ -35,65 +87,25 @@ pub fn rebuild(s: &mut State) {
         .filter(|t| t.pinned.is_some())
         .collect();
     pinned.sort_by(|a, b| b.pinned.partial_cmp(&a.pinned).unwrap());
+    s.menus.focus.order = pinned.iter().map(|t| t.id.clone()).collect();
     if !pinned.is_empty() {
         rows.push(Item::Heading("Pinned".into()));
         rows.extend(pinned.iter().map(|t| Item::Session(t.id.clone(), false)));
         rows.push(Item::Gap("pinned".into()));
     }
     if s.prefs.focus {
-        rows.push(Item::Heading("Focus".into()));
-        let now = crate::unix_ms() as f64;
-        let (mut recent, mut inactive): (Vec<_>, Vec<_>) = s
-            .snapshot
-            .sessions
-            .values()
-            .filter(|t| t.pinned.is_none())
-            .partition(|t| {
-                s.snapshot.active.contains(&t.id)
-                    || s.snapshot.attention.contains_key(&t.id)
-                    || (t.activity() >= now - 3.0 * 86400000.0
-                        && t.done.is_none_or(|d| d < t.activity()))
-            });
-        recent.sort_by(|a, b| {
-            let rank = |t: &oc_gateway::types::Session| {
-                if s.snapshot.attention.contains_key(&t.id)
-                    || (!s.snapshot.active.contains(&t.id) && t.unread())
-                {
-                    0
-                } else if s.snapshot.active.contains(&t.id) {
-                    1
-                } else {
-                    2
-                }
-            };
-            rank(a)
-                .cmp(&rank(b))
-                .then(b.activity().total_cmp(&a.activity()))
-        });
-        rows.extend(recent.iter().map(|t| Item::Session(t.id.clone(), false)));
-        if recent.is_empty() {
-            rows.push(Item::Note("Nothing needs focus".into()));
-        }
-        rows.push(Item::Gap("focus".into()));
-        rows.push(Item::Inactive);
-        if s.inactive_open {
-            inactive.sort_by(|a, b| b.activity().total_cmp(&a.activity()));
-            rows.extend(
-                inactive
-                    .iter()
-                    .take(s.inactive_visible)
-                    .map(|t| Item::Session(t.id.clone(), false)),
-            );
-            if inactive.len() > s.inactive_visible {
-                rows.push(Item::MoreInactive);
-            }
-            if inactive.is_empty() {
-                rows.push(Item::Note("No inactive threads".into()));
-            }
+        if !focus::append(s, &mut rows) {
+            s.rows = rows;
+            s.rows_revision += 1;
+            pagination::sync(s);
+            return;
         }
     } else {
         rows.push(Item::Heading("Projects".into()));
-        for project in &s.snapshot.projects {
+        if projects(s).is_empty() {
+            rows.push(Item::Note("Open a project to get started.".into()));
+        }
+        for project in projects(s) {
             if s.prefs.closed_projects.contains(&project.canonical) {
                 continue;
             }
@@ -121,6 +133,15 @@ pub fn rebuild(s: &mut State) {
                     at(b).total_cmp(&at(a))
                 });
                 let limit = s.visible.get(&project.id).copied().unwrap_or(4);
+                project_counts.insert(project.id.clone(), threads.len());
+                if threads.is_empty() && s.snapshot.loaded_directories.contains(&project.canonical)
+                {
+                    rows.push(Item::Note("No threads yet".into()));
+                } else if !s.snapshot.loaded_directories.contains(&project.canonical)
+                    && !s.snapshot.project_errors.contains_key(&project.canonical)
+                {
+                    rows.push(Item::Note("Loading…".into()));
+                }
                 rows.extend(
                     threads
                         .iter()
@@ -128,16 +149,28 @@ pub fn rebuild(s: &mut State) {
                         .map(|t| Item::Session(t.id.clone(), true)),
                 );
                 if threads.len() > limit
+                    || pagination::error(s, &project.id).is_some()
                     || s.snapshot.cursors.contains_key(&project.canonical)
                     || s.snapshot.project_cursors.contains_key(&project.id)
                 {
                     rows.push(Item::More(project.id.clone()));
+                }
+                if let Some(error) = pagination::error(s, &project.id) {
+                    rows.push(Item::Note(error.into()));
                 }
                 rows.push(Item::Gap(project.id.clone()));
             }
         }
     }
     s.rows = rows;
+    s.menus.project_counts = project_counts;
+    pagination::sync(s);
+    let listed: std::collections::HashSet<&str> =
+        s.menus.focus.order.iter().map(String::as_str).collect();
+    s.menus
+        .selection
+        .picked
+        .retain(|id| listed.contains(id.as_str()));
     s.rows_revision += 1;
 }
 /// React starts with only the current project's disclosure expanded.
@@ -147,6 +180,7 @@ pub fn initialize(s: &mut State) {
         .snapshot
         .projects
         .iter()
+        .chain(s.prefs.opened_projects.iter())
         .filter(|p| Some(&p.id) != current.as_ref())
         .map(|p| p.id.clone())
         .collect();
@@ -192,181 +226,16 @@ fn nav_ink(t: &Theme, glyph: &'static rune::Icon, name: &str, ink: &str) -> El {
         .child(icon(glyph, 16.0).color(t.c(ink)))
         .child(label(t, name, 13.5, 400.0, ink))
 }
-pub fn view(s: &State) -> El {
-    let t = &s.theme;
-    let header = row()
-        .key("sidebar-header")
-        .h(40.0)
-        .w_full()
-        .pl(88.0)
-        .pr(8.0)
-        .center_y()
-        .justify_between()
-        .window_drag()
-        .child(
-            row()
-                .gap(2.0)
-                .child(
-                    icon_button_size(t, &i::BACK, "Go back", 14.0)
-                        .on_press(|s: &mut State| s.navigate(false))
-                        .dim(if s.history_index > 0 { 1.0 } else { 0.45 }),
-                )
-                .child(
-                    icon_button_size(t, &i::FORWARD, "Go forward", 14.0)
-                        .on_press(|s: &mut State| s.navigate(true))
-                        .dim(if s.history_index + 1 < s.history.len() {
-                            1.0
-                        } else {
-                            0.45
-                        }),
-                ),
-        )
-        .child(
-            icon_button(t, &i::SIDEBAR, "Hide sidebar").on_press(|s: &mut State| {
-                s.prefs.sidebar_closed = true;
-                s.save();
-            }),
-        );
-    let mut identity = row()
-        .key("identity")
-        .h(44.0)
-        .w_full()
-        .mb(4.0)
-        .pl(8.0)
-        .gap(5.0)
-        .center_y();
-    if let Some(a) = &s.assets {
-        identity = identity
-            .child(el().size(24.0, 24.0).pixels(a.small.pixels()))
-            .child(el().size(96.0, 16.4).pixels(a.wordmark.pixels()));
-    } else {
-        identity = identity.child(el().size(125.0, 24.0));
-    }
-    identity = identity
-        .child(
-            icon_button_size(t, &i::DOWN, "App menu", 10.0)
-                .on_press(|s: &mut State| s.menus.open = Some(crate::menus::Menu::Brand)),
-        )
-        .child(el().grow(1.0))
-        .child(
-            icon_button_size(t, &i::SEARCH, "Search threads", 15.0)
-                .on_press_tx(|s: &mut State, tx| crate::menus::open_search(s, tx)),
-        );
-    if let crate::pages::Route::Settings(section) = &s.pages.route {
-        return col()
-            .key("sidebar")
-            .w(s.sidebar_width())
-            .h_full()
-            .fill(t.c("surface-under"))
-            .child(header)
-            .child(
-                col()
-                    .w_full()
-                    .px(10.0)
-                    .child(identity)
-                    .child(crate::settings::navigation(s, section)),
-            );
-    }
-    let actions = col()
-        .w_full()
-        .mb(16.0)
-        .child(nav(t, &i::EDIT, "New thread").on_press(|s: &mut State| {
-            s.open_session(None);
-        }))
-        .child(
-            nav(t, &i::FOLDER_OPEN, "Open project").on_press_tx(|s: &mut State, tx| {
-                crate::menus::open_projects(s, tx);
-            }),
-        )
-        .child(
-            nav(t, &i::TASKS, "Tasks")
-                .fill(if s.pages.route == crate::pages::Route::Tasks {
-                    t.c("selected")
-                } else {
-                    rune::Color::TRANSPARENT
-                })
-                .on_press(|s: &mut State| s.open_page(crate::pages::Route::Tasks)),
-        )
-        .child(
-            nav(t, &i::APPS, "Apps")
-                .fill(
-                    if s.pages.route == crate::pages::Route::Apps && s.pages.app.is_none() {
-                        t.c("selected")
-                    } else {
-                        rune::Color::TRANSPARENT
-                    },
-                )
-                .on_press(|s: &mut State| {
-                    s.pages.app = None;
-                    s.open_page(crate::pages::Route::Apps)
-                }),
-        )
-        .child(crate::apps::sidebar(s));
-    let list = col()
-        .key("project-list")
-        .w_full()
-        .grow(1.0)
-        .min_h(0.0)
-        .scroll(ScrollSpec {
-            stick_bottom: false,
-        })
-        .child(
-            col()
-                .key("sidebar-rows")
-                .w_full()
-                .growth(GrowthSpec::default())
-                .virtual_rows(
-                    s.rows.len(),
-                    32.0,
-                    |s: &State, n| s.rows[n].key().into(),
-                    render_item,
-                )
-                .virtual_rows_version(s.rows_revision),
-        );
-    let footer = row()
-        .h(40.0)
-        .pt(8.0)
-        .gap(2.0)
-        .center_y()
-        .child(
-            nav_ink(t, &i::SETTINGS, "Settings", "text-secondary")
-                .grow(1.0)
-                .on_press(|s: &mut State| {
-                    s.open_page(crate::pages::Route::Settings("general".into()))
-                }),
-        )
-        .child(
-            icon_button(t, &i::USAGE, "Usage limits").on_press(|s: &mut State| {
-                s.open_page(crate::pages::Route::Settings("usage".into()))
-            }),
-        );
-    col()
-        .key("sidebar")
-        .w(s.sidebar_width())
-        .h_full()
-        .min_h(0.0)
-        .fill(t.c("surface-under"))
-        .child(header)
-        .child(
-            col()
-                .grow(1.0)
-                .w_full()
-                .min_h(0.0)
-                .px(10.0)
-                .pb(10.0)
-                .child(identity)
-                .child(actions)
-                .child(list)
-                .child(footer),
-        )
-}
 fn render_item(s: &State, n: usize) -> El {
     let t = &s.theme;
     match &s.rows[n] {
+        Item::FocusRetry => crate::pages::controls::ghost(s, "Retry")
+            .on_press(|s: &mut State| focus::load(s, false)),
         Item::Heading(title) => {
             let heading = row()
                 .w_full()
-                .h(28.0)
+                .h(if title == "Projects" { 34.0 } else { 35.0 })
+                .pb(if title == "Projects" { 6.0 } else { 7.0 })
                 .pl(8.0)
                 .pr(2.0)
                 .center_y()
@@ -375,18 +244,47 @@ fn render_item(s: &State, n: usize) -> El {
             if title == "Pinned" {
                 heading
             } else {
-                heading.child(icon_button_size(t, &i::INBOX, "Focus view", 14.0).on_press(
-                    |s: &mut State| {
+                let toggle = icon_button_size(t, &i::INBOX, "Focus view", 14.0)
+                    .key("thread-view-toggle")
+                    .on_press(|s: &mut State| {
                         s.prefs.focus = !s.prefs.focus;
+                        s.menus.selection.picked.clear();
+                        s.inactive_open = false;
+                        s.inactive_visible = 10;
+                        if s.prefs.focus {
+                            focus::load(s, false);
+                        }
                         rebuild(s);
                         s.save();
-                    },
-                ))
+                    });
+                if title == "Focus" {
+                    heading.child(
+                        row()
+                            .gap(6.0)
+                            .child(
+                                icon_button_size(t, &glyphs::FILTER, "Filter projects", 14.0)
+                                    .key("focus-filter-trigger")
+                                    .on_drawn_layout_tx(|s: &mut State, r, tx| {
+                                        s.pages.anchors.insert("focus-filter-trigger".into(), r);
+                                        tx.live_only();
+                                    })
+                                    .on_press_tx(|s: &mut State, tx| {
+                                        s.menus.focus.filter_open = true;
+                                        tx.focus_when_shown("focus-filter-0", tx.by_keys());
+                                    }),
+                            )
+                            .child(toggle),
+                    )
+                } else {
+                    heading.child(toggle)
+                }
             }
         }
         Item::Inactive => row()
+            .key("inactive-toggle")
             .w_full()
-            .h(28.0)
+            .h(if s.inactive_open { 35.0 } else { 34.0 })
+            .pb(if s.inactive_open { 7.0 } else { 6.0 })
             .pl(8.0)
             .gap(4.0)
             .center_y()
@@ -404,6 +302,7 @@ fn render_item(s: &State, n: usize) -> El {
                 rebuild(s);
             }),
         Item::MoreInactive => row()
+            .key("more-inactive")
             .w_full()
             .h(32.0)
             .pl(8.0)
@@ -411,35 +310,81 @@ fn render_item(s: &State, n: usize) -> El {
             .role("button")
             .label("Show more")
             .focusable(true)
+            .disabled(s.menus.focus.pending)
             .radius(8.0)
             .hover(t.c("hover"))
-            .child(label(t, "Show more", 13.0, 400.0, "text-tertiary"))
+            .child(label(
+                t,
+                if s.menus.focus.pending {
+                    "Loading…"
+                } else {
+                    "Show more"
+                },
+                13.0,
+                400.0,
+                "text-tertiary",
+            ))
             .on_press(|s: &mut State| {
-                s.inactive_visible += 10;
+                if s.menus.focus.pending {
+                    return;
+                }
+                let inactive = s.menus.focus.inactive_count;
+                if inactive <= s.inactive_visible && s.menus.focus.cursor.is_some() {
+                    s.menus.focus.expand_page = true;
+                    focus::load(s, true);
+                } else {
+                    s.inactive_visible += 10;
+                }
                 rebuild(s);
             }),
         Item::Note(note) => label(t, note, 12.0, 400.0, "text-tertiary")
             .w_full()
             .py(6.0)
             .px(8.0),
-        Item::Gap(_) => el().w_full().h(14.0),
+        Item::Gap(_) => el().w_full().h(
+            if n > 0
+                && matches!(
+                    s.rows[n - 1],
+                    Item::Session(_, _) | Item::More(_) | Item::MoreInactive
+                )
+            {
+                13.0
+            } else {
+                14.0
+            },
+        ),
         Item::Project(id) => {
-            let Some(p) = s.snapshot.projects.iter().find(|p| &p.id == id) else {
+            let Some(p) = projects(s).into_iter().find(|p| &p.id == id) else {
                 return el();
             };
             let id = id.clone();
             let close = id.clone();
             let new = id.clone();
+            let within = s.menus.sidebar_focus.as_ref().is_some_and(|key| {
+                [
+                    format!("project-row-{id}"),
+                    format!("project-new-{id}"),
+                    format!("project-close-{id}"),
+                ]
+                .contains(key)
+            });
+            let close_focused =
+                s.menus.sidebar_focus.as_deref() == Some(&format!("project-close-{id}"));
+            // The first group's 4px top margin collapses into the heading's
+            // 6px bottom margin in CSS; virtual rows must not add both.
+            let first =
+                n > 0 && matches!(&s.rows[n - 1], Item::Heading(title) if title == "Projects");
             row()
                 .key(format!("folder-{id}"))
                 .w_full()
-                .h(36.0)
-                .pt(4.0)
+                .h(if first { 32.0 } else { 36.0 })
+                .pt(if first { 0.0 } else { 4.0 })
                 .hover_group()
                 .center_y()
                 .child(
                     row()
                         .role("treeitem")
+                        .key(format!("project-row-{id}"))
                         .label(p.display_name())
                         .expanded(!s.folded.contains(&id))
                         .focusable(true)
@@ -454,10 +399,13 @@ fn render_item(s: &State, n: usize) -> El {
                         .child(
                             el().size(16.0, 16.0)
                                 .child(
-                                    icon(&i::FOLDER, 16.0)
-                                        .color(t.c("text-secondary"))
-                                        .absolute(0.0, 0.0)
-                                        .group_opacity(1.0, 0.0),
+                                    (if p.icon.is_some() {
+                                        images::avatar(s, p, 16.0)
+                                    } else {
+                                        icon(&i::FOLDER, 16.0).color(t.c("text-secondary"))
+                                    })
+                                    .absolute(0.0, 0.0)
+                                    .group_opacity(1.0, 0.0),
                                 )
                                 .child(
                                     icon(
@@ -480,67 +428,109 @@ fn render_item(s: &State, n: usize) -> El {
                                 s.folded.insert(id.clone());
                             }
                             if expanding
-                                && let Some(p) = s.snapshot.projects.iter().find(|p| p.id == id)
+                                && let Some(path) = projects(s)
+                                    .into_iter()
+                                    .find(|p| p.id == id)
+                                    .map(|p| p.canonical.clone())
                             {
-                                s.prefs.project = Some(p.canonical.clone());
+                                let different = s.project().is_none_or(|p| p.canonical != path);
+                                s.prefs.project = Some(path);
+                                if different {
+                                    s.open_session(None);
+                                }
                             }
                             rebuild(s);
                             s.save();
                         }),
                 )
                 .child(
-                    icon_button(t, &i::PLUS, &format!("New chat in {}", p.display_name()))
-                        .w(24.0)
-                        .group_opacity(0.0, 1.0)
-                        .on_press(move |s: &mut State| {
-                            if let Some(p) = s.snapshot.projects.iter().find(|p| p.id == new) {
-                                s.prefs.project = Some(p.canonical.clone());
-                            }
-                            s.open_session(None);
-                            s.folded.remove(&new);
-                            rebuild(s);
-                            s.save();
-                        }),
+                    icon_button_size(
+                        t,
+                        &i::PLUS,
+                        &format!("New chat in {}", p.display_name()),
+                        14.0,
+                    )
+                    .key(format!("project-new-{new}"))
+                    .w(24.0)
+                    .group_opacity(if within { 1.0 } else { 0.0 }, 1.0)
+                    .on_press(move |s: &mut State| {
+                        if let Some(path) = projects(s)
+                            .into_iter()
+                            .find(|p| p.id == new)
+                            .map(|p| p.canonical.clone())
+                        {
+                            s.prefs.project = Some(path);
+                        }
+                        s.open_session(None);
+                        s.folded.remove(&new);
+                        rebuild(s);
+                        s.save();
+                    }),
                 )
                 .child(
-                    icon_button(t, &i::CLOSE, &format!("Close project {}", p.display_name()))
-                        .w(24.0)
-                        .group_opacity(0.0, 1.0)
-                        .on_press(move |s: &mut State| {
-                            crate::settings::projects::close_project(s, &close);
-                        }),
+                    icon_button_size(
+                        t,
+                        &i::CLOSE,
+                        &format!("Close project {}", p.display_name()),
+                        14.0,
+                    )
+                    .key(format!("project-close-{close}"))
+                    .w(24.0)
+                    .group_opacity(if close_focused { 1.0 } else { 0.0 }, 1.0)
+                    .on_press(move |s: &mut State| {
+                        close_project(s, &close);
+                    }),
                 )
         }
         Item::More(id) => {
             let id = id.clone();
+            let pending = pagination::pending(s, &id);
+            let has_hidden = s.menus.project_counts.get(&id).copied().unwrap_or(0)
+                > s.visible.get(&id).copied().unwrap_or(4);
+            let disabled = pending || (!has_hidden && !crate::menus::search::connected(s));
+            let error = pagination::error(s, &id);
+            let title = if pending { "Loading…" } else { "Show more" };
             row()
+                .key(format!("more-project-{id}"))
                 .w_full()
                 .h(33.0)
                 .pl(32.0)
                 .center_y()
                 .role("button")
-                .label("Show more")
-                .focusable(true)
+                .label(error.unwrap_or(title))
+                .focusable(!disabled)
+                .disabled(disabled)
+                .dim(if disabled { 0.45 } else { 1.0 })
                 .radius(8.0)
                 .hover(t.c("hover"))
-                .child(label(t, "Show more", 13.0, 400.0, "text-tertiary"))
+                .child(label(
+                    t,
+                    if error.is_some() { "Try again" } else { title },
+                    13.0,
+                    400.0,
+                    if error.is_some() {
+                        "error"
+                    } else {
+                        "text-tertiary"
+                    },
+                ))
                 .on_press(move |s: &mut State| {
-                    *s.visible.entry(id.clone()).or_insert(4) += 4;
-                    if let Some(p) = s.snapshot.projects.iter().find(|p| p.id == id) {
-                        if s.snapshot.cursors.contains_key(&p.canonical)
-                            || s.snapshot.project_cursors.contains_key(&p.id)
-                        {
-                            s.command(oc_gateway::Command::More(p.canonical.clone()));
-                        }
-                    }
-                    rebuild(s);
+                    pagination::more(s, &id);
                 })
         }
         Item::Session(id, nested) => {
             let actions = id.clone();
+            let keyboard = id.clone();
+            let anchor = id.clone();
+            let anchor_key = format!("thread-{id}");
             let thread = &s.snapshot.sessions[id];
             let active = s.snapshot.active.contains(id);
             let selected = s.selected.as_ref() == Some(id);
+            let highlighted = if !nested && !s.menus.selection.picked.is_empty() {
+                s.menus.selection.picked.contains(id)
+            } else {
+                selected
+            };
             let id = id.clone();
             let worktree = *nested
                 && s.snapshot
@@ -550,11 +540,29 @@ fn render_item(s: &State, n: usize) -> El {
                     .is_some_and(|p| thread.directory != p.canonical);
             let mut r = row()
                 .key(format!("thread-{id}"))
-                .on_secondary_press(move |s: &mut State, point, _| {
-                    s.menus.point = Some((point.x, point.y));
-                    s.menus.open = Some(crate::menus::Menu::Thread(actions.clone()))
+                .on_drawn_layout_tx(move |s: &mut State, rect, tx| {
+                    if tx.focused() == Some(anchor_key.as_str())
+                        && s.menus
+                            .thread_anchor
+                            .as_ref()
+                            .is_none_or(|(row, old)| row != &anchor || old != &rect)
+                    {
+                        s.menus.thread_anchor = Some((anchor.clone(), rect));
+                    }
+                    tx.live_only();
                 })
-                .role("listitem")
+                .on_secondary_press(move |s: &mut State, point, tx| {
+                    if !crate::menus::search::connected(s) {
+                        return;
+                    }
+                    s.menus.point = Some((point.x, point.y));
+                    s.menus.open = Some(crate::menus::Menu::Thread(actions.clone()));
+                    if let Some(first) = crate::menus::thread::enabled_labels(s, &actions).first() {
+                        tx.focus_when_shown(format!("menu-{first}"), false);
+                    }
+                })
+                .on_key(move |s: &mut State, e, tx| selection::key(s, &keyboard, e, tx))
+                .role("button")
                 .label(&thread.title)
                 .focusable(true)
                 .w_full()
@@ -564,25 +572,72 @@ fn render_item(s: &State, n: usize) -> El {
                 .gap(9.0)
                 .center_y()
                 .radius(6.0)
-                .fill(if selected {
+                .fill(if highlighted {
                     t.c("selected")
                 } else {
                     Color::TRANSPARENT
                 })
                 .focus_selected(selected)
-                .hover(if selected {
+                .hover(if highlighted {
                     Color::TRANSPARENT
                 } else {
                     t.c("hover")
                 });
             if !nested {
-                let project = s
-                    .snapshot
-                    .projects
-                    .iter()
-                    .find(|p| thread.project_id.as_ref() == Some(&p.id));
-                if let Some(project) = project {
-                    r = r.child(project_badge(t, project));
+                let number = s
+                    .menus
+                    .selection
+                    .numbers
+                    .then(|| selection::shortcut_ids(s).iter().position(|row| row == &id))
+                    .flatten();
+                if let Some(number) = number {
+                    r = r.child(
+                        el().size(16.0, 16.0)
+                            .radius(4.0)
+                            .center()
+                            .fill(t.c("elevated"))
+                            .border(1.0, t.c("border-heavy"))
+                            .child(label(
+                                t,
+                                (number + 1).to_string(),
+                                10.0,
+                                400.0,
+                                "text-secondary",
+                            )),
+                    );
+                } else {
+                    if !s.menus.selection.picked.is_empty() {
+                        r = r.child(
+                            el().size(16.0, 16.0)
+                                .radius(4.0)
+                                .fill(if s.menus.selection.picked.contains(&id) {
+                                    t.c("accent")
+                                } else {
+                                    Color::TRANSPARENT
+                                })
+                                .border(
+                                    1.0,
+                                    if s.menus.selection.picked.contains(&id) {
+                                        Color::TRANSPARENT
+                                    } else {
+                                        t.c("border-heavy")
+                                    },
+                                )
+                                .child(if s.menus.selection.picked.contains(&id) {
+                                    icon(&i::TICK, 11.0).color(t.c("on-accent"))
+                                } else {
+                                    el()
+                                }),
+                        );
+                    }
+                    let project = s
+                        .snapshot
+                        .projects
+                        .iter()
+                        .find(|p| thread.project_id.as_ref() == Some(&p.id));
+                    if let Some(project) = project {
+                        r = r.child(images::avatar(s, project, 16.0));
+                    }
                 }
             }
             r = r.child(
@@ -599,6 +654,20 @@ fn render_item(s: &State, n: usize) -> El {
             );
             if worktree {
                 r = r.child(icon(&i::WORKTREE, 14.0).color(t.c("text-tertiary")));
+            }
+            if thread.muted.unwrap_or(false) {
+                r = r.child(
+                    icon(&glyphs::MUTED, 14.0)
+                        .color(t.c("text-tertiary"))
+                        .label("Notifications muted"),
+                );
+            }
+            if thread.fork.is_some() {
+                r = r.child(
+                    icon(&glyphs::FORK, 14.0)
+                        .color(t.c("text-tertiary"))
+                        .label("Forked thread"),
+                );
             }
             let attention = (!nested)
                 .then(|| s.snapshot.attention.get(&thread.id))
@@ -646,7 +715,10 @@ fn render_item(s: &State, n: usize) -> El {
             col()
                 .h(33.0)
                 .w_full()
-                .child(r.on_press(move |s: &mut State| {
+                .child(r.on_press_tx(move |s: &mut State, tx| {
+                    if selection::click(s, &id, tx.mods()) {
+                        return;
+                    }
                     if let Some(t) = s.snapshot.sessions.get(&id) {
                         s.prefs.project = Some(t.directory.clone());
                     }
@@ -656,76 +728,42 @@ fn render_item(s: &State, n: usize) -> El {
         }
     }
 }
-fn project_badge(t: &Theme, p: &oc_gateway::types::Project) -> El {
-    let color = p
-        .icon
-        .as_ref()
-        .and_then(|i| i.color.as_deref())
-        .filter(|c| matches!(*c, "gray" | "blue" | "green" | "orange" | "pink" | "purple"))
-        .unwrap_or("gray");
-    el().size(16.0, 16.0)
-        .radius(4.0)
-        .center()
-        .fill(t.c(&format!("project-{color}")))
-        .border(1.0, t.c("border-heavy"))
-        .child(label(
-            t,
-            p.display_name()
-                .trim()
-                .chars()
-                .next()
-                .unwrap_or('?')
-                .to_uppercase()
-                .collect::<String>(),
-            10.0,
-            500.0,
-            "on-project",
-        ))
+fn projects(s: &State) -> Vec<&oc_gateway::types::Project> {
+    s.prefs
+        .opened_projects
+        .iter()
+        .filter(|p| !s.prefs.closed_projects.contains(&p.canonical))
+        .map(|folder| {
+            s.snapshot
+                .projects
+                .iter()
+                .find(|p| p.canonical == folder.canonical)
+                .unwrap_or(folder)
+        })
+        .collect()
+}
+pub(crate) fn close_project(s: &mut State, id: &str) {
+    let Some(path) = projects(s)
+        .into_iter()
+        .find(|p| p.id == id)
+        .map(|p| p.canonical.clone())
+    else {
+        return;
+    };
+    let current = s.project().is_some_and(|p| p.canonical == path);
+    s.prefs.opened_projects.retain(|p| p.canonical != path);
+    if !s.prefs.closed_projects.contains(&path) {
+        s.prefs.closed_projects.push(path);
+    }
+    if current {
+        s.prefs.project = projects(s).first().map(|p| p.canonical.clone());
+        s.open_session(None);
+    }
+    rebuild(s);
+    s.save();
 }
 const RUNNING: rune::Icon = rune::Icon {
     name: "running",
     view: 10.0,
     body: r##"<circle cx="5" cy="5" r="4.25" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3"/><path d="M5 .75 A4.25 4.25 0 0 1 9.25 5" fill="none" stroke="currentColor" stroke-width="1.5"/>"##,
 };
-pub fn resize(width: f32, height: f32) -> El {
-    el().key("sidebar-resize")
-        .role("separator")
-        .label("Resize sidebar")
-        .focusable(true)
-        .size(8.0, height)
-        .absolute(width - 4.0, 0.0)
-        .cursor(rune::Cursor::ResizeColumn)
-        .on_double_press(|s: &mut State| {
-            s.prefs.sidebar_width = Some(300.0);
-            s.save();
-        })
-        .on_key(|s: &mut State, event, tx| {
-            let max = (s.window_size.0 - 360.0).clamp(200.0, 480.0);
-            let next = match event.key {
-                rune::Key::Left => s.sidebar_width() - 32.0,
-                rune::Key::Right => s.sidebar_width() + 32.0,
-                rune::Key::Home => 200.0,
-                rune::Key::End => max,
-                _ => return false,
-            };
-            s.prefs.sidebar_width = Some(next.clamp(200.0, max));
-            s.save();
-            tx.instant();
-            true
-        })
-        .on_drag(|s: &mut State, d, tx| match d.phase {
-            rune::Phase::Down => d.data = s.sidebar_width(),
-            rune::Phase::Move => {
-                s.prefs.sidebar_width = Some(
-                    (d.data + d.dx).clamp(200.0, (s.window_size.0 - 360.0).clamp(200.0, 480.0)),
-                );
-                tx.instant();
-            }
-            rune::Phase::Up => {
-                if d.cancelled() {
-                    s.prefs.sidebar_width = Some(d.data);
-                }
-                s.save();
-            }
-        })
-}

@@ -10,10 +10,16 @@ pub struct Preferences {
     pub model_variants: std::collections::BTreeMap<String, Option<String>>,
     pub project: Option<String>,
     pub closed_projects: Vec<String>,
+    #[serde(
+        serialize_with = "serialize_folders",
+        deserialize_with = "deserialize_folders"
+    )]
+    pub opened_projects: Vec<oc_gateway::types::Project>,
     pub sidebar_width: Option<f32>,
     pub sidebar_closed: bool,
     pub workbench_width: Option<f32>,
     pub focus: bool,
+    pub focus_excluded: std::collections::BTreeSet<String>,
     pub dark: Option<bool>,
     pub preset: String,
     pub accent: Option<String>,
@@ -22,6 +28,40 @@ pub struct Preferences {
     pub theme: Option<ThemePreference>,
     pub terminal_right: bool,
     pub task_assignee: String,
+}
+// Opened folders are presentation ownership, not cached OpenCode projects.
+// Never write native IDs, VCS, icons or recency metadata into the profile.
+fn serialize_folders<S: serde::Serializer>(
+    projects: &[oc_gateway::types::Project],
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    projects
+        .iter()
+        .map(|p| serde_json::json!({"directory":p.canonical,"name":p.name}))
+        .collect::<Vec<_>>()
+        .serialize(serializer)
+}
+fn deserialize_folders<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Vec<oc_gateway::types::Project>, D::Error> {
+    #[derive(Deserialize)]
+    struct Folder {
+        #[serde(alias = "canonical")]
+        directory: String,
+        name: Option<String>,
+    }
+    let folders = Vec::<Folder>::deserialize(deserializer)?;
+    Ok(folders
+        .into_iter()
+        .map(|folder| oc_gateway::types::Project {
+            id: format!("folder:{}", folder.directory),
+            canonical: folder.directory,
+            name: folder.name,
+            icon: None,
+            vcs: None,
+            time: Default::default(),
+        })
+        .collect())
 }
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[serde(default)]

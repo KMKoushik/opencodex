@@ -138,7 +138,13 @@ impl State {
         self.prefs
             .project
             .as_ref()
-            .and_then(|d| self.snapshot.projects.iter().find(|p| &p.canonical == d))
+            .and_then(|d| {
+                self.snapshot
+                    .projects
+                    .iter()
+                    .chain(self.prefs.opened_projects.iter())
+                    .find(|p| &p.canonical == d)
+            })
             .filter(|p| !self.prefs.closed_projects.contains(&p.canonical))
     }
     fn open_session(&mut self, id: Option<String>) {
@@ -227,6 +233,8 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
     chat::comments::decorate(s, cx);
     native::coverage(s);
     cx.web_focus();
+    // globals.css resets native outlines; individual web controls opt back in.
+    cx.focus_ring(0.0, 0.0, rune::Color::TRANSPARENT);
     let t = &s.theme;
     cx.caption_color(if t.dark {
         t.c("text-secondary")
@@ -248,7 +256,11 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
         .and_then(|id| s.snapshot.sessions.get(id))
         .map(|t| t.title.as_str())
         .or_else(|| s.chat.data.info.as_ref().and_then(|i| i.title.as_deref()))
-        .unwrap_or("New thread");
+        .unwrap_or(if s.project().is_some() {
+            "New thread"
+        } else {
+            "OpenCodex"
+        });
     let mut toolbar = row()
         .key("toolbar")
         .h(40.0)
@@ -289,7 +301,18 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
     if s.selected.is_some() {
         toolbar = toolbar.child(el().grow(1.0)).child(chat::toolbar(s));
     }
-    if let Some(error) = s.error.as_ref().or(s.snapshot.error.as_ref()) {
+    if menus::search::connected(s)
+        && !s.snapshot.live
+        && matches!(
+            s.pages.route,
+            pages::Route::Chat | pages::Route::ProjectSetup
+        )
+    {
+        toolbar = toolbar.child(
+            sidebar::label(t, "Live updates paused", 12.0, 400.0, "text-tertiary").role("status"),
+        );
+    }
+    if let Some(error) = s.error.as_ref() {
         toolbar = toolbar
             .child(el().grow(1.0))
             .child(sidebar::label(t, error, 12.0, 400.0, "error").truncate());
@@ -303,43 +326,49 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
         .fill(t.c("surface"))
         .border_sides([0.0, 0.0, 0.0, 1.0], t.c("border"))
         .border_layout()
-        .child(
+        .child(if matches!(s.pages.route, pages::Route::Settings(_)) {
+            row()
+                .w_full()
+                .h(40.0)
+                .px(20.0)
+                .center_y()
+                .window_drag()
+                .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
+                .child(if matches!(s.pages.route, pages::Route::Settings(_)) {
+                    el()
+                } else {
+                    sidebar::label(t, "OpenCodex", 13.0, 500.0, "text")
+                })
+        } else if !matches!(
+            s.pages.route,
+            pages::Route::Chat | pages::Route::ProjectSetup
+        ) {
+            row()
+                .w_full()
+                .h(40.0)
+                .px(20.0)
+                .center_y()
+                .window_drag()
+                .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
+                .child(sidebar::label(
+                    t,
+                    match s.pages.route {
+                        pages::Route::Tasks => "Tasks",
+                        pages::Route::Apps => "Apps",
+                        _ => "",
+                    },
+                    13.0,
+                    500.0,
+                    "text",
+                ))
+        } else {
+            toolbar
+        })
+        .child(col().grow(1.0).w_full().min_h(0.0).child(
             if matches!(
                 s.pages.route,
-                pages::Route::Settings(_) | pages::Route::ProjectSetup
-            ) || (s.pages.route == pages::Route::Chat
-                && s.selected.is_none()
-                && s.project().is_none())
-            {
-                el().w_full()
-                    .h(40.0)
-                    .window_drag()
-                    .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
-            } else if s.pages.route != pages::Route::Chat {
-                row()
-                    .w_full()
-                    .h(40.0)
-                    .px(20.0)
-                    .center_y()
-                    .window_drag()
-                    .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
-                    .child(sidebar::label(
-                        t,
-                        match s.pages.route {
-                            pages::Route::Tasks => "Tasks",
-                            pages::Route::Apps => "Apps",
-                            _ => "",
-                        },
-                        13.0,
-                        500.0,
-                        "text",
-                    ))
-            } else {
-                toolbar
-            },
-        )
-        .child(col().grow(1.0).w_full().min_h(0.0).child(
-            if s.pages.route == pages::Route::Chat && !s.snapshot.live && s.snapshot.error.is_some()
+                pages::Route::Chat | pages::Route::ProjectSetup
+            ) && !menus::search::connected(s)
             {
                 pages::offline::view(s)
             } else if s.pages.route == pages::Route::Chat {
@@ -422,6 +451,12 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
         })
 }
 fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
+    if s.menus.sidebar_scopes.is_none() {
+        sidebar::pagination::sync(s);
+    }
+    let connection_changed = pages::offline::poll(s, clock, tx)
+        | sidebar::focus::poll(s, clock, tx)
+        | sidebar::images::take(s);
     let task_minute = s.pages.tasks.minute;
     if let Some(worker) = &s.worker {
         let changes = worker.take_page_changes();
@@ -430,6 +465,7 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
     pages::poll(s, clock, tx);
     notifications::clear_on_focus(s);
     let mut changed = composer::context::poll(s, tx);
+    changed |= connection_changed;
     for chat in [&mut s.chat, &mut s.workbench.reader_chat] {
         if chat.copied.as_ref().is_some_and(|(_, due)| clock >= *due) {
             chat.copied = None;
@@ -447,7 +483,7 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
         s.menus.toast_due = None;
         changed = true;
     }
-    let mut sidebar_changed = false;
+    let mut sidebar_changed = connection_changed;
     let mut chat_updated = false;
     if let Some(data) = s.worker.as_ref().and_then(Worker::take_messages) {
         if s.selected.as_deref() == Some(&data.session_id) {
@@ -560,7 +596,15 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
             || snapshot.native_revisions[0] != s.snapshot.native_revisions[0]
             || snapshot.active != s.snapshot.active;
         let first_projects = s.snapshot.projects.is_empty() && !snapshot.projects.is_empty();
+        let new_focus_thread = s.prefs.focus && snapshot.sessions.keys().any(|id| !s.snapshot.sessions.contains_key(id));
         s.snapshot = snapshot;
+        sidebar::pagination::receive(s);
+        for (id, thread) in &s.menus.focus.loaded {
+            Arc::make_mut(&mut s.snapshot).sessions.entry(id.clone()).or_insert_with(|| thread.clone());
+        }
+        if new_focus_thread || (reconnected && s.prefs.focus) {
+            sidebar::focus::load(s, false);
+        }
         if details_changed {
             chat::details::invalidate(s, clock, tx);
         }
@@ -605,7 +649,7 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
         changed = true;
         tx.instant();
     }
-    changed
+    changed | sidebar::selection::poll(s, clock, tx) | menus::thread::poll(s, tx)
 }
 pub fn unix_ms() -> u128 {
     std::time::SystemTime::now()
@@ -699,11 +743,14 @@ fn main() {
             "ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace",
         ),
         min_size: Some((760.0, 560.0)),
-        on_key: Some(shortcuts::global),
+        on_key: Some(|s, e, tx| {
+            sidebar::selection::global(s, e, tx) || shortcuts::global(s, e, tx)
+        }),
         ..AppSpec::new("OpenCodex", (1240.0, 840.0), State::new, view)
     };
     let app = menus::native::install(rune::App::new(spec))
         .on_ime(terminal::ime)
+        .modifier_keys()
         .args(args)
         .font_smoothing(rune::FontSmoothing::Off)
         .chrome(Chrome {
@@ -753,7 +800,14 @@ fn main() {
     app.init(|| {
         let mut s = State::new();
         if OPTIONS.get().unwrap().headless {
-            if let Some(url) = &OPTIONS.get().unwrap().gateway {
+            pages::offline::capture(&mut s);
+            if let Some(url) = OPTIONS
+                .get()
+                .unwrap()
+                .gateway
+                .as_ref()
+                .filter(|_| menus::search::connected(&s))
+            {
                 match Gateway::new(url, None).and_then(|client| {
                     oc_gateway::capture_directory(client, s.prefs.project.clone())
                 }) {
@@ -820,6 +874,7 @@ fn main() {
                     .unwrap();
                 pages::receive(&mut s, "page:apps", result);
             }
+            sidebar::rebuild(&mut s);
             settings::capture(&mut s);
             if let Err(error) = workbench::capture(&mut s) {
                 eprintln!("{error}");
@@ -835,6 +890,7 @@ fn main() {
                 eprintln!("{e}");
                 std::process::exit(1);
             }
+            pages::offline::capture_state(&mut s);
             sidebar::rebuild(&mut s);
         }
         s

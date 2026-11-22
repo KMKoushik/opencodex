@@ -145,6 +145,14 @@ impl State {
     }
 }
 pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) -> bool {
+    if let Some(id) = tag.strip_prefix("sidebar-done:") {
+        crate::sidebar::selection::receive(s, id, result);
+        return true;
+    }
+    if let Some(page) = tag.strip_prefix("sidebar-focus:") {
+        crate::sidebar::focus::receive(s, page == "more", result);
+        return true;
+    }
     if tag.starts_with("menu-thread:") || tag.starts_with("menu-export:") {
         return crate::menus::thread::receive(s, tag, result);
     }
@@ -180,17 +188,42 @@ pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) -> bool 
             }
         }
         s.pages.data.insert(path.into(), result);
+        if path == "connection" {
+            crate::sidebar::rebuild(s);
+        }
         if path == "tasks/plugin" {
             s.page_get("tasks");
         }
         // Small bounded page cache, never persisted.
         while s.pages.data.len() > 24 {
-            s.pages.data.pop_first();
+            if let Some(key) = s
+                .pages
+                .data
+                .keys()
+                .find(|k| !matches!(k.as_str(), "connection" | "apps"))
+                .cloned()
+            {
+                s.pages.data.remove(&key);
+            }
         }
         return true;
     }
     if let Some(path) = tag.strip_prefix("page-refresh:") {
         s.pages.pending.remove(path);
+        if path == "connection" {
+            s.pages.errors.remove("connect-pending");
+            match result {
+                Ok(value) => {
+                    s.pages.data.insert("connection".into(), Ok(value));
+                    s.command(oc_gateway::Command::Refresh);
+                }
+                Err(error) => {
+                    s.pages.errors.insert("connection".into(), error);
+                }
+            }
+            crate::sidebar::rebuild(s);
+            return true;
+        }
         if path == "task-start" {
             s.pages.tasks.starting = None;
         }

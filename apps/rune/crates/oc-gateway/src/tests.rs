@@ -2,6 +2,28 @@ use super::*;
 use serde_json::json;
 
 #[test]
+fn failed_page_preserves_cursors_rows_and_live_connection() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let client = Gateway::new(&format!("http://{}", listener.local_addr().unwrap()), None).unwrap();
+    drop(listener);
+    let mut snapshot = Snapshot {
+        live: true,
+        ..Default::default()
+    };
+    snapshot.cursors.insert("/fixture".into(), "next".into());
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(snapshot.more(&client, "/fixture"));
+    assert_eq!(snapshot.cursors["/fixture"], "next");
+    assert!(snapshot.live);
+    assert_eq!(snapshot.page_results["/fixture"].0, 1);
+    assert!(snapshot.page_results["/fixture"].1.is_some());
+    assert!(snapshot.error.is_none());
+}
+
+#[test]
 fn live_rows_reduce_without_refetch_or_token_delta_wakes() {
     let mut s = Snapshot::default();
     let event = |kind: &str, created, data| types::Event {

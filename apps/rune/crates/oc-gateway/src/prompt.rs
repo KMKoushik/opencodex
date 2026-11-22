@@ -119,6 +119,15 @@ pub struct Send {
     pub branch: Option<String>,
 }
 pub enum Request {
+    DownloadExport {
+        session: String,
+        format: String,
+    },
+    FinishExport {
+        session: String,
+        temporary: String,
+        destination: Option<String>,
+    },
     ProjectIcon {
         source: String,
         local: bool,
@@ -209,8 +218,43 @@ impl PromptWorker {
                     .expect("prompt runtime");
                 rt.block_on(async {
                     let run = async {
+                        // TempPath guards clean interrupted/cancelled downloads when
+                        // this worker stops too; filesystem cleanup stays off the UI.
+                        let mut downloads = std::collections::BTreeMap::new();
                         while let Some(request) = rx.recv().await {
                             let reply = match request {
+                                Request::DownloadExport { session, format } => Reply::Data {
+                                    tag: format!("menu-export:{session}:temp"),
+                                    result: client.download_export(&session, &format).await.map(
+                                        |file| {
+                                            let path = file.into_temp_path();
+                                            let temporary = path.to_string_lossy().into_owned();
+                                            downloads.insert(temporary.clone(), path);
+                                            json!({"temporary":temporary})
+                                        },
+                                    ),
+                                },
+                                Request::FinishExport {
+                                    session,
+                                    temporary,
+                                    destination,
+                                } => {
+                                    let result = if let Some(path) = downloads.remove(&temporary) {
+                                        destination
+                                            .map(|destination| {
+                                                std::fs::copy(&path, destination)
+                                                    .map(|_| ())
+                                                    .map_err(|e| e.to_string())
+                                            })
+                                            .unwrap_or(Ok(()))
+                                    } else {
+                                        Err("The prepared export is no longer available".into())
+                                    };
+                                    Reply::Data {
+                                        tag: format!("menu-export:{session}:saved"),
+                                        result: result.map(|_| Value::Null),
+                                    }
+                                }
                                 Request::ProjectIcon {
                                     source,
                                     local,
@@ -490,6 +534,29 @@ impl Gateway {
         } else {
             Value::Null
         })
+    }
+    /// Electron downloads the response before asking where to save it. Spool on
+    /// the worker rather than carrying an unbounded JSON/Markdown blob into UI state.
+    async fn download_export(
+        &self,
+        id: &str,
+        format: &str,
+    ) -> Result<tempfile::NamedTempFile, String> {
+        use std::io::Write;
+        let mut response = self
+            .response(
+                &format!("sessions/{id}/export"),
+                &[("format", format)],
+                reqwest::Method::GET,
+                None,
+                false,
+            )
+            .await?;
+        let mut file = tempfile::NamedTempFile::new().map_err(|e| e.to_string())?;
+        while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
+            file.write_all(&chunk).map_err(|e| e.to_string())?;
+        }
+        Ok(file)
     }
     pub async fn send_prompt(
         &self,

@@ -23,7 +23,7 @@ guests are destroyed and their URLs restored on return, not kept running indefin
 
 **Main claim:** browser and Electron share the React UI and gateway API; Electron adds native capabilities, while OpenCode owns the agent runtime and durable sessions.
 
-Rune also owns native page navigation, settings, task/app lists, menus, loaded-transcript find, and background OS notifications. Page reads and writes use its existing bounded prompt worker against the same gateway routes; its disposable page cache is not another persistence layer. Theme, font and notification choices share the existing native preference worker. Remote configuration and pairing credentials remain gateway-owned. `apps::canvas_host` and the Canvas inspector now mount WKWebView surfaces; a separate native PTY drawer sits below chat and inspector. The updater is a disabled native-preview state. Thread search currently filters the loaded sidebar snapshot, a presentation limitation rather than a new search index. Notification delivery uses Rune's OS adapter with foreground, muted-root, subagent-reply and app-session-reply exclusions; it requires a bundled native app on macOS.
+Rune owns native page navigation, settings, task/app lists, menus, transcript find, and background OS notifications. Page reads and writes use its bounded prompt worker against the same gateway routes; the disposable cache is not persistence. Theme, font and notification choices share the native preference worker. Remote configuration and pairing credentials remain gateway-owned. `apps::canvas_host` and the Canvas inspector mount WKWebView surfaces; a separate native PTY drawer sits below chat and inspector. The updater is a disabled native-preview state. Thread search and Focus use gateway paginated global search, not another index. Notifications apply foreground, muted-root, subagent-reply and app-session-reply exclusions and require a macOS bundle.
 
 The common path runs downward: shared UI → local gateway → OpenCode. Upward arrows carry native events for live text and snapshot refresh, plus terminal output over WebSocket; terminal input follows the downward path. Ordinary HTTP responses return on their request connection and are omitted for clarity. The desktop-only side branch uses preload IPC for the native bridge and web-content events for OS link, editing, and spelling menus.
 
@@ -230,6 +230,20 @@ the shared OpenCode service. Explicit gateway URLs remain externally owned.
 Gateway stderr rotates between two 1 MiB files in the Rune presentation-data directory.
 No OpenCode snapshots or backend state are copied into that directory.
 # Rune native controls
+
+Rune's live sidebar requests session pages only for expanded, presentation-owned
+folders, including folders with no native project registration. Service-discovered
+project metadata enriches these folders without owning their open/closed state.
+The preference file stores only folder paths/names, not native IDs, icons, VCS or
+recency snapshots. Focus/search reads remain independently paginated and coalesced.
+Failed sidebar pagination preserves cursors and does not restart SSE.
+
+Thread exports stream through the existing prompt worker into guarded temporary
+files before presenting the native Save dialog, with the same sanitized filename
+as React. Save, cancel and worker shutdown release the temporary file. This is
+disposable client-side download staging, not durable transcript storage or another
+OpenCode export implementation; content still comes from the gateway's export
+route. App shutdown never stops the shared OpenCode service.
 
 `apps/rune/crates/oc-native` is a narrow main-thread AppKit boundary for the
 system color panel. The safe UI remains `forbid(unsafe_code)`. The panel publishes

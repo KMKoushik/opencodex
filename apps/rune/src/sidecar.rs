@@ -68,6 +68,7 @@ pub fn attach(s: &mut crate::State, client: oc_gateway::Gateway) {
     crate::terminal::start(s, client.clone(), wake.clone());
     crate::native::start(s, client.clone(), wake.clone());
     s.page_get("apps");
+    s.page_get("connection");
     s.worker = Some(oc_gateway::Worker::start(
         client,
         s.prefs.project.clone(),

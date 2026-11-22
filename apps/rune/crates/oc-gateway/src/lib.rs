@@ -52,6 +52,8 @@ use tokio::sync::mpsc;
 pub enum Command {
     Refresh,
     More(String),
+    ProjectLists(std::collections::BTreeSet<String>),
+    RetryProject(String),
     AddProject(String),
     Details(String),
     OpenSession(String),
@@ -98,6 +100,7 @@ impl Worker {
                     let mut transcript: Option<messages::Messages> = None;
                     let mut refresh_chat: Option<tokio::time::Instant> = None;
                     let mut delay = Duration::from_millis(500);
+                    let mut directories: std::collections::BTreeSet<String> = initial_directory.iter().cloned().collect();
                     loop {
                         let result: Result<(), String> = async {
                             // Open the subscription BEFORE reading snapshots: no launch/reconnect gap.
@@ -114,7 +117,7 @@ impl Worker {
                                                 "ready" => {
                                                     let workspace_revision=snapshot.workspace_revision.wrapping_add(1);
                                                     let native_revisions=snapshot.native_revisions.map(|v|v.wrapping_add(1));
-                                                    snapshot = Snapshot::load(&client).await?;
+                                                    snapshot = Snapshot::load_scoped(&client, Some(&directories)).await?;
                                                     snapshot.workspace_revision=workspace_revision;
                                                     snapshot.native_revisions=native_revisions;
                                                     snapshot.live = true;
@@ -124,8 +127,7 @@ impl Worker {
                                                         if let Err(e) = chat.refresh(&client).await { chat.error = Some(e); }
                                                         publish_chat(chat);
                                                     }
-                                                    let directory = initial_directory.clone()
-                                                        .or_else(|| snapshot.projects.first().map(|p| p.canonical.clone()));
+                                                    let directory = initial_directory.clone();
                                                     if let Some(directory) = directory {
                                                         if let Err(e) = snapshot.details(&client, &directory).await { snapshot.error=Some(e); }
                                                         publish(&mut snapshot);
@@ -183,29 +185,58 @@ impl Worker {
                                                 snapshot.details(&client,&directory).await?;
                                             }
                                             Command::Refresh => {
-                                                snapshot = Snapshot::load(&client).await?;
+                                                snapshot = Snapshot::load_scoped(&client, Some(&directories)).await?;
                                                 snapshot.live = true;
                                             }
                                             Command::AddProject(directory) => {
                                                 client.add_project(&directory).await?;
-                                                snapshot = Snapshot::load(&client).await?;
+                                                snapshot = Snapshot::load_scoped(&client, Some(&directories)).await?;
                                                 snapshot.live = true;
                                             }
                                             Command::More(directory) => {
-                                                if let Some(cursor) = snapshot.cursors.get(&directory) {
-                                                    let page = client.sessions(&directory, Some(cursor)).await?;
-                                                    snapshot.cursors.remove(&directory);
-                                                    if let Some(cursor) = page.next_cursor { snapshot.cursors.insert(directory.clone(), cursor); }
-                                                    for s in page.sessions { snapshot.sessions.insert(s.id.clone(), s); }
+                                                snapshot.more(&client, &directory).await;
+                                            }
+                                            Command::ProjectLists(next) => {
+                                                let added: std::collections::BTreeSet<String> = next.difference(&directories).cloned().collect();
+                                                directories = next;
+                                                snapshot.retain_project_lists(&directories, transcript.as_ref().map(|chat|chat.session_id.as_str()));
+                                                if added.is_empty() { publish(&mut snapshot); continue; }
+                                                match Snapshot::load_scoped(&client, Some(&added)).await {
+                                                Ok(loaded) => {
+                                                    snapshot.projects = loaded.projects;
+                                                    snapshot.active = loaded.active;
+                                                    snapshot.sessions.extend(loaded.sessions);
+                                                    snapshot.cursors.extend(loaded.cursors);
+                                                    snapshot.project_cursors.extend(loaded.project_cursors);
+                                                    snapshot.loaded_directories.extend(loaded.loaded_directories);
+                                                    for directory in &added { snapshot.project_errors.remove(directory); }
+                                                    snapshot.project_errors.extend(loaded.project_errors);
+                                                    snapshot.attention = loaded.attention;
                                                 }
-                                                if let Some(id) = snapshot.projects.iter().find(|p| p.canonical==directory).map(|p| p.id.clone()) {
-                                                    if let Some(cursor) = snapshot.project_cursors.get(&id) {
-                                                        let page = client.project_sessions(&id, Some(cursor)).await?;
-                                                        snapshot.project_cursors.remove(&id);
-                                                        if let Some(cursor) = page.next_cursor { snapshot.project_cursors.insert(id, cursor); }
-                                                        for s in page.sessions { snapshot.sessions.insert(s.id.clone(), s); }
+                                                Err(error) => {
+                                                    // Keep the stream and cached rows; the UI can retry.
+                                                    snapshot.error = Some(error);
+                                                }
+                                                }
+                                            }
+                                            Command::RetryProject(directory) => {
+                                                let dirs = [directory.clone()].into_iter().collect();
+                                                let result = Snapshot::load_scoped(&client, Some(&dirs)).await;
+                                                let error = match result {
+                                                    Ok(loaded) => {
+                                                        snapshot.sessions.extend(loaded.sessions);
+                                                        snapshot.cursors.extend(loaded.cursors);
+                                                        snapshot.project_cursors.extend(loaded.project_cursors);
+                                                        snapshot.loaded_directories.extend(loaded.loaded_directories);
+                                                        loaded.project_errors.get(&directory).cloned()
                                                     }
-                                                }
+                                                    Err(error) => Some(error),
+                                                };
+                                                snapshot.project_errors.remove(&directory);
+                                                if let Some(error) = &error { snapshot.project_errors.insert(directory.clone(), error.clone()); }
+                                                let entry = snapshot.page_results.entry(directory).or_default();
+                                                entry.0 = entry.0.wrapping_add(1);
+                                                entry.1 = error;
                                             }
                                         }
                                         publish(&mut snapshot);
