@@ -30,7 +30,7 @@ fn valid_key(key: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-')
 }
 fn shell(s: &State) -> String {
-    let origin = OPTIONS.get().unwrap().gateway.as_deref().unwrap_or("");
+    let origin = crate::sidecar::url().unwrap_or("");
     let url = format!(
         "{}/api/canvas-runtime/frame.html",
         origin.trim_end_matches('/')
@@ -54,7 +54,7 @@ pub fn open(s: &mut State, id: String) {
     s.native.pending.clear();
     s.native.error = None;
     let web = super::web(s, true);
-    if let Err(e) = web.load_html(&shell(s), OPTIONS.get().unwrap().gateway.as_deref()) {
+    if let Err(e) = web.load_html(&shell(s), crate::sidecar::url()) {
         s.native.error = Some(e);
     }
     s.native.canvas = Some(Canvas {
@@ -367,7 +367,7 @@ pub fn event(s: &mut State, event: Event, tx: &mut Tx) {
                     c.ready = false;
                     c.initialized = false;
                     let web = c.web.clone();
-                    let _ = web.load_html(&shell(s), OPTIONS.get().unwrap().gateway.as_deref());
+                    let _ = web.load_html(&shell(s), crate::sidecar::url());
                 }
                 "error" => {
                     s.native.error = m["message"]

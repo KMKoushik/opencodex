@@ -524,9 +524,9 @@ pub fn capture(s: &mut State) {
         Route::Settings(v) if v == "usage" => Some("usage/limits"),
         _ => None,
     };
-    if let (Some(path), Some(url)) = (path, &crate::OPTIONS.get().unwrap().gateway) {
+    if let (Some(path), Some(url)) = (path, crate::sidecar::url()) {
         let path = path.to_owned();
-        let url = url.clone();
+        let url = url.to_owned();
         let result = std::thread::spawn(move || oc_gateway::capture_page(&url, &path))
             .join()
             .unwrap();

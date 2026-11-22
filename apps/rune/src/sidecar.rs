@@ -59,9 +59,14 @@ pub fn start(handle: rune::AppHandle<crate::State>) {
         });
     });
 }
+/// Starts every gateway client once the gateway is known: from `OPENCODEX_GATEWAY` at launch,
+/// or when the bundled gateway reports ready.
 pub fn attach(s: &mut crate::State, client: oc_gateway::Gateway) {
     let wake = s.waker.clone().expect("setup waker");
     crate::composer::state::start(s, client.clone(), wake.clone());
+    crate::workbench::start(s, client.clone(), wake.clone());
+    crate::terminal::start(s, client.clone(), wake.clone());
+    crate::native::start(s, client.clone(), wake.clone());
     s.worker = Some(oc_gateway::Worker::start(
         client,
         s.prefs.project.clone(),

@@ -52,11 +52,7 @@ pub fn attach_window(s: &mut State, w: rune::WindowHandle) {
 }
 fn web(s: &State, bridge: bool) -> WebView {
     let wake = s.waker.clone();
-    let origin = OPTIONS
-        .get()
-        .unwrap()
-        .gateway
-        .as_ref()
+    let origin = crate::sidecar::url()
         .and_then(|v| url::Url::parse(v).ok())
         .map(|u| u.origin().ascii_serialization());
     let web = WebView::new(oc_webview::Options {

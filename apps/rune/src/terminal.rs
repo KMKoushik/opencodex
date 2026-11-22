@@ -192,9 +192,7 @@ pub fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
         let visible =
             s.terminal.open && s.pages.route == crate::pages::Route::Chat && active == Some(i);
         if visible && !crate::OPTIONS.get().unwrap().headless && t.view.worker.is_none() {
-            if let (Some(url), Some(wake)) =
-                (&crate::OPTIONS.get().unwrap().gateway, s.waker.clone())
-            {
+            if let (Some(url), Some(wake)) = (crate::sidecar::url(), s.waker.clone()) {
                 match oc_gateway::Gateway::new(url, None) {
                     Ok(client) => t.view.attach(oc_terminal::Worker::start(
                         client,

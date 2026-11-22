@@ -781,17 +781,7 @@ fn main() {
             match &OPTIONS.get().unwrap().gateway {
                 Some(url) => match Gateway::new(url, None) {
                     Ok(client) => {
-                        composer::state::start(s, client.clone(), wake.clone());
-                        workbench::start(s, client.clone(), wake.clone());
-                        terminal::start(s, client.clone(), wake.clone());
-                        native::start(s, client.clone(), wake.clone());
-                        s.worker =
-                            Some(Worker::start(client, s.prefs.project.clone(), move || {
-                                wake()
-                            }));
-                        if let Some(id) = &OPTIONS.get().unwrap().session {
-                            s.open_session(Some(id.clone()));
-                        }
+                        sidecar::attach(s, client);
                         if let Some(panel) = OPTIONS
                             .get()
                             .unwrap()

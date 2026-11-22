@@ -12,10 +12,7 @@ impl State {
             .entry(id.clone())
             .or_insert_with(|| TextEdit::new(""));
         if self.workbench.reader_worker.is_none() {
-            if let (Some(url), Some(wake)) = (
-                crate::OPTIONS.get().unwrap().gateway.as_deref(),
-                self.waker.clone(),
-            ) {
+            if let (Some(url), Some(wake)) = (crate::sidecar::url(), self.waker.clone()) {
                 match oc_gateway::Gateway::new(url, None) {
                     Ok(client) => {
                         self.workbench.reader_worker = Some(oc_gateway::Worker::start(

@@ -12,7 +12,7 @@ cd "$ROOT"
 VERSION=$(bun -e 'console.log(require("./apps/desktop/package.json").version)')
 # Read the actual pinned Electron runtime's deployment requirement, not a guessed OS version.
 ELECTRON=$(cd apps/desktop && node -p 'require("electron")')
-MIN_OS=$(/usr/libexec/PlistBuddy -c 'Print LSMinimumSystemVersion' "$(dirname "$ELECTRON")/../Info.plist")
+MIN_OS=$(plutil -extract LSMinimumSystemVersion raw -o - "$(dirname "$ELECTRON")/../Info.plist")
 TARGET_ARGS=()
 BINARY=apps/rune/target/release/opencodex
 if ! rustc -vV | grep -q '^host: aarch64-apple-darwin$'; then
