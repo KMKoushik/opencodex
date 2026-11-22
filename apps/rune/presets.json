@@ -1,0 +1,314 @@
+{
+  "light": [
+    {
+      "id": "opencodex-light",
+      "name": "OpenCodex",
+      "seed": {
+        "surface": "#f9f9f8",
+        "ink": "#18181a",
+        "accent": "#18181a",
+        "contrast": 45
+      },
+      "under": "#f1f1ef",
+      "error": "#c0392b",
+      "success": "#1e7a3a",
+      "warning": "#9a5b00",
+      "syntax": "ink",
+      "art": "calico"
+    },
+    {
+      "id": "catppuccin-latte",
+      "name": "Catppuccin Latte",
+      "seed": {
+        "surface": "#eff1f5",
+        "ink": "#4c4f69",
+        "accent": "#8839ef",
+        "contrast": 45
+      },
+      "under": "#e6e9ef",
+      "error": "#d20f39",
+      "success": "#40a02b",
+      "warning": "#fe640b",
+      "link": "#1e66f5",
+      "primary": "accent",
+      "syntax": "catppuccin-latte",
+      "art": "catppuccin"
+    },
+    {
+      "id": "github-light",
+      "name": "GitHub Light",
+      "seed": {
+        "surface": "#ffffff",
+        "ink": "#1f2328",
+        "accent": "#0969da",
+        "contrast": 45
+      },
+      "error": "#d1242f",
+      "success": "#1a7f37"
+    },
+    {
+      "id": "everforest-light",
+      "name": "Everforest Light",
+      "seed": {
+        "surface": "#fdf6e3",
+        "ink": "#5c6a72",
+        "accent": "#8da101",
+        "contrast": 45
+      },
+      "error": "#f85552",
+      "success": "#8da101"
+    },
+    {
+      "id": "gruvbox-light",
+      "name": "Gruvbox Light",
+      "seed": {
+        "surface": "#fbf1c7",
+        "ink": "#3c3836",
+        "accent": "#076678",
+        "contrast": 45
+      },
+      "error": "#9d0006",
+      "success": "#79740e"
+    },
+    {
+      "id": "nord-light",
+      "name": "Nord Light",
+      "seed": {
+        "surface": "#eceff4",
+        "ink": "#2e3440",
+        "accent": "#5e81ac",
+        "contrast": 45
+      },
+      "error": "#bf616a",
+      "success": "#a3be8c"
+    },
+    {
+      "id": "one-light",
+      "name": "One Light",
+      "seed": {
+        "surface": "#fafafa",
+        "ink": "#383a42",
+        "accent": "#4078f2",
+        "contrast": 45
+      },
+      "error": "#e45649",
+      "success": "#50a14f"
+    },
+    {
+      "id": "rose-pine-dawn",
+      "name": "Rosé Pine Dawn",
+      "seed": {
+        "surface": "#faf4ed",
+        "ink": "#575279",
+        "accent": "#907aa9",
+        "contrast": 45
+      },
+      "error": "#b4637a",
+      "success": "#286983"
+    },
+    {
+      "id": "solarized-light",
+      "name": "Solarized Light",
+      "seed": {
+        "surface": "#fdf6e3",
+        "ink": "#586e75",
+        "accent": "#268bd2",
+        "contrast": 45
+      },
+      "error": "#dc322f",
+      "success": "#859900"
+    },
+    {
+      "id": "tokyo-night-day",
+      "name": "Tokyo Night Day",
+      "seed": {
+        "surface": "#e1e2e7",
+        "ink": "#3760bf",
+        "accent": "#2e7de9",
+        "contrast": 45
+      },
+      "error": "#f52a65",
+      "success": "#587539"
+    }
+  ],
+  "dark": [
+    {
+      "id": "opencodex-dark",
+      "name": "OpenCodex",
+      "seed": {
+        "surface": "#1a1a1d",
+        "ink": "#ededf0",
+        "accent": "#ededf0",
+        "contrast": 60
+      },
+      "under": "#141416",
+      "error": "#ff7b72",
+      "success": "#5fd47f",
+      "warning": "#e2b85a",
+      "syntax": "ink",
+      "art": "calico"
+    },
+    {
+      "id": "catppuccin-mocha",
+      "name": "Catppuccin Mocha",
+      "seed": {
+        "surface": "#1e1e2e",
+        "ink": "#cdd6f4",
+        "accent": "#cba6f7",
+        "contrast": 60
+      },
+      "under": "#181825",
+      "error": "#f38ba8",
+      "success": "#a6e3a1",
+      "warning": "#fab387",
+      "link": "#89b4fa",
+      "primary": "accent",
+      "syntax": "catppuccin-mocha",
+      "art": "catppuccin"
+    },
+    {
+      "id": "catppuccin-macchiato",
+      "name": "Catppuccin Macchiato",
+      "seed": {
+        "surface": "#24273a",
+        "ink": "#cad3f5",
+        "accent": "#c6a0f6",
+        "contrast": 60
+      },
+      "under": "#1e2030",
+      "error": "#ed8796",
+      "success": "#a6da95",
+      "warning": "#f5a97f",
+      "link": "#8aadf4",
+      "primary": "accent",
+      "syntax": "catppuccin-macchiato",
+      "art": "catppuccin"
+    },
+    {
+      "id": "catppuccin-frappe",
+      "name": "Catppuccin Frappé",
+      "seed": {
+        "surface": "#303446",
+        "ink": "#c6d0f5",
+        "accent": "#ca9ee6",
+        "contrast": 60
+      },
+      "under": "#292c3c",
+      "error": "#e78284",
+      "success": "#a6d189",
+      "warning": "#ef9f76",
+      "link": "#8caaee",
+      "primary": "accent",
+      "syntax": "catppuccin-frappe",
+      "art": "catppuccin"
+    },
+    {
+      "id": "dracula",
+      "name": "Dracula",
+      "seed": {
+        "surface": "#282a36",
+        "ink": "#f8f8f2",
+        "accent": "#bd93f9",
+        "contrast": 60
+      },
+      "error": "#ff5555",
+      "success": "#50fa7b"
+    },
+    {
+      "id": "everforest-dark",
+      "name": "Everforest Dark",
+      "seed": {
+        "surface": "#2d353b",
+        "ink": "#d3c6aa",
+        "accent": "#a7c080",
+        "contrast": 60
+      },
+      "error": "#e67e80",
+      "success": "#a7c080"
+    },
+    {
+      "id": "github-dark",
+      "name": "GitHub Dark",
+      "seed": {
+        "surface": "#0d1117",
+        "ink": "#e6edf3",
+        "accent": "#4493f8",
+        "contrast": 60
+      },
+      "error": "#f85149",
+      "success": "#3fb950"
+    },
+    {
+      "id": "gruvbox-dark",
+      "name": "Gruvbox Dark",
+      "seed": {
+        "surface": "#282828",
+        "ink": "#ebdbb2",
+        "accent": "#fabd2f",
+        "contrast": 60
+      },
+      "error": "#fb4934",
+      "success": "#b8bb26"
+    },
+    {
+      "id": "nord",
+      "name": "Nord",
+      "seed": {
+        "surface": "#2e3440",
+        "ink": "#eceff4",
+        "accent": "#88c0d0",
+        "contrast": 60
+      },
+      "error": "#bf616a",
+      "success": "#a3be8c"
+    },
+    {
+      "id": "one-dark",
+      "name": "One Dark",
+      "seed": {
+        "surface": "#282c34",
+        "ink": "#abb2bf",
+        "accent": "#61afef",
+        "contrast": 60
+      },
+      "error": "#e06c75",
+      "success": "#98c379"
+    },
+    {
+      "id": "rose-pine",
+      "name": "Rosé Pine",
+      "seed": {
+        "surface": "#191724",
+        "ink": "#e0def4",
+        "accent": "#c4a7e7",
+        "contrast": 60
+      },
+      "error": "#eb6f92",
+      "success": "#9ccfd8"
+    },
+    {
+      "id": "solarized-dark",
+      "name": "Solarized Dark",
+      "seed": {
+        "surface": "#002b36",
+        "ink": "#93a1a1",
+        "accent": "#268bd2",
+        "contrast": 60
+      },
+      "error": "#dc322f",
+      "success": "#859900"
+    },
+    {
+      "id": "tokyo-night",
+      "name": "Tokyo Night",
+      "seed": {
+        "surface": "#1a1b26",
+        "ink": "#c0caf5",
+        "accent": "#7aa2f7",
+        "contrast": 60
+      },
+      "error": "#f7768e",
+      "success": "#9ece6a"
+    }
+  ]
+}
