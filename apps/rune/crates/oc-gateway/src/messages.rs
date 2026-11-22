@@ -18,6 +18,8 @@ pub struct Messages {
     pub running: bool,
     pub error: Option<String>,
     pub revision: u64,
+    /// Snapshot boundaries only, so attachment discovery never scans history per token.
+    pub media_revision: u64,
     pub(crate) indexes: BTreeMap<String, usize>,
     // A late subscriber must never render a suffix as a complete answer.
     pub(crate) started: BTreeSet<(String, String, usize)>,
@@ -58,6 +60,7 @@ impl Messages {
         Ok(())
     }
     pub fn merge(&mut self, page: MessagePage, earlier: bool) {
+        self.media_revision += 1;
         let fresh: Vec<_> = page.data.into_iter().rev().map(Arc::new).collect();
         let cursor = page.cursor.and_then(|c| c.next);
         if earlier {
@@ -76,6 +79,22 @@ impl Messages {
             self.cursor = cursor;
         }
         self.reindex();
+        if let Some(info) = self.info.as_ref().filter(|info| {
+            info.metadata
+                .as_ref()
+                .is_some_and(|m| m["opencodexSideChat"].is_object())
+        }) {
+            if self
+                .messages
+                .iter()
+                .any(|m| m.time.created < info.time.created)
+            {
+                self.cursor = None;
+            }
+            self.messages
+                .retain(|m| m.time.created >= info.time.created);
+            self.reindex();
+        }
         self.live.retain(|(id, _, _), _| {
             self.indexes
                 .get(id)

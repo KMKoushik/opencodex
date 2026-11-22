@@ -139,4 +139,54 @@ impl Gateway {
     pub async fn events(&self) -> Result<Response, String> {
         self.response("events", &[], Method::GET, None, true).await
     }
+    /// Image transport only; local paths always go through the gateway's checked session route.
+    pub async fn image(&self, id: &str, source: &str) -> Result<Vec<u8>, String> {
+        const LIMIT: usize = 16 * 1024 * 1024;
+        if let Some(data) = source
+            .strip_prefix("data:image/")
+            .and_then(|s| s.split_once(";base64,").map(|(_, data)| data))
+        {
+            use base64::Engine;
+            if data.len() > LIMIT * 4 / 3 + 4 {
+                return Err("Image exceeds 16 MiB".into());
+            }
+            return base64::engine::general_purpose::STANDARD
+                .decode(data)
+                .map_err(|e| e.to_string());
+        }
+        let response = if source.starts_with("https://") || source.starts_with("http://") {
+            // Never send gateway authorization to an image's origin.
+            self.http
+                .get(source)
+                .timeout(Duration::from_secs(15))
+                .send()
+                .await
+                .map_err(|e| e.to_string())?
+                .error_for_status()
+                .map_err(|e| e.to_string())?
+        } else {
+            self.response(
+                &format!("sessions/{id}/image"),
+                &[("path", source)],
+                Method::GET,
+                None,
+                false,
+            )
+            .await?
+        };
+        if response.content_length().is_some_and(|n| n > LIMIT as u64) {
+            return Err("Image exceeds 16 MiB".into());
+        }
+        use futures_util::StreamExt;
+        let mut stream = response.bytes_stream();
+        let mut bytes = Vec::new();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| e.to_string())?;
+            if bytes.len() + chunk.len() > LIMIT {
+                return Err("Image exceeds 16 MiB".into());
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        Ok(bytes)
+    }
 }

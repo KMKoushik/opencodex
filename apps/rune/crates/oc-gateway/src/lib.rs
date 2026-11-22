@@ -271,3 +271,12 @@ pub fn capture_details(
     .join()
     .map_err(|_| "Capture details worker panicked".to_owned())?
 }
+
+/// Blocking adapter for Rune's background image worker. Never called from a frame/handler.
+pub fn image_bytes(client: &Gateway, id: &str, source: &str) -> Result<Vec<u8>, String> {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| e.to_string())?
+        .block_on(client.image(id, source))
+}

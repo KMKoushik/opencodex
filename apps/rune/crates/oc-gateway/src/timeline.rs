@@ -47,6 +47,7 @@ pub struct Projector {
     cache: BTreeMap<String, (Arc<Message>, Vec<Arc<Row>>)>,
     groups: BTreeMap<String, String>,
     owners: BTreeMap<String, String>,
+    answers: BTreeMap<String, (u64, Arc<Row>)>,
     version: u64,
 }
 impl Projector {
@@ -88,8 +89,10 @@ impl Projector {
         }
         self.flush(&mut work, &mut rows, &mut next_groups, &mut claimed);
         self.groups = next_groups;
-        self.cache
-            .retain(|id, _| data.messages.iter().any(|m| &m.id == id));
+        let ids: BTreeSet<_> = data.messages.iter().map(|m| m.id.as_str()).collect();
+        self.cache.retain(|id, _| ids.contains(id.as_str()));
+        let row_ids: BTreeSet<_> = rows.iter().map(|row| row.id.as_str()).collect();
+        self.answers.retain(|id, _| row_ids.contains(id.as_str()));
         let times = turn_times(data);
         let mut out = Vec::new();
         let mut next_owners = BTreeMap::new();
@@ -153,7 +156,16 @@ impl Projector {
                 let open = overrides.get(&id).copied().unwrap_or(live);
                 Some(Arc::new(Row {
                     id,
-                    version: self.version,
+                    version: time.map_or(0, |t| {
+                        t.0.to_bits() ^ t.1.unwrap_or(0.0).to_bits().rotate_left(13)
+                    }) ^ u64::from(open)
+                        ^ if live {
+                            2
+                        } else if status == "stopped" {
+                            4
+                        } else {
+                            8
+                        },
                     kind: Kind::Turn {
                         status,
                         start: time.map_or(0.0, |t| t.0),
@@ -184,16 +196,26 @@ impl Projector {
                         ..
                     } = &row.kind
                     {
-                        out.push(Arc::new(Row {
-                            id: row.id.clone(),
-                            version: row.version,
-                            kind: Kind::Text {
-                                message: message.clone(),
-                                ordinal: *ordinal,
-                                text: text.clone(),
-                                copyable: message.time.completed.is_some(),
-                            },
-                        }));
+                        let answer = self
+                            .answers
+                            .entry(row.id.clone())
+                            .or_insert_with(|| (0, row.clone()));
+                        if answer.0 != row.version {
+                            *answer = (
+                                row.version,
+                                Arc::new(Row {
+                                    id: row.id.clone(),
+                                    version: row.version,
+                                    kind: Kind::Text {
+                                        message: message.clone(),
+                                        ordinal: *ordinal,
+                                        text: text.clone(),
+                                        copyable: message.time.completed.is_some(),
+                                    },
+                                }),
+                            );
+                        }
+                        out.push(answer.1.clone());
                         continue;
                     }
                 }
