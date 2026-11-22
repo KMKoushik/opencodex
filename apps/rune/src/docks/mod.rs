@@ -1,4 +1,9 @@
 //! Gateway forms and permission requests, replacing the active composer's draft.
+mod answer;
+mod keyboard;
+mod permission;
+#[cfg(test)]
+mod tests;
 use crate::{State, sidebar::label};
 use oc_gateway::prompt::Request;
 use rune::{El, TextEdit, TextStyle, col, el, row, text_input};
@@ -14,10 +19,14 @@ pub struct Docks {
     custom: TextEdit,
     custom_on: BTreeSet<String>,
     index: usize,
+    active_key: Option<String>,
     reviewing: bool,
     collapsed: bool,
     error: Option<String>,
     pub sending: bool,
+    pending_path: Option<String>,
+    permission_pending: BTreeSet<String>,
+    permission_errors: BTreeMap<String, String>,
 }
 impl State {
     pub fn refresh_docks(&mut self) {
@@ -48,11 +57,13 @@ pub fn receive(s: &mut State, tag: &str, value: Value) {
                 .and_then(|v| v["id"].as_str())
                 .unwrap_or("")
                 .to_owned();
-            if id != s.docks.form_id {
+            let changed = id != s.docks.form_id;
+            if changed {
                 s.docks.form_id = id;
                 s.docks.answers.clear();
                 s.docks.custom_on.clear();
                 s.docks.index = 0;
+                s.docks.active_key = None;
                 s.docks.reviewing = false;
                 s.docks.custom.clear();
                 s.docks.error = None;
@@ -67,6 +78,9 @@ pub fn receive(s: &mut State, tag: &str, value: Value) {
                 }
             }
             s.docks.forms = items;
+            if changed {
+                restore_input(&mut s.docks);
+            }
         }
         "permissions" => s.docks.permissions = items,
         _ => {}
@@ -86,16 +100,7 @@ fn fields(d: &Docks) -> Vec<&Value> {
         .and_then(|f| f["fields"].as_array())
         .into_iter()
         .flatten()
-        .filter(|f| {
-            f["hidden"] != true
-                && f["when"].as_array().is_none_or(|conditions| {
-                    conditions.iter().all(|c| {
-                        let equal =
-                            d.answers.get(c["key"].as_str().unwrap_or("")) == Some(&c["value"]);
-                        if c["op"] == "eq" { equal } else { !equal }
-                    })
-                })
-        })
+        .filter(|f| f["hidden"] != true && answer::applies(f, &d.answers))
         .collect()
 }
 fn title(field: &Value) -> &str {
@@ -104,6 +109,67 @@ fn title(field: &Value) -> &str {
         .or_else(|| field["title"].as_str())
         .or_else(|| field["key"].as_str())
         .unwrap_or("Question")
+}
+fn restore_input(d: &mut Docks) {
+    let Some(field) = fields(d).get(d.index).cloned().cloned() else {
+        return;
+    };
+    let key = field["key"].as_str().unwrap_or("");
+    d.active_key = Some(key.into());
+    let value = d.answers.get(key);
+    let options = field["options"].as_array();
+    let custom =
+        |v: &&Value| !options.is_some_and(|options| options.iter().any(|o| o["value"] == **v));
+    let text = match value {
+        Some(Value::Array(items)) => items
+            .iter()
+            .filter(custom)
+            .filter_map(Value::as_str)
+            .collect::<Vec<_>>()
+            .join("\n"),
+        Some(v) if custom(&v) => v
+            .as_str()
+            .map(str::to_owned)
+            .unwrap_or_else(|| v.to_string()),
+        _ => String::new(),
+    };
+    if !text.is_empty() && options.is_some_and(|o| !o.is_empty()) {
+        d.custom_on.insert(key.into());
+    }
+    d.custom.replace_text(text);
+}
+fn current_index(d: &Docks) -> usize {
+    fields(d)
+        .iter()
+        .position(|f| f["key"].as_str() == d.active_key.as_deref())
+        .unwrap_or(0)
+}
+
+pub fn replied(s: &mut State, path: &str, result: Result<Value, String>) {
+    if s.docks.permission_pending.remove(path) {
+        if let Err(error) = result {
+            s.docks.permission_errors.insert(path.into(), error);
+        } else {
+            s.refresh_docks();
+        }
+        return;
+    }
+    if s.docks.pending_path.as_deref() != Some(path) {
+        return;
+    }
+    s.docks.pending_path = None;
+    s.docks.sending = false;
+    match result {
+        Err(error) => s.docks.error = Some(error),
+        Ok(_) => {
+            if path.contains("/forms/") {
+                s.docks.forms.retain(|form| {
+                    !path.ends_with(&format!("/{}", form["id"].as_str().unwrap_or("")))
+                });
+            }
+            s.refresh_docks();
+        }
+    }
 }
 fn button(s: &State, title: &str) -> El {
     s.theme
@@ -118,60 +184,33 @@ fn button(s: &State, title: &str) -> El {
         .role("button")
         .label(title)
         .focusable(true)
-}
-fn validate(field: &Value, value: Option<&Value>) -> Option<String> {
-    if field["type"] == "external" {
-        return None;
-    }
-    let empty = value.is_none_or(|v| {
-        v.is_null()
-            || v.as_str().is_some_and(|s| s.trim().is_empty())
-            || v.as_array().is_some_and(Vec::is_empty)
-    });
-    if empty {
-        return (field["required"] == true)
-            .then(|| "Choose or enter an answer to continue.".into());
-    }
-    let value = value.unwrap();
-    if field["type"] == "multiselect" {
-        let Some(items) = value.as_array() else {
-            return Some("Choose one or more answers.".into());
-        };
-        if field["minItems"]
-            .as_u64()
-            .is_some_and(|n| items.len() < (n as usize))
-            || field["maxItems"]
-                .as_u64()
-                .is_some_and(|n| items.len() > (n as usize))
-        {
-            return Some("Check the number of selected answers.".into());
-        }
-    }
-    if let Some(text) = value.as_str() {
-        if field["minLength"]
-            .as_u64()
-            .is_some_and(|n| text.chars().count() < (n as usize))
-            || field["maxLength"]
-                .as_u64()
-                .is_some_and(|n| text.chars().count() > (n as usize))
-        {
-            return Some("Check the answer length.".into());
-        }
-    }
-    None
+        .disabled(s.docks.sending)
 }
 fn reply(s: &mut State, path: String, body: Value, delete: bool) {
-    if s.docks.sending {
+    let permission = path.contains("/permissions/");
+    if s.composer.access_pending
+        || if permission {
+            s.docks.permission_pending.contains(&path)
+        } else {
+            s.docks.sending
+        }
+    {
         return;
     }
     if s.prompt_request(Request::Mutate {
-        tag: "dock-reply".into(),
-        path,
+        tag: format!("dock-reply:{path}"),
+        path: path.clone(),
         body,
         delete,
     }) {
-        s.docks.sending = true;
-        s.docks.error = None;
+        if permission {
+            s.docks.permission_errors.remove(&path);
+            s.docks.permission_pending.insert(path);
+        } else {
+            s.docks.sending = true;
+            s.docks.pending_path = Some(path);
+            s.docks.error = None;
+        }
     }
 }
 fn advance(s: &mut State) {
@@ -182,19 +221,17 @@ fn advance(s: &mut State) {
         s.docks.collapsed = false;
         return;
     }
-    if s.docks.collapsed {
-        s.docks.collapsed = false;
-        return;
-    }
     let fs = fields(&s.docks);
-    let index = s.docks.index.min(fs.len().saturating_sub(1));
+    let index = current_index(&s.docks);
     for (i, f) in fs.iter().enumerate() {
-        if (s.docks.reviewing || i == index)
-            && let Some(error) = validate(f, s.docks.answers.get(f["key"].as_str().unwrap_or("")))
+        if (s.docks.reviewing || index + 1 >= fs.len() || i == index)
+            && let Some(error) =
+                answer::validate(f, s.docks.answers.get(f["key"].as_str().unwrap_or("")))
         {
             s.docks.index = i;
             s.docks.reviewing = false;
             s.docks.error = Some(error);
+            restore_input(&mut s.docks);
             return;
         }
     }
@@ -203,7 +240,7 @@ fn advance(s: &mut State) {
     if !s.docks.reviewing {
         if index + 1 < count {
             s.docks.index = index + 1;
-            s.docks.custom.clear();
+            restore_input(&mut s.docks);
         } else {
             s.docks.reviewing = true;
         }
@@ -212,15 +249,28 @@ fn advance(s: &mut State) {
     let Some(id) = s.selected.clone() else {
         return;
     };
+    let answers: BTreeMap<_, _> = s.docks.forms[0]["fields"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|f| answer::applies(f, &s.docks.answers))
+        .filter_map(|f| {
+            let key = f["key"].as_str()?;
+            Some((key.to_owned(), s.docks.answers.get(key)?.clone()))
+        })
+        .collect();
     reply(
         s,
         format!("sessions/{id}/forms/{}", s.docks.form_id),
-        json!({"answer":s.docks.answers}),
+        json!({"answer":answers}),
         false,
     );
 }
 pub fn active(s: &State) -> bool {
     s.selected.is_some() && (!s.docks.forms.is_empty() || !s.docks.permissions.is_empty())
+}
+pub fn has_question(s: &State) -> bool {
+    s.selected.is_some() && !s.docks.forms.is_empty()
 }
 pub fn waiting_label(s: &State) -> &'static str {
     if !s.docks.permissions.is_empty() {
@@ -235,84 +285,21 @@ pub fn view(s: &State) -> El {
     }
     let t = &s.theme;
     let mut out = col().w_full().gap(8.0);
-    if let Some(request) = s.docks.permissions.first() {
-        let id = request["id"].as_str().unwrap_or("").to_owned();
-        let mut actions = row().gap(6.0);
-        for (name, decision) in [
-            ("Allow once", "once"),
-            ("Always allow", "always"),
-            ("Reject", "reject"),
-        ] {
-            if decision == "always" && request["save"].as_array().is_none_or(Vec::is_empty) {
-                continue;
-            }
-            let id = id.clone();
-            actions = actions.child(button(s, name).on_press(move |s: &mut State| {
-                if let Some(session) = &s.selected {
-                    reply(
-                        s,
-                        format!("sessions/{session}/permissions/{id}"),
-                        json!({"decision":decision}),
-                        false,
-                    );
-                }
-            }));
-        }
-        let resources = request["resources"]
-            .as_array()
-            .map(|r| {
-                r.iter()
-                    .filter_map(Value::as_str)
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            })
-            .unwrap_or_default();
-        out = out.child(
-            col()
-                .w_full()
-                .padding(16.0)
-                .gap(10.0)
-                .radius(14.0)
-                .fill(t.c("surface"))
-                .border(1.0, t.c("border"))
-                .child(label(
-                    t,
-                    request["action"].as_str().unwrap_or("Permission request"),
-                    14.0,
-                    600.0,
-                    "text",
-                ))
-                .child(
-                    label(
-                        t,
-                        request["message"].as_str().unwrap_or(""),
-                        13.0,
-                        400.0,
-                        "text-secondary",
-                    )
-                    .wrap(),
-                )
-                .child(label(t, &resources, 12.0, 400.0, "text-secondary").wrap())
-                .child(actions),
-        );
+    for request in &s.docks.permissions {
+        out = out.child(permission::view(s, request));
     }
     if s.docks.forms.is_empty() {
         return out;
     }
     let fs = fields(&s.docks);
-    let index = s.docks.index.min(fs.len().saturating_sub(1));
+    let index = current_index(&s.docks);
     let mut dock = col()
         .key("question-dock")
+        .on_key(keyboard::handle)
         .w_full()
-        .max_h((s.window_size.1 * 0.55).min(480.0))
-        .scroll(rune::ScrollSpec {
-            stick_bottom: false,
-        })
         .radius(18.0)
         .fill(t.c("surface"))
-        .border(1.0, t.c("border-heavy"))
-        .padding(14.0)
-        .gap(8.0);
+        .border(1.0, t.c("border-heavy"));
     let header = if s.docks.reviewing {
         "Review answers".into()
     } else if fs.len() > 1 {
@@ -323,7 +310,9 @@ pub fn view(s: &State) -> El {
     dock = dock.child(
         row()
             .w_full()
-            .h(24.0)
+            .h(48.0)
+            .px(14.0)
+            .py(8.0)
             .justify_between()
             .child(
                 row()
@@ -366,6 +355,17 @@ pub fn view(s: &State) -> El {
                 .on_press(|s: &mut State| s.docks.collapsed = !s.docks.collapsed),
             ),
     );
+    let frame = dock;
+    let mut dock = col()
+        .w_full()
+        .px(10.0)
+        .pt(4.0)
+        .pb(12.0)
+        .gap(3.0)
+        .max_h((s.window_size.1 * 0.55).min(480.0))
+        .scroll(rune::ScrollSpec {
+            stick_bottom: false,
+        });
     if s.docks.collapsed {
         dock = dock.child(
             label(
@@ -383,17 +383,14 @@ pub fn view(s: &State) -> El {
         );
     } else {
         if s.docks.reviewing {
-            dock = dock
-                .child(label(t, "Check your answers before sending", 15.0, 600.0, "text").mb(12.0));
+            dock = dock.child(
+                label(t, "Check your answers before sending", 14.0, 500.0, "text")
+                    .mx(8.0)
+                    .mb(12.0),
+            );
             for (i, f) in fs.iter().enumerate() {
                 let answer = s.docks.answers.get(f["key"].as_str().unwrap_or(""));
-                let answer = answer
-                    .map(|v| {
-                        v.as_str()
-                            .map(str::to_owned)
-                            .unwrap_or_else(|| v.to_string())
-                    })
-                    .unwrap_or("Not answered".into());
+                let answer = answer::review(f, answer);
                 dock = dock.child(
                     row()
                         .w_full()
@@ -408,14 +405,75 @@ pub fn view(s: &State) -> El {
                         .child(button(s, "Edit").on_press(move |s: &mut State| {
                             s.docks.index = i;
                             s.docks.reviewing = false;
-                            s.docks.custom.clear();
+                            restore_input(&mut s.docks);
                         })),
                 );
             }
         } else if let Some(field) = fs.get(index) {
             let key = field["key"].as_str().unwrap_or("").to_owned();
             let multi = field["type"] == "multiselect";
-            dock = dock.child(label(t, title(field), 14.0, 500.0, "text").wrap());
+            let numeric = field["type"] == "number" || field["type"] == "integer";
+            dock = dock.child(
+                label(t, title(field), 14.0, 500.0, "text")
+                    .wrap()
+                    .mx(8.0)
+                    .mb(12.0),
+            );
+            if field["type"] == "boolean" {
+                for (i, value) in [true, false].into_iter().enumerate() {
+                    let key = key.clone();
+                    let selected =
+                        s.docks.answers.get(&key).and_then(Value::as_bool) == Some(value);
+                    dock = dock.child(
+                        button(s, if value { "Yes" } else { "No" })
+                            .key(format!("question-option-{i}"))
+                            .role("radio")
+                            .checked(selected)
+                            .tab_index(
+                                if selected || (i == 0 && !s.docks.answers.contains_key(&key)) {
+                                    0
+                                } else {
+                                    -1
+                                },
+                            )
+                            .disabled(s.docks.sending)
+                            .on_press(move |s: &mut State| {
+                                s.docks.answers.insert(key.clone(), json!(value));
+                                s.docks.error = None;
+                            }),
+                    );
+                }
+            }
+            if field["type"] == "external" {
+                let url = field["url"].as_str().unwrap_or("").to_owned();
+                if url.to_lowercase().starts_with("http://")
+                    || url.to_lowercase().starts_with("https://")
+                {
+                    dock = dock.child(
+                        button(
+                            s,
+                            &format!(
+                                "{} ↗",
+                                field["title"]
+                                    .as_str()
+                                    .filter(|v| !v.is_empty())
+                                    .unwrap_or("Open link")
+                            ),
+                        )
+                        .on_press_tx(move |_: &mut State, tx| {
+                            let _ = tx.open_url(&url);
+                        }),
+                    );
+                } else {
+                    dock = dock.child(label(
+                        t,
+                        "Open this request in OpenCode to continue.",
+                        13.0,
+                        400.0,
+                        "text-secondary",
+                    ));
+                }
+            }
             if let Some(options) = field["options"].as_array() {
                 dock = dock.child(label(
                     t,
@@ -439,19 +497,25 @@ pub fn view(s: &State) -> El {
                         .w_full()
                         .padding(10.0)
                         .gap(10.0)
-                        .radius(9.0)
+                        .radius(8.0)
+                        .hover(t.c("hover"))
                         .fill(t.c(if selected { "selected" } else { "surface" }))
                         .role(if multi { "checkbox" } else { "radio" })
+                        .checked(selected)
+                        .tab_index(
+                            if multi || selected || (i == 0 && !s.docks.answers.contains_key(&key))
+                            {
+                                0
+                            } else {
+                                -1
+                            },
+                        )
+                        .disabled(s.docks.sending)
                         .focusable(true)
-                        .child(label(
-                            t,
-                            if selected { "●" } else { "○" },
-                            14.0,
-                            500.0,
-                            "text-secondary",
-                        ))
+                        .child(indicator(s, selected, multi))
                         .child(
                             col()
+                                .gap(3.0)
                                 .grow(1.0)
                                 .child(
                                     label(
@@ -461,7 +525,7 @@ pub fn view(s: &State) -> El {
                                             .or_else(|| value.as_str())
                                             .unwrap_or("Option"),
                                         13.0,
-                                        500.0,
+                                        400.0,
                                         "text",
                                     )
                                     .wrap(),
@@ -472,7 +536,7 @@ pub fn view(s: &State) -> El {
                                         option["description"].as_str().unwrap_or(""),
                                         12.0,
                                         400.0,
-                                        "text-secondary",
+                                        "text-tertiary",
                                     )
                                     .wrap(),
                                 ),
@@ -520,6 +584,10 @@ pub fn view(s: &State) -> El {
                 let on = s.docks.custom_on.contains(&key);
                 dock = dock.child(
                     row()
+                        .key(format!(
+                            "question-option-{}",
+                            field["options"].as_array().map_or(0, Vec::len)
+                        ))
                         .w_full()
                         .padding(10.0)
                         .gap(10.0)
@@ -527,25 +595,41 @@ pub fn view(s: &State) -> El {
                         .fill(t.c(if on { "selected" } else { "surface" }))
                         .role(if multi { "checkbox" } else { "radio" })
                         .focusable(true)
-                        .child(label(
-                            t,
-                            if on { "●" } else { "○" },
-                            14.0,
-                            400.0,
-                            "text-secondary",
-                        ))
+                        .checked(on)
+                        .disabled(s.docks.sending)
+                        .child(indicator(s, on, multi))
                         .child(label(t, "Type your own answer", 13.0, 400.0, "text"))
                         .on_press_tx(move |s: &mut State, tx| {
+                            if multi && s.docks.custom_on.remove(&custom_key) {
+                                let options: Vec<_> = fields(&s.docks)
+                                    .get(current_index(&s.docks))
+                                    .and_then(|f| f["options"].as_array())
+                                    .into_iter()
+                                    .flatten()
+                                    .map(|o| o["value"].clone())
+                                    .collect();
+                                if let Some(Value::Array(values)) =
+                                    s.docks.answers.get_mut(&custom_key)
+                                {
+                                    values.retain(|v| options.contains(v));
+                                }
+                                return;
+                            }
                             s.docks.custom_on.insert(custom_key.clone());
-                            s.docks.custom.clear();
                             if !multi {
-                                s.docks.answers.remove(&custom_key);
+                                s.docks
+                                    .answers
+                                    .insert(custom_key.clone(), json!(s.docks.custom.text));
                             }
                             tx.focus("question-custom", false);
                         }),
                 );
             }
-            if field["options"].is_null() || s.docks.custom_on.contains(&key) {
+            if (field["options"].as_array().is_none_or(Vec::is_empty)
+                || s.docks.custom_on.contains(&key))
+                && field["type"] != "boolean"
+                && field["type"] != "external"
+            {
                 let option_values: Vec<_> = field["options"]
                     .as_array()
                     .into_iter()
@@ -556,12 +640,25 @@ pub fn view(s: &State) -> El {
                     text_input(&s.docks.custom, TextStyle::new(13.0, 400.0))
                         .key("question-custom")
                         .w_full()
-                        .min_h(36.0)
-                        .padding(8.0)
+                        .min_h(40.0)
+                        .max_h(140.0)
+                        .mx(8.0)
+                        .my(6.0)
+                        .px(12.0)
+                        .py(10.0)
+                        .fill(t.c("secondary"))
                         .radius(8.0)
                         .border(1.0, t.c("border"))
                         .color(t.c("text"))
-                        .placeholder("Type your own answer", t.c("text-tertiary"))
+                        .placeholder(
+                            field["placeholder"].as_str().unwrap_or(if multi {
+                                "One answer per line…"
+                            } else {
+                                "Type your answer…"
+                            }),
+                            t.c("text-tertiary"),
+                        )
+                        .disabled(s.docks.sending)
                         .on_edit(|s: &mut State| &mut s.docks.custom)
                         .on_input_change(move |s: &mut State, _| {
                             let text = s.docks.custom.text.clone();
@@ -583,13 +680,19 @@ pub fn view(s: &State) -> El {
                                     }
                                 }
                                 json!(values)
+                            } else if numeric && !text.is_empty() {
+                                text.parse::<f64>()
+                                    .ok()
+                                    .filter(|n| n.is_finite())
+                                    .map(|n| json!(n))
+                                    .unwrap_or(Value::Null)
                             } else {
                                 json!(text)
                             };
                             s.docks.answers.insert(key.clone(), answer);
                             s.docks.error = None;
                         })
-                        .on_submit(|s: &mut State, _| advance(s)),
+                        .on_input_key(keyboard::handle),
                 );
             }
         }
@@ -599,6 +702,9 @@ pub fn view(s: &State) -> El {
     }
     let mut footer = row()
         .w_full()
+        .px(14.0)
+        .py(10.0)
+        .border_sides([1.0, 0.0, 0.0, 0.0], t.c("border"))
         .gap(8.0)
         .child(button(s, "Dismiss").on_press(|s: &mut State| {
             if let Some(id) = &s.selected {
@@ -617,9 +723,11 @@ pub fn view(s: &State) -> El {
             s.docks.index = if s.docks.reviewing {
                 last
             } else {
-                s.docks.index.saturating_sub(1)
+                current_index(&s.docks).saturating_sub(1)
             };
             s.docks.reviewing = false;
+            s.docks.error = None;
+            restore_input(&mut s.docks);
         }));
     }
     footer = footer.child(
@@ -644,5 +752,30 @@ pub fn view(s: &State) -> El {
         .key("question-next")
         .on_press(advance),
     );
-    out.child(dock.child(footer))
+    out.child(frame.child(dock).child(footer))
+}
+
+fn indicator(s: &State, selected: bool, multi: bool) -> El {
+    let t = &s.theme;
+    let mut mark = el()
+        .size(15.0, 15.0)
+        .mt(2.0)
+        .radius(if multi { 3.0 } else { 7.5 })
+        .border(
+            1.0,
+            t.c(if selected {
+                "accent-text"
+            } else {
+                "text-tertiary"
+            }),
+        )
+        .center();
+    if selected {
+        mark = mark.fill(t.c("accent-text")).child(if multi {
+            label(t, "✓", 11.0, 600.0, "surface")
+        } else {
+            el().size(5.0, 5.0).radius(2.5).fill(t.c("surface"))
+        });
+    }
+    mark
 }

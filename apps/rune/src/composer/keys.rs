@@ -17,7 +17,7 @@ pub fn global(s: &mut State, event: &KeyEvent, tx: &mut Tx) -> bool {
     if escape(s, event, tx) {
         return true;
     }
-    if crate::docks::active(s) {
+    if crate::docks::has_question(s) {
         return false;
     }
     if event.mods.shift && event.is_command('l') {
