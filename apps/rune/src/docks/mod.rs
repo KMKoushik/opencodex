@@ -278,7 +278,8 @@ pub fn view(s: &State) -> El {
         .w_full()
         .radius(18.0)
         .fill(t.c("surface"))
-        .border(1.0, t.c("border-heavy"));
+        .border(1.0, t.c("border-heavy"))
+        .border_layout();
     let header = if s.docks.reviewing {
         "Review answers".into()
     } else if fs.len() > 1 {
@@ -289,7 +290,7 @@ pub fn view(s: &State) -> El {
     dock = dock.child(
         row()
             .w_full()
-            .h(48.0)
+            .h(44.0)
             .px(14.0)
             .py(8.0)
             .justify_between()
@@ -378,14 +379,17 @@ pub fn view(s: &State) -> El {
                 let answer = answer::review(f, answer);
                 dock = dock.child(
                     row()
-                        .w_full()
+                        .mx(8.0)
                         .py(12.0)
+                        .border_sides([1.0, 0.0, 0.0, 0.0], t.c("border"))
+                        .border_layout()
                         .gap(12.0)
                         .child(
                             col()
                                 .grow(1.0)
-                                .child(label(t, title(f), 13.0, 500.0, "text").wrap())
-                                .child(label(t, &answer, 13.0, 400.0, "text-secondary").wrap()),
+                                .gap(6.0)
+                                .child(label(t, title(f), 13.0, 400.0, "text-secondary").wrap())
+                                .child(label(t, &answer, 13.0, 400.0, "text").wrap()),
                         )
                         .child(
                             button(s, "Edit")
@@ -562,17 +566,20 @@ pub fn view(s: &State) -> El {
                                         }),
                                 ),
                         )
-                        .child(label(
-                            t,
-                            if i < 9 {
-                                (i + 1).to_string()
-                            } else {
-                                String::new()
-                            },
-                            11.0,
-                            400.0,
-                            "text-tertiary",
-                        ))
+                        .child(
+                            label(
+                                t,
+                                if i < 9 {
+                                    (i + 1).to_string()
+                                } else {
+                                    String::new()
+                                },
+                                11.0,
+                                400.0,
+                                "text-tertiary",
+                            )
+                            .font(TextStyle::new(11.0, 400.0).lh(20.0)),
+                        )
                         .on_press(move |s: &mut State| {
                             if s.docks.sending {
                                 return;
@@ -623,7 +630,10 @@ pub fn view(s: &State) -> El {
                         .checked(on)
                         .disabled(s.docks.sending)
                         .child(indicator(s, on, multi))
-                        .child(label(t, "Type your own answer", 13.0, 400.0, "text"))
+                        .child(
+                            label(t, "Type your own answer", 13.0, 400.0, "text")
+                                .font(TextStyle::new(13.0, 400.0).lh(18.2)),
+                        )
                         .on_press_tx(move |s: &mut State, tx| {
                             if multi && s.docks.custom_on.remove(&custom_key) {
                                 let options: Vec<_> = fields(&s.docks)
@@ -733,6 +743,7 @@ pub fn view(s: &State) -> El {
         .px(14.0)
         .py(10.0)
         .border_sides([1.0, 0.0, 0.0, 0.0], t.c("border"))
+        .border_layout()
         .gap(8.0)
         .child(button(s, "Dismiss").on_press(|s: &mut State| {
             if let Some(id) = &s.selected {
@@ -778,6 +789,7 @@ pub fn view(s: &State) -> El {
                     "Next"
                 },
             )
+            .font(TextStyle::new(12.0, 600.0).lh(18.0))
             .color(t.c("on-primary")),
             "primary-glaze",
         )
