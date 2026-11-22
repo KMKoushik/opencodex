@@ -766,25 +766,27 @@ pub fn view(s: &State, width: f32) -> El {
                     .on_press(refresh),
             );
     }
-    let popup = col()
-        .key("session-details")
-        .w(panel_width)
-        .max_h(s.window_size.1 - 72.0)
-        .radius(12.0)
-        .fill(t.c("surface"))
-        .border(1.0, t.c("border-heavy"))
-        .border_layout()
-        .scroll(rune::ScrollSpec {
-            stick_bottom: false,
-        })
-        .role(if inline { "region" } else { "dialog" })
-        .label("Session details")
-        .child(popup);
+    let popup = crate::menus::overlay::surface(
+        t,
+        col()
+            .key("session-details")
+            .w(panel_width)
+            .max_h(s.window_size.1 - 72.0)
+            .scroll(rune::ScrollSpec {
+                stick_bottom: false,
+            })
+            .role(if inline { "region" } else { "dialog" })
+            .label("Session details")
+            .child(popup),
+        12.0,
+        "surface",
+        "border-heavy",
+    );
     if inline {
-        popup.absolute((width - panel_width - 16.0).max(12.0), 16.0)
+        popup.pin(None, Some(16.0), Some(16.0), None)
     } else {
         popup
-            .absolute((width - panel_width - 12.0).max(12.0), 8.0)
+            .pin(None, Some(8.0), Some(12.0), None)
             .modal(true, |s: &mut State| s.chat.details = false)
     }
 }
