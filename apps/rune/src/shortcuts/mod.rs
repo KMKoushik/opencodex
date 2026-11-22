@@ -2,10 +2,28 @@
 use crate::{State, pages::Route};
 use rune::{KeyEvent, Tx};
 pub fn global(s: &mut State, event: &KeyEvent, tx: &mut Tx) -> bool {
+    // Any intervening key breaks the web registry's double-Escape sequence.
+    if event.key != rune::Key::Escape
+        || event.mods.cmd
+        || event.mods.ctrl
+        || event.mods.alt
+        || event.mods.shift
+    {
+        s.composer.escape_until = None;
+    }
     if dispatch(s, event, tx) {
         return true;
     }
     if s.pages.route != Route::Chat || s.menus.open.is_some() {
+        return false;
+    }
+    // The catalog above owns modified chords. Don't let the composer's legacy
+    // letter checks accept extra modifiers after an exact catalog match failed.
+    if event.mods.cmd
+        || event.mods.ctrl
+        || matches!(event.key, rune::Key::Command(_))
+        || (event.key == rune::Key::Escape && (event.mods.alt || event.mods.shift))
+    {
         return false;
     }
     crate::composer::keys::global(s, event, tx)
@@ -41,8 +59,7 @@ pub fn dispatch(s: &mut State, event: &KeyEvent, tx: &mut Tx) -> bool {
     }
     if event.key == rune::Key::Escape {
         if s.find.open {
-            s.find.open = false;
-            s.chat.disclosure_revision += 1;
+            crate::find::close(s, tx);
             return true;
         }
         if s.menus.open.take().is_some() {
@@ -69,10 +86,29 @@ pub fn dispatch(s: &mut State, event: &KeyEvent, tx: &mut Tx) -> bool {
     {
         return false;
     }
+    if s.find.open
+        && (rune::Chord::parse("mod+g").unwrap().matches_tx(event, tx)
+            || rune::Chord::parse("mod+shift+g")
+                .unwrap()
+                .matches_tx(event, tx))
+    {
+        crate::find::next(s, tx, event.mods.shift);
+        return true;
+    }
     for &(_, chord, id) in COMMANDS {
+        if id == "chat.background" && !cfg!(target_os = "macos") {
+            continue;
+        }
         if rune::Chord::parse(chord).is_ok_and(|chord| chord.matches_tx(event, tx)) {
             return execute(s, id, tx);
         }
+    }
+    if !cfg!(target_os = "macos")
+        && rune::Chord::parse("ctrl+shift+b")
+            .unwrap()
+            .matches_tx(event, tx)
+    {
+        return execute(s, "chat.background", tx);
     }
     for n in 1..=9 {
         if rune::Chord::parse(&format!("mod+{n}"))
@@ -110,6 +146,40 @@ pub fn execute(s: &mut State, id: &str, tx: &mut Tx) -> bool {
         "shortcuts.open" => s.open_page(Route::Settings("shortcuts".into())),
         "project.open" => crate::menus::open_projects(s, tx),
         "find.open" => crate::find::open(s, tx),
+        "model.choose" | "thinking.choose" | "thinking.cycle" => {
+            if s.pages.route != Route::Chat || s.chat.read_only() || crate::docks::active(s) {
+                return false;
+            }
+            match id {
+                "model.choose" => {
+                    crate::composer::menus::open(s, crate::composer::state::Menu::Models, tx)
+                }
+                "thinking.choose" => {
+                    if !s.model_info().is_some_and(|m| !m.variants.is_empty()) {
+                        return false;
+                    }
+                    crate::composer::menus::open(s, crate::composer::state::Menu::Thinking, tx);
+                }
+                _ => {
+                    let (Some(mut model), Some(info)) =
+                        (s.selected_model().cloned(), s.model_info())
+                    else {
+                        return false;
+                    };
+                    if info.variants.is_empty() {
+                        return false;
+                    }
+                    let next = model
+                        .variant
+                        .as_ref()
+                        .and_then(|v| info.variants.iter().position(|item| &item.id == v))
+                        .map(|n| n + 1)
+                        .unwrap_or(0);
+                    model.variant = info.variants.get(next).map(|v| v.id.clone());
+                    s.choose_model(model);
+                }
+            }
+        }
         "sidebar.focus" => tx.focus("project-list", false),
         "composer.focus" => {
             s.open_page(Route::Chat);
