@@ -164,7 +164,14 @@ fn main() {
         bridge: true,
         navigation: Navigation {
             origins: if checking {
-                vec!["http://127.0.0.1".into()]
+                std::iter::once("http://127.0.0.1".into())
+                    .chain(
+                        std::env::var("OC_WEBVIEW_HISTORY_URL")
+                            .ok()
+                            .and_then(|value| url::Url::parse(&value).ok())
+                            .map(|url| url.origin().ascii_serialization()),
+                    )
+                    .collect()
             } else {
                 vec![]
             },
@@ -178,6 +185,8 @@ fn main() {
         ..Default::default()
     });
     let result = Rc::new(RefCell::new(None));
+    let restored = WebView::new(Options::default());
+    let attach_restored = restored.clone();
     let result_in = result.clone();
     let init_web = web.clone();
     let attach_web = web.clone();
@@ -208,10 +217,13 @@ fn main() {
             sidebar: 260.0,
             popover: false,
             status: "Ready".into(),
-            check: checking.then(|| check::Check::new(result_in, web.clone())),
+            check: checking.then(|| check::Check::new(result_in, web.clone(), restored)),
         })
         .on_window(move |window| {
             attach_web.attach(window).expect("attach WKWebView");
+            attach_restored
+                .attach(window)
+                .expect("attach fresh restoration WKWebView");
             if checking {
                 attach_web
                     .load_html(PAGE, Some("http://127.0.0.1/"))

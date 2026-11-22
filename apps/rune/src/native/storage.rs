@@ -8,6 +8,7 @@ use std::{
 #[serde(default)]
 pub struct Tabs {
     pub browsers: Vec<String>,
+    pub history: Vec<Option<String>>,
     pub browser: usize,
     pub canvases: Vec<String>,
     pub canvas: Option<String>,
@@ -135,13 +136,30 @@ pub(super) fn restore_tabs(s: &mut State) {
         .take(12)
         .collect();
     s.native.selected_canvas = next.canvas.filter(|id| s.native.canvas_tabs.contains(id));
-    for url in next
+    for (index, url) in next
         .browsers
         .into_iter()
-        .filter_map(|url| address_url(if url.is_empty() { "about:blank" } else { &url }))
+        .enumerate()
+        .filter_map(|(i, url)| {
+            address_url(if url.is_empty() { "about:blank" } else { &url }).map(|url| (i, url))
+        })
         .take(12)
     {
         let web = web(s, false);
+        if !url.starts_with("file:") {
+            use base64::Engine;
+            if let Some(data) = next
+                .history
+                .get(index)
+                .and_then(Option::as_ref)
+                .filter(|data| data.len() <= 90_000)
+                .and_then(|data| base64::engine::general_purpose::STANDARD.decode(data).ok())
+            {
+                if let Err(e) = web.restore_interaction(&data) {
+                    s.native.error = Some(e);
+                }
+            }
+        }
         let error = if url.starts_with("file:") {
             None
         } else {
@@ -176,6 +194,7 @@ fn browser_url(b: &Browser) -> String {
 fn saved(t: &ChatTabs) -> Tabs {
     Tabs {
         browsers: t.browsers.iter().map(browser_url).collect(),
+        history: t.browsers.iter().map(browser_history).collect(),
         browser: t.browser,
         canvases: t.canvases.clone(),
         canvas: t.canvas.clone(),
@@ -195,6 +214,7 @@ pub(super) fn save_tabs(s: &mut State) {
         key,
         Tabs {
             browsers: s.native.browsers.iter().map(browser_url).collect(),
+            history: s.native.browsers.iter().map(browser_history).collect(),
             browser: s.native.browser,
             canvases: s.native.canvas_tabs.clone(),
             canvas: s.native.selected_canvas.clone(),
@@ -203,7 +223,30 @@ pub(super) fn save_tabs(s: &mut State) {
     while s.native.saved.len() > 128 {
         s.native.saved.pop_first();
     }
+    // URLs survive even when a large history cannot fit the presentation budget.
+    let mut budget = 512 * 1024usize;
+    for tabs in s.native.saved.values_mut().rev() {
+        for history in &mut tabs.history {
+            if let Some(data) = history {
+                if data.len() > budget {
+                    *history = None;
+                } else {
+                    budget -= data.len();
+                }
+            }
+        }
+    }
     if let Some(storage) = &s.native.storage {
         storage.save(s.native.saved.clone());
     }
+}
+fn browser_history(b: &Browser) -> Option<String> {
+    use base64::Engine;
+    // Local grants are process-scoped and must be re-authorized, not restored as opaque origins.
+    if b.address.text.starts_with("file:") {
+        return None;
+    }
+    b.web
+        .interaction_state()
+        .map(|data| base64::engine::general_purpose::STANDARD.encode(data))
 }

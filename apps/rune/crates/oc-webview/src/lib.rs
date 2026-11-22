@@ -11,6 +11,9 @@ use fallback as platform;
 use macos as platform;
 
 pub type Rect = [f64; 4];
+pub fn browser_locale() -> String {
+    platform::browser_locale()
+}
 /// Localized month/day and short time, matching the canvas list's Intl formatter.
 pub fn updated_label(milliseconds: f64) -> String {
     platform::updated_label(milliseconds)
@@ -199,6 +202,13 @@ impl WebView {
     }
     pub fn state(&self) -> PageState {
         self.inner.state()
+    }
+    /// Opaque WebKit-owned session history, bounded to 64 KiB per tab.
+    pub fn interaction_state(&self) -> Option<Vec<u8>> {
+        self.inner.interaction_state()
+    }
+    pub fn restore_interaction(&self, bytes: &[u8]) -> Result<(), String> {
+        self.inner.restore_interaction(bytes)
     }
     pub fn drain_events(&self) -> Vec<Event> {
         self.inner.drain_events()

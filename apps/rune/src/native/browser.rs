@@ -42,11 +42,15 @@ pub(super) fn limit_live(s: &mut State) {
         )
         .find(|b| b.key == old);
     if let Some(b) = b {
+        let history = b.web.interaction_state();
         let url = b.web.state().url;
         if !url.is_empty() {
             b.address = TextEdit::new(url.clone());
         }
         b.web = web;
+        if let Some(history) = history {
+            let _ = b.web.restore_interaction(&history);
+        }
         if !url.starts_with("file:") {
             b.error = b.web.load_url(&url).err();
         }

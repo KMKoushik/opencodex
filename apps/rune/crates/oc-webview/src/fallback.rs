@@ -1,6 +1,12 @@
 use super::*;
 pub struct Surface;
 impl Surface {
+    pub fn interaction_state(&self) -> Option<Vec<u8>> {
+        None
+    }
+    pub fn restore_interaction(&self, _: &[u8]) -> Result<(), String> {
+        Err("Browser history restoration requires WebKit on macOS".into())
+    }
     pub fn new(_: Options) -> Self {
         Self
     }
@@ -51,6 +57,9 @@ impl Surface {
 }
 pub fn updated_label(_: f64) -> String {
     String::new()
+}
+pub fn browser_locale() -> String {
+    "en-US".into()
 }
 pub fn short_time(_: f64) -> String {
     "now".into()

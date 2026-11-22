@@ -40,6 +40,12 @@ enum Stage {
     Isolated(EvalSlot),
     RetainedWorld(EvalSlot),
     PageWorld(EvalSlot),
+    Dates(EvalSlot),
+    HistoryLoad,
+    History(EvalSlot),
+    HistoryWait,
+    Restored,
+    Original,
     Snapshot(mpsc::Receiver<Result<PathBuf, String>>),
     Move {
         step: u32,
@@ -61,9 +67,10 @@ pub struct Check {
     runtime: Runtime<Layout>,
     output: PathBuf,
     last: [f32; 4],
+    restored: WebView,
 }
 impl Check {
-    pub fn new(result: ResultSlot, web: WebView) -> Self {
+    pub fn new(result: ResultSlot, web: WebView, restored: WebView) -> Self {
         let output = std::env::var_os("OC_WEBVIEW_PNG_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|| std::env::temp_dir().join("oc-webview-check"));
@@ -76,6 +83,7 @@ impl Check {
             new_tab: false,
             output,
             last: [0.0; 4],
+            restored,
             runtime: Runtime::new(
                 Layout {
                     web,
@@ -181,6 +189,95 @@ impl Check {
                 println!(
                     "PASS: annotation evaluation awaits promises without exposing globals to page scripts"
                 );
+                let locale = serde_json::to_string(&oc_webview::browser_locale()).unwrap();
+                self.stage = Stage::Dates(evaluate(
+                    web,
+                    &format!(
+                        "JSON.stringify([new Intl.DateTimeFormat({locale},{{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}}).format(new Date(1795348860000)),new Intl.DateTimeFormat({locale},{{timeStyle:'short'}}).format(new Date(1795348860000))])"
+                    ),
+                ));
+            }
+            Stage::Dates(slot) => {
+                let Some(result) = slot.borrow_mut().take() else {
+                    return Ok(());
+                };
+                let mut values: Vec<String> =
+                    serde_json::from_str(&result?).map_err(|e| e.to_string())?;
+                if let Ok(expected) = std::env::var("OC_WEBVIEW_DATE_EXPECTED") {
+                    values = serde_json::from_str(&expected).map_err(|e| e.to_string())?;
+                } else if oc_webview::browser_locale().starts_with("en") {
+                    values[0] = values[0].replace(" at ", ", ");
+                }
+                if values
+                    != vec![
+                        oc_webview::updated_label(1795348860000.0),
+                        oc_webview::short_time(1795348860000.0),
+                    ]
+                {
+                    return Err(format!("Intl date parity failed: {values:?}"));
+                }
+                println!(
+                    "PASS: canvas timestamp and side-chat short time match the selected locale oracle byte-for-byte"
+                );
+                if let Ok(url) = std::env::var("OC_WEBVIEW_HISTORY_URL") {
+                    web.load_url(&url)?;
+                    self.stage = Stage::HistoryLoad;
+                } else {
+                    self.stage =
+                        Stage::Snapshot(snapshot(web, self.output.join("panel-before.png")));
+                }
+            }
+            Stage::HistoryLoad => {
+                if web.state().loading {
+                    return Ok(());
+                }
+                self.stage = Stage::History(evaluate(
+                    web,
+                    "history.pushState({},'', '#one'); history.pushState({},'', '#two'); history.back(); JSON.stringify({length:history.length,url:location.href})",
+                ));
+            }
+            Stage::History(slot) => {
+                let Some(result) = slot.borrow_mut().take() else {
+                    return Ok(());
+                };
+                println!("History script: {}", result?);
+                self.stage = Stage::HistoryWait;
+            }
+            Stage::HistoryWait => {
+                if !web.state().can_go_forward {
+                    return Ok(());
+                }
+                let data = web
+                    .interaction_state()
+                    .ok_or("WebKit did not return bounded NSData interactionState")?;
+                println!(
+                    "History before fresh restore: {:?}, {} bytes",
+                    web.state(),
+                    data.len()
+                );
+                self.restored.restore_interaction(&data)?;
+                self.restored.load_url(&web.state().url)?;
+                self.restored
+                    .present([0.0, 0.0, 320.0, 200.0], [0.0, 0.0, 320.0, 200.0])?;
+                println!("Fresh restored state: {:?}", self.restored.state());
+                self.stage = Stage::Restored;
+            }
+            Stage::Restored => {
+                let state = self.restored.state();
+                if !state.can_go_back || !state.can_go_forward {
+                    return Ok(());
+                }
+                println!(
+                    "PASS: fresh WKWebView restores backward AND forward history from opaque interactionState"
+                );
+                self.restored.hide();
+                web.load_html(super::PAGE, Some("http://127.0.0.1/"))?;
+                self.stage = Stage::Original;
+            }
+            Stage::Original => {
+                if web.state().loading || web.state().title != "Canvas bridge check" {
+                    return Ok(());
+                }
                 self.stage = Stage::Snapshot(snapshot(web, self.output.join("panel-before.png")));
             }
             Stage::Snapshot(receiver) => {

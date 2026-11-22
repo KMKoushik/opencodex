@@ -33,6 +33,10 @@ load rather than queueing unbounded work.
 - `load_url`, `load_html(html, base_url)`, `load_local_file(url, root)`, `back`, `forward`, `reload`, `stop`.
 - `state()` is an event-maintained snapshot (title, URL, loading, estimated progress, history
   availability). Native KVO produces coalesced `Event::Changed`; there is no state polling.
+- `interaction_state()` / `restore_interaction()` round-trip WebKit's public opaque NSData
+  state (64 KiB per tab). Lazy creation restores both backward and forward lists and loads
+  the current item without appending a duplicate URL. A different queued URL remains a new
+  navigation. Local opaque file grants are intentionally re-authorized instead of restored.
 - `drain_events()` also returns errors, blocked/external navigations, new-window URLs, focus
   requests and bridge messages. The queue is capped at 256 entries, bridge JSON at 1 MiB.
   Integrators must validate message schemas and attribute them to the owning canvas.
@@ -58,11 +62,17 @@ load rather than queueing unbounded work.
   sixteen concurrent requests and 64 MiB per resource bound retention and work.
 - The annotation `WKContentWorld` is retained for the whole native surface lifetime, so separate
   evaluations share overlay state without exposing globals to page scripts.
-- Browser downloads use a native save panel and WebKit's download delegate. Cancellation
-  declines the destination; errors are reported through the event queue.
+- Browser downloads use a native save sheet, initially in Downloads, and WebKit's download
+  delegate. Cancellation declines the destination; errors are reported through the event queue.
+  The source Electron app has no production `will-download` handler or custom progress UI.
+  Overwriting an existing destination and actual save/cancel interactions remain unverified.
 - `set_background([r,g,b,a])` changes WebKit's loading/under-page color, in sRGB 0–1.
-  Normal AppKit context menus remain enabled. Debug builds enable Web Inspector / Inspect
-  Element; release builds do not enable developer extras.
+  Browser views use the public NSView `willOpenMenu:withEvent:` hook (not an unavailable
+  macOS WKUIDelegate context-menu callback). It preserves native text/spelling action targets,
+  routes WebKit's new-window action to an owned tab, and hides non-source download actions.
+  Browser views enable Inspect Element in release as Electron does; opaque canvas views do not.
+  This is not the complete Electron menu: custom system-browser/Google actions, exact item
+  order and localized native-item identification remain outstanding.
 
 ## Position, lifetime, z-order, focus
 
@@ -144,3 +154,23 @@ otherwise it uses the platform temporary directory's `oc-webview-check` subfolde
 PASS/FAIL and exits nonzero on errors or a 30-second deadline. Offscreen snapshots verify web
 content, not Rune overlay pixels or atomic display presentation; visually check the popover
 in the interactive demo when the display is available.
+
+The check also compares canvas/side-chat date labels byte-for-byte with actual WebKit Intl.
+Date labels use cached JavaScriptCore Intl formatters with the same options as React, rather
+than NSDateFormatter templates with different punctuation/day-period spacing. Application
+locale negotiation uses Chromium desktop's supported locale set and Apple's public bundle
+matching (for example en-AU resolves to en-GB, as in Electron, not bare WebKit's en-AU).
+The English date/time joining literal is normalized from macOS CLDR's `at` to the
+current Chromium ICU `, `, using `formatToParts` (not replacing date/time text).
+`OPENCODEX_LOCALE` optionally selects the preferred application language; isolated screenshots
+set it from the oracle's resolved locale because their empty HOME has no AppleLanguages.
+Set
+`OC_WEBVIEW_HISTORY_URL` to an isolated HTTP fixture to additionally verify that a fresh
+WKWebView restores both backward and forward history. `loadHTMLString` deliberately has no
+restorable native history; it is not suitable evidence for browser restoration.
+
+For cross-engine date verification, set `OC_WEBVIEW_DATE_EXPECTED` to a JSON pair of actual
+Chromium strings for epoch `1795348860000` (canvas format, then short time), and set
+`OPENCODEX_LOCALE` to that renderer's resolved locale. Without it the standalone check
+uses WebKit's Intl with the documented English literal normalization. Non-English
+CLDR-version combinations have not been exhaustively compared with Chromium.

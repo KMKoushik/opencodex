@@ -13,8 +13,11 @@ use objc2_web_kit::WKWebView;
 use raw_window_handle::RawWindowHandle;
 use std::{cell::RefCell, collections::VecDeque};
 
+mod dates;
 mod delegate;
+pub use dates::{browser_locale, short_time, updated_label};
 mod local_pages;
+mod menu;
 use delegate::{Delegate, Shared};
 
 const BRIDGE: &str = include_str!("bridge.js");
@@ -32,6 +35,7 @@ pub struct Surface {
     parent: RefCell<Option<Retained<AnyObject>>>,
     native: RefCell<Option<Native>>,
     pending: RefCell<Option<Content>>,
+    interaction: RefCell<Option<Vec<u8>>>,
     placement: Cell<Option<(Rect, Rect)>>,
     covered: Cell<bool>,
     shared: Rc<Shared>,
@@ -97,6 +101,7 @@ impl Surface {
             parent: RefCell::new(None),
             native: RefCell::new(None),
             pending: RefCell::new(None),
+            interaction: RefCell::new(None),
             placement: Cell::new(None),
             covered: Cell::new(false),
             shared,
@@ -210,10 +215,7 @@ impl Surface {
                     Retained::from_raw(script).ok_or("WKUserScript initialization failed")?;
                 let _: () = msg_send![controller, addUserScript: &*script];
             }
-            let alloc: *mut AnyObject = msg_send![WKWebView::class(), alloc];
-            let view: *mut AnyObject =
-                msg_send![alloc, initWithFrame: rect([0.0; 4]), configuration: &*config];
-            let view = Retained::from_raw(view).ok_or("WKWebView initialization failed")?;
+            let view = menu::BrowserView::new(&config, !options.bridge)?;
             let _: () = msg_send![&*view, setNavigationDelegate: &*delegate];
             let _: () = msg_send![&*view, setUIDelegate: &*delegate];
             let _: () = msg_send![&*view, setWantsLayer: true];
@@ -225,7 +227,9 @@ impl Surface {
             let _: () = msg_send![layer, setMasksToBounds: true];
             // Rune's material compositor uses z=1 for Metal. Our interactive surface is above it.
             let _: () = msg_send![layer, setZPosition: 2.0f64];
-            if cfg!(debug_assertions) {
+            // Electron's browser guest menu always offers Inspect Element, including
+            // release builds. Do not expose it on opaque canvas/application guests.
+            if cfg!(debug_assertions) || (options.persistent && !options.bridge) {
                 let _: () = msg_send![&*view, setInspectable: true];
                 let preferences: *mut AnyObject = msg_send![&*config, preferences];
                 let _: () = msg_send![preferences, setValue: &*objc2_foundation::NSNumber::new_bool(true), forKey: &*NSString::from_str("developerExtrasEnabled")];
@@ -249,6 +253,31 @@ impl Surface {
         drop(options);
         let background = self.options.borrow().background;
         self.set_background(background);
+        if let Some(data) = self.interaction.borrow_mut().take() {
+            self.restore_interaction(&data)?;
+            // Setting interactionState restores the list, not its current document.
+            // Navigate to its existing current item, rather than loadURL (which would
+            // append a duplicate current URL and destroy the restored forward list).
+            if let Some(n) = self.native.borrow().as_ref() {
+                unsafe {
+                    let list: *mut AnyObject = msg_send![&*n.view, backForwardList];
+                    let current: *mut AnyObject = msg_send![list, currentItem];
+                    let same_url = if current.is_null() {
+                        false
+                    } else {
+                        let current_url = url_string(msg_send![current, URL]);
+                        self.pending.borrow().as_ref().is_none_or(
+                            |content| matches!(content, Content::Url(url) if *url == current_url),
+                        )
+                    };
+                    if same_url {
+                        let _: *mut AnyObject =
+                            msg_send![&*n.view, goToBackForwardListItem: current];
+                        self.pending.borrow_mut().take();
+                    }
+                }
+            }
+        }
         if let Some(content) = self.pending.borrow_mut().take() {
             self.load(content)?;
         }
@@ -572,25 +601,47 @@ impl Surface {
             !hidden
         })
     }
-}
-pub fn updated_label(milliseconds: f64) -> String {
-    date_label(milliseconds, "MMMdjmm")
-}
-pub fn short_time(milliseconds: f64) -> String {
-    date_label(milliseconds, "jmm")
-}
-fn date_label(milliseconds: f64, template: &str) -> String {
-    if !milliseconds.is_finite() {
-        return String::new();
+    pub fn interaction_state(&self) -> Option<Vec<u8>> {
+        let native = self.native.borrow();
+        let Some(n) = native.as_ref() else {
+            return self.interaction.borrow().clone();
+        };
+        unsafe {
+            let data: *mut AnyObject = msg_send![&*n.view, interactionState];
+            if data.is_null() {
+                return None;
+            }
+            let bytes: bool = msg_send![data, isKindOfClass: AnyClass::get(c"NSData").unwrap()];
+            if !bytes {
+                return None;
+            }
+            let len: usize = msg_send![data, length];
+            if len == 0 || len > 64 * 1024 {
+                return None;
+            }
+            let ptr: *const u8 = msg_send![data, bytes];
+            if ptr.is_null() {
+                return None;
+            }
+            Some(std::slice::from_raw_parts(ptr, len).to_vec())
+        }
     }
-    unsafe {
-        let formatter = object(c"NSDateFormatter");
-        let _: () = msg_send![&*formatter,setLocalizedDateFormatFromTemplate:&*NSString::from_str(template)];
-        let date: Retained<AnyObject> = msg_send![AnyClass::get(c"NSDate").unwrap(),dateWithTimeIntervalSince1970:milliseconds/1000.0];
-        string(msg_send![&*formatter,stringFromDate:&*date])
+    pub fn restore_interaction(&self, bytes: &[u8]) -> Result<(), String> {
+        if bytes.is_empty() || bytes.len() > 64 * 1024 {
+            return Err("Invalid browser history size".into());
+        }
+        let native = self.native.borrow();
+        let Some(n) = native.as_ref() else {
+            *self.interaction.borrow_mut() = Some(bytes.to_vec());
+            return Ok(());
+        };
+        unsafe {
+            let data: Retained<AnyObject> = msg_send![AnyClass::get(c"NSData").unwrap(), dataWithBytes: bytes.as_ptr(), length: bytes.len()];
+            let _: () = msg_send![&*n.view, setInteractionState: &*data];
+        }
+        Ok(())
     }
 }
-
 unsafe fn encode_png(image: *mut AnyObject) -> Result<Vec<u8>, String> {
     unsafe {
         let tiff: Option<Retained<AnyObject>> = msg_send![image, TIFFRepresentation];

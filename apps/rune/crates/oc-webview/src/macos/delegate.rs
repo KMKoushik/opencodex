@@ -97,16 +97,26 @@ define_class!(
         #[unsafe(method(webView:navigationResponse:didBecomeDownload:))]
         unsafe fn response_download(&self,_view:*mut AnyObject,_response:*mut AnyObject,download:*mut AnyObject){unsafe{let _:()=msg_send![download,setDelegate:self];}}
         #[unsafe(method(download:decideDestinationUsingResponse:suggestedFilename:completionHandler:))]
-        unsafe fn download_destination(&self,_download:*mut AnyObject,_response:*mut AnyObject,name:*mut AnyObject,handler:&Block<dyn Fn(*mut AnyObject)>) {
+        unsafe fn download_destination(&self,download:*mut AnyObject,_response:*mut AnyObject,name:*mut AnyObject,handler:&Block<dyn Fn(*mut AnyObject)>) {
             unsafe {
                 let panel:Retained<AnyObject>=msg_send![AnyClass::get(c"NSSavePanel").unwrap(),savePanel];
                 let _:()=msg_send![&*panel,setNameFieldStringValue:name];
+                let manager: Retained<AnyObject> = msg_send![AnyClass::get(c"NSFileManager").unwrap(), defaultManager];
+                let directories: Retained<AnyObject> = msg_send![&*manager, URLsForDirectory: 15usize, inDomains: 1usize];
+                let directory: *mut AnyObject = msg_send![&*directories, firstObject];
+                if !directory.is_null() { let _: () = msg_send![&*panel, setDirectoryURL: directory]; }
                 let handler=handler.copy();let held=panel.clone();
                 let completion=RcBlock::new(move|response:isize|{
                     let url=if response==1{msg_send![&*held,URL]}else{std::ptr::null_mut()};
                     handler.call((url,));
                 });
-                let _:()=msg_send![&*panel,beginWithCompletionHandler:&*completion];
+                let view: *mut AnyObject = msg_send![download, webView];
+                let window: *mut AnyObject = if view.is_null() { std::ptr::null_mut() } else { msg_send![view, window] };
+                if window.is_null() {
+                    let _:()=msg_send![&*panel,beginWithCompletionHandler:&*completion];
+                } else {
+                    let _:()=msg_send![&*panel,beginSheetModalForWindow:window,completionHandler:&*completion];
+                }
             }
         }
         #[unsafe(method(download:didFailWithError:resumeData:))]

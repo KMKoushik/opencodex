@@ -540,7 +540,9 @@ pub fn poll(s: &mut State, tx: &mut Tx) -> bool {
             changed = true;
             match event {
                 Event::Changed(p) => {
-                    s.native.tabs_dirty = true;
+                    // Progress KVO is not a persistence event. Capture WebKit history
+                    // at settled navigation, not once per progress update.
+                    s.native.tabs_dirty |= !p.loading;
                     if p.loading {
                         b.error = None;
                     }
