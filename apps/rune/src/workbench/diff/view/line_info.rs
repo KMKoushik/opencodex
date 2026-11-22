@@ -192,7 +192,9 @@ impl View {
         row()
             .w_full()
             .h(l.metrics.gap)
-            .fill(l.separator)
+            // Pierre's inner content wrapper covers the separator tint with
+            // the source background. Only the gutter button keeps that tint.
+            .fill(l.bg)
             .role("group")
             .label(count)
             .child(inner)
