@@ -570,6 +570,7 @@ pub fn view(s: &State) -> Option<El> {
                         "border"
                     }),
                 )
+                .border_layout()
                 .child(rune::icon(&crate::icons::SEARCH, 16.0).color(t.c("text-tertiary")))
                 .child(
                     text_input(&s.composer.search, TextStyle::new(13.0, 400.0))
@@ -796,17 +797,17 @@ pub fn view(s: &State) -> Option<El> {
     );
     if menu == Menu::Models {
         panel = panel.child(
-            label(
-                t,
-                "↑↓ Navigate    ↵ Select    esc Close",
-                11.0,
-                400.0,
-                "text-tertiary",
-            )
-            .h(30.0)
-            .border_sides([1.0, 0.0, 0.0, 0.0], t.c("border"))
-            .px(14.0)
-            .py(6.0),
+            row()
+                .h(30.0)
+                .center_y()
+                .gap(16.0)
+                .border_sides([1.0, 0.0, 0.0, 0.0], t.c("border"))
+                .border_layout()
+                .px(14.0)
+                .py(4.0)
+                .child(label(t, "↑↓ Navigate", 11.0, 400.0, "text-tertiary"))
+                .child(label(t, "↵ Select", 11.0, 400.0, "text-tertiary"))
+                .child(label(t, "esc Close", 11.0, 400.0, "text-tertiary")),
         );
     }
     let panel = crate::menus::overlay::anchored(
