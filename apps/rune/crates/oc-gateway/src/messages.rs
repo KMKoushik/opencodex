@@ -27,19 +27,33 @@ pub struct Messages {
 }
 impl Messages {
     pub fn visible(&self) -> &[Arc<Message>] {
+        let start = self
+            .info
+            .as_ref()
+            .filter(|info| {
+                info.metadata
+                    .as_ref()
+                    .is_some_and(|m| m["opencodexSideChat"].is_object())
+            })
+            .map(|info| {
+                self.messages
+                    .partition_point(|message| message.time.created < info.time.created)
+            })
+            .unwrap_or(0);
         let boundary = self
             .info
             .as_ref()
             .and_then(|info| info.revert.as_ref())
             .and_then(|revert| revert["messageID"].as_str());
         if let Some(boundary) = boundary {
-            &self.messages[..self
+            let end = self
                 .messages
                 .iter()
                 .position(|m| m.id == boundary)
-                .unwrap_or(0)]
+                .unwrap_or(0);
+            &self.messages[start.min(end)..end]
         } else {
-            &self.messages
+            &self.messages[start..]
         }
     }
     pub async fn load(client: &Gateway, id: &str) -> Result<Self, String> {

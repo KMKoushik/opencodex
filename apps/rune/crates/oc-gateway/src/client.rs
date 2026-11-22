@@ -11,6 +11,18 @@ pub struct Gateway {
     token: Option<String>,
 }
 impl Gateway {
+    /// A blocking-on-demand worker must not borrow connections driven by another runtime.
+    pub fn isolated_pool(&self) -> Result<Self, String> {
+        Ok(Self {
+            http: Client::builder()
+                .connect_timeout(Duration::from_secs(10))
+                .user_agent("OpenCodex Rune")
+                .build()
+                .map_err(|e| e.to_string())?,
+            base: self.base.clone(),
+            token: self.token.clone(),
+        })
+    }
     pub fn new(base: &str, token: Option<String>) -> Result<Self, String> {
         let mut base = Url::parse(base).map_err(|e| e.to_string())?;
         if !matches!(base.scheme(), "http" | "https") || base.host_str().is_none() {
@@ -84,6 +96,29 @@ impl Gateway {
             .json()
             .await
             .map_err(|e| e.to_string())
+    }
+    /// Workspace previews are bounded even when a backend returns an unexpectedly large diff.
+    pub async fn get_bounded<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        query: &[(&str, &str)],
+        limit: usize,
+    ) -> Result<T, String> {
+        use futures_util::StreamExt;
+        let response = self.response(path, query, Method::GET, None, false).await?;
+        if response.content_length().is_some_and(|n| n > limit as u64) {
+            return Err("Workspace preview exceeds the response limit.".into());
+        }
+        let mut stream = response.bytes_stream();
+        let mut body = Vec::new();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| e.to_string())?;
+            if body.len() + chunk.len() > limit {
+                return Err("Workspace preview exceeds the response limit.".into());
+            }
+            body.extend_from_slice(&chunk);
+        }
+        serde_json::from_slice(&body).map_err(|e| e.to_string())
     }
     pub async fn post<T: DeserializeOwned>(&self, path: &str, body: Value) -> Result<T, String> {
         self.response(path, &[], Method::POST, Some(body), false)

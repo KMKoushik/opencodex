@@ -51,20 +51,25 @@ impl Worker {
         std::thread::Builder::new()
             .name("workbench".into())
             .spawn(move || {
+                let client = client.isolated_pool();
                 let rt = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()
                     .expect("workbench runtime");
                 while let Ok(request) = requests.recv() {
                     let tag = request.tag.clone();
-                    let result = rt.block_on(run(&client, request.op)).map(|mut value| {
-                        if let Some((kind, path)) = tag.split_once(':') {
-                            if kind == "file" || kind == "save" {
-                                value["__path"] = Value::String(path.into());
+                    let result = client
+                        .as_ref()
+                        .map_err(Clone::clone)
+                        .and_then(|client| rt.block_on(run(client, request.op)))
+                        .map(|mut value| {
+                            if let Some((kind, path)) = tag.split_once(':') {
+                                if kind == "file" || kind == "save" {
+                                    value["__path"] = Value::String(path.into());
+                                }
                             }
-                        }
-                        prepare(value)
-                    });
+                            prepare(value)
+                        });
                     if replies
                         .send(Reply {
                             epoch: request.epoch,
@@ -97,7 +102,7 @@ async fn run(client: &Gateway, op: Operation) -> Result<Value, String> {
                 .iter()
                 .map(|(k, v)| (k.as_str(), v.as_str()))
                 .collect();
-            client.get(&path, &query).await
+            client.get_bounded(&path, &query, 16 * 1024 * 1024).await
         }
         Operation::Save(body) => client.put("workspace/file", body).await,
         Operation::CreateSide(id) => {

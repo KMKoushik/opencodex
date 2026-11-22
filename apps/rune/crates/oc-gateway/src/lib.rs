@@ -79,7 +79,9 @@ impl Worker {
                                         for (name, data) in parser.push(&chunk)? {
                                             match name.as_str() {
                                                 "ready" => {
+                                                    let workspace_revision=snapshot.workspace_revision.wrapping_add(1);
                                                     snapshot = Snapshot::load(&client).await?;
+                                                    snapshot.workspace_revision=workspace_revision;
                                                     snapshot.live = true;
                                                     delay = Duration::from_millis(500);
                                                     publish(&mut snapshot);
