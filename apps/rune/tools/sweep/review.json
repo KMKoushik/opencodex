@@ -1,0 +1,272 @@
+{
+  "$source": "e474b017e6f06fdffb3fed01eaa662b323908c399aafd3b546376791b09b456f",
+  "$note": "All 67 scored states were visually reviewed on fresh-name, worst-first sheets; refreshed Side chat/tool/terminal pairs were checked separately. Classification is strict about component presence: the native Browser rail button is additional UI in every conversation state because the gateway-served web page has no Electron browser bridge. Those host-only additions are counted, not mislabeled as rasterization or different fixture data. They are not evidence of missing transcript support. Primary surfaces are generally close; large Side chat and middle-history errors are geometry/scroll-layout differences over identical text. A fresh-fixture Home rerun produced byte-identical PNGs for web and Rune in both themes (four SHA-256 equality checks). This is visual parity evidence, not interaction or atomic presentation sign-off.",
+  "home-empty": {
+    "classification": "equivalent (only rasterization)",
+    "description": "Matching hero, starters, composer and four-row sidebar; glyph and analytic shadow rasterization differs."
+  },
+  "home-no-project": {
+    "classification": "missing/extra UI",
+    "description": "Native adds a folder-browse icon inside the path field; input/button width and hero vertical alignment differ."
+  },
+  "sidebar-hidden": {
+    "classification": "missing/extra UI",
+    "description": "Native hidden-sidebar toolbar omits web Back/Forward controls; matching centered home content otherwise."
+  },
+  "sidebar-project-collapsed": {
+    "classification": "small layout differences",
+    "description": "Matching collapsed folder and home; disclosure/focus affordance and glyph/shadow edges differ."
+  },
+  "sidebar-row-hover": {
+    "classification": "missing/extra UI",
+    "description": "Same Caching row hovered; web shows the title/relative-time tooltip, while native shows only the row highlight."
+  },
+  "sidebar-focus-view": {
+    "classification": "small layout differences",
+    "description": "Same eight Focus titles/order; small row/icon metrics, heading controls and home shadows differ."
+  },
+  "app-menu-open": {
+    "classification": "small layout differences",
+    "description": "Same four menu entries; popup height, row rhythm, border and shadow differ slightly."
+  },
+  "thread-search-open": {
+    "classification": "small layout differences",
+    "description": "Same gateway-ranked titles and paths; dialog/input outline, result spacing and shadow differ slightly."
+  },
+  "composer-focused": {
+    "classification": "small layout differences",
+    "description": "Matching focused composer; native caret/focus painting and shadow differ from the caret-suppressed web capture."
+  },
+  "composer-text": {
+    "classification": "small layout differences",
+    "description": "Exact same draft and send state; native caret remains visible at its fixed capture phase; glyph/shadow edges differ."
+  },
+  "composer-attachment": {
+    "classification": "small layout differences",
+    "description": "Same notes.txt bytes, 30 B chip and draft; chip padding/icon, hero vertical position and native caret differ."
+  },
+  "composer-slash": {
+    "classification": "small layout differences",
+    "description": "Same command rows and descriptions; native menu is slightly lower and leaves more hero subtitle visible."
+  },
+  "composer-mention": {
+    "classification": "small layout differences",
+    "description": "Same skill/thread suggestions; native popup top/height, row inset and icons differ, not the underlying catalog."
+  },
+  "model-picker-open": {
+    "classification": "small layout differences",
+    "description": "Same current model and provider catalog; native row density, visible bottom cutoff and popup shadow differ."
+  },
+  "model-picker-filtered": {
+    "classification": "small layout differences",
+    "description": "Same big query and Big Pickle result; native popup is shorter and its top edge/search field sit lower."
+  },
+  "project-picker-open": {
+    "classification": "small layout differences",
+    "description": "Same atlas-api/home recent-project rows and paths; search popup inset, height and shadow differ slightly."
+  },
+  "project-open-dialog": {
+    "classification": "missing/extra UI",
+    "description": "Native adds an inline folder-browse button; path field is wider and setup hero/button geometry differs."
+  },
+  "project-actions-open": {
+    "classification": "small layout differences",
+    "description": "Same six actions at the measured anchor; native menu rows are more compact, shortening the popup."
+  },
+  "project-edit-open": {
+    "classification": "small layout differences",
+    "description": "Same fields, path and colors; native Upload icon spans the row and URL action/button sizing differs."
+  },
+  "project-copy-feedback": {
+    "classification": "small layout differences",
+    "description": "Same Project path copied notice; native project card is slightly shorter and notice/row spacing differs."
+  },
+  "worktree-picker-open": {
+    "classification": "missing/extra UI",
+    "description": "Same Local/New worktree choices; native omits the web leading folder icons and selected checkmark; popup is wider."
+  },
+  "worktree-new-selected": {
+    "classification": "small layout differences",
+    "description": "Same new-worktree selection and master branch; native label lacks the web From prefix and chip sizing differs."
+  },
+  "worktrees-empty": {
+    "classification": "small layout differences",
+    "description": "Same empty worktree dialog and explanatory text; tiny dialog height, border and shadow differences."
+  },
+  "chat-markdown-top": {
+    "classification": "small layout differences",
+    "description": "Same opening prompt/headings/list/table; paragraph/list rhythm, bottom fade and Jump to latest visibility differ."
+  },
+  "chat-markdown-middle": {
+    "classification": "small layout differences",
+    "description": "Same full history at 50% scroll; native table/paragraph rhythm displaces the lower code/list and jump control."
+  },
+  "chat-markdown-bottom": {
+    "classification": "small layout differences",
+    "description": "Same numbered list/table/code/end paragraph; native row/list spacing shifts the code block and final line."
+  },
+  "chat-long-top": {
+    "classification": "small layout differences",
+    "description": "Both fully page to the beginning and show turns 1–4; small repeated bubble/text baseline offsets accumulate."
+  },
+  "chat-long-middle": {
+    "classification": "small layout differences",
+    "description": "Both load all 40 turns and scroll to 50%; different total row heights put web near turn 19 and native near turn 20."
+  },
+  "chat-long-bottom": {
+    "classification": "small layout differences",
+    "description": "Same final turns 37–40; repeated bubble/answer spacing and line baselines differ slightly."
+  },
+  "chat-tools-bottom": {
+    "classification": "small layout differences",
+    "description": "Same collapsed 5s work turn and linked answer; disclosure glyph, link icon and text baselines differ."
+  },
+  "chat-question-bottom": {
+    "classification": "small layout differences",
+    "description": "Same real form and unselected choices; native title/choice/footer spacing and radio/button rendering differ."
+  },
+  "chat-architecture-bottom": {
+    "classification": "small layout differences",
+    "description": "Same authored architecture Markdown; list/table row rhythm, checkbox/icon shape and code baseline differ."
+  },
+  "chat-subagent-bottom": {
+    "classification": "small layout differences",
+    "description": "Same parent prompt and answer; near-matching transcript geometry with small bubble/text metrics differences."
+  },
+  "chat-checklist-bottom": {
+    "classification": "small layout differences",
+    "description": "Same checked Tests and unchecked Release items; native checkbox shapes and list/text baselines differ."
+  },
+  "chat-external-read-bottom": {
+    "classification": "small layout differences",
+    "description": "Same caching Markdown and native permission record; rendered history matches, with table/list/code spacing differences. This is not pending-permission-dock coverage."
+  },
+  "tools-expanded": {
+    "classification": "small layout differences",
+    "description": "Same expanded work turn with collapsed activity summary; disclosure marker and summary/answer baselines differ."
+  },
+  "tool-rows-expanded": {
+    "classification": "small layout differences",
+    "description": "Same reasoning and five collapsed tool rows; native adds leading disclosure chevrons and uses slightly different row/icon metrics."
+  },
+  "tool-detail-open": {
+    "classification": "small layout differences",
+    "description": "Only the same Read output is expanded, with bottom scroll normalized; native code/input padding and row disclosure icons differ."
+  },
+  "thoughts-expanded": {
+    "classification": "small layout differences",
+    "description": "Same reasoning text and tool rows; short authored reasoning fits without truncation in both; row chevrons and spacing differ."
+  },
+  "question-selected": {
+    "classification": "small layout differences",
+    "description": "Same Local choice selected; radio inset, choice height, footer/button geometry differ slightly."
+  },
+  "question-review": {
+    "classification": "small layout differences",
+    "description": "Same Local answer in review; native review card begins slightly lower and its answer/footer rows are tighter."
+  },
+  "thread-actions-open": {
+    "classification": "small layout differences",
+    "description": "Same six thread actions; native popup is anchored farther right rather than right-aligning to the trigger; Markdown rhythm also differs."
+  },
+  "thread-context-menu": {
+    "classification": "small layout differences",
+    "description": "Same Caching row and six actions at the measured right-click point; row height/shadow and underlying Markdown spacing differ."
+  },
+  "session-details-open": {
+    "classification": "small layout differences",
+    "description": "Same context, checkout, one changed file, canvas/MCP/skills data; native popover row spacing/height and background Markdown differ."
+  },
+  "find-markdown-open": {
+    "classification": "small layout differences",
+    "description": "Same empty Find field and underlying Markdown; native Find lacks the web raised shadow and has a different outline; transcript spacing differs."
+  },
+  "find-long-open": {
+    "classification": "small layout differences",
+    "description": "Same empty Find field and final long-history turns; native overlay border/shadow and transcript vertical rhythm differ."
+  },
+  "panel-changes": {
+    "classification": "small layout differences",
+    "description": "Same one-file change tree; native review-empty icon differs and tree/header controls shift slightly; narrow main-chat code wraps instead of horizontally clipping."
+  },
+  "panel-diff-open": {
+    "classification": "small layout differences",
+    "description": "Same actual one-line addition in src/index.ts; native path/header icon, diff gutter and toolbar spacing differ; narrow main-chat code wraps differently."
+  },
+  "panel-files": {
+    "classification": "small layout differences",
+    "description": "Same .git/src/README/report tree; native empty-state glyph differs, controls shift slightly and narrow main-chat code wraps differently."
+  },
+  "panel-file-open": {
+    "classification": "small layout differences",
+    "description": "Same README bytes and source view; native tree/file markers, editor toolbar spacing and narrow main-chat wrapping differ."
+  },
+  "panel-terminal": {
+    "classification": "small layout differences",
+    "description": "Same real PTY/prompt and bottom drawer; terminal glyph/cursor outline and tab icons differ; underlying Markdown spacing differs."
+  },
+  "panel-side-chat": {
+    "classification": "small layout differences",
+    "description": "Same first side fork explicitly selected and same inherited Markdown; native transcript starts higher in its scroll extent, has different table/list spacing and a shorter composer; narrow main composer controls reflow differently."
+  },
+  "side-chat-new": {
+    "classification": "small layout differences",
+    "description": "Same newly created real fork selected in both; native side Markdown/table rhythm and composer height differ; only the temporary fork is removed after the pair."
+  },
+  "panel-subagents": {
+    "classification": "small layout differences",
+    "description": "Same real Explore source child, All 1 / Running 0; native header/icon spacing and narrow main composer reflow differ."
+  },
+  "subagents-list": {
+    "classification": "small layout differences",
+    "description": "Same completed Explore source child and counts; native row/header glyphs and narrow main composer layout differ."
+  },
+  "subagent-conversation": {
+    "classification": "small layout differences",
+    "description": "Same real child prompt/answer, not a parent substitute; native reader omits/moves the web beginning label and places Idle at the bottom; narrow composer reflows differently."
+  },
+  "settings-general": {
+    "classification": "missing/extra UI",
+    "description": "Native adds an OpenCodex Updates card (showing Reading update status in headless mode), shifting the same service/plugin/notification sections down. This is a native-host versus browser-host difference."
+  },
+  "settings-general-bottom": {
+    "classification": "small layout differences",
+    "description": "Both explicitly scrolled to the same bottom sections and paths; native group heights, button insets and wrapped plugin-path text differ slightly."
+  },
+  "settings-appearance": {
+    "classification": "small layout differences",
+    "description": "Same visible mode, font size, terminal placement and theme controls; range-track/knob geometry, segmented controls and row metrics differ."
+  },
+  "settings-shortcuts": {
+    "classification": "equivalent (only rasterization)",
+    "description": "Matching visible shortcut catalog, row positions and keycaps; glyph/border rasterization differs."
+  },
+  "settings-projects": {
+    "classification": "equivalent (only rasterization)",
+    "description": "Matching two actual service projects, order, controls and geometry; glyph and border rasterization differs."
+  },
+  "settings-usage": {
+    "classification": "equivalent (only rasterization)",
+    "description": "Matching empty Usage/Limits content and geometry; glyph/refresh-icon rasterization differs."
+  },
+  "settings-remote-access": {
+    "classification": "small layout differences",
+    "description": "Same off-state fields and no devices; native input/segmented-control insets and card/row dimensions differ slightly."
+  },
+  "usage-limits-open": {
+    "classification": "equivalent (only rasterization)",
+    "description": "Matching empty Usage/Limits page; only text/refresh-icon rasterization differs."
+  },
+  "tasks-empty": {
+    "classification": "small layout differences",
+    "description": "Both real task lists are empty; native assignee/project filter row sits slightly higher and column/header/control spacing differs."
+  },
+  "apps-empty": {
+    "classification": "equivalent (only rasterization)",
+    "description": "Both real app lists are empty; matching empty-state copy, icon and placement with glyph/shadow rasterization differences."
+  },
+  "connection-offline": {
+    "classification": "equivalent (only rasterization)",
+    "description": "Matching unreachable-gateway page, retry button and disabled shell; minor glyph/shadow rasterization differences."
+  }
+}

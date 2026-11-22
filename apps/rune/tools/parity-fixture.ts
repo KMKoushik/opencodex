@@ -127,7 +127,7 @@ export const multiply = (a: number, b: number) => a * b;
 
 Inline \`code\`, **bold**, *emphasis* and ~~strikethrough~~ stay selectable.
 `;
-const at = Date.now() - 120_000;
+const at = Number(process.env.OCR_FIXTURE_NOW ?? Date.now()) - 120_000;
 let sequence = 0;
 const id = () => `msg_parity_${(++sequence).toString().padStart(5, '0')}`;
 const user = (text: string, time = at) => ({
@@ -246,6 +246,10 @@ for (const [index, title, messages] of [
   sessions.push({ id: session.id, goldenPrompt: title });
 }
 await writeFile(`${root}/sessions.json`, JSON.stringify(sessions, null, 2));
+if (process.env.OCR_FIXTURE_NOW) {
+  const removed = await fetch(`${base}/sessions/${template.id}`, { method: 'DELETE' });
+  if (!removed.ok) throw new Error(`Failed to remove fixture template: ${removed.status}`);
+}
 await writeFile(
   `${root}/fixture-provenance.txt`,
   'Authored deterministic UI fixtures imported via the isolated OpenCode V2 API, not model replies or original cloud recordings.\n',
