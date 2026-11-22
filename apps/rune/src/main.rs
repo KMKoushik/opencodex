@@ -279,11 +279,17 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
         .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
         .border_layout();
     if s.prefs.sidebar_closed {
-        toolbar = toolbar.pl(96.0).child(
-            sidebar::icon_button(t, &icons::SIDEBAR, "Show sidebar").on_press(|s: &mut State| {
-                s.prefs.sidebar_closed = false;
-                s.save();
-            }),
+        toolbar = toolbar.pl(96.0);
+        if let Some(a) = &s.assets {
+            toolbar = toolbar.child(el().size(24.0, 24.0).pixels(a.small.pixels()));
+        }
+        toolbar = toolbar.child(
+            sidebar::icon_button(t, &icons::SIDEBAR_OPEN, "Show sidebar").on_press(
+                |s: &mut State| {
+                    s.prefs.sidebar_closed = false;
+                    s.save();
+                },
+            ),
         );
     }
     if let Some(p) = s.project() {
@@ -309,9 +315,11 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
     }
     toolbar = toolbar.child(
         sidebar::label(t, title, 13.0, 500.0, "text")
-            .px(5.0)
+            .px(if s.selected.is_some() { 5.0 } else { 0.0 })
+            // Text is painted from the content inset, not align-items. Keep
+            // the 30px title hit box and center its 19.5px line box explicitly.
+            .py((30.0 - 19.5) / 2.0)
             .h(30.0)
-            .center_y()
             .truncate()
             .min_w(0.0),
     );
@@ -397,7 +405,10 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
                 } else {
                     composer::view(
                         s,
-                        w - width - s.panel_width() - 0.5 - if s.selected.is_some() { 44.0 } else { 0.0 },
+                        w - width
+                            - s.panel_width()
+                            - 0.5
+                            - if s.selected.is_some() { 44.0 } else { 0.0 },
                         h,
                     )
                 }
@@ -498,7 +509,12 @@ fn main() {
             *arg = "--snap".into();
         }
     }
-    let value = |flag: &str| args.windows(2).rev().find(|v| v[0] == flag).map(|v| v[1].clone());
+    let value = |flag: &str| {
+        args.windows(2)
+            .rev()
+            .find(|v| v[0] == flag)
+            .map(|v| v[1].clone())
+    };
     let dark = value("--theme").is_none_or(|t| t != "light");
     if args.iter().any(|a| a == "--list-presets") {
         for p in theme::presets(dark) {
@@ -525,7 +541,9 @@ fn main() {
             let tree = value("--tree").unwrap_or_else(|| format!("{screenshot}.tree.json"));
             (screenshot, tree)
         })
-    } else { None };
+    } else {
+        None
+    };
     OPTIONS
         .set(Options {
             gateway: std::env::var("OPENCODEX_GATEWAY").ok(),
@@ -564,7 +582,9 @@ fn main() {
         return;
     }
     if let Some((_, tree)) = &native_capture {
-        if !args.iter().any(|a| a == "--tree") { args.extend(["--tree".into(), tree.clone()]); }
+        if !args.iter().any(|a| a == "--tree") {
+            args.extend(["--tree".into(), tree.clone()]);
+        }
     }
     let spec = AppSpec {
         poll: Some(poll),

@@ -40,7 +40,7 @@ pub fn button(s: &State, name: &str, glyph: &'static rune::Icon, active: bool) -
         .focusable(true)
 }
 pub fn close(s: &State, name: &str) -> El {
-    crate::sidebar::icon_button_size(&s.theme, &crate::icons::CLOSE, name, 12.0)
+    crate::sidebar::icon_button_ink(&s.theme, &crate::icons::CLOSE, name, 12.0, "text-tertiary")
         .size(18.0, 18.0)
         .radius(5.0)
 }

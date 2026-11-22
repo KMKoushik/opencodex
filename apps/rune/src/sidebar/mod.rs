@@ -194,6 +194,15 @@ pub fn icon_button(t: &Theme, glyph: &'static rune::Icon, name: &str) -> El {
     icon_button_size(t, glyph, name, 16.0)
 }
 pub fn icon_button_size(t: &Theme, glyph: &'static rune::Icon, name: &str, size: f32) -> El {
+    icon_button_ink(t, glyph, name, size, "text-secondary")
+}
+pub fn icon_button_ink(
+    t: &Theme,
+    glyph: &'static rune::Icon,
+    name: &str,
+    size: f32,
+    ink: &str,
+) -> El {
     el().role("button")
         .label(name)
         .help(name)
@@ -206,12 +215,12 @@ pub fn icon_button_size(t: &Theme, glyph: &'static rune::Icon, name: &str, size:
         .radius(7.0)
         .center()
         .hover(t.c("hover"))
-        .child(icon(glyph, size).color(t.c("text-secondary")))
+        .child(icon(glyph, size).color(t.c(ink)))
 }
 pub fn nav(t: &Theme, glyph: &'static rune::Icon, name: &str) -> El {
     nav_ink(t, glyph, name, "text")
 }
-fn nav_ink(t: &Theme, glyph: &'static rune::Icon, name: &str, ink: &str) -> El {
+pub fn nav_ink(t: &Theme, glyph: &'static rune::Icon, name: &str, ink: &str) -> El {
     row()
         .role("button")
         .label(name)
@@ -244,7 +253,8 @@ fn render_item(s: &State, n: usize) -> El {
             if title == "Pinned" {
                 heading
             } else {
-                let toggle = icon_button_size(t, &i::INBOX, "Focus view", 14.0)
+                let toggle = icon_button_ink(t, &i::INBOX, "Focus view", 14.0, "text-tertiary")
+                    .mr(if title == "Focus" { 0.0 } else { -2.0 })
                     .key("thread-view-toggle")
                     .on_press(|s: &mut State| {
                         s.prefs.focus = !s.prefs.focus;
@@ -261,17 +271,26 @@ fn render_item(s: &State, n: usize) -> El {
                     heading.child(
                         row()
                             .gap(6.0)
+                            .mr(-2.0)
                             .child(
-                                icon_button_size(t, &glyphs::FILTER, "Filter projects", 14.0)
-                                    .key("focus-filter-trigger")
-                                    .on_drawn_layout_tx(|s: &mut State, r, tx| {
-                                        s.pages.anchors.insert("focus-filter-trigger".into(), r);
-                                        tx.live_only();
-                                    })
-                                    .on_press_tx(|s: &mut State, tx| {
+                                icon_button_ink(
+                                    t,
+                                    &glyphs::FILTER,
+                                    "Filter projects",
+                                    14.0,
+                                    "text-tertiary",
+                                )
+                                .key("focus-filter-trigger")
+                                .on_drawn_layout_tx(|s: &mut State, r, tx| {
+                                    s.pages.anchors.insert("focus-filter-trigger".into(), r);
+                                    tx.live_only();
+                                })
+                                .on_press_tx(
+                                    |s: &mut State, tx| {
                                         s.menus.focus.filter_open = true;
                                         tx.focus_when_shown("focus-filter-0", tx.by_keys());
-                                    }),
+                                    },
+                                ),
                             )
                             .child(toggle),
                     )
@@ -578,6 +597,7 @@ fn render_item(s: &State, n: usize) -> El {
                     Color::TRANSPARENT
                 })
                 .focus_selected(selected)
+                .hover_group()
                 .hover(if highlighted {
                     Color::TRANSPARENT
                 } else {
@@ -648,6 +668,7 @@ fn render_item(s: &State, n: usize) -> El {
                     400.0,
                     if selected { "text" } else { "text-secondary" },
                 )
+                .group_color(t.c("text"))
                 .grow(1.0)
                 .min_w(0.0)
                 .truncate_fade(),

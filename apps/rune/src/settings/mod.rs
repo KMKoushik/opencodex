@@ -140,9 +140,14 @@ pub fn view(s: &State, section: &str) -> El {
 }
 pub fn navigation(s: &State, section: &str) -> El {
     let mut nav = col().w_full().gap(1.0).child(
-        crate::sidebar::nav(&s.theme, &crate::icons::BACK, "Back to app")
-            .mb(12.0)
-            .on_press(|s: &mut State| s.open_page(Route::Chat)),
+        crate::sidebar::nav_ink(
+            &s.theme,
+            &crate::icons::BACK,
+            "Back to app",
+            "text-secondary",
+        )
+        .mb(12.0)
+        .on_press(|s: &mut State| s.open_page(Route::Chat)),
     );
     for &(id, name) in SECTIONS {
         let icon = match id {
@@ -155,13 +160,22 @@ pub fn navigation(s: &State, section: &str) -> El {
             _ => &crate::icons::SETTINGS,
         };
         nav = nav.child(
-            crate::sidebar::nav(&s.theme, icon, name)
-                .fill(if id == section {
-                    s.theme.c("selected")
+            crate::sidebar::nav_ink(
+                &s.theme,
+                icon,
+                name,
+                if id == section {
+                    "text"
                 } else {
-                    rune::Color::TRANSPARENT
-                })
-                .on_press(move |s: &mut State| s.open_page(Route::Settings(id.into()))),
+                    "text-secondary"
+                },
+            )
+            .fill(if id == section {
+                s.theme.c("selected")
+            } else {
+                rune::Color::TRANSPARENT
+            })
+            .on_press(move |s: &mut State| s.open_page(Route::Settings(id.into()))),
         );
     }
     nav
@@ -175,7 +189,7 @@ fn shortcut_row(s: &State, title: &str, chord: &str) -> El {
         .border_sides([1.0, 0.0, 0.0, 0.0], s.theme.c("border"))
         .child(label(&s.theme, title, 13.0, 400.0, "text").grow(1.0))
         .child(
-            label(&s.theme, chord, 13.0, 400.0, "text-secondary")
+            label(&s.theme, chord, 12.0, 400.0, "text-secondary")
                 .px(8.0)
                 .py(4.0)
                 .radius(5.0)

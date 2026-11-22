@@ -149,8 +149,10 @@ pub fn view(s: &State) -> El {
         .map(|p| format!("{p} context used"))
         .unwrap_or("Context usage unavailable".into());
     let circle = el()
-        .size(15.0, 15.0)
-        .radius(7.5)
+        // SVG strokes straddle r=9 in a 24-unit viewBox rendered at 20px.
+        // Rune borders are inset: include the stroke in the outer diameter.
+        .size(17.0833, 17.0833)
+        .radius(8.54165)
         .border(2.0833, t.c("border-heavy"));
     let mut ring = el().size(20.0, 20.0).center().child(circle);
     if let Some(used) = used {

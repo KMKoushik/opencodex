@@ -738,6 +738,12 @@ fn receive(s: &mut State, tag: &str, p: worker::Payload) {
 }
 /// Capture setup performs network and parsing on a worker before any Rune frames.
 pub fn capture(s: &mut State) -> Result<(), String> {
+    // Headless setup waits for the same worker-owned discovery/decode used at
+    // window startup; otherwise every screenshot silently paints the fallback.
+    let apps = std::thread::spawn(|| open_apps::discover().map(worker::prepare))
+        .join()
+        .map_err(|_| "Application discovery worker panicked".to_owned())??;
+    receive(s, "open-apps", apps);
     let Some(panel) = OPTIONS
         .get()
         .and_then(|o| o.panel.as_deref())

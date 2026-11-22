@@ -98,7 +98,16 @@ pub fn discover() -> Result<Value, String> {
     let mut apps = Vec::new();
     for (id, label, name) in CATALOG {
         if let Some(path) = bundle(name) {
-            apps.push(json!({"id":id,"label":label,"bundle":path,"icon":bundle_icon(&path)}));
+            let image = bundle_icon(&path).or_else(|| {
+                use base64::Engine;
+                oc_native::app_icon::png(&path).map(|bytes| {
+                    format!(
+                        "data:image/png;base64,{}",
+                        base64::engine::general_purpose::STANDARD.encode(bytes)
+                    )
+                })
+            });
+            apps.push(json!({"id":id,"label":label,"bundle":path,"icon":image}));
         }
     }
     let selected = preference().and_then(|p| std::fs::read_to_string(p).ok());
@@ -203,10 +212,10 @@ pub fn trigger(s: &State) -> El {
         .and_then(|a| a.icon.as_ref())
         .map(|image| {
             rune::el()
-                .size(18.0, 18.0)
+                .size(16.0, 16.0)
                 .pixels_fit(image.pixels(), rune::SurfaceFit::Fit)
         })
-        .unwrap_or_else(|| icon(&crate::chat::icons::OPEN, 18.0).color(s.theme.c("text-tertiary")));
+        .unwrap_or_else(|| icon(&crate::chat::icons::OPEN, 16.0).color(s.theme.c("text-tertiary")));
     rune::el()
         .key("open-project-app")
         .size(36.0, 40.0)

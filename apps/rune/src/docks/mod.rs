@@ -298,7 +298,7 @@ pub fn view(s: &State) -> El {
                 row()
                     .gap(10.0)
                     .center_y()
-                    .child(label(t, &header, 12.0, 500.0, "text-secondary"))
+                    .child(label(t, &header, 12.0, 400.0, "text-secondary"))
                     .child(label(
                         t,
                         if s.docks.reviewing
@@ -330,7 +330,7 @@ pub fn view(s: &State) -> El {
                     } else {
                         "Collapse question"
                     },
-                    14.0,
+                    16.0,
                 )
                 .on_press(|s: &mut State| s.docks.collapsed = !s.docks.collapsed),
             ),

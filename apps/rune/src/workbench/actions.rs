@@ -17,7 +17,7 @@ pub fn trigger(s: &State, index: usize) -> El {
         .radius(9.0)
         .hover(s.theme.c("hover"))
         .child(icon(&icons::OPEN, 16.0).color(s.theme.c("text-secondary")))
-        .child(icon(&crate::icons::DOWN, 10.0).color(s.theme.c("text-tertiary")))
+        .child(icon(&crate::icons::DOWN, 10.0).color(s.theme.c("text-secondary")))
         .role("button")
         .label("File actions")
         .focusable(true)

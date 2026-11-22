@@ -81,7 +81,7 @@ pub fn documents(s: &State) -> El {
                 tx.focus(format!("document-tab-{next}"), false);
                 true
             });
-        let close = crate::sidebar::icon_button(
+        let close = crate::sidebar::icon_button_ink(
             t,
             &crate::icons::CLOSE,
             &format!(
@@ -89,6 +89,8 @@ pub fn documents(s: &State) -> El {
                 doc.path,
                 if doc.is_diff { " diff" } else { "" }
             ),
+            12.0,
+            "text-tertiary",
         )
         .size(18.0, 18.0)
         .radius(5.0)

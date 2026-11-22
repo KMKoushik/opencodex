@@ -24,12 +24,12 @@ pub(crate) use document::open as open_document;
 mod measure;
 mod media;
 pub use measure::ScrollStart;
+pub(crate) mod follow;
 #[cfg(target_os = "macos")]
 mod pasteboard;
 pub mod preview;
 pub mod probe;
 mod reader;
-pub(crate) mod follow;
 mod tools;
 mod user;
 pub use reader::reader;
@@ -334,18 +334,39 @@ pub fn view(s: &State, width: f32) -> El {
 }
 fn jump_pill(s: &State, width: f32, height: f32, reader: bool) -> El {
     let t = &s.theme;
-    row().w(160.0).h(28.0).absolute((width - 160.0) / 2.0, height - 36.0)
-        .center().enter_delay(0.15)
-        .child(t.shadow(row().h(28.0).px(10.0).gap(6.0).center_y()
-            .radius(20.0).fill(t.c("elevated")).hover(t.c("secondary-hover"))
-            .border(1.0, t.c("border-heavy"))
-            .child(icon(&icons::LATEST, 14.0).color(t.c("text-secondary")))
-            .child(label(t, "Jump to latest", 12.0, 500.0, "text-secondary"))
-            .role("button").label("Jump to latest").focusable(true)
-            .on_press_tx(move |s: &mut State, tx| {
-                tx.scroll_to_bottom(if reader { "workspace-conversation".into() } else { scroll_key(s) });
-                conversation_mut(s, reader).jump = false;
-            }), "chip-shadow"))
+    row()
+        .w(160.0)
+        .h(28.0)
+        .absolute((width - 160.0) / 2.0, height - 36.0)
+        .center()
+        .enter_delay(0.15)
+        .child(
+            t.shadow(
+                row()
+                    .h(28.0)
+                    .px(10.0)
+                    .gap(6.0)
+                    .center_y()
+                    .radius(20.0)
+                    .fill(t.c("elevated"))
+                    .hover(t.c("secondary-hover"))
+                    .border(1.0, t.c("border-heavy"))
+                    .child(icon(&icons::LATEST, 14.0).color(t.c("text")))
+                    .child(label(t, "Jump to latest", 12.0, 500.0, "text"))
+                    .role("button")
+                    .label("Jump to latest")
+                    .focusable(true)
+                    .on_press_tx(move |s: &mut State, tx| {
+                        tx.scroll_to_bottom(if reader {
+                            "workspace-conversation".into()
+                        } else {
+                            scroll_key(s)
+                        });
+                        conversation_mut(s, reader).jump = false;
+                    }),
+                "chip-shadow",
+            ),
+        )
 }
 pub fn scroll_key(s: &State) -> String {
     format!("conversation-{}", s.selected.as_deref().unwrap_or(""))

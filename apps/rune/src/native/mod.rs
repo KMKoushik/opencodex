@@ -763,7 +763,8 @@ pub fn canvas_tabs(s: &State) -> El {
         .grow(1.0)
         .min_w(0.0)
         .center_y()
-        .gap(8.0)
+        .gap(6.0)
+        .pr(6.0)
         .child(tab::viewport(tabs));
     if s.native.selected_canvas.is_some() {
         header = header.child(
@@ -780,7 +781,7 @@ pub fn canvas_tabs(s: &State) -> El {
         );
     }
     header.child(
-        crate::sidebar::icon_button(&s.theme, &crate::icons::PLUS, "Canvases in this chat")
+        crate::sidebar::icon_button(&s.theme, &crate::icons::ADD, "Canvases in this chat")
             .checked(s.native.selected_canvas.is_none())
             .on_press(|s: &mut State| {
                 s.native.selected_canvas = None;

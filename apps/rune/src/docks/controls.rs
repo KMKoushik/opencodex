@@ -2,10 +2,10 @@ use crate::{State, sidebar::label};
 use rune::{El, el};
 
 pub(super) fn button(s: &State, title: &str) -> El {
-    label(&s.theme, title, 12.0, 500.0, "text")
+    label(&s.theme, title, 12.0, 500.0, "text-secondary")
         .px(10.0)
+        .py(5.0)
         .h(28.0)
-        .center_y()
         .radius(7.0)
         .hover(s.theme.c("hover"))
         .role("button")

@@ -345,19 +345,31 @@ pub fn view(s: &State) -> El {
     }
 }
 pub fn button(s: &State, title: &str) -> El {
+    secondary_sized(s, title, true)
+}
+pub fn regular_button(s: &State, title: &str) -> El {
+    secondary_sized(s, title, false)
+}
+fn secondary_sized(s: &State, title: &str, small: bool) -> El {
     s.theme.shadow(
         s.theme.paint(
             el().role("button")
                 .key(format!("page-action-{title}"))
                 .label(title)
                 .focusable(true)
-                .px(10.0)
-                .h(28.0)
+                .px(if small { 10.0 } else { 14.0 })
+                .h(if small { 28.0 } else { 32.0 })
                 .center()
                 .radius(8.0)
                 .border(1.0, s.theme.c("chip-border"))
                 .hover(s.theme.c("hover"))
-                .child(label(&s.theme, title, 12.0, 500.0, "text")),
+                .child(label(
+                    &s.theme,
+                    title,
+                    if small { 12.0 } else { 13.0 },
+                    500.0,
+                    "text",
+                )),
             "chip",
         ),
         "chip-shadow",
@@ -384,7 +396,7 @@ fn primary_sized(s: &State, title: &str, small: bool) -> El {
                     &s.theme,
                     title,
                     if small { 12.0 } else { 13.0 },
-                    if small { 500.0 } else { 600.0 },
+                    600.0,
                     "on-primary",
                 )),
             "primary-glaze",

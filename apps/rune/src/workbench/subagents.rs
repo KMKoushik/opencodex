@@ -116,9 +116,12 @@ pub fn view(s: &State) -> El {
             .h(20.0)
             .role("status"),
         );
-        return body
-            .child(header)
-            .child(crate::chat::reader(s, chat, s.panel_width().max(340.0), Some(footer)));
+        return body.child(header).child(crate::chat::reader(
+            s,
+            chat,
+            s.panel_width().max(340.0),
+            Some(footer),
+        ));
     }
     let running = s
         .workbench
@@ -137,6 +140,7 @@ pub fn view(s: &State) -> El {
         .gap(8.0)
         .center_y()
         .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
+        .border_layout()
         .child(
             label(t, "Delegated sessions", 14.0, 500.0, "text")
                 .grow(1.0)
@@ -181,14 +185,20 @@ pub fn view(s: &State) -> El {
                 if selected { "text" } else { "text-secondary" },
             ))
             .child(
-                label(t, count, 10.5, 500.0, "text-secondary")
-                    .font(rune::TextStyle {
-                        family: rune::Family::Mono,
-                        ..rune::TextStyle::new(10.5, 500.0)
-                    })
-                    .px(5.0)
-                    .radius(4.0)
-                    .fill(t.c("secondary")),
+                label(
+                    t,
+                    count,
+                    10.5,
+                    500.0,
+                    if selected { "text" } else { "text-secondary" },
+                )
+                .font(rune::TextStyle {
+                    family: rune::Family::Mono,
+                    ..rune::TextStyle::new(10.5, 500.0)
+                })
+                .px(5.0)
+                .radius(4.0)
+                .fill(t.c("secondary")),
             )
             .role("radio")
             .checked(selected)

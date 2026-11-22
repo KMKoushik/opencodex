@@ -654,10 +654,14 @@ pub fn view(s: &State) -> Option<El> {
                                 return r
                                     .child(label(t, &c.label, 12.0, 500.0, "text-secondary"))
                                     .child(rune::el().grow(1.0))
-                                    .child(label(t, &c.detail, 11.0, 400.0, "text-tertiary"))
+                                    .child(
+                                        label(t, &c.detail, 11.0, 500.0, "text-tertiary").font(
+                                            rune::TextStyle::new(11.0, 500.0).mono().lh(16.5),
+                                        ),
+                                    )
                                     .child(
                                         rune::icon(&crate::icons::DOWN, 14.0)
-                                            .color(t.c("text-tertiary")),
+                                            .color(t.c("text-secondary")),
                                     )
                                     .role("button")
                                     .label(&c.label)
@@ -708,8 +712,13 @@ pub fn view(s: &State) -> Option<El> {
                                         Some("chat") => &crate::icons::CHAT,
                                         _ => &crate::chat::icons::READ,
                                     };
-                                    r = r
-                                        .child(rune::icon(glyph, 16.0).color(t.c("text-tertiary")));
+                                    r = r.child(rune::icon(glyph, 16.0).color(t.c(
+                                        if s.composer.cursor == i {
+                                            "text-secondary"
+                                        } else {
+                                            "text-tertiary"
+                                        },
+                                    )));
                                 }
                                 return r
                                     .child(
@@ -747,7 +756,7 @@ pub fn view(s: &State) -> Option<El> {
                                         },
                                         16.0,
                                     )
-                                    .color(t.c("text-secondary")),
+                                    .color(t.c("text-tertiary")),
                                 );
                             }
                             r = r.child(
@@ -762,7 +771,7 @@ pub fn view(s: &State) -> Option<El> {
                                             13.0,
                                             400.0,
                                             if menu == Menu::Workspace {
-                                                "text-secondary"
+                                                "text-tertiary"
                                             } else {
                                                 "text"
                                             },
@@ -782,6 +791,7 @@ pub fn view(s: &State) -> Option<El> {
                             );
                             if menu == Menu::Workspace && (c.id == "worktree") == s.draft().worktree
                             {
+                                r = r.pr(8.0);
                                 r = r.child(
                                     rune::icon(&crate::icons::TICK, 14.0)
                                         .color(t.c("text-secondary")),

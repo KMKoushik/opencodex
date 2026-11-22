@@ -51,7 +51,7 @@ pub fn sidebar(s: &State) -> El {
                 .focusable(true)
                 .child(index::icon(s, app, 16.0))
                 .child(
-                    label(&s.theme, title, 13.0, 400.0, "text-secondary")
+                    label(&s.theme, title, 13.0, 400.0, "text")
                         .grow(1.0)
                         .truncate(),
                 )

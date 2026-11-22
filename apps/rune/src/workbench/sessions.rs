@@ -78,7 +78,12 @@ pub(super) fn poll_reader(s: &mut State, clock: f64, tx: &mut rune::Tx) -> bool 
 }
 
 pub(super) fn reader(s: &State) -> El {
-    crate::chat::reader(s, &s.workbench.reader_chat, s.panel_width().max(340.0), None)
+    crate::chat::reader(
+        s,
+        &s.workbench.reader_chat,
+        s.panel_width().max(340.0),
+        None,
+    )
 }
 
 pub fn tabs(s: &State) -> El {
@@ -132,7 +137,7 @@ pub fn tabs(s: &State) -> El {
     }
     tabs::viewport(
         strip.child(
-            crate::sidebar::icon_button(&s.theme, &crate::icons::PLUS, "New side chat")
+            crate::sidebar::icon_button_size(&s.theme, &crate::icons::PLUS, "New side chat", 14.0)
                 .disabled(
                     s.workbench.sides.len() >= 8
                         || s.workbench.pending.contains("side-create")

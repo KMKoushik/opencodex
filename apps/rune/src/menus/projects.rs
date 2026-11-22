@@ -313,7 +313,7 @@ pub fn view(s: &State) -> El {
             .w_full()
             .min_h(44.0)
             .padding(8.0)
-            .gap(10.0)
+            .gap(8.0)
             .center_y()
             .radius(5.0)
             .disabled(pending)
@@ -448,8 +448,9 @@ pub fn view(s: &State) -> El {
             .h(44.0)
             .mt(4.0)
             .border_sides([1.0, 0.0, 0.0, 0.0], s.theme.c("border"))
-            .px(10.0)
-            .gap(8.0)
+            .border_layout()
+            .px(14.0)
+            .gap(6.0)
             .center_y()
             .radius(5.0)
             .hover(s.theme.c("hover"))
@@ -459,7 +460,7 @@ pub fn view(s: &State) -> El {
                 &s.theme,
                 "Open project…",
                 13.0,
-                400.0,
+                500.0,
                 "text-secondary",
             ))
             .on_press_tx(|s: &mut State, tx| {

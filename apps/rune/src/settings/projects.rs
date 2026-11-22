@@ -214,10 +214,10 @@ pub fn view(s: &State, mut body: El) -> El {
                 .role("button")
                 .label("Add project")
                 .focusable(true)
-                .px(10.0)
+                .px(14.0)
                 .gap(6.0)
                 .center_y()
-                .child(rune::icon(&crate::icons::PLUS, 16.0).color(s.theme.c("text-secondary")))
+                .child(rune::icon(&crate::icons::ADD, 16.0).color(s.theme.c("text-secondary")))
                 .child(label(
                     &s.theme,
                     "Add project",
@@ -281,7 +281,8 @@ pub fn view(s: &State, mut body: El) -> El {
         .px(16.0)
         .radius(10.0)
         .fill(s.theme.c("secondary"))
-        .border(1.0, s.theme.c("border"));
+        .border(1.0, s.theme.c("border"))
+        .border_layout();
     for (n, p) in items.iter().enumerate() {
         let id = p.id.clone();
         let edit = id.clone();
@@ -300,6 +301,7 @@ pub fn view(s: &State, mut body: El) -> El {
                     [if n > 0 { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0],
                     s.theme.c("border"),
                 )
+                .border_layout()
                 .child(
                     row()
                         .grow(1.0)
@@ -331,11 +333,13 @@ pub fn view(s: &State, mut body: El) -> El {
                         }),
                 )
                 .child(
-                    crate::sidebar::icon_button(
+                    crate::sidebar::icon_button_size(
                         &s.theme,
                         &crate::icons::MORE,
                         &format!("Actions for {name}"),
+                        18.0,
                     )
+                    .size(32.0, 32.0)
                     .key(&key)
                     .on_layout_tx(move |s: &mut State, r, tx| {
                         s.pages.anchors.insert(anchor.clone(), r);
@@ -369,18 +373,24 @@ pub fn avatar(s: &State, name: &str, color: &str, size: f32) -> El {
         .center()
         .fill(s.theme.c(&format!("project-{color}")))
         .border(1.0, s.theme.c("border-heavy"))
-        .child(label(
-            &s.theme,
-            name.trim()
-                .chars()
-                .next()
-                .unwrap_or('?')
-                .to_uppercase()
-                .to_string(),
-            if size >= 48.0 { 26.0 } else { size * 0.65 },
-            500.0,
-            "on-project",
-        ))
+        .child(
+            label(
+                &s.theme,
+                name.trim()
+                    .chars()
+                    .next()
+                    .unwrap_or('?')
+                    .to_uppercase()
+                    .to_string(),
+                if size >= 48.0 { 26.0 } else { size * 0.65 },
+                500.0,
+                "on-project",
+            )
+            .font(
+                rune::TextStyle::new(if size >= 48.0 { 26.0 } else { size * 0.65 }, 500.0)
+                    .lh(if size >= 48.0 { 26.0 } else { size * 0.65 }),
+            ),
+        )
 }
 pub fn dialog(s: &State) -> Option<El> {
     if s.pages.remote.pairing_at.is_some() {
@@ -589,7 +599,7 @@ fn footer(s: &State, enabled: bool, save: impl Fn(&mut State) + 'static) -> El {
         .gap(8.0)
         .justify_end()
         .child(
-            pages::button(s, "Cancel")
+            pages::regular_button(s, "Cancel")
                 .disabled(s.pages.projects.busy)
                 .on_press(|s: &mut State| close(s)),
         )

@@ -83,8 +83,8 @@ pub fn view(s: &State, width: f32, height: f32) -> El {
                 "chip-shadow",
             )
             .child(
-                label(t, title, 20.0, 500.0, "text-secondary")
-                    .font(TextStyle::new(20.0, 500.0).lh(30.0).tracking(-0.4)),
+                label(t, title, 20.0, 400.0, "text-secondary")
+                    .font(TextStyle::new(20.0, 400.0).lh(30.0).tracking(-0.4)),
             )
             .child(icon(&i::DOWN, 14.0).color(t.c("text-tertiary")))
             .role("button")
@@ -205,7 +205,8 @@ pub fn area(s: &State, width: f32) -> El {
     if s.selected.is_some() {
         controls = controls.child(context::view(s));
     }
-    let model = t.shadow(
+    let model = t
+        .shadow(
             t.paint(
                 row()
                     .shrink()
@@ -244,15 +245,13 @@ pub fn area(s: &State, width: f32) -> El {
     // wrapper; thinking retains its intrinsic width rather than being ellipsized.
     controls = controls.child(if inner <= 480.0 {
         row().shrink().min_w(0.0).child(model)
-    } else { model });
+    } else {
+        model
+    });
     controls = controls.child(
         row()
             .h(30.0)
-            .max_w(if inner <= 480.0 {
-                inner
-            } else {
-                240.0
-            })
+            .max_w(if inner <= 480.0 { inner } else { 240.0 })
             .px(8.0)
             .gap(8.0)
             .center_y()
@@ -542,6 +541,50 @@ pub fn area(s: &State, width: f32) -> El {
                 menus::open(s, Menu::Workspace, tx);
             }
         });
+    let branch = s
+        .draft()
+        .branch
+        .as_deref()
+        .or_else(|| {
+            project
+                .and_then(|p| s.snapshot.branches.get(&p.canonical))
+                .map(String::as_str)
+        })
+        .unwrap_or("Detached HEAD");
+    let from = s.selected.is_none() && s.draft().worktree;
+    let mut branch_control = row()
+        .h(28.0)
+        .px(8.0)
+        .gap(6.0)
+        .center_y()
+        .child(icon(&i::BRANCH, 14.0).color(t.c("text-secondary")))
+        .child(label(
+            t,
+            if from {
+                format!("From {branch}")
+            } else {
+                branch.into()
+            },
+            12.5,
+            500.0,
+            if from {
+                "text-secondary"
+            } else {
+                "text-tertiary"
+            },
+        ));
+    if from {
+        branch_control = branch_control.child(icon(&i::DOWN, 12.0).color(t.c("text-tertiary")));
+    }
+    let branch_control = branch_control
+        .role("button")
+        .label("Start from branch")
+        .focusable(true)
+        .on_press_tx(|s: &mut State, tx| {
+            if s.selected.is_none() && s.draft().worktree {
+                menus::open(s, Menu::Branch, tx);
+            }
+        });
     let workspace = row()
         .key("workspace-bar")
         .h(30.0)
@@ -550,37 +593,7 @@ pub fn area(s: &State, width: f32) -> El {
         .gap(2.0)
         .center_y()
         .child(workspace)
-        .child(
-            row()
-                .h(28.0)
-                .px(8.0)
-                .gap(6.0)
-                .center_y()
-                .child(icon(&i::BRANCH, 14.0).color(t.c("text-secondary")))
-                .child(label(
-                    t,
-                    s.draft()
-                        .branch
-                        .as_deref()
-                        .or_else(|| {
-                            project
-                                .and_then(|p| s.snapshot.branches.get(&p.canonical))
-                                .map(String::as_str)
-                        })
-                        .unwrap_or("Detached HEAD"),
-                    12.5,
-                    500.0,
-                    "text-tertiary",
-                ))
-                .role("button")
-                .label("Start from branch")
-                .focusable(true)
-                .on_press_tx(|s: &mut State, tx| {
-                    if s.selected.is_none() && s.draft().worktree {
-                        menus::open(s, Menu::Branch, tx);
-                    }
-                }),
-        );
+        .child(branch_control);
     let mut area = col()
         .key("composer-area")
         .w(column)
@@ -675,6 +688,7 @@ fn attachments(s: &State) -> El {
                 .gap(8.0)
                 .radius(12.0)
                 .border(1.0, s.theme.c("border"))
+                .border_layout()
                 .fill(s.theme.c("secondary"))
                 .center_y()
                 .child(
@@ -709,13 +723,12 @@ fn attachments(s: &State) -> El {
                     col()
                         .grow(1.0)
                         .min_w(0.0)
-                        .child(
-                            label(&s.theme, &item.name, 12.0, 400.0, "text-secondary").truncate(),
-                        )
+                        .gap(2.0)
+                        .child(label(&s.theme, &item.name, 12.0, 400.0, "text").truncate())
                         .child(label(
                             &s.theme,
                             &attachment_size(item.bytes.len()),
-                            11.0,
+                            12.0,
                             400.0,
                             "text-tertiary",
                         ))

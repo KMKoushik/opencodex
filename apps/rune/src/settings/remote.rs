@@ -148,7 +148,7 @@ pub fn view(s: &State, mut body: El) -> El {
             (if enabled {
                 button(s, "Turn off")
             } else {
-                pages::primary_button(s, "Turn on").h(28.0).px(10.0)
+                pages::primary_small_button(s, "Turn on")
             })
             .disabled(busy)
             .on_press(move |s: &mut State| save(s, !enabled)),

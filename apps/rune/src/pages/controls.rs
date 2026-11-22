@@ -179,8 +179,10 @@ pub fn select(
                 .center_y()
                 .radius(8.0)
                 .border(1.0, s.theme.c("chip-border"))
+                .border_layout()
+                .pl(5.0)
                 .child(preview)
-                .child(label(&s.theme, current, 12.0, 400.0, "text").grow(1.0))
+                .child(label(&s.theme, current, 13.0, 400.0, "text").grow(1.0))
                 .child(rune::icon(&crate::icons::DOWN, 14.0).color(s.theme.c("text-tertiary")))
                 .on_layout_tx(move |s: &mut State, rect, tx| {
                     s.pages.anchors.insert(anchor.clone(), rect);

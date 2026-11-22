@@ -55,7 +55,8 @@ pub fn view(s: &State) -> El {
     }
     identity = identity
         .child(
-            icon_button_size(t, &i::DOWN, "App menu", 10.0)
+            icon_button_ink(t, &i::DOWN, "App menu", 10.0, "text-tertiary")
+                .size(10.0, 24.0)
                 .on_press(|s: &mut State| s.menus.open = Some(crate::menus::Menu::Brand)),
         )
         .child(el().grow(1.0))

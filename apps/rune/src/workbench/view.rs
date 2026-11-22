@@ -348,7 +348,11 @@ fn tree(s: &State) -> El {
                     s.workbench.changes.len().to_string(),
                     10.5,
                     500.0,
-                    "text-secondary",
+                    if s.workbench.panel == p {
+                        "text"
+                    } else {
+                        "text-secondary"
+                    },
                 )
                 .font(TextStyle::new(10.5, 500.0).mono().lh(15.75))
                 .px(5.0)
@@ -410,9 +414,9 @@ fn tree(s: &State) -> El {
             )
             .child(
                 documents::button(s, "−")
-                    .font(TextStyle::new(12.0, 400.0).lh(18.0))
+                    .font(TextStyle::new(12.0, 500.0).lh(18.0))
                     .px(10.0)
-                    .py(0.0)
+                    .py((28.0 - 18.0) / 2.0)
                     .h(28.0)
                     .center()
                     .label("Collapse folders")
@@ -638,7 +642,7 @@ fn tree_row(s: &State, n: usize, changes: bool) -> El {
                 t,
                 short,
                 12.5,
-                500.0,
+                600.0,
                 if status == "deleted" || status == "D" {
                     "error"
                 } else if status == "added" || status == "A" || status == "untracked" {

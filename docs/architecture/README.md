@@ -16,6 +16,11 @@ UTF-16 ranges into OpenCode message metadata. Native file reveal validates the
 target through `/api/workspace/file-location` before invoking Finder on its worker.
 Browser/canvas tabs retain per-chat presentation state in memory; inactive browser
 guests are destroyed and their URLs restored on return, not kept running indefinitely.
+Open-in discovery uses the existing dedicated workbench worker and five-minute
+cache. Bundle-declared icons match Electron; `oc-native` falls back to macOS
+LaunchServices (`NSWorkspace.iconForFile`) when a bundle has no usable declared
+icon. Headless captures await this same discovery/decode before rendering instead
+of substituting a generic folder. This adds no backend state or runtime channel.
 
 ## Reading the diagram
 

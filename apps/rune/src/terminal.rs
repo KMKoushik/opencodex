@@ -332,7 +332,7 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
         .gap(8.0)
         .child(tabs::viewport(strip))
         .child(
-            icon_button(t, &icons::PLUS, "New terminal")
+            icon_button(t, &icons::ADD, "New terminal")
                 .mx(6.0)
                 .disabled(s.terminal.creating)
                 .on_press(|s: &mut State| s.create_terminal()),

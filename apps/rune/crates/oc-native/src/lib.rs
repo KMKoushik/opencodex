@@ -1,6 +1,7 @@
 //! macOS's native color panel, used by the web's color input as well. AppKit
 //! stays on the main thread; callbacks publish only the latest value and wake.
 use std::sync::Mutex;
+pub mod app_icon;
 pub mod clipboard;
 pub mod menu;
 pub mod notifications;

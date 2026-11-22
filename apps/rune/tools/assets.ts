@@ -10,6 +10,7 @@ const names = {
   right: 'ArrowRight01Icon',
   sidebar: 'PanelLeftCloseIcon',
   edit: 'PencilEdit02Icon',
+  diff_edit: 'PencilEdit01Icon',
   search: 'Search01Icon',
   folder_open: 'FolderOpenIcon',
   tasks: 'CheckListIcon',
@@ -36,6 +37,8 @@ const names = {
   usage: 'DashboardSpeed01Icon',
   folder: 'Folder01Icon',
   plus: 'PlusSignIcon',
+  add: 'Add01Icon',
+  sidebar_open: 'PanelLeftIcon',
   close: 'Cancel01Icon',
   inbox: 'InboxIcon',
   book: 'BookOpen01Icon',
@@ -76,7 +79,8 @@ for (const [id, data] of Object.entries(GLYPHS)) {
         `<${tag} ${Object.entries(props)
           .filter(([k]) => k !== 'key')
           .map(
-            ([k, v]) => `${k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())}="${esc(String(v))}"`,
+            ([k, v]) =>
+              `${k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())}="${esc(String(k === 'strokeWidth' ? 1.8 : v))}"`,
           )
           .join(' ')}/>`,
     )

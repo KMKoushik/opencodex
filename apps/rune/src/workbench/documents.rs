@@ -407,19 +407,29 @@ pub fn view(s: &State) -> El {
             (false, "Unified", &crate::chat::icons::UNIFIED),
             (true, "Split", &crate::chat::icons::SPLIT),
         ] {
-            let choice = crate::sidebar::icon_button_size(t, glyph, name, 14.0)
-                .size(28.0, 26.0)
-                .checked(s.workbench.split == split)
-                .on_press(move |s: &mut State| {
-                    s.workbench.split = split;
-                    for doc in &mut s.workbench.docs {
-                        doc.diff.set_mode(if split {
-                            DiffMode::Split
-                        } else {
-                            DiffMode::Unified
-                        });
-                    }
-                });
+            let choice = crate::sidebar::icon_button_ink(
+                t,
+                glyph,
+                name,
+                14.0,
+                if s.workbench.split == split {
+                    "text"
+                } else {
+                    "text-secondary"
+                },
+            )
+            .size(28.0, 26.0)
+            .checked(s.workbench.split == split)
+            .on_press(move |s: &mut State| {
+                s.workbench.split = split;
+                for doc in &mut s.workbench.docs {
+                    doc.diff.set_mode(if split {
+                        DiffMode::Split
+                    } else {
+                        DiffMode::Unified
+                    });
+                }
+            });
             layouts = layouts.child(if s.workbench.split == split {
                 t.shadow(t.paint(choice, "glaze"), "glaze-shadow")
             } else {
@@ -431,7 +441,7 @@ pub fn view(s: &State) -> El {
             .child(s.theme.shadow(layouts, "well-shadow"));
         if doc.value["status"] != "deleted" {
             toolbar = toolbar.gap(4.0).child(
-                crate::sidebar::icon_button(t, &crate::icons::EDIT, "Edit file").on_press(
+                crate::sidebar::icon_button(t, &crate::icons::DIFF_EDIT, "Edit file").on_press(
                     move |s: &mut State| {
                         let doc = &s.workbench.docs[index];
                         let (directory, path) = (doc.directory.clone(), doc.path.clone());
@@ -773,8 +783,10 @@ fn breadcrumbs(s: &State, path: &str) -> El {
                     s.load_panel(true);
                 });
             modes = modes.child(if s.workbench.mode == mode {
-                s.theme
-                    .shadow(s.theme.paint(button, "glaze"), "glaze-shadow")
+                s.theme.shadow(
+                    s.theme.paint(button.color(s.theme.c("text")), "glaze"),
+                    "glaze-shadow",
+                )
             } else {
                 button
             });
@@ -792,7 +804,7 @@ fn breadcrumbs(s: &State, path: &str) -> El {
         if index > 0 {
             nav = nav.child(label(&s.theme, "›", 12.0, 400.0, "text-tertiary"));
         }
-        nav = nav.child(label(&s.theme, part, 11.5, 400.0, "text-secondary").truncate());
+        nav = nav.child(label(&s.theme, part, 12.0, 400.0, "text-secondary").truncate());
     }
     nav
 }
