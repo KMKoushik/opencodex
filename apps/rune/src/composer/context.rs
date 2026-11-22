@@ -93,7 +93,7 @@ pub fn poll(s: &mut State, tx: &mut rune::Tx) -> bool {
     was_open != s.chat.context || running_changed
 }
 
-fn total(tokens: &serde_json::Value) -> u64 {
+pub(crate) fn total(tokens: &serde_json::Value) -> u64 {
     tokens["input"].as_u64().unwrap_or(0)
         + tokens["output"].as_u64().unwrap_or(0)
         + tokens["reasoning"].as_u64().unwrap_or(0)

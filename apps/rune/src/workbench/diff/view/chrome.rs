@@ -24,6 +24,30 @@ static EXPAND_ALL: Icon = Icon {
     view: 16.0,
     body: r#"<path d="M5 5.5L8 2.5L11 5.5M5 10.5L8 13.5L11 10.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>"#,
 };
+// Pierre's diffs-icon-symbol-modified, used by the real diff header.
+static MODIFIED: Icon = Icon {
+    name: "diffs-icon-symbol-modified",
+    view: 16.0,
+    body: r#"<path fill="currentColor" d="M1.5 8c0 1.613.088 2.806.288 3.704.196.88.478 1.381.802 1.706s.826.607 1.706.802c.898.2 2.091.288 3.704.288s2.806-.088 3.704-.288c.88-.195 1.381-.478 1.706-.802s.607-.826.802-1.706c.2-.898.288-2.091.288-3.704s-.088-2.806-.288-3.704c-.195-.88-.478-1.381-.802-1.706s-.826-.606-1.706-.802C10.806 1.588 9.613 1.5 8 1.5s-2.806.088-3.704.288c-.88.196-1.381.478-1.706.802s-.606.826-.802 1.706C1.588 5.194 1.5 6.387 1.5 8M0 8c0-6.588 1.412-8 8-8s8 1.412 8 8-1.412 8-8 8-8-1.412-8-8m8 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/>"#,
+};
+
+macro_rules! change_icon {
+    ($name:literal, $symbol:literal) => {
+        Icon { name: $name, view: 16.0, body: concat!(r#"<g fill="currentColor"><path d="M1.5 8c0 1.613.088 2.806.288 3.704.196.88.478 1.381.802 1.706s.826.607 1.706.802c.898.2 2.091.288 3.704.288s2.806-.088 3.704-.288c.88-.195 1.381-.478 1.706-.802s.607-.826.802-1.706c.2-.898.288-2.091.288-3.704s-.088-2.806-.288-3.704c-.195-.88-.478-1.381-.802-1.706s-.826-.606-1.706-.802C10.806 1.588 9.613 1.5 8 1.5s-2.806.088-3.704.288c-.88.196-1.381.478-1.706.802s-.606.826-.802 1.706C1.588 5.194 1.5 6.387 1.5 8M0 8c0-6.588 1.412-8 8-8s8 1.412 8 8-1.412 8-8 8-8-1.412-8-8"/><path d=""#, $symbol, r#""/></g>"#) }
+    };
+}
+static ADDED: Icon = change_icon!(
+    "diffs-icon-symbol-added",
+    "M8 4a.75.75 0 0 1 .75.75v2.5h2.5a.75.75 0 0 1 0 1.5h-2.5v2.5a.75.75 0 0 1-1.5 0v-2.5h-2.5a.75.75 0 0 1 0-1.5h2.5v-2.5A.75.75 0 0 1 8 4"
+);
+static DELETED: Icon = change_icon!(
+    "diffs-icon-symbol-deleted",
+    "M4 8a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 4 8"
+);
+static MOVED: Icon = change_icon!(
+    "diffs-icon-symbol-moved",
+    "M8.495 4.695a.75.75 0 0 0-.05 1.06L10.486 8l-2.041 2.246a.75.75 0 0 0 1.11 1.008l2.5-2.75a.75.75 0 0 0 0-1.008l-2.5-2.75a.75.75 0 0 0-1.06-.051m-4 0a.75.75 0 0 0-.05 1.06l2.044 2.248-1.796 1.995a.75.75 0 0 0 1.114 1.004l2.25-2.5a.75.75 0 0 0-.002-1.007l-2.5-2.75a.75.75 0 0 0-1.06-.05"
+);
 
 impl View {
     /// The unchanged lines between two hunks, folded: buttons to show more, and the next
@@ -179,7 +203,7 @@ impl View {
         let collapsed = st.collapsed(f);
         let toggle = row()
             .key("toggle")
-            .size(24.0, 24.0)
+            .size(16.0, 16.0)
             .center()
             .radius(6.0)
             .hover(l.hover)
@@ -193,14 +217,20 @@ impl View {
             .expanded(!collapsed)
             .child(
                 icon(
-                    if collapsed {
-                        l.triangle_right
-                    } else {
-                        l.triangle_down
+                    match file.status {
+                        FileStatus::Added => &ADDED,
+                        FileStatus::Deleted => &DELETED,
+                        FileStatus::Renamed | FileStatus::Copied => &MOVED,
+                        FileStatus::Modified => &MODIFIED,
                     },
                     16.0,
                 )
-                .color(l.muted),
+                .color(match file.status {
+                    FileStatus::Added => l.add.count,
+                    FileStatus::Deleted => l.del.count,
+                    FileStatus::Renamed | FileStatus::Copied => l.muted,
+                    FileStatus::Modified => l.modified,
+                }),
             );
         let toggle = self.bind.bind_toggle_file(toggle, f, sticky);
         let path = |p: &str, c: Color| {
@@ -236,7 +266,8 @@ impl View {
             .key("inner")
             .w_full()
             .grow(1.0)
-            .px(10.0)
+            .pl(14.0)
+            .pr(12.0)
             .gap(8.0)
             .items_center()
             .child(toggle)
@@ -259,7 +290,7 @@ impl View {
         if adds > 0 {
             inner = inner.child(
                 text(format!("+{adds}"))
-                    .font(l.small)
+                    .font(l.font)
                     .color(l.add.count)
                     .key("adds"),
             );
@@ -267,7 +298,7 @@ impl View {
         if dels > 0 {
             inner = inner.child(
                 text(format!("−{dels}"))
-                    .font(l.small)
+                    .font(l.font)
                     .color(l.del.count)
                     .key("dels"),
             );
@@ -293,14 +324,6 @@ impl View {
         if let (false, Some(w)) = (sticky, self.view_w(st, false)) {
             h = h.w(w).sticky_left(0.0);
         }
-        h = h.child(line(
-            "top",
-            if f > 0 && !sticky {
-                l.border
-            } else {
-                l.header_bg
-            },
-        ));
         h.child(inner).child(line("bottom", l.border))
     }
 }

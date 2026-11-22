@@ -5,7 +5,7 @@ use rune::{El, icon, row};
 pub fn strip(name: &str) -> El {
     row()
         .min_w(0.0)
-        .h(40.0)
+        .h(39.0)
         .pl(10.0)
         .gap(4.0)
         .center_y()
@@ -13,7 +13,7 @@ pub fn strip(name: &str) -> El {
         .label(name)
 }
 pub fn viewport(tabs: El) -> El {
-    row().h(40.0).grow(1.0).min_w(0.0).scroll_x().child(tabs)
+    row().h(39.0).grow(1.0).min_w(0.0).scroll_x().child(tabs)
 }
 pub fn button(s: &State, name: &str, glyph: &'static rune::Icon, active: bool) -> El {
     row()

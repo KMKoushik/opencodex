@@ -10,14 +10,64 @@ use rune_kit::Kit;
 use rune_kit::syntax::SyntaxTheme;
 
 fn tint(base: Color, hue: Color, t: f32) -> Color {
-    let [a, b] = [base.to_oklab(), hue.to_oklab()];
-    Color::from_oklab([0, 1, 2, 3].map(|i| {
-        if i == 3 {
-            a[3]
+    // Pierre uses CSS color-mix(in lab), whose reference white is D50.
+    let lab = |c: Color| {
+        let [r, g, b] = [c.r, c.g, c.b];
+        let x = 0.4123908 * r + 0.35758434 * g + 0.1804808 * b;
+        let y = 0.212639 * r + 0.7151687 * g + 0.07219232 * b;
+        let z = 0.01933082 * r + 0.11919478 * g + 0.95053214 * b;
+        let f = |v: f32| {
+            if v > 216.0 / 24389.0 {
+                v.cbrt()
+            } else {
+                (24389.0 / 27.0 * v + 16.0) / 116.0
+            }
+        };
+        let fx = f((1.0479298 * x + 0.02294687 * y - 0.050192267 * z) / 0.9642957);
+        let fy = f(0.02962781 * x + 0.9904344 * y - 0.0170738 * z);
+        let fz = f((-0.009243058 * x + 0.015055145 * y + 0.7518743 * z) / 0.8251046);
+        [116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz)]
+    };
+    let [a, b] = [lab(base), lab(hue)];
+    let v = [0, 1, 2].map(|i| a[i] + (b[i] - a[i]) * t);
+    let y = (v[0] + 16.0) / 116.0;
+    let inv = |v: f32| {
+        if v.powi(3) > 216.0 / 24389.0 {
+            v.powi(3)
         } else {
-            a[i] + (b[i] - a[i]) * t
+            (116.0 * v - 16.0) / (24389.0 / 27.0)
         }
-    }))
+    };
+    let [x, y, z] = [
+        inv(y + v[1] / 500.0) * 0.9642957,
+        inv(y),
+        inv(y - v[2] / 200.0) * 0.8251046,
+    ];
+    let [x, y, z] = [
+        0.9554734 * x - 0.023098536 * y + 0.06325931 * z,
+        -0.028369708 * x + 1.0099955 * y + 0.021041399 * z,
+        0.012314002 * x - 0.020507697 * y + 1.3303659 * z,
+    ];
+    Color {
+        r: (3.24097 * x - 1.5373832 * y - 0.49861076 * z).clamp(0.0, 1.0),
+        g: (-0.96924365 * x + 1.8759675 * y + 0.04155506 * z).clamp(0.0, 1.0),
+        b: (0.05563008 * x - 0.20397696 * y + 1.0569715 * z).clamp(0.0, 1.0),
+        a: base.a,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn pierre_tints_use_css_lab_not_oklab_or_srgb() {
+        let mid = super::tint(rune::Color::WHITE, rune::Color::BLACK, 0.5);
+        assert!((mid.r - 0.1841865).abs() < 0.0001);
+        assert!((mid.g - mid.r).abs() < 0.0001 && (mid.b - mid.r).abs() < 0.0001);
+        let bg = rune::color::hex("#f9f9f8").unwrap();
+        let green = rune::color::hex("#3c7841").unwrap();
+        // Real Electron's 91% surface + 9% addition gutter, both in Lab D50.
+        assert_eq!(super::tint(bg, green, 0.09).hex(), "#e7ede6ff");
+    }
 }
 
 /// Colours and type, from the kit's palette so themes restyle them.
@@ -36,6 +86,7 @@ pub(super) struct Look {
     pub(super) bg: Color,
     pub(super) text: Color,
     pub(super) muted: Color,
+    pub(super) modified: Color,
     pub(super) faint: Color,
     pub(super) border: Color,
     pub(super) header_bg: Color,
@@ -72,10 +123,13 @@ impl Look {
         let bg = c.bg_base;
         let dark = k.dark;
         let tints = |hue: Color, fg: Color| Tints {
-            line: tint(bg, hue, if dark { 0.13 } else { 0.1 }),
-            gutter: tint(bg, hue, if dark { 0.2 } else { 0.17 }),
-            word: tint(bg, hue, if dark { 0.32 } else { 0.27 }),
-            number: tint(c.text_muted, hue, 0.7),
+            line: tint(bg, hue, if dark { 0.2 } else { 0.12 }),
+            gutter: tint(bg, hue, if dark { 0.15 } else { 0.09 }),
+            word: Color {
+                a: if dark { 0.2 } else { 0.15 },
+                ..hue
+            },
+            number: hue,
             bar: hue,
             count: fg,
         };
@@ -91,7 +145,7 @@ impl Look {
             label: TextStyle {
                 size: 12.5,
                 line_height: 20.0,
-                ..k.ty.ui_medium
+                ..k.ty.ui
             },
             small: TextStyle {
                 size: 12.0,
@@ -108,6 +162,7 @@ impl Look {
             bg,
             text: c.text_base,
             muted: c.text_muted,
+            modified: c.warning.fg,
             faint: c.text_faint,
             border: c.border_weak,
             header_bg: c.layer_01,

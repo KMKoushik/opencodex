@@ -435,7 +435,8 @@ fn source_cards_follow_end_line_and_native_rows_keep_multiline_paste_ime_and_und
         .find(|e| e.key.as_deref() == Some("source-line-0-0"))
         .unwrap()
         .rect;
-    let (x, y) = (first[0] + 37.5 + 15.0, first[1] + 10.0);
+    // CodeMirror's 41px gutter + 6px source inset, then two 12px mono cells.
+    let (x, y) = (first[0] + 41.0 + 6.0 + 2.0 * 7.224609, first[1] + 10.0);
     rt.pointer_move(x, y);
     rt.pointer_down(x, y);
     rt.frame(0.0);

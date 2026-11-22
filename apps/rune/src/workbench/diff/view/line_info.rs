@@ -92,7 +92,8 @@ impl View {
                     ),
                 ],
             };
-            let w = self.gutter_w(st, f) - LINE_INFO_GAP;
+            // OpenCodex removes Pierre's right border on these controls.
+            let w = self.gutter_w(st, f);
             let h = if steps.len() == 2 {
                 (l.metrics.gap - LINE_INFO_GAP) / 2.0
             } else {
@@ -120,7 +121,7 @@ impl View {
             inner = inner.child(
                 col()
                     .key("expand")
-                    .w(w + LINE_INFO_GAP)
+                    .w(w)
                     .h(l.metrics.gap)
                     .gap(LINE_INFO_GAP)
                     .fill(l.bg)
