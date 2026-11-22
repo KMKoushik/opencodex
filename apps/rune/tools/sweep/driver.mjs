@@ -2,7 +2,17 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { parseArgs } from 'node:util';
-import { root, fixture, env, command, setup, cleanup, now } from './environment.mjs';
+import {
+  root,
+  fixture,
+  env,
+  command,
+  setup,
+  cleanup,
+  now,
+  gwPort,
+  ocPort,
+} from './environment.mjs';
 import { seed, api, beginState } from './fixture.mjs';
 import { states, config } from './states.mjs';
 import { reach } from './web.mjs';
@@ -88,7 +98,7 @@ function report(rows) {
       .map(([k, v]) => `${v} ${k}`)
       .join(' · ')}.`,
     '',
-    'Both clients use gateway **4507**, isolated OpenCode **4977**, and the same authored fixture. No model calls or historical screenshots. **Real Electron is LEFT**, Rune RIGHT. Electron runs this checkout’s built main and sandboxed preload with `ELECTRON_RENDERER_URL=http://127.0.0.1:4507`, isolated HOME/XDG and a per-capture temporary user-data directory. Its genuine desktop bridge supplies Browser and Updates capabilities; no preload substitute or host-capability mock is installed. Fixtures include Markdown, 40-turn history, completed tools/reasoning, a real native form and permission, source diff/files, native child, side fork, tasks, and an app/canvas. Tasks/Apps empty states temporarily remove their data before the pair and restore it afterwards; both captures and their digests use the same empty lists. New side chat creates a real gateway fork before capturing that selected conversation (including inherited context) in both clients; this compares the rendered result, not native mutation behavior.',
+    `Both clients use gateway **${gwPort}**, isolated OpenCode **${ocPort}**, and the same authored fixture. No model calls or historical screenshots. **Real Electron is LEFT**, Rune RIGHT. Electron runs this checkout’s built main and sandboxed preload with \`ELECTRON_RENDERER_URL=http://127.0.0.1:${gwPort}\`, isolated HOME/XDG and a per-capture temporary user-data directory. Its genuine desktop bridge supplies Browser and Updates capabilities; no preload substitute or host-capability mock is installed. Fixtures include Markdown, 40-turn history, completed tools/reasoning, a real native form and permission, source diff/files, native child, side fork, tasks, and an app/canvas. Tasks/Apps empty states temporarily remove their data before the pair and restore it afterwards; both captures and their digests use the same empty lists. New side chat creates a real gateway fork before capturing that selected conversation (including inherited context) in both clients; this compares the rendered result, not native mutation behavior.`,
     '',
     '## Method and limits',
     '',
@@ -133,7 +143,10 @@ function report(rows) {
     '# Optional: --states home-empty,chat-markdown-top --themes dark,light --sizes 1280x800',
     '```',
     '',
-    'Requires Bun, Node, the pinned Electron dependency, Rust/macOS toolchain and Python Pillow. Builds the shared renderer, real desktop main/preload, and Rune incrementally; isolated CLI pinned to 2.3.2. Each Electron instance is closed after capture. Only processes whose actual environment contains `HOME=/tmp/ocr-sweep/home` are terminated during fallback cleanup. The temporary environment is removed in finally; `--keep-env` is for diagnosis only. PNGs, logs, DOM observations, fixture manifest and full per-theme metrics stay local/ignored. Reference PNGs are `.electron.png`, never historical `.web.png` files. `--report-only` regenerates this report from local results and checked-in review descriptions.',
+    'Requires Bun, Node, the pinned Electron dependency, Rust/macOS toolchain and Python Pillow. Builds the shared renderer, real desktop main/preload, and Rune incrementally; isolated CLI pinned to 2.3.2. Each Electron instance is closed after capture. Only processes whose actual environment contains `HOME=/tmp/ocr-sweep/home` are terminated during fallback cleanup. The temporary environment is removed in finally; `--keep-env` is for diagnosis only. PNGs, logs, DOM observations, fixture manifest and full per-theme metrics stay local/ignored. Reference PNGs are `.electron.png`, never historical `.web.png` files. `--report-only` regenerates this report from local results and checked-in review descriptions.'.replaceAll(
+      '/tmp/ocr-sweep',
+      fixture,
+    ),
     '',
   );
   writeFileSync(out + '/REPORT.md', lines.join('\n'));

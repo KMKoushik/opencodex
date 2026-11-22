@@ -49,8 +49,12 @@ Full-resolution outputs: `<state>-<theme>.electron.png`, `.rune.png`, `.diff.png
 `results.json` contains all theme/size metrics and before/after digests.
 It records `reference: "electron"` and runtime/bridge evidence. Old Chrome
 `.web.png` files, if present locally, are never read by the corrected metrics.
-DOM text and native capture logs accompany each pair. Classification uses the
-worst theme/size; reviewed descriptions/overrides live in `review.json`.
+DOM text and native capture logs accompany each pair.
+Each pair also writes `.geometry.json` with live Electron root, row and trigger
+rectangles and computed padding, radius, border, shadow and typography, plus
+`.rune-tree.json` with the native element geometry. Custom service ports are reported
+from the configured environment rather than the default ports.
+Classification uses the worst theme/size; reviewed descriptions/overrides live in `review.json`.
 Observations are pinned to the reference host and a hash of the shared renderer,
 desktop main/preload, and native/backend source files; changed source
 automatically falls back to explicitly provisional metric classifications.
