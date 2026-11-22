@@ -490,11 +490,21 @@ pub fn area(s: &State, width: f32) -> El {
     }
     let workspace = row()
         .key("workspace-choice")
-        .h(30.0)
-        .px(0.0)
+        .h(28.0)
+        .px(8.0)
         .gap(6.0)
         .center_y()
-        .child(icon(&i::FOLDER, 14.0).color(t.c("text-secondary")))
+        .child(
+            icon(
+                if s.draft().worktree {
+                    &crate::icons::WORKTREE
+                } else {
+                    &i::FOLDER
+                },
+                14.0,
+            )
+            .color(t.c("text-secondary")),
+        )
         .child(label(
             t,
             if s.draft().worktree {
@@ -519,36 +529,40 @@ pub fn area(s: &State, width: f32) -> El {
         .key("workspace-bar")
         .h(30.0)
         .mt(6.0)
-        .px(14.0)
-        .gap(6.0)
+        .px(6.0)
+        .gap(2.0)
         .center_y()
         .child(workspace)
-        .child(el().w(4.0))
-        .child(icon(&i::BRANCH, 14.0).color(t.c("text-secondary")))
         .child(
-            label(
-                t,
-                s.draft()
-                    .branch
-                    .as_deref()
-                    .or_else(|| {
-                        project
-                            .and_then(|p| s.snapshot.branches.get(&p.canonical))
-                            .map(String::as_str)
-                    })
-                    .unwrap_or("Detached HEAD"),
-                12.5,
-                500.0,
-                "text-tertiary",
-            )
-            .role("button")
-            .label("Start from branch")
-            .focusable(true)
-            .on_press_tx(|s: &mut State, tx| {
-                if s.selected.is_none() && s.draft().worktree {
-                    menus::open(s, Menu::Branch, tx);
-                }
-            }),
+            row()
+                .h(28.0)
+                .px(8.0)
+                .gap(6.0)
+                .center_y()
+                .child(icon(&i::BRANCH, 14.0).color(t.c("text-secondary")))
+                .child(label(
+                    t,
+                    s.draft()
+                        .branch
+                        .as_deref()
+                        .or_else(|| {
+                            project
+                                .and_then(|p| s.snapshot.branches.get(&p.canonical))
+                                .map(String::as_str)
+                        })
+                        .unwrap_or("Detached HEAD"),
+                    12.5,
+                    500.0,
+                    "text-tertiary",
+                ))
+                .role("button")
+                .label("Start from branch")
+                .focusable(true)
+                .on_press_tx(|s: &mut State, tx| {
+                    if s.selected.is_none() && s.draft().worktree {
+                        menus::open(s, Menu::Branch, tx);
+                    }
+                }),
         );
     let mut area = col()
         .key("composer-area")

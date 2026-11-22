@@ -1,6 +1,7 @@
 use crate::{State, sidebar::label};
 use rune::{El, TextEdit, Tx, col, el, row};
 pub mod native;
+pub(crate) mod overlay;
 pub(crate) mod projects;
 pub(crate) mod search;
 pub(crate) mod thread;
@@ -59,14 +60,30 @@ fn button(s: &State, title: &str) -> El {
         .label(title)
         .focusable(true)
         .w_full()
-        .h(32.0)
+        .h(match s.menus.open {
+            Some(Menu::Project(_)) => 35.5,
+            Some(Menu::Brand) => 31.5,
+            _ => 32.0,
+        })
         .px(10.0)
         .center_y()
-        .radius(5.0)
+        .radius(if matches!(s.menus.open, Some(Menu::Thread(_))) {
+            4.0
+        } else {
+            5.0
+        })
         .hover(s.theme.c("hover"))
         .focus_fill(s.theme.c("hover"))
         .no_focus_ring()
         .child(label(&s.theme, title, 13.0, 400.0, "text"))
+}
+pub fn project_height(s: &State, id: &str) -> f32 {
+    let project = s.snapshot.projects.iter().find(|p| p.id == id);
+    let count = 3
+        + usize::from(project.is_some_and(|p| p.vcs.is_some()))
+        + usize::from(project.is_some())
+        + usize::from(project.is_some_and(|p| !s.prefs.closed_projects.contains(&p.canonical)));
+    10.0 + count as f32 * 35.5
 }
 pub fn open_search(s: &mut State, tx: &mut Tx) {
     if !search::connected(s) {
@@ -141,13 +158,19 @@ pub fn view(s: &State) -> Option<El> {
         menu,
         Menu::Thread(_) | Menu::Project(_) | Menu::App(_) | Menu::AppRun(_) | Menu::Brand
     );
-    let width = if compact { 180.0 } else { 520.0 };
+    let width = if matches!(menu, Menu::Project(_)) {
+        176.0
+    } else if compact {
+        180.0
+    } else {
+        520.0
+    };
     let mut panel = col()
         .w(width)
         .max_h(520.0)
         .padding(if compact { 4.0 } else { 16.0 })
         .gap(if compact { 0.0 } else { 8.0 })
-        .radius(if matches!(menu, Menu::Brand) {
+        .radius(if matches!(menu, Menu::Brand | Menu::Project(_)) {
             9.0
         } else if compact {
             8.0
@@ -155,7 +178,14 @@ pub fn view(s: &State) -> Option<El> {
             12.0
         })
         .fill(t.c("elevated"))
-        .border(1.0, t.c("border-heavy"))
+        .border(
+            1.0,
+            t.c(if matches!(menu, Menu::Project(_)) {
+                "border"
+            } else {
+                "border-heavy"
+            }),
+        )
         .border_layout();
     let title = match menu {
         Menu::Choice(_) => unreachable!(),
@@ -386,8 +416,23 @@ pub fn view(s: &State) -> Option<El> {
         });
         height
     } else {
-        292.0
+        if matches!(menu, Menu::Brand) {
+            136.0
+        } else if let Menu::Project(id) = menu {
+            project_height(s, id)
+        } else {
+            292.0
+        }
     };
+    let [x, y] = overlay::position(
+        [x, y, 0.0, 0.0],
+        [width, menu_height],
+        s.window_size,
+        rune::Side::Bottom,
+        rune::Align::Start,
+        0.0,
+        overlay::Collision::Shift,
+    );
     Some(
         el().key("navigation-overlay")
             .absolute(0.0, 0.0)
@@ -403,10 +448,7 @@ pub fn view(s: &State) -> Option<El> {
                     })
                     .on_press(|s: &mut State| s.menus.open = None),
             )
-            .child(t.shadow(panel, "shadow").absolute(
-                x.clamp(8.0, (s.window_size.0 - width - 8.0).max(8.0)),
-                y.clamp(8.0, (s.window_size.1 - menu_height - 8.0).max(8.0)),
-            )),
+            .child(overlay::raised(t, panel).absolute(x, y)),
     )
 }
 fn compact_key(s: &mut State, event: &rune::KeyEvent, tx: &mut Tx) -> bool {

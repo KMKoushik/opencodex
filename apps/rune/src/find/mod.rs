@@ -294,7 +294,7 @@ pub fn view(s: &State) -> El {
         .w_full()
         .pr(12.0)
         .justify_end()
-        .child(bar)
+        .child(crate::menus::overlay::raised(&s.theme, bar.border_layout()))
 }
 fn find_button(s: &State, icon: &'static rune::Icon, title: &str) -> El {
     crate::sidebar::icon_button_size(&s.theme, icon, title, 14.0).size(26.0, 26.0)

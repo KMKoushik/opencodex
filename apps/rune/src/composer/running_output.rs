@@ -356,5 +356,5 @@ pub fn view(s: &State) -> El {
         .size(s.window_size.0, s.window_size.1)
         .fill(t.c("scrim"))
         .center()
-        .child(t.shadow(dialog.modal(true, close), "shadow"))
+        .child(crate::menus::overlay::raised(t, dialog.modal(true, close)))
 }

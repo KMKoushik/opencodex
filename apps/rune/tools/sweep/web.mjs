@@ -122,7 +122,7 @@ export async function reach(page, state, c, extras) {
     ) {
       const button = page.getByRole('button', { name: 'Actions for atlas-api', exact: true });
       const box = await button.boundingBox();
-      point = `${box.x + box.width - 180},${box.y + box.height + 4}`;
+      point = `${box.x + box.width - 176},${box.y + box.height + 4}`;
       await button.click();
       if (state === 'project-edit-open') await menu('Edit project');
       if (state === 'project-copy-feedback') {
@@ -197,7 +197,7 @@ export async function reach(page, state, c, extras) {
     const box = await page
       .getByRole('button', { name: 'Thread actions', exact: true })
       .boundingBox();
-    point = `${box.x},${box.y + box.height + 4}`;
+    point = `${box.x + box.width - 180},${box.y + box.height + 4}`;
     await click('Thread actions');
   }
   if (state === 'session-details-open') await click('Session details');

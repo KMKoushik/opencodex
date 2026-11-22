@@ -9,9 +9,9 @@ use oc_gateway::{
 use rune::{El, GrowthSpec, ScrollSpec, TextStyle, col, el, icon, row, text};
 use std::{cell::Cell, collections::BTreeMap, rc::Rc, sync::Arc};
 pub(crate) mod comments;
+mod html;
 pub(crate) mod icons;
 mod markdown;
-mod html;
 pub(crate) use markdown::render as markdown_view;
 mod attachments;
 mod copy;
@@ -696,12 +696,21 @@ pub fn toolbar(s: &State) -> El {
         .gap(4.0)
         .center_y()
         .child(
-            icon_button(t, &icons::MORE, "Thread actions").on_press(|s: &mut State| {
-                if let Some(id) = &s.selected {
-                    s.menus.open = Some(crate::menus::Menu::Thread(id.clone()));
-                    s.menus.point = Some((s.window_size.0 - 216.0, 40.0));
-                }
-            }),
+            icon_button(t, &icons::MORE, "Thread actions")
+                .on_layout_tx(|s: &mut State, rect, tx| {
+                    s.pages.anchors.insert("Thread actions".into(), rect);
+                    tx.live_only();
+                })
+                .on_press(|s: &mut State| {
+                    if let Some(id) = &s.selected {
+                        s.menus.open = Some(crate::menus::Menu::Thread(id.clone()));
+                        s.menus.point = s
+                            .pages
+                            .anchors
+                            .get("Thread actions")
+                            .map(|r| (r[0] + r[2] - 180.0, r[1] + r[3] + 4.0));
+                    }
+                }),
         )
         .child(
             icon_button(t, &icons::INFO, "Session details")

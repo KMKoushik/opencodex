@@ -309,7 +309,11 @@ pub fn form(s: &State, register: bool) -> El {
                     Ok(Some(path))=>{s.pages.projects.directory=TextEdit::new(path.to_string_lossy());s.pages.projects.suggesting=false;submit(s,register);},Err(_)=>s.pages.projects.error=Some("The folder picker could not be opened. Enter the path instead.".into()),_=>{}
                 }))))
         .child(pages::primary_button(s,if s.pages.projects.busy{"Opening…"}else{"Open"}).h(36.0).disabled(disabled).dim(if disabled{0.5}else{1.0}).on_press(move|s:&mut State|submit(s,register)));
-    body = body.child(col().w_full().gap(8.0).child(controls).child(error(s)));
+    let mut controls = col().w_full().gap(8.0).child(controls);
+    if s.pages.projects.error.is_some() {
+        controls = controls.child(error(s));
+    }
+    body = body.child(controls);
     body
 }
 pub fn overlay(s: &State) -> Option<El> {
@@ -421,7 +425,7 @@ pub fn overlay(s: &State) -> Option<El> {
             );
         }
     }
-    Some(s.theme.shadow(list, "shadow").anchored_fit(
+    Some(crate::menus::overlay::raised(&s.theme, list).anchored_fit(
         "project-directory-field",
         rune::Side::Bottom,
         rune::Align::Start,

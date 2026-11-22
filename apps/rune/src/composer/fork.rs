@@ -194,7 +194,7 @@ pub fn view(s: &State) -> El {
         .size(s.window_size.0, s.window_size.1)
         .fill(t.c("scrim"))
         .center()
-        .child(t.shadow(panel, "shadow").modal(true, |s: &mut State| {
+        .child(crate::menus::overlay::raised(t, panel).modal(true, |s: &mut State| {
             if s.composer.fork.as_ref().is_none_or(|p| !p.sending) {
                 s.composer.menu = None;
                 s.composer.fork = None;

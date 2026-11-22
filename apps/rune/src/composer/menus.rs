@@ -352,6 +352,9 @@ pub fn filter(s: &mut State) {
         .iter()
         .position(|c| !c.heading)
         .unwrap_or(0);
+    if menu == Menu::Workspace && s.draft().worktree {
+        s.composer.cursor = 1;
+    }
 }
 fn context(value: Option<u64>) -> String {
     match value {
@@ -520,6 +523,8 @@ pub fn view(s: &State) -> Option<El> {
         (s.window_size.0 - sidebar).min(768.0) - 48.0
     } else if menu == Menu::Models {
         400.0
+    } else if menu == Menu::Workspace {
+        300.0f32.min(s.window_size.0 - 48.0)
     } else {
         360.0
     };
@@ -527,19 +532,28 @@ pub fn view(s: &State) -> Option<El> {
     let anchor = match menu {
         Menu::Models => "model-picker",
         Menu::Thinking => "thinking-picker",
-        Menu::Workspace | Menu::Branch => "workspace-bar",
+        Menu::Workspace | Menu::Branch => "workspace-choice",
         _ => "composer",
     };
-    let mut panel = col()
-        .key("composer-menu")
-        .w(width)
-        .padding(if menu == Menu::Models { 0.0 } else { 6.0 })
-        .gap(if menu == Menu::Models { 0.0 } else { 4.0 })
-        .radius(12.0)
-        .fill(t.c("elevated"))
-        .border(1.0, t.c("border-heavy"))
-        .role("listbox")
-        .label("Composer choices");
+    let mut panel = crate::menus::overlay::surface(
+        t,
+        col()
+            .key("composer-menu")
+            .w(width)
+            .padding(if menu == Menu::Models {
+                0.0
+            } else if menu == Menu::Workspace {
+                5.0
+            } else {
+                6.0
+            })
+            .gap(0.0)
+            .role("listbox")
+            .label("Composer choices"),
+        12.0,
+        "elevated",
+        "border-heavy",
+    );
     if searchable {
         panel = panel.child(
             row()
@@ -548,7 +562,14 @@ pub fn view(s: &State) -> Option<El> {
                 .px(14.0)
                 .gap(10.0)
                 .center_y()
-                .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
+                .border_sides(
+                    [0.0, 0.0, 1.0, 0.0],
+                    t.c(if s.composer.search.focused {
+                        "accent"
+                    } else {
+                        "border"
+                    }),
+                )
                 .child(rune::icon(&crate::icons::SEARCH, 16.0).color(t.c("text-tertiary")))
                 .child(
                     text_input(&s.composer.search, TextStyle::new(13.0, 400.0))
@@ -573,7 +594,9 @@ pub fn view(s: &State) -> Option<El> {
     }
     let n = s.composer.choices.len();
     let row_height = if menu == Menu::Models || inline {
-        36.0
+        if inline { 37.0 } else { 36.0 }
+    } else if menu == Menu::Workspace {
+        50.75
     } else {
         44.0
     };
@@ -581,7 +604,13 @@ pub fn view(s: &State) -> Option<El> {
         col()
             .key("composer-options")
             .w_full()
-            .h((n as f32 * row_height).min(if menu == Menu::Models {
+            .h((n as f32
+                * if menu == Menu::Models {
+                    44.0
+                } else {
+                    row_height
+                })
+            .min(if menu == Menu::Models {
                 342.0
             } else if inline {
                 (s.window_size.1 * 0.4).min(320.0) - 14.0
@@ -607,10 +636,16 @@ pub fn view(s: &State) -> Option<El> {
                                 .key(format!("composer-choice-{i}"))
                                 .h(row_height)
                                 .w_full()
-                                .px(10.0)
-                                .gap(8.0)
+                                .px(if menu == Menu::Models {
+                                    8.0
+                                } else if menu == Menu::Workspace {
+                                    5.0
+                                } else {
+                                    10.0
+                                })
+                                .gap(if inline { 10.0 } else { 8.0 })
                                 .center_y()
-                                .radius(7.0);
+                                .radius(6.0);
                             if c.heading {
                                 if let Some(provider) = c.data["provider"].as_str() {
                                     r = r.child(super::providers::view(s, provider));
@@ -631,8 +666,11 @@ pub fn view(s: &State) -> Option<El> {
                                 let selected = s.selected_model().is_some_and(|m| {
                                     c.data["id"] == m.id && c.data["providerID"] == m.provider_id
                                 });
-                                if selected || s.composer.cursor == i {
+                                if selected {
                                     r = r.fill(t.c("selected"));
+                                }
+                                if s.composer.cursor == i {
+                                    r = r.fill(t.c("hover"));
                                 }
                                 if c.data["frequent"] == true {
                                     r = r.child(super::providers::view(
@@ -656,20 +694,37 @@ pub fn view(s: &State) -> Option<El> {
                                     .on_press_tx(move |s: &mut State, tx| choose(s, i, tx));
                             }
                             if s.composer.cursor == i {
-                                r = r.fill(t.c("selected"));
+                                r = r.fill(t.c(if menu == Menu::Workspace {
+                                    "hover"
+                                } else {
+                                    "selected"
+                                }));
                             }
                             if inline {
                                 if menu == Menu::Mention {
                                     let glyph = match c.data["type"].as_str() {
                                         Some("skill") => &crate::chat::icons::SKILL,
-                                        Some("chat") => &crate::chat::icons::CHAT,
+                                        Some("chat") => &crate::icons::CHAT,
                                         _ => &crate::chat::icons::READ,
                                     };
                                     r = r
-                                        .child(rune::icon(glyph, 14.0).color(t.c("text-tertiary")));
+                                        .child(rune::icon(glyph, 16.0).color(t.c("text-tertiary")));
                                 }
                                 return r
-                                    .child(label(t, &c.label, 13.0, 400.0, "text").truncate())
+                                    .child(
+                                        label(
+                                            t,
+                                            &c.label,
+                                            14.0,
+                                            400.0,
+                                            if s.composer.cursor == i {
+                                                "text"
+                                            } else {
+                                                "text-secondary"
+                                            },
+                                        )
+                                        .truncate(),
+                                    )
                                     .child(
                                         label(t, &c.detail, 12.0, 400.0, "text-tertiary")
                                             .grow(1.0)
@@ -681,20 +736,60 @@ pub fn view(s: &State) -> Option<El> {
                                     .label(&c.label)
                                     .on_press_tx(move |s: &mut State, tx| choose(s, i, tx));
                             }
-                            r.child(
+                            if menu == Menu::Workspace {
+                                r = r.child(
+                                    rune::icon(
+                                        if c.id == "worktree" {
+                                            &crate::icons::WORKTREE
+                                        } else {
+                                            &crate::icons::FOLDER
+                                        },
+                                        16.0,
+                                    )
+                                    .color(t.c("text-secondary")),
+                                );
+                            }
+                            r = r.child(
                                 col()
                                     .grow(1.0)
                                     .min_w(0.0)
-                                    .child(label(t, &c.label, 13.0, 500.0, "text").truncate())
+                                    .gap(2.0)
                                     .child(
-                                        label(t, &c.detail, 11.0, 400.0, "text-tertiary")
-                                            .truncate(),
+                                        label(
+                                            t,
+                                            &c.label,
+                                            13.0,
+                                            400.0,
+                                            if menu == Menu::Workspace {
+                                                "text-secondary"
+                                            } else {
+                                                "text"
+                                            },
+                                        )
+                                        .truncate(),
+                                    )
+                                    .child(
+                                        label(
+                                            t,
+                                            &c.detail,
+                                            if menu == Menu::Workspace { 11.5 } else { 11.0 },
+                                            400.0,
+                                            "text-tertiary",
+                                        )
+                                        .truncate(),
                                     ),
-                            )
-                            .hover(t.c("hover"))
-                            .role("option")
-                            .label(&c.label)
-                            .on_press_tx(move |s: &mut State, tx| choose(s, i, tx))
+                            );
+                            if menu == Menu::Workspace && (c.id == "worktree") == s.draft().worktree
+                            {
+                                r = r.child(
+                                    rune::icon(&crate::icons::TICK, 14.0)
+                                        .color(t.c("text-secondary")),
+                                );
+                            }
+                            r.hover(t.c("hover"))
+                                .role("option")
+                                .label(&c.label)
+                                .on_press_tx(move |s: &mut State, tx| choose(s, i, tx))
                         },
                     ),
             ),
@@ -704,18 +799,24 @@ pub fn view(s: &State) -> Option<El> {
             label(
                 t,
                 "↑↓ Navigate    ↵ Select    esc Close",
-                12.0,
+                11.0,
                 400.0,
                 "text-tertiary",
             )
             .h(30.0)
+            .border_sides([1.0, 0.0, 0.0, 0.0], t.c("border"))
             .px(14.0)
             .py(6.0),
         );
     }
-    let panel = t
-        .shadow(panel, "shadow")
-        .anchored(anchor, Side::Top, Align::Start, 8.0);
+    let panel = crate::menus::overlay::anchored(
+        t,
+        panel,
+        anchor,
+        Side::Top,
+        Align::Start,
+        if menu == Menu::Workspace { 4.0 } else { 8.0 },
+    );
     Some(if matches!(menu, Menu::Slash | Menu::Mention) {
         panel
     } else {

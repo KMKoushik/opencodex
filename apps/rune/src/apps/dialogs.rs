@@ -52,7 +52,7 @@ pub fn view(s: &State) -> Option<El> {
                     .fill(s.theme.c("scrim"))
                     .on_press(close_dialog),
             )
-            .child(s.theme.shadow(panel, "shadow")),
+            .child(crate::menus::overlay::raised(&s.theme, panel)),
     )
 }
 fn error(s: &State, body: El) -> El {

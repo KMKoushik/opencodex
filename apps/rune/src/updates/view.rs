@@ -110,6 +110,6 @@ pub fn dialog(s: &State) -> Option<El> {
             .center()
             .fill(s.theme.c("scrim"))
             .modal(true, close)
-            .child(s.theme.shadow(panel, "shadow")),
+            .child(crate::menus::overlay::raised(&s.theme, panel)),
     )
 }

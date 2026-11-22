@@ -117,6 +117,7 @@ pub fn view(s: &State, id: &str) -> El {
                         "Upload icon"
                     },
                 )
+                .self_start()
                 .disabled(busy)
                 .on_press_tx(|_: &mut State, tx| {
                     tx.open_file(

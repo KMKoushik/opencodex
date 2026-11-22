@@ -92,16 +92,18 @@ pub fn dialog(s: &State) -> El {
                 .placeholder("Search titles and messages…", t.c("text-tertiary"))
                 .color(t.c("text")),
         );
-    let panel = col()
-        .w(440.0f32.min(s.window_size.0 - 32.0))
-        .padding(20.0)
-        .radius(14.0)
-        .fill(t.c("elevated"))
-        .border(1.0, t.c("border-heavy"))
-        .border_layout()
-        .child(header)
-        .child(input)
-        .child(view(s, col().w_full()));
+    let panel = super::overlay::surface(
+        t,
+        col()
+            .w(440.0f32.min(s.window_size.0 - 32.0))
+            .padding(20.0)
+            .child(header)
+            .child(input)
+            .child(view(s, col().w_full())),
+        14.0,
+        "elevated",
+        "border-heavy",
+    );
     rune::el()
         .key("thread-search-dialog")
         .absolute(0.0, 0.0)
@@ -115,7 +117,7 @@ pub fn dialog(s: &State) -> El {
                 .fill(t.c("scrim"))
                 .on_press(close),
         )
-        .child(t.shadow(panel, "shadow"))
+        .child(super::overlay::raised(t, panel))
 }
 
 fn changed(s: &mut State) {

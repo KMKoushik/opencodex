@@ -335,7 +335,7 @@ pub fn filter(s: &State) -> El {
                 .h_full()
                 .on_press(|s: &mut State| s.menus.focus.filter_open = false),
         )
-        .child(s.theme.shadow(panel, "shadow").absolute(
+        .child(crate::menus::overlay::raised(&s.theme, panel).absolute(
             (anchor[0] + anchor[2] - 220.0).max(8.0),
             anchor[1] + anchor[3] + 4.0,
         ))

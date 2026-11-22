@@ -343,7 +343,12 @@ pub fn view(s: &State, mut body: El) -> El {
                     })
                     .on_press_tx(move |s: &mut State, tx| {
                         if let Some(r) = s.pages.anchors.get(&key) {
-                            s.menus.point = Some((r[0] + r[2] - 180.0, r[1] + r[3] + 4.0));
+                            let y = if s.window_size.1 - r[1] - r[3] < 200.0 && r[1] > 200.0 {
+                                r[1] - crate::menus::project_height(s, &actions) - 4.0
+                            } else {
+                                r[1] + r[3] + 4.0
+                            };
+                            s.menus.point = Some((r[0] + r[2] - 176.0, y));
                         }
                         s.menus.open = Some(crate::menus::Menu::Project(actions.clone()));
                         tx.focus_when_shown("menu-Open project", false);
@@ -460,7 +465,7 @@ pub fn dialog(s: &State) -> Option<El> {
                     .fill(s.theme.c("scrim"))
                     .on_press(|s: &mut State| close(s)),
             )
-            .child(s.theme.shadow(panel, "shadow")),
+            .child(crate::menus::overlay::raised(&s.theme, panel)),
     )
 }
 fn project_name<'a>(s: &'a State, id: &str) -> &'a str {

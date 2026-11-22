@@ -325,8 +325,7 @@ pub fn select_overlay(s: &State, menu: &Select) -> El {
                 .on_press(|s: &mut State| s.menus.open = None),
         )
         .child(
-            s.theme
-                .shadow(panel, "shadow")
+            crate::menus::overlay::raised(&s.theme, panel)
                 .absolute(rect[0].min(s.window_size.0 - w - 8.0), y),
         )
 }

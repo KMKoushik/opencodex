@@ -280,9 +280,14 @@ pub fn view(s: &State) -> El {
                 .mt(4.0),
             );
         }
-        let panel =
-            t.shadow(panel, "shadow")
-                .anchored("context-indicator", Side::Top, Align::End, 8.0);
+        let panel = crate::menus::overlay::anchored(
+            t,
+            panel,
+            "context-indicator",
+            Side::Top,
+            Align::End,
+            8.0,
+        );
         wrapper = wrapper.child(panel);
     }
     wrapper

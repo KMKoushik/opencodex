@@ -1,3 +1,4 @@
+/* global document, getComputedStyle */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { parseArgs } from 'node:util';
@@ -260,10 +261,57 @@ try {
           row.desktop = await electron.capture(stem + '.electron.png');
           row.versions = { electron: electron.versions.electron, chrome: electron.versions.chrome };
           writeFileSync(stem + '.dom.txt', await page.locator('body').innerText());
+          writeFileSync(
+            stem + '.geometry.json',
+            JSON.stringify(
+              await page.evaluate(() => {
+                const selectors =
+                  '[role="menu"],[role="listbox"],dialog[open],:popover-open,.slash-menu,.model-picker,.find-bar,.session-panel,.select-menu,.project-form';
+                const measure = (e) => {
+                  const r = e.getBoundingClientRect(),
+                    c = getComputedStyle(e);
+                  return {
+                    tag: e.tagName,
+                    class: e.className,
+                    text: e.textContent?.slice(0, 160),
+                    rect: [r.x, r.y, r.width, r.height],
+                    padding: c.padding,
+                    radius: c.borderRadius,
+                    border: c.border,
+                    shadow: c.boxShadow,
+                    lineHeight: c.lineHeight,
+                    fontSize: c.fontSize,
+                    position: c.position,
+                  };
+                };
+                return {
+                  roots: [...document.querySelectorAll(selectors)]
+                    .filter((e) => e.getBoundingClientRect().height)
+                    .map((e) => ({
+                      ...measure(e),
+                      rows: [
+                        ...e.querySelectorAll(
+                          'button,input,summary,[role="option"],[role="menuitem"],[role="treeitem"],li,.session-panel-row,.session-details-content > *',
+                        ),
+                      ].map(measure),
+                    })),
+                  triggers: [
+                    ...document.querySelectorAll(
+                      '[aria-expanded="true"],[aria-haspopup],[popovertarget],.composer',
+                    ),
+                  ].map(measure),
+                };
+              }),
+              null,
+              2,
+            ),
+          );
           const args = [
             ...c.flags,
             '--screenshot',
             stem + '.rune.png',
+            '--tree',
+            stem + '.rune-tree.json',
             '--size',
             size,
             '--scale',

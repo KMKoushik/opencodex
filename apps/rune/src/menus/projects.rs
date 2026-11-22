@@ -298,7 +298,7 @@ pub fn view(s: &State) -> El {
         .label("Projects")
         .w_full()
         .min_h(0.0)
-        .max_h((max_h - 104.0).max(20.0))
+        .max_h((max_h - 108.0).max(20.0))
         .scroll(ScrollSpec {
             stick_bottom: false,
         });
@@ -407,10 +407,11 @@ pub fn view(s: &State) -> El {
         })
         .w(width)
         .max_h(max_h)
-        .padding(4.0)
-        .radius(9.0)
+        .padding(5.0)
+        .radius(12.0)
         .fill(s.theme.c("elevated"))
         .border(1.0, s.theme.c("border-heavy"))
+        .border_layout()
         .child(search)
         .child(options);
     if rows.is_empty() {
@@ -475,7 +476,7 @@ pub fn view(s: &State) -> El {
     );
     // The top edge is anchored for bottom placement; top placement uses actual content height.
     let content_h = (54.0 * rows.len() as f32
-        + 104.0
+        + 108.0
         + if rows.is_empty() { 38.0 } else { 0.0 }
         + if s.menus.projects.error.is_some() {
             50.0
@@ -483,13 +484,15 @@ pub fn view(s: &State) -> El {
             0.0
         })
     .min(max_h);
-    let y = if above {
-        anchor[1] - content_h - 4.0
-    } else {
-        anchor[1] + anchor[3] + 4.0
-    };
-    let x = (anchor[0] + anchor[2] / 2.0 - width / 2.0)
-        .clamp(8.0, (s.window_size.0 - width - 8.0).max(8.0));
+    let [x, y] = super::overlay::position(
+        anchor,
+        [width, content_h],
+        s.window_size,
+        rune::Side::Bottom,
+        rune::Align::Center,
+        4.0,
+        super::overlay::Collision::MostRoom,
+    );
     el().absolute(0.0, 0.0)
         .size(s.window_size.0, s.window_size.1)
         .on_key(|s: &mut State, event, tx| {
@@ -505,5 +508,5 @@ pub fn view(s: &State) -> El {
                 .size(s.window_size.0, s.window_size.1)
                 .on_press_tx(close),
         )
-        .child(s.theme.shadow(panel, "shadow").absolute(x, y))
+        .child(super::overlay::raised(&s.theme, panel).absolute(x, y))
 }
