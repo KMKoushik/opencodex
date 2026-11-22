@@ -92,6 +92,14 @@ impl Gateway {
             .await
             .map_err(|e| e.to_string())
     }
+    /// Safe writes use the gateway's content-version precondition, never a local write.
+    pub async fn put<T: DeserializeOwned>(&self, path: &str, body: Value) -> Result<T, String> {
+        self.response(path, &[], Method::PUT, Some(body), false)
+            .await?
+            .json()
+            .await
+            .map_err(|e| e.to_string())
+    }
     pub async fn connection(&self) -> Result<Connection, String> {
         self.get("connection", &[]).await
     }
