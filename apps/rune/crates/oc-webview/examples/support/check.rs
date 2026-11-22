@@ -37,6 +37,8 @@ fn layout(s: &Layout, _: &mut Cx<Layout>) -> El {
 enum Stage {
     Ready,
     Initial(EvalSlot),
+    Isolated(EvalSlot),
+    PageWorld(EvalSlot),
     Snapshot(mpsc::Receiver<Result<PathBuf, String>>),
     Move {
         step: u32,
@@ -137,6 +139,33 @@ impl Check {
                     return Err("title KVO observation failed".into());
                 }
                 println!("PASS: title/loading observation; initial viewport and backing scale");
+                let slot = Rc::new(RefCell::new(None));
+                let out = slot.clone();
+                web.evaluate_isolated(
+                    "globalThis.__ocPrivateCheck = 'private'; return await Promise.resolve('isolated-ready');",
+                    move |result| *out.borrow_mut() = Some(result),
+                );
+                self.stage = Stage::Isolated(slot);
+            }
+            Stage::Isolated(slot) => {
+                let Some(result) = slot.borrow_mut().take() else {
+                    return Ok(());
+                };
+                if result? != "isolated-ready" {
+                    return Err("isolated async evaluation did not await its result".into());
+                }
+                self.stage = Stage::PageWorld(evaluate(web, "typeof globalThis.__ocPrivateCheck"));
+            }
+            Stage::PageWorld(slot) => {
+                let Some(result) = slot.borrow_mut().take() else {
+                    return Ok(());
+                };
+                if result? != "undefined" {
+                    return Err("annotation globals leaked into the page world".into());
+                }
+                println!(
+                    "PASS: annotation evaluation awaits promises without exposing globals to page scripts"
+                );
                 self.stage = Stage::Snapshot(snapshot(web, self.output.join("panel-before.png")));
             }
             Stage::Snapshot(receiver) => {

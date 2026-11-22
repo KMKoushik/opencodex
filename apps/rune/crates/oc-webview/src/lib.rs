@@ -11,6 +11,13 @@ use fallback as platform;
 use macos as platform;
 
 pub type Rect = [f64; 4];
+/// Localized month/day and short time, matching the canvas list's Intl formatter.
+pub fn updated_label(milliseconds: f64) -> String {
+    platform::updated_label(milliseconds)
+}
+pub fn short_time(milliseconds: f64) -> String {
+    platform::short_time(milliseconds)
+}
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PageState {
@@ -55,6 +62,8 @@ pub enum Decision {
 
 #[derive(Clone)]
 pub struct Navigation {
+    /// Explicitly granted canonical local HTML directories, shared with the owning surface.
+    pub files: Rc<std::cell::RefCell<Vec<String>>>,
     /// Empty allows HTTP(S); otherwise exact normalized origins (including ports).
     pub origins: Vec<String>,
     pub external_links: bool,
@@ -64,6 +73,7 @@ pub struct Navigation {
 impl Default for Navigation {
     fn default() -> Self {
         Self {
+            files: Default::default(),
             origins: Vec::new(),
             external_links: false,
             hook: None,
@@ -79,6 +89,18 @@ impl Navigation {
         let Ok(url) = url::Url::parse(value) else {
             return Decision::Block;
         };
+        if url.scheme() == "file" && url.host_str().is_none_or(|h| h == "localhost") {
+            return if self
+                .files
+                .borrow()
+                .iter()
+                .any(|root| url.as_str().starts_with(root))
+            {
+                Decision::Allow
+            } else {
+                Decision::Block
+            };
+        }
         if !matches!(url.scheme(), "http" | "https") {
             return Decision::Block;
         }
@@ -102,6 +124,8 @@ impl Navigation {
 
 pub struct Options {
     pub navigation: Navigation,
+    /// Browser tabs share WebKit's persistent application profile. Sandboxed hosts don't.
+    pub persistent: bool,
     /// Enable only for trusted shell pages. Browser guests get no injected host channel.
     pub bridge: bool,
     pub background: [f64; 4],
@@ -113,6 +137,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             navigation: Navigation::default(),
+            persistent: false,
             bridge: false,
             background: [0.08, 0.08, 0.09, 1.0],
             wake: Rc::new(|| {}),
@@ -156,6 +181,10 @@ impl WebView {
     pub fn load_html(&self, html: &str, base_url: Option<&str>) -> Result<(), String> {
         self.inner.load_html(html, base_url)
     }
+    /// Paths must be canonicalized and checked off-thread by the host before granting.
+    pub fn load_local_file(&self, url: &str, directory_url: &str) -> Result<(), String> {
+        self.inner.load_local_file(url, directory_url)
+    }
     pub fn back(&self) {
         self.inner.command("goBack");
     }
@@ -186,6 +215,14 @@ impl WebView {
     pub fn evaluate(&self, js: &str, callback: impl FnOnce(Result<String, String>) + 'static) {
         self.inner.evaluate(js, Box::new(callback));
     }
+    /// Async body in a private content world, sharing DOM but no page JavaScript globals.
+    pub fn evaluate_isolated(
+        &self,
+        js: &str,
+        callback: impl FnOnce(Result<String, String>) + 'static,
+    ) {
+        self.inner.evaluate_isolated(js, Box::new(callback));
+    }
     /// Delivers to the sandbox iframe of the existing gateway frame shell (not a replacement
     /// for that shell or its CSP). A top-level canvas-like page receives a normal MessageEvent.
     pub fn post_message(&self, value: &serde_json::Value) {
@@ -196,7 +233,14 @@ impl WebView {
     }
     /// PNG encoding occurs in WebKit's asynchronous snapshot completion, never per frame.
     pub fn snapshot(&self, callback: impl FnOnce(Result<Vec<u8>, String>) + 'static) {
-        self.inner.snapshot(Box::new(callback));
+        self.inner.snapshot(None, Box::new(callback));
+    }
+    pub fn snapshot_region(
+        &self,
+        rect: Rect,
+        callback: impl FnOnce(Result<Vec<u8>, String>) + 'static,
+    ) {
+        self.inner.snapshot(Some(rect), Box::new(callback));
     }
     pub fn native_frame(&self) -> Option<Rect> {
         self.inner.native_frame()
