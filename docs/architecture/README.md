@@ -200,3 +200,15 @@ Files and skills use OpenCode's native mentions. A file becomes a `file://` atta
 # Sent annotations
 
 Review comments still reach the model as ordinary prompt text. Chat and page selections are numbered "Annotation N" and code comments "Comment N", so the agent can cite them. Like Codex, the sent message shows them as a compact chip, such as "1 annotation, 2 comments", with the user's own text in the bubble. The chip opens a numbered list with each comment's source, selected text, and comment. The UI sends the character ranges of the user's text, each quote, and each comment in that same prompt text. The gateway stores them in OpenCode's native message `metadata` under `opencodexAnnotations`, so the text is never duplicated. Both the contract and the renderer reject ranges that don't fit the text, so a mismatched message falls back to plain text. Native commands take no metadata, so expanded slash commands render as plain text. Undo still restores the original sent text.
+
+# Rune packaged lifecycle
+
+`apps/rune/src/sidecar.rs` owns the compiled gateway child when `OPENCODEX_GATEWAY` is absent.
+After Rune's first frame, a worker resolves the login-shell environment (five-second bound),
+launches `Contents/Resources/opencodex-gateway --port 0 --parent-stdin`, parses its readiness
+record, and connects through the existing gateway client. Development searches executable
+ancestors for `packages/gateway/dist/opencodex-gateway`. The UI retains the child's stdin;
+closing/crashing the native host closes it, and the gateway shuts down its own resources, never
+the shared OpenCode service. Explicit gateway URLs remain externally owned.
+Gateway stderr rotates between two 1 MiB files in the Rune presentation-data directory.
+No OpenCode snapshots or backend state are copied into that directory.

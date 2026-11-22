@@ -146,6 +146,7 @@ pub fn area(s: &State, width: f32) -> El {
         .on_edit(|s: &mut State| &mut s.draft_mut().edit)
         .on_input_change(menus::changed)
         .on_input_key(|s: &mut State, ev, tx| {
+            crate::bench::input();
             if menus::keys(s, ev, tx) {
                 return true;
             }

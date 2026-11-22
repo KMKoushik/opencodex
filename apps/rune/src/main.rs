@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 mod apps;
 mod assets;
+mod bench;
 mod chat;
 mod composer;
 mod docks;
@@ -13,6 +14,7 @@ mod profile;
 mod settings;
 mod shortcuts;
 mod sidebar;
+mod sidecar;
 mod tasks;
 mod theme;
 
@@ -43,6 +45,7 @@ struct State {
     theme: Theme,
     snapshot: Arc<Snapshot>,
     worker: Option<Worker>,
+    sidecar: Option<sidecar::Sidecar>,
     profile: Option<Profile>,
     prefs: Preferences,
     assets: Option<Assets>,
@@ -75,6 +78,7 @@ impl State {
             theme: Theme::new(options.dark, &options.preset),
             snapshot: Arc::default(),
             worker: None,
+            sidecar: None,
             profile: None,
             prefs: Preferences {
                 project: std::env::var("OPENCODEX_BENCH_PROJECT").ok(),
@@ -374,11 +378,9 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
             if let Some(info) = &s.chat.data.info {
                 s.prefs.project = Some(info.location.directory.clone());
             }
-            s.chat.media.request(
-                s.chat.data.clone(),
-                OPTIONS.get().unwrap().gateway.as_deref(),
-                s.waker.clone(),
-            );
+            s.chat
+                .media
+                .request(s.chat.data.clone(), sidecar::url(), s.waker.clone());
             changed = true;
             chat_updated = true;
             s.chat_settled = false;
@@ -453,6 +455,9 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
         sidebar_changed = true;
     }
     if let Some(snapshot) = s.worker.as_ref().and_then(Worker::take) {
+        if snapshot.live && !s.snapshot.live {
+            bench::mark("sidebar_loaded");
+        }
         if std::env::var("OPENCODEX_FRAME_LOG").as_deref() == Ok("1") {
             eprintln!(
                 "OPENCODEX_SNAPSHOT {} {} {} {} {:?}",
@@ -507,6 +512,7 @@ fn snapshot_digest(snapshot: &Snapshot) -> u64 {
     digest.finish()
 }
 fn main() {
+    bench::init();
     rune::prewarm_gpu();
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     for arg in &mut args {
@@ -622,6 +628,7 @@ fn main() {
     let settle_handle = handle.clone();
     let mut reply_marked = false;
     let mut reply_after = f64::MAX;
+    let mut frames = bench::Frames::default();
     app.init(|| {
         let mut s = State::new();
         if OPTIONS.get().unwrap().headless {
@@ -690,6 +697,9 @@ fn main() {
         s
     })
     .on_ready(move |_| {
+        if OPTIONS.get().unwrap().gateway.is_none() {
+            sidecar::start(handle.clone());
+        }
         handle.update(|s, tx| {
             if s.worker.is_some() {
                 return;
@@ -713,18 +723,18 @@ fn main() {
                     }
                     Err(e) => s.error = Some(e),
                 },
-                None => s.error = Some("Set OPENCODEX_GATEWAY to your gateway URL".into()),
+                None => {}
             }
-            // M5: spawn the bundled gateway on a free loopback port here, retain its child,
-            // and stop only that child on quit. Never discover/start/stop OpenCode in Rust.
         });
     })
     .on_frame_encoded(move |frame| {
+        frames.encoded(frame);
         if frame_log {
             eprintln!("OPENCODEX_FRAME {:?} {}", frame.outcome(), unix_ms());
         }
     })
     .on_frame_drawn(move |rt| {
+        bench::drawn();
         let elements = if bench { rt.elements() } else { Vec::new() };
         if bench {
             if let Some(id) = &rt.state.selected {
@@ -739,8 +749,8 @@ fn main() {
                 if mounted && session_marked.as_ref() != Some(id) {
                     reply_after = unix_ms() as f64;
                     reply_marked = false;
-                    eprintln!("OPENCODEX_BENCH session_first_row {}", unix_ms());
-                    eprintln!("OPENCODEX_BENCH session_loaded {}", unix_ms());
+                    bench::mark("session_first_row");
+                    bench::mark("session_loaded");
                     session_marked = Some(id.clone());
                 }
                 let position = rt.state.chat.position.get();
@@ -769,13 +779,13 @@ fn main() {
                     && rt.state.chat_settled
                     && settled_marked.as_ref() != Some(id)
                 {
-                    eprintln!("OPENCODEX_BENCH session_settled {}", unix_ms());
+                    bench::mark("session_settled");
                     settled_marked = Some(id.clone());
                 }
                 if !reply_marked
                     && chat::rendered_reply(&elements, &rt.state.chat.data, reply_after)
                 {
-                    eprintln!("OPENCODEX_BENCH reply_rendered {}", unix_ms());
+                    bench::mark("reply_rendered");
                     reply_marked = true;
                 }
             }
@@ -794,7 +804,7 @@ fn main() {
                 .iter()
                 .any(|e| e.key.as_deref().is_some_and(|k| k.starts_with("thread-")))
         {
-            eprintln!("OPENCODEX_BENCH first_content {}", unix_ms());
+            bench::mark("first_content");
             marked = true;
         }
     })
