@@ -56,6 +56,8 @@ impl Worker {
                     if first { wake(); }
                 };
                 let run = async {
+                    // A supplied client's idle HTTP connections may belong to another runtime.
+                    let gateway = gateway.isolated_pool()?;
                     let id = match id { Some(id) => id, None => gateway.create_terminal(&directory).await?.id };
                     pump(&gateway, &directory, &id, size, &mut engine, rx, &queued, &publish).await
                 };
