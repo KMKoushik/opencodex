@@ -1,7 +1,9 @@
 //! Workspace presentation. All project data and mutations cross the existing gateway.
 mod details;
 mod documents;
+mod links;
 pub use details::view as details_view;
+pub use links::file_target;
 mod sessions;
 #[cfg(test)]
 mod tests;
@@ -31,8 +33,8 @@ impl Panel {
         Self::Subagents,
         Self::Side,
         Self::Canvas,
-        Self::Browser,
         Self::Terminal,
+        Self::Browser,
     ];
     pub fn id(self) -> &'static str {
         match self {
@@ -67,6 +69,7 @@ impl Panel {
 pub struct Workbench {
     pub open: bool,
     pub expanded: bool,
+    pub tree_visible: bool,
     pub panel: Panel,
     pub worker: Option<Worker>,
     epoch: u64,
@@ -105,6 +108,7 @@ impl Default for Workbench {
         Self {
             open: false,
             expanded: false,
+            tree_visible: true,
             panel: Panel::Files,
             worker: None,
             epoch: 0,
@@ -348,8 +352,9 @@ pub fn poll(s: &mut State, clock: f64, _tx: &mut rune::Tx) -> bool {
                 .and_then(|i| s.workbench.docs.get(i))
                 .filter(|d| !d.dirty())
             {
-                let (path, is_diff) = (doc.path.clone(), doc.is_diff);
-                s.open_workspace_file(path, is_diff);
+                let (directory, path, is_diff) =
+                    (doc.directory.clone(), doc.path.clone(), doc.is_diff);
+                s.open_workspace_target(directory, path, is_diff);
             }
         }
     }
@@ -371,9 +376,29 @@ pub fn poll(s: &mut State, clock: f64, _tx: &mut rune::Tx) -> bool {
         .and_then(oc_gateway::Worker::take_messages)
     {
         if s.workbench.reader.as_deref() == Some(&data.session_id) {
+            s.workbench.reader_chat.media.request(
+                data.clone(),
+                crate::sidecar::url(),
+                s.waker.clone(),
+            );
             s.workbench.reader_chat.accept(data);
             changed = true;
         }
+    }
+    if s.workbench.reader_chat.media.take() {
+        s.workbench.reader_chat.disclosure_revision += 1;
+        changed = true;
+    }
+    if s.workbench.open && s.workbench.reader.is_some() && s.workbench.reader_chat.data.running {
+        let chat = &mut s.workbench.reader_chat;
+        if chat.tick_due.is_none_or(|due| clock >= due) {
+            chat.tick_due = Some(clock + 1.0);
+            chat.now_ms = crate::unix_ms() as f64;
+            _tx.wake_after(std::time::Duration::from_secs(1));
+            changed = true;
+        }
+    } else {
+        s.workbench.reader_chat.tick_due = None;
     }
     // Drain unrelated sidebar snapshots without rebuilding or refetching the workbench.
     if let Some(worker) = &s.workbench.reader_worker {
@@ -389,12 +414,13 @@ pub fn poll(s: &mut State, clock: f64, _tx: &mut rune::Tx) -> bool {
             Err(e) => {
                 s.workbench.error = Some(e);
                 if let Some(path) = reply.tag.strip_prefix("save:") {
-                    if let Some(doc) = s
-                        .workbench
-                        .docs
-                        .iter_mut()
-                        .find(|d| d.path == path && !d.is_diff)
-                    {
+                    let target = serde_json::from_str::<[String; 2]>(path).ok();
+                    if let Some(doc) = s.workbench.docs.iter_mut().find(|d| {
+                        !d.is_diff
+                            && target
+                                .as_ref()
+                                .map_or(d.path == path, |v| d.directory == v[0] && d.path == v[1])
+                    }) {
                         doc.saving = None;
                     }
                 }

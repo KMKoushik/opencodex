@@ -317,7 +317,7 @@ impl TerminalView {
                                     400.
                                 },
                             );
-                            style.family = Family::Mono;
+                            style.family = Family::Named("Menlo, Consolas, monospace");
                             style.line_height = CELL_HEIGHT;
                             style.italic = c.flags.contains(Flags::ITALIC);
                             glyph = glyph.child(text(value).font(style).color(fg));
@@ -360,7 +360,7 @@ impl TerminalView {
                     cursor = cursor.child(
                         text(paint.cell.c.to_string())
                             .font(TextStyle {
-                                family: Family::Mono,
+                                family: Family::Named("Menlo, Consolas, monospace"),
                                 line_height: CELL_HEIGHT,
                                 ..TextStyle::new(13., 400.)
                             })
@@ -375,7 +375,7 @@ impl TerminalView {
                 text(&self.preedit)
                     .absolute(col as f32 * CELL_WIDTH, row as f32 * CELL_HEIGHT)
                     .font(TextStyle {
-                        family: Family::Mono,
+                        family: Family::Named("Menlo, Consolas, monospace"),
                         ..TextStyle::new(13., 400.)
                     })
                     .color(self.palette.foreground)

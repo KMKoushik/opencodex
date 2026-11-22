@@ -162,10 +162,24 @@ impl State {
             self.open_canvas(id.to_owned());
             return;
         }
+        if let Some((directory, path)) =
+            crate::workbench::file_target(href, &self.workspace_directory())
+        {
+            self.workbench.open = true;
+            self.workbench.panel = Panel::Files;
+            self.open_workspace_target(directory, path, false);
+            self.load_panel(false);
+            return;
+        }
         let Ok(url) = url::Url::parse(href) else {
             return;
         };
         if !matches!(url.scheme(), "http" | "https") {
+            if matches!(url.scheme(), "mailto" | "irc" | "ircs" | "xmpp") {
+                if let Err(error) = tx.open_url(href) {
+                    self.error = Some(error.to_string());
+                }
+            }
             return;
         }
         let host = url.host_str().unwrap_or("");
@@ -368,7 +382,8 @@ pub fn coverage(s: &State) {
         || s.menus.open.is_some()
         || s.composer.menu.is_some()
         || s.chat.preview.is_some()
-        || s.chat.details;
+        || s.chat.details
+        || s.chat.context;
     if let Some(c) = &s.native.canvas {
         c.web.set_covered(covered);
     }

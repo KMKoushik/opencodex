@@ -10,11 +10,6 @@ static EXPAND: rune::Icon = rune::Icon {
     view: 24.0,
     body: r#"<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>"#,
 };
-static BROWSER: rune::Icon = rune::Icon {
-    name: "workspace-browser",
-    view: 24.0,
-    body: r#"<rect x="3" y="4" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 9h18M6 6.5h.01M9 6.5h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>"#,
-};
 
 pub fn kit(s: &State) -> rune_kit::Kit {
     let t = &s.theme;
@@ -58,7 +53,7 @@ pub fn rail(s: &State) -> El {
         .h_full()
         .px(4.0)
         .gap(4.0)
-        .fill(t.c("surface-under"))
+        .fill(t.c("surface"))
         .border_sides([0.0, 0.0, 0.0, 1.0], t.c("border"))
         .border_layout()
         .child(
@@ -80,7 +75,7 @@ pub fn rail(s: &State) -> El {
             Panel::Subagents => &ci::SUBAGENTS,
             Panel::Side => &ci::CHAT,
             Panel::Canvas => &ci::CANVAS,
-            Panel::Browser => &BROWSER,
+            Panel::Browser => &ci::BROWSER,
             Panel::Terminal => &ci::TERMINAL,
         };
         let selected = if panel == Panel::Terminal {
@@ -88,22 +83,20 @@ pub fn rail(s: &State) -> El {
         } else {
             s.workbench.open && s.workbench.panel == panel
         };
+        let button = el()
+            .key(format!("panel-{}", panel.id()))
+            .size(36.0, 36.0)
+            .center()
+            .radius(10.0)
+            .hover(t.c("hover"))
+            .child(icon(glyph, 18.0).color(t.c(if selected { "text" } else { "text-tertiary" })));
+        let button = if selected {
+            t.shadow(t.paint(button, "glaze"), "glaze-shadow")
+        } else {
+            button
+        };
         rail = rail.child(
-            el().key(format!("panel-{}", panel.id()))
-                .size(36.0, 36.0)
-                .center()
-                .radius(10.0)
-                .fill(if selected {
-                    t.c("selected")
-                } else {
-                    rune::Color::TRANSPARENT
-                })
-                .hover(t.c("hover"))
-                .child(icon(glyph, 18.0).color(t.c(if selected {
-                    "text"
-                } else {
-                    "text-tertiary"
-                })))
+            button
                 .role("button")
                 .label(panel.label())
                 .focusable(true)
@@ -196,7 +189,11 @@ fn panel(s: &State, cx: &mut rune::Cx<State>) -> El {
             .min_h(0.0)
             .min_w(0.0)
             .child(documents::view(s))
-            .child(tree(s)),
+            .child(if s.workbench.tree_visible {
+                tree(s)
+            } else {
+                el()
+            }),
         Panel::Subagents => sessions::view(s, false),
         Panel::Side => sessions::view(s, true),
         Panel::Canvas => canvas_host(s, cx),
@@ -298,9 +295,9 @@ fn tree(s: &State) -> El {
                 documents::button(
                     s,
                     if s.workbench.mode == "working" {
-                        "Working tree ▾"
+                        "Uncommitted"
                     } else {
-                        "Branch changes ▾"
+                        "Base branch"
                     },
                 )
                 .on_press(|s: &mut State| {

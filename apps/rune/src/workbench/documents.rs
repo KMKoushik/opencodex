@@ -10,6 +10,7 @@ use rune_kit::{
 };
 use serde_json::{Value, json};
 use std::sync::Arc;
+const MAX_EDIT_BYTES: usize = 2 * 1024 * 1024;
 
 pub struct Document {
     pub path: String,
@@ -19,6 +20,8 @@ pub struct Document {
     pub diff: DiffState,
     pub edit: TextEdit,
     pub editing: bool,
+    pub preview: bool,
+    pub discarding: bool,
     pub revision: u64,
     pub saved_revision: u64,
     pub saving: Option<(u64, String)>,
@@ -48,6 +51,9 @@ impl Document {
 impl State {
     pub fn open_workspace_file(&mut self, path: String, is_diff: bool) {
         let directory = self.workspace_directory();
+        self.open_workspace_target(directory, path, is_diff);
+    }
+    pub fn open_workspace_target(&mut self, directory: String, path: String, is_diff: bool) {
         if let Some(i) = self
             .workbench
             .docs
@@ -59,11 +65,12 @@ impl State {
                 return;
             }
         }
-        let tag = format!("{}:{path}", if is_diff { "diff" } else { "file" });
-        let mut q = vec![
-            ("directory".into(), self.workspace_directory()),
-            ("path".into(), path),
-        ];
+        let tag = format!(
+            "{}:{}",
+            if is_diff { "diff" } else { "file" },
+            json!([directory, path])
+        );
+        let mut q = vec![("directory".into(), directory), ("path".into(), path)];
         if is_diff {
             q.push(("mode".into(), self.workbench.mode.clone()));
         }
@@ -99,7 +106,7 @@ impl State {
         let text = doc.edit.text.clone();
         doc.saving = Some((doc.revision, text.clone()));
         self.workspace_request(
-            format!("save:{path}"),
+            format!("save:{}", json!([directory, path])),
             Operation::Save(
                 json!({"directory":directory,"path":path,"text":text,"version":version}),
             ),
@@ -122,20 +129,20 @@ pub fn receive(s: &mut State, tag: &str, mut p: Payload) {
     let Some((kind, path)) = tag.split_once(':') else {
         return;
     };
+    let target = serde_json::from_str::<[String; 2]>(path).ok();
+    let directory = target
+        .as_ref()
+        .map(|v| v[0].clone())
+        .unwrap_or_else(|| s.workspace_directory());
+    let path = target.as_ref().map(|v| v[1].as_str()).unwrap_or(path);
     if kind == "save" {
-        if let Some(doc) = s
-            .workbench
-            .docs
-            .iter_mut()
-            .find(|d| d.path == path && !d.is_diff && d.saving.is_some())
-        {
+        if let Some(doc) = s.workbench.docs.iter_mut().find(|d| {
+            d.path == path && d.directory == directory && !d.is_diff && d.saving.is_some()
+        }) {
             if let Some((revision, _)) = doc.saving.take() {
                 doc.value = p.value;
                 doc.saved_revision = revision;
-                // Later edits remain in TextEdit; only the captured revision is acknowledged.
-                if doc.revision == revision {
-                    doc.editing = false;
-                }
+                // The source editor stays mounted after a save, like FileEditor.
                 reindex(doc);
             }
         }
@@ -178,17 +185,21 @@ pub fn receive(s: &mut State, tag: &str, mut p: Payload) {
     let text = p.value["text"].as_str().unwrap_or("");
     let mut edit = TextEdit::new("");
     // Long-file viewer remains virtual; only allocate an editable buffer on demand.
-    if text.len() <= 128 * 1024 {
+    if text.len() <= MAX_EDIT_BYTES {
         edit.replace_text(text);
     }
+    let editing =
+        !kind.starts_with("diff") && p.value["kind"] == "text" && text.len() <= MAX_EDIT_BYTES;
     let mut doc = Document {
         path: path.into(),
-        directory: s.workspace_directory(),
+        directory: directory.clone(),
         is_diff: kind.starts_with("diff"),
         value: p.value,
         diff,
         edit,
-        editing: false,
+        editing,
+        preview: false,
+        discarding: false,
         revision: 0,
         saved_revision: 0,
         saving: None,
@@ -200,12 +211,9 @@ pub fn receive(s: &mut State, tag: &str, mut p: Payload) {
     reindex(&mut doc);
     // Never evict an unsaved draft. Both tab count and retained source bytes are bounded.
     let bytes: usize = s.workbench.docs.iter().map(Document::bytes).sum();
-    if let Some(index) = s
-        .workbench
-        .docs
-        .iter()
-        .position(|d| d.path == path && d.is_diff == doc.is_diff && !d.dirty())
-    {
+    if let Some(index) = s.workbench.docs.iter().position(|d| {
+        d.path == path && d.directory == directory && d.is_diff == doc.is_diff && !d.dirty()
+    }) {
         s.workbench.docs[index] = doc;
         s.workbench.selected = Some(index);
         return;
@@ -282,8 +290,9 @@ pub fn tabs(s: &State) -> El {
                     )
                     .on_press(move |s: &mut State| {
                         let doc = &s.workbench.docs[index];
-                        let (path, is_diff) = (doc.path.clone(), doc.is_diff);
-                        s.open_workspace_file(path, is_diff);
+                        let (directory, path, is_diff) =
+                            (doc.directory.clone(), doc.path.clone(), doc.is_diff);
+                        s.open_workspace_target(directory, path, is_diff);
                     }),
                 )
                 .child(
@@ -371,33 +380,108 @@ pub fn view(s: &State) -> El {
             .grow(1.0)
             .min_h(0.0)
             .min_w(0.0)
-            .child(toolbar)
+            .child(toolbar.child(tree_toggle(s)))
             .child(diff.grow(1.0).min_h(0.0));
     }
-    if doc.value["kind"] == "text"
-        && doc.edit.text.len() <= 128 * 1024
-        && doc.value["bytes"].as_u64().unwrap_or(0) <= 128 * 1024
-    {
-        if doc.editing {
-            toolbar = toolbar.child(
-                button(
-                    s,
-                    if doc.saving.is_some() {
-                        "Saving…"
-                    } else {
-                        "Save"
-                    },
+    if doc.editing {
+        let markdown = doc.path.rsplit('.').next().is_some_and(|ext| {
+            matches!(
+                ext.to_ascii_lowercase().as_str(),
+                "md" | "markdown" | "mdown"
+            )
+        });
+        if markdown {
+            toolbar = toolbar
+                .child(
+                    crate::sidebar::icon_button(t, &crate::chat::icons::SOURCE, "Edit source")
+                        .disabled(doc.saving.is_some())
+                        .on_press(move |s: &mut State| s.workbench.docs[index].preview = false),
                 )
-                .on_press(|s: &mut State| s.save_workspace_file()),
-            );
-        } else {
-            toolbar = toolbar.child(
-                button(s, "Edit")
-                    .on_press(move |s: &mut State| s.workbench.docs[index].editing = true),
-            );
+                .child(
+                    crate::sidebar::icon_button(
+                        t,
+                        &crate::chat::icons::PREVIEW,
+                        "Preview Markdown",
+                    )
+                    .disabled(doc.saving.is_some())
+                    .on_press(move |s: &mut State| s.workbench.docs[index].preview = true),
+                );
         }
+        if doc.dirty() {
+            toolbar = toolbar.child(label(t, "Unsaved edits", 11.0, 400.0, "text-tertiary"));
+        }
+        toolbar = toolbar.child(
+            crate::sidebar::icon_button(t, &crate::chat::icons::UNDO, "Discard edits")
+                .disabled(!doc.dirty() || doc.saving.is_some())
+                .on_press(move |s: &mut State| s.workbench.docs[index].discarding = true),
+        );
+        toolbar = toolbar.child(
+            crate::sidebar::icon_button(
+                t,
+                &crate::chat::icons::SAVE,
+                if doc.saving.is_some() {
+                    "Saving file…"
+                } else {
+                    "Save file"
+                },
+            )
+            .disabled(!doc.dirty() || doc.saving.is_some())
+            .on_press(|s: &mut State| s.save_workspace_file()),
+        );
     }
-    let content = if doc.editing {
+    let content = if doc.discarding {
+        col()
+            .grow(1.0)
+            .w_full()
+            .padding(24.0)
+            .gap(12.0)
+            .role("dialog")
+            .label("Discard file edits?")
+            .child(label(t, "Discard file edits?", 16.0, 600.0, "text"))
+            .child(
+                label(
+                    t,
+                    format!(
+                        "Replace your unsaved edits to {} with the latest loaded disk version?",
+                        doc.path
+                    ),
+                    14.0,
+                    400.0,
+                    "text",
+                )
+                .wrap(),
+            )
+            .child(
+                row()
+                    .gap(8.0)
+                    .child(
+                        button(s, "Keep editing").on_press(move |s: &mut State| {
+                            s.workbench.docs[index].discarding = false
+                        }),
+                    )
+                    .child(button(s, "Discard edits").on_press(move |s: &mut State| {
+                        let doc = &mut s.workbench.docs[index];
+                        doc.edit
+                            .replace_text(doc.value["text"].as_str().unwrap_or(""));
+                        doc.saved_revision = doc.revision;
+                        doc.discarding = false;
+                    })),
+            )
+    } else if doc.preview && doc.edit.text.len() <= 200_000 {
+        col()
+            .grow(1.0)
+            .min_h(0.0)
+            .padding(24.0)
+            .scroll(ScrollSpec {
+                stick_bottom: false,
+            })
+            .child(crate::chat::markdown_view(
+                s,
+                &doc.edit.text,
+                false,
+                (s.panel_width() - 268.0).max(100.0),
+            ))
+    } else if doc.editing {
         text_input(&doc.edit, TextStyle::new(12.5, 400.0).mono().lh(20.0))
             .key("workspace-editor")
             .grow(1.0)
@@ -407,7 +491,19 @@ pub fn view(s: &State) -> El {
             .color(t.c("text"))
             .on_edit(move |s: &mut State| &mut s.workbench.docs[index].edit)
             .on_input_change(move |s: &mut State, _| {
-                s.workbench.docs[index].revision += 1;
+                let dirty_count = s.workbench.docs.iter().filter(|d| d.dirty()).count();
+                let doc = &mut s.workbench.docs[index];
+                let error = if doc.edit.text.len() > MAX_EDIT_BYTES {
+                    Some("This edit would exceed the file size limit. Keep this document under 2 MiB.")
+                } else if !doc.dirty() && dirty_count >= 8 {
+                    Some("Save or discard an open edit before editing another file (8-file limit).")
+                } else { None };
+                if let Some(error) = error {
+                    doc.edit.undo();
+                    s.workbench.error = Some(error.into());
+                } else {
+                    doc.revision += 1;
+                }
             })
             .on_input_key(|s: &mut State, key, tx| {
                 if key.is_command('s') {
@@ -452,7 +548,7 @@ pub fn view(s: &State) -> El {
         .grow(1.0)
         .min_h(0.0)
         .min_w(0.0)
-        .child(toolbar)
+        .child(toolbar.child(tree_toggle(s)))
         .child(content)
 }
 fn file_line(s: &State, index: usize, n: usize) -> El {
@@ -479,6 +575,18 @@ fn file_line(s: &State, index: usize, n: usize) -> El {
                 .color(t.c("text"))
                 .selectable(true),
         )
+}
+fn tree_toggle(s: &State) -> El {
+    crate::sidebar::icon_button(
+        &s.theme,
+        &crate::chat::icons::PANEL,
+        if s.workbench.tree_visible {
+            "Hide file tree"
+        } else {
+            "Show file tree"
+        },
+    )
+    .on_press(|s: &mut State| s.workbench.tree_visible = !s.workbench.tree_visible)
 }
 pub fn button(s: &State, name: &str) -> El {
     label(&s.theme, name, 11.5, 400.0, "text-secondary")

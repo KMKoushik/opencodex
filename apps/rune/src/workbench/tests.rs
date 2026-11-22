@@ -51,6 +51,37 @@ fn save_acknowledges_only_captured_revision_and_navigation_preserves_edits() {
     assert!(s.workbench.docs[0].dirty());
 }
 #[test]
+fn file_links_keep_directory_identity_and_large_text_remains_editable() {
+    let mut s = state();
+    for directory in ["/first", "/second"] {
+        let text = "x".repeat(256 * 1024);
+        documents::receive(
+            &mut s,
+            &format!("file:{}", serde_json::json!([directory, "notes.txt"])),
+            worker::prepare(
+                serde_json::json!({"kind":"text", "text":text, "version":"disk", "bytes":text.len()}),
+            ),
+        );
+    }
+    assert_eq!(s.workbench.docs.len(), 2);
+    for (doc, directory) in s.workbench.docs.iter().zip(["/first", "/second"]) {
+        assert_eq!(doc.directory, directory);
+        assert!(doc.editing);
+        assert_eq!(doc.edit.text.len(), 256 * 1024);
+    }
+    s.workbench.docs[1].revision = 1;
+    s.workbench.docs[1].saving = Some((1, "new".into()));
+    documents::receive(
+        &mut s,
+        "save:[\"/second\",\"notes.txt\"]",
+        worker::prepare(
+            serde_json::json!({"kind":"text", "text":"new", "version":"after", "bytes":3}),
+        ),
+    );
+    assert_eq!(s.workbench.docs[0].value["version"], "disk");
+    assert_eq!(s.workbench.docs[1].value["version"], "after");
+}
+#[test]
 fn large_workspaces_mount_only_visible_rows() {
     let mut timings = [Vec::<f64>::new(), Vec::<f64>::new()];
     let mut prepare_times = Vec::new();
