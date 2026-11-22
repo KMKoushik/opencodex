@@ -10,6 +10,8 @@ This is the project's single maintained architecture diagram. It shows implement
 
 **Main claim:** browser and Electron share the React UI and gateway API; Electron adds native capabilities, while OpenCode owns the agent runtime and durable sessions.
 
+Rune also owns native page navigation, settings, task/app lists, menus, loaded-transcript find, and background OS notifications. Page reads and writes use its existing bounded prompt worker against the same gateway routes; its disposable page cache is not another persistence layer. Theme, font and notification choices share the existing native preference worker. Remote configuration and pairing credentials remain gateway-owned. App canvas embedding is an explicit `apps::canvas_host` loading hook until WKWebView integration lands. The updater is a disabled native-preview state. Thread search currently filters the loaded sidebar snapshot, a presentation limitation rather than a new search index. Notification delivery uses Rune's OS adapter with foreground, muted-root, subagent-reply and app-session-reply exclusions; it requires a bundled native app on macOS.
+
 The common path runs downward: shared UI → local gateway → OpenCode. Upward arrows carry native events for live text and snapshot refresh, plus terminal output over WebSocket; terminal input follows the downward path. Ordinary HTTP responses return on their request connection and are omitted for clarity. The desktop-only side branch uses preload IPC for the native bridge and web-content events for OS link, editing, and spelling menus.
 
 | Source                | Action                                                                                  | Target                                                |

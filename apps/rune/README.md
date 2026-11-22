@@ -209,11 +209,11 @@ diff fences and tool outputs are readable here.
   conversation `/undo` restores text but not the original attachment context.
 - Mention search uses a prefetched bounded index instead of the web's debounced live search.
   It excludes `.git`, `node_modules`, and `target`, and can be stale until the project is reloaded.
-- Project chooser currently uses Rune's native popup, not the web's searchable popover. Custom
+- Project chooser uses a searchable native overlay. Custom
   project image URLs, per-project Focus exclusions, and full cross-project Focus pagination remain.
   First launch shows gateway projects; closing one is stored in this client's own profile.
-- CLI theme/preset selection works; saved theme selection and automatic OS-appearance switching
-  are not wired yet. Model provider SVGs are decoded asynchronously and cached in memory.
+- CLI and saved theme/preset/accent selection work; automatic OS-appearance switching
+  is not wired yet. Model provider SVGs are decoded asynchronously and cached in memory.
 - Glyph antialiasing and analytic shadow edges are close, not pixel-identical to Chromium; see
   paired metrics. Headless output has no OS traffic lights unless Rune's chrome diagnostics are
   requested. The paired web screenshots enable Electron's macOS titlebar CSS inset, without
@@ -224,3 +224,43 @@ diff fences and tool outputs are readable here.
   with CGWindowList), and Rune reported skipped frames once initial creation finished, on both
   Metal and wgpu. Headless GPU output works. Native visible-content startup/idle measurements
   therefore remain unverified here; no early bench marker or forced redraw loop masks this.
+
+## Native pages handoff (rune-pages)
+
+Implemented settings navigation, general/plugin controls, persisted appearance/font/notification
+preferences, project instructions, usage limits, remote configuration/devices/pairing QR, and an
+explicitly unavailable updater. Tasks support plugin setup, create/delete, complete/reopen and
+agent start. Apps support list/detail, function invocation with empty arguments, run logs and
+session links. Searchable project/thread overlays, thread/project action menus, native menu-bar
+commands, shortcut routing, loaded-transcript find/highlights, copy toasts and offline retry are
+wired. The page cache is disposable and bounded; gateway writes use the existing prompt worker.
+
+Integration points:
+
+- `src/apps/mod.rs::canvas_host` is the WKWebView embedding hook (currently a loading placeholder).
+- `src/shortcuts/mod.rs::execute` leaves workspace/terminal commands to their owning integration.
+- `src/notifications/mod.rs` uses `rune-notify`; macOS delivery requires an application bundle.
+  Foreground, ancestry, mute and app-session exclusions are wired; actual banners were not verified.
+
+This is not complete web parity. Remaining work includes task editing/filtering/reordering;
+app settings/model/icon/code controls and argument forms; worktree removal/dialogs; global message
+search; additional archive/export/menu actions; OS appearance and precise theme transitions;
+spelling menus and full notification semantics. Find searches loaded transcript rows and navigates
+rows rather than each occurrence. Thread search filters loaded titles. Some settings icons,
+service-version/plugin-path text, button styling and page geometry still differ from the goldens.
+The fixture's project/session names differ from the original web fixture.
+
+Validation: release build and all nine existing workspace tests pass. Scripted theme switching,
+shortcut navigation and typed thread filtering were captured. Headless captures fetch page data,
+but do not exercise the normal mutation worker; end-to-end page mutations remain unverified.
+
+Run `OCR_PAGES_VERSION=reviewed python3 tools/pages-compare.py` from `apps/rune` after a release
+build with the isolated gateway on port 4481. It captures 68 states across dark/light and
+1280×800/1600×1000, pairing available web goldens on the left with native output on the right.
+Images are intentionally ignored and remain under `goldens/pages/`. Representative pairs:
+
+- `pair-settings-general-dark-1280x800-reviewed.png`
+- `pair-settings-shortcuts-light-1280x800-reviewed.png`
+- `pair-apps-empty-light-1600x1000-reviewed.png`
+
+Testing used only `/tmp/ocr-pages`, service port 4951 and gateway port 4481.

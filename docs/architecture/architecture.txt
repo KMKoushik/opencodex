@@ -78,12 +78,12 @@
 └┼─────────────────────────────────────────────────────┐
  └─────────────────────┐                               │
                        │                               ▼
-     ┌────── NATIVE RUNE CLIENT / apps/rune (chat + composer) ───────┐
+     ┌─────────────── NATIVE RUNE CLIENT / apps/rune ────────────────┐
      │                                                               │
-     │ Rune shell + revisioned drafts + question/permission docks    │
+     │ Shell, chat, drafts, docks; settings/tasks/apps page routes   │
      │ Live sidebar/chat worker: /api + SSE; reconnect refresh       │
-     │ Prompt worker: sends, worktrees, replies, attachment I/O      │
-     │ Virtual transcript; system fonts; headless PNGs; themes       │
-     │ UI/model prefs: OPENCODEX_DATA_DIR, else ~/.opencodex/rune    │
+     │ Prompt worker: sends, page reads/writes, attachment I/O       │
+     │ Native menus + OS notifications; virtual transcript/find      │
+     │ UI/model/theme prefs: OPENCODEX_DATA_DIR or ~/.opencodex/rune │
      │                                                               │
      └───────────────────────────────────────────────────────────────┘
