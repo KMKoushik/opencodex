@@ -76,6 +76,9 @@ impl Renderer {
                 }
                 Style::CodePad => {
                     sp.size = Some(pad_size(font, s.inline_code_pad));
+                    // Insets must use the same face as their measured advance,
+                    // not inherit a surrounding link's medium weight.
+                    sp.weight = Some(font.weight);
                 }
                 Style::Strong => sp.weight = Some(s.strong_weight),
                 Style::Bold => sp.weight = Some(700.0),

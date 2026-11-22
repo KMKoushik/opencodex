@@ -7,7 +7,7 @@ use rune::text::{BareIcon, PillChip, TextSystem};
 thread_local! {
     static BASELINES: RefCell<std::collections::HashMap<u64, (f32, f32)>> = RefCell::default();
     static SHAPER: RefCell<TextSystem> = RefCell::new({
-        let families=("System Font, .SF NS, Segoe UI, sans-serif", "ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace");
+        let families=("System Font, .SF NS, Segoe UI, sans-serif", "Menlo, Consolas, Liberation Mono, monospace");
         // TextSystem::new publishes measurement fonts. Keep this auxiliary
         // shaper scoped, so it cannot change another window/test's font epoch.
         let _guard=rune::text::with_families(families.0,families.1);
@@ -175,8 +175,9 @@ impl Renderer {
             let code = local.spans.iter().any(|s| s.2 == Style::Code);
             let extra = if code { extra } else { 0.0 };
             let mut row = el().w_full().h(font.line_height + extra);
-            let metrics = line.metrics();
-            let baseline = metrics.baseline - metrics.block_min_coord;
+            // Blink aligns inline decorations on the half-point baseline grid.
+            // Parley's layout baseline rounds to a whole point instead.
+            let baseline = inline_baseline(font);
             for &(a, b, st) in &inl.spans {
                 let (start, end) = (a.max(range.start), b.min(range.end));
                 if start >= end {
@@ -197,6 +198,9 @@ impl Renderer {
                         }
                     }
                 }
+                // CoreText's CSS inline box uses whole-point ascent/descent,
+                // not the font's fractional outline extents.
+                let (ascent, descent) = (ascent.round(), descent.round());
                 for (r, ln) in rune::text::range_boxes(&layout, start, end, false) {
                     if ln != number {
                         continue;
@@ -217,6 +221,25 @@ impl Renderer {
                 }
             }
             let mut local_spans = self.spans(&local, font);
+            // CSS text-underline-offset: 3px is independent of the font's
+            // native underline position. Keep links selectable/clickable, but
+            // paint their decorations at the measured CSS baseline.
+            for &(a, b, _) in &local.links {
+                if let Some(span) = local_spans.iter_mut().find(|span| span.start as usize == a && span.end as usize == b && span.underline.is_some()) {
+                    span.underline = None;
+                }
+            }
+            for &(a, b, _) in &inl.links {
+                let (start, end) = (a.max(range.start), b.min(range.end));
+                if start >= end { continue; }
+                let Some(ink) = self.link_span(a, b, &inl).underline else { continue; };
+                for (rect, ln) in rune::text::range_boxes(&layout, start, end, false) {
+                    if ln == number {
+                        row = row.child(el().absolute(rect.x0 as f32, baseline + 3.0)
+                            .size((rect.x1 - rect.x0) as f32, 1.0).fill(ink).inert());
+                    }
+                }
+            }
             for &(a, b, st) in &local.spans {
                 if matches!(st, Style::Sub | Style::Sup | Style::Small) {
                     local_spans.push(Span::new(a, b).color(Color::TRANSPARENT));
@@ -379,7 +402,7 @@ mod tests {
     #[test]
     fn css_code_line_box_does_not_inflate_the_following_plain_line() {
         fn view(_: &(), _: &mut rune::Cx<()>) -> El {
-            Markdown::new("`code` and [path](src/lib.rs)  \nplain tail")
+            Markdown::new("[`src/index.ts`](src/index.ts) and [path](src/lib.rs)  \nplain tail")
                 .on_link(|_: &mut (), _| {})
                 .render(
                     &MarkdownStyle::neutral(true)

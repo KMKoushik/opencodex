@@ -279,11 +279,13 @@ pub fn view(s: &State) -> El {
         .child(
             find_button(s, &crate::icons::FIND_UP, "Previous match")
                 .disabled(s.find.rows.is_empty())
+                .opacity(if s.find.rows.is_empty() { 0.45 } else { 1.0 })
                 .on_press_tx(|s: &mut State, tx| next(s, tx, true)),
         )
         .child(
             find_button(s, &crate::icons::DOWN, "Next match")
                 .disabled(s.find.rows.is_empty())
+                .opacity(if s.find.rows.is_empty() { 0.45 } else { 1.0 })
                 .on_press_tx(|s: &mut State, tx| next(s, tx, false)),
         )
         .child(

@@ -279,7 +279,7 @@ try {
             JSON.stringify(
               await page.evaluate(() => {
                 const selectors =
-                  '[role="menu"],[role="listbox"],dialog[open],:popover-open,.slash-menu,.model-picker,.find-bar,.session-panel,.select-menu,.project-form';
+                  '[role="menu"],[role="listbox"],dialog[open],:popover-open,.slash-menu,.model-picker,.find-bar,.session-panel,.select-menu,.project-form,.settings-page,.question-dock,.workbench,.terminal-panel,.toolbar,.activity-group';
                 const measure = (e) => {
                   const r = e.getBoundingClientRect(),
                     c = getComputedStyle(e);
@@ -288,12 +288,18 @@ try {
                     class: e.className,
                     text: e.textContent?.slice(0, 160),
                     rect: [r.x, r.y, r.width, r.height],
+                    ...(e.tagName === 'CANVAS' ? { pixels: [e.width, e.height] } : {}),
                     padding: c.padding,
                     radius: c.borderRadius,
                     border: c.border,
                     shadow: c.boxShadow,
                     lineHeight: c.lineHeight,
                     fontSize: c.fontSize,
+                    fontFamily: c.fontFamily,
+                    fontWeight: c.fontWeight,
+                    color: c.color,
+                    background: c.backgroundColor,
+                    gap: c.gap,
                     position: c.position,
                   };
                 };
@@ -304,7 +310,7 @@ try {
                       ...measure(e),
                       rows: [
                         ...e.querySelectorAll(
-                          'button,input,summary,[role="option"],[role="menuitem"],[role="treeitem"],li,.session-panel-row,.session-details-content > *',
+                          'button,input,summary,canvas,.terminal-viewport,[role="option"],[role="menuitem"],[role="treeitem"],li,.session-panel-row,.session-details-content > *,.settings-group,.settings-row,.settings-label,.settings-label > *,.question-dock *',
                         ),
                       ].map(measure),
                     })),
@@ -357,6 +363,34 @@ try {
               2,
             ),
           );
+          // Computed font-family is only a fallback list. Record the actual
+          // platform faces too: Blink and Rune can resolve ui-monospace differently.
+          const fonts = {};
+          const fontCDP = await page.context().newCDPSession(page);
+          try {
+            await fontCDP.send('DOM.enable');
+            await fontCDP.send('CSS.enable');
+            const { root: document } = await fontCDP.send('DOM.getDocument');
+            for (const selector of [
+              '.markdown p',
+              '.markdown pre code',
+              '.markdown a code',
+              '.settings-label code',
+              '.activity-target',
+            ]) {
+              const { nodeId } = await fontCDP.send('DOM.querySelector', {
+                nodeId: document.nodeId,
+                selector,
+              });
+              if (nodeId)
+                fonts[selector] = (
+                  await fontCDP.send('CSS.getPlatformFontsForNode', { nodeId })
+                ).fonts;
+            }
+          } finally {
+            await fontCDP.detach();
+          }
+          writeFileSync(stem + '.fonts.json', JSON.stringify(fonts, null, 2));
           const args = [
             ...c.flags,
             '--screenshot',

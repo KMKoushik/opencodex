@@ -566,7 +566,11 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
                                 .exact_lines()
                                 .wrap()
                                 .selectable(true)
-                                .max_w(if side_chat { width - 2.0 * inset } else { ((width - 2.0 * inset) * 0.7).min(456.0) })
+                                .max_w(if side_chat {
+                                    width - 2.0 * inset
+                                } else {
+                                    ((width - 2.0 * inset) * 0.7).min(456.0)
+                                })
                                 .px(12.0)
                                 .py(8.0)
                                 .radius(16.0)
@@ -708,7 +712,7 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
 pub fn toolbar(s: &State) -> El {
     let t = &s.theme;
     row()
-        .gap(4.0)
+        .gap(8.0)
         .center_y()
         .child(
             icon_button(t, &icons::MORE, "Thread actions")
@@ -728,16 +732,23 @@ pub fn toolbar(s: &State) -> El {
                 }),
         )
         .child(
-            icon_button(t, &icons::INFO, "Session details")
+            crate::sidebar::icon_button_size(t, &icons::INFO, "Session details", 17.0)
                 .key("session-details-toggle")
+                .fill(if s.chat.details {
+                    t.c("hover")
+                } else {
+                    rune::Color::TRANSPARENT
+                })
                 .checked(s.chat.details)
                 .on_press(details::toggle),
         )
         .child(
-            icon_button(t, &icons::PANEL, "Toggle workspace").on_press(|s: &mut State| {
-                let panel = s.workbench.panel;
-                s.select_panel(panel);
-            }),
+            crate::sidebar::icon_button_size(t, &icons::PANEL, "Toggle workspace", 17.0)
+                .ml(4.0)
+                .on_press(|s: &mut State| {
+                    let panel = s.workbench.panel;
+                    s.select_panel(panel);
+                }),
         )
 }
 fn details(s: &State, width: f32) -> El {

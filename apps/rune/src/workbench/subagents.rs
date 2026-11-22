@@ -52,6 +52,7 @@ pub fn view(s: &State) -> El {
             .gap(12.0)
             .center_y()
             .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
+            .border_layout()
             .child(
                 icon_button(t, &crate::icons::BACK, "Back to subagents")
                     .key("subagents-back")
@@ -68,7 +69,7 @@ pub fn view(s: &State) -> El {
             header = header.child(activity(s, "Responding"));
         }
         // Timeline's footer belongs to the scroll content, not a fixed bottom dock.
-        let mut footer = col().w_full().px(16.0).gap(8.0);
+        let mut footer = col().w_full().px(16.0).pb(20.0).gap(8.0);
         if let Some(error) = &chat.data.error {
             footer = footer
                 .child(label(t, error, 12.0, 400.0, "error").wrap())
@@ -93,7 +94,10 @@ pub fn view(s: &State) -> El {
         if !chat.data.running && outcome == Some("failed") {
             footer = footer.child(label(t, "This subagent run failed.", 12.0, 400.0, "error"));
         }
-        footer = footer.child(super::reader_requests::permissions(s)).child(
+        if !s.workbench.requests.permissions.is_empty() {
+            footer = footer.child(super::reader_requests::permissions(s));
+        }
+        footer = footer.child(
             label(
                 t,
                 super::reader_requests::status(s).unwrap_or(if chat.data.running {
@@ -109,7 +113,7 @@ pub fn view(s: &State) -> El {
                 400.0,
                 "text-tertiary",
             )
-            .py(12.0)
+            .h(20.0)
             .role("status"),
         );
         return body

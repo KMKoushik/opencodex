@@ -182,7 +182,6 @@ fn tool_row(s: &State, id: &str, tool: &Value, reader: bool) -> El {
         .py(4.0)
         .gap(8.0)
         .center_y()
-        .child(icon(if open { &i::DOWN } else { &i::RIGHT }, 12.0).color(t.c("text-tertiary")))
         .child(icon(glyph, 14.0).color(t.c(ink)))
         .child(label(t, title, 12.0, 400.0, "text-secondary"))
         .child(

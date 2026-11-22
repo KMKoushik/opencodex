@@ -70,6 +70,22 @@ fn render_marked(
         None
     };
     let font_size = s.prefs.chat_font_size.unwrap_or(14.0);
+    // Disabled <input type=checkbox> is painted by Blink's native control theme,
+    // not by the app's text/surface palette (including custom app themes).
+    let gray = |value: u8| {
+        let value = rune::color::srgb_decode(value as f32 / 255.0);
+        rune::Color {
+            r: value,
+            g: value,
+            b: value,
+            a: 1.0,
+        }
+    };
+    let (checked, mark, unchecked, outline) = if t.dark {
+        (gray(117), gray(59), gray(59), gray(98))
+    } else {
+        (gray(208), gray(236), gray(247), gray(208))
+    };
     let mut style = MarkdownStyle::neutral(t.dark)
         .web_layout()
         .text(t.c("text"))
@@ -86,20 +102,15 @@ fn render_marked(
         .list_markers_outside(true)
         .code_block(t.c("surface-under"), t.c("border"))
         .code_block_font(TextStyle::new(13.0, 400.0).mono().lh(font_size * 1.625))
-        .code_block_strut(TextStyle::new(font_size, 400.0).mono().lh(font_size * 1.625))
+        .code_block_strut(
+            TextStyle::new(font_size, 400.0)
+                .mono()
+                .lh(font_size * 1.625),
+        )
         .code_block_padding(16.0, 14.0)
         .text_width(width)
         .list(24.0, 6.0)
-        .task_checkbox(
-            13.0,
-            2.0,
-            0.0,
-            Some(3.5),
-            t.c("text-tertiary"),
-            t.c("surface"),
-            t.c("secondary"),
-            t.c("border-heavy"),
-        )
+        .task_checkbox(13.0, 2.0, 0.0, Some(3.5), checked, mark, unchecked, outline)
         .strong_weight(600.0)
         .quote(t.c("border-heavy"), 2.0, 16.0, t.c("text-secondary"))
         .rule(t.c("border-heavy"))

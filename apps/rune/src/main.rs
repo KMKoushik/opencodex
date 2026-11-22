@@ -288,25 +288,38 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
     }
     if let Some(p) = s.project() {
         toolbar = toolbar
-            .child(rune::icon(&icons::FOLDER, 14.0).color(t.c("text-secondary")))
             .child(
-                sidebar::label(t, p.display_name(), 13.0, 400.0, "text-secondary")
-                    .truncate()
-                    .max_w(if s.workbench.open && w - width - s.panel_width() < 500.0 {
-                        12.0
-                    } else {
-                        180.0
-                    }),
+                row()
+                    .gap(6.0)
+                    .center_y()
+                    .min_w(0.0)
+                    .shrink()
+                    .child(rune::icon(&icons::FOLDER, 14.0).color(t.c("text-secondary")))
+                    .child(
+                        sidebar::label(t, p.display_name(), 13.0, 400.0, "text-secondary")
+                            .truncate(),
+                    )
+                    .max_w(
+                        rune::memo::layout_size("toolbar")
+                            .map(|size| (size[0] - 40.0) * 0.3)
+                            .unwrap_or((w - width - 40.0) * 0.3),
+                    ),
             )
-            .child(sidebar::label(t, "/", 13.0, 400.0, "text-tertiary"));
+            .child(sidebar::label(t, "/", 13.0, 400.0, "text-tertiary").mx(2.0));
     }
     toolbar = toolbar.child(
         sidebar::label(t, title, 13.0, 500.0, "text")
+            .px(5.0)
+            .h(30.0)
+            .center_y()
             .truncate()
             .min_w(0.0),
     );
     if s.selected.is_some() {
-        toolbar = toolbar.child(el().grow(1.0)).child(chat::toolbar(s));
+        // CSS margin-left:auto doesn't add a flex child (and another gap).
+        toolbar = toolbar
+            .child(el().grow(1.0).ml(-8.0))
+            .child(chat::toolbar(s));
     }
     if menus::search::connected(s)
         && !s.snapshot.live
@@ -331,7 +344,7 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
         .min_w(0.0)
         .min_h(0.0)
         .fill(t.c("surface"))
-        .border_sides([0.0, 0.0, 0.0, 1.0], t.c("border"))
+        .border_sides([0.0, 0.0, 0.0, 0.5], t.c("border"))
         .border_layout()
         .child(if matches!(s.pages.route, pages::Route::Settings(_)) {
             row()
@@ -551,7 +564,9 @@ fn main() {
         // CoreText calls SF Pro "System Font" / ".SF NS"; the web's -apple-system.
         families: (
             "System Font, .SF NS, Segoe UI, sans-serif",
-            "ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace",
+            // CDP CSS.getPlatformFontsForNode resolves the web's mono stack to
+            // Menlo on macOS. Rune's ui-monospace instead selects SF NS Mono.
+            "Menlo, Consolas, Liberation Mono, monospace",
         ),
         min_size: Some((760.0, 560.0)),
         on_key: Some(|s, e, tx| {

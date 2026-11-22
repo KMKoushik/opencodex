@@ -55,15 +55,7 @@ pub fn start(handle: rune::AppHandle<State>) {
     }
     std::thread::spawn(move || {
         let installed = package::Installed::load();
-        let version = installed
-            .as_ref()
-            .map(|i| i.version.as_str())
-            .unwrap_or(env!("CARGO_PKG_VERSION"));
-        let mut state = json!({"status":"idle","currentVersion":version});
-        if let Err(reason) = &installed {
-            state["status"] = json!("disabled");
-            state["disabledReason"] = json!(reason);
-        }
+        let mut state = initial_state(&installed);
         publish(&handle, &state);
         let mut due = Instant::now() + Duration::from_secs(15);
         let mut release: Option<package::Release> = None;
@@ -141,4 +133,26 @@ pub fn start(handle: rune::AppHandle<State>) {
             publish(&handle, &state);
         }
     });
+}
+
+fn initial_state(installed: &Result<package::Installed, String>) -> Value {
+    let version = installed
+        .as_ref()
+        .map(|i| i.version.as_str())
+        .unwrap_or(env!("CARGO_PKG_VERSION"));
+    let mut state = json!({"status":"idle","currentVersion":version});
+    if let Err(reason) = installed {
+        state["status"] = json!("disabled");
+        state["disabledReason"] = json!(reason);
+    }
+    state
+}
+
+/// Headless acquisition uses the same installed-package check as the native host.
+/// It runs before the capture clock, without starting the update/network worker.
+pub fn capture(s: &mut State) {
+    let state = std::thread::spawn(|| initial_state(&package::Installed::load()))
+        .join()
+        .expect("update status acquisition panicked");
+    s.pages.data.insert("host/update".into(), Ok(state));
 }

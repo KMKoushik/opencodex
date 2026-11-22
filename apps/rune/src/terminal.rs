@@ -326,6 +326,7 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
         .h(40.0)
         .w_full()
         .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
+        .border_layout()
         .pr(8.0)
         .center_y()
         .gap(8.0)
@@ -346,7 +347,8 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
         .h(s.terminal.height.min(s.window_size.1 * 0.6))
         .min_h(120.0)
         .fill(t.c("surface"))
-        .border_sides([1.0, 0.0, 0.0, 0.0], t.c("border"))
+        .border_sides([1.0, 0.0, 0.0, 0.5], t.c("border"))
+        .border_layout()
         .child(header);
     if let Some(e) = &s.terminal.error {
         body = body.child(label(t, e, 12.0, 400.0, "error").px(12.0));
@@ -383,18 +385,17 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
                     ),
             )
             .child(
-                s.terminal.tabs[i]
-                    .view
-                    .element("terminal-host", cx, |s| {
-                        let i = active(s).expect("mounted terminal");
-                        &mut s.terminal.tabs[i].view
-                    })
-                    .autofocus()
-                    .grow(1.0)
-                    .min_h(0.0)
-                    .mx(10.0)
-                    .mb(10.0)
-                    .mt(4.0),
+                col().grow(1.0).min_h(0.0).mx(10.0).mb(10.0).mt(4.0).child(
+                    s.terminal.tabs[i]
+                        .view
+                        .element("terminal-host", cx, |s| {
+                            let i = active(s).expect("mounted terminal");
+                            &mut s.terminal.tabs[i].view
+                        })
+                        .autofocus()
+                        .grow(1.0)
+                        .min_h(0.0),
+                ),
             );
     } else {
         body = body.child(
@@ -466,10 +467,12 @@ pub fn capture(s: &mut State) -> Result<(), String> {
         s.sidebar_width()
     };
     let size = Size {
-        cols: ((s.window_size.0 - sidebar - 20.0) / 7.826172)
+        cols: ((s.window_size.0 - sidebar - 20.5 - oc_terminal::SCROLLBAR_RESERVE)
+            / oc_terminal::CELL_WIDTH)
             .floor()
             .max(2.0) as u16,
-        rows: ((s.terminal.height.min(s.window_size.1 * 0.6) - 40.0 - 32.5 - 14.0) / 16.0)
+        rows: ((s.terminal.height.min(s.window_size.1 * 0.6) - 1.0 - 40.0 - 32.5 - 14.0)
+            / oc_terminal::CELL_HEIGHT)
             .floor()
             .max(1.0) as u16,
     };

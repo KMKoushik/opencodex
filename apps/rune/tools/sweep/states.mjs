@@ -72,6 +72,9 @@ export function config(state, extras) {
     'subagent-conversation': 'subagents',
   };
   if (panels[state]) flags.push('--panel', panels[state]);
+  // Opening Electron's terminal focuses its viewport. Apply that same focus
+  // after native capture mounting (the main composer also requests autofocus).
+  if (state === 'panel-terminal') script.push({ t: 0.1, type: 'click', key: 'terminal-host' });
   if (state === 'panel-diff-open') flags.push('--file', 'src/index.ts');
   if (state === 'panel-file-open') flags.push('--file', 'README.md');
   if (state === 'panel-side-chat') flags.push('--file', extras.side.id);
