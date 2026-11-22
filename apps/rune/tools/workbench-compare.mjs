@@ -15,7 +15,7 @@ if (!fixture || !base) throw new Error('Set an isolated OPENCODEX_FIXTURE and OP
 const sessions = JSON.parse(readFileSync(`${fixture}/sessions.json`, 'utf8'));
 const projects = await (await fetch(`${base}/api/projects`)).json();
 const session = await (await fetch(`${base}/api/sessions/${sessions[1].id}`)).json();
-const out = 'apps/rune/goldens/workbench';
+const out = process.env.OPENCODEX_CAPTURE_OUT ?? 'apps/rune/goldens/workbench';
 mkdirSync(out, { recursive: true });
 const version = process.env.OCR_CAPTURE_VERSION ?? 'v2';
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
@@ -54,6 +54,15 @@ try {
       await page.evaluate(() => (document.documentElement.dataset.platform = 'darwin'));
       const project = page.locator('.project-row').filter({ hasText: 'atlas-api' });
       if ((await project.getAttribute('aria-expanded')) !== 'true') await project.click();
+      await page.locator('.session-entry').first().waitFor();
+      for (let more = 0; more < 10; more++) {
+        if (await page.getByRole('button', { name: session.title, exact: false }).first().count())
+          break;
+        const expand = page.getByRole('button', { name: 'Show more', exact: true });
+        if (!(await expand.count())) break;
+        await expand.first().click();
+        await page.waitForTimeout(150);
+      }
       await page.getByRole('button', { name: session.title, exact: false }).first().click();
       await page.locator('.timeline-scroll').waitFor();
       for (const [panel, label, file] of [

@@ -8,7 +8,7 @@ rendering of its entire surface. `matches` means the named source behavior was c
 Outstanding work is explicitly marked `remaining` rather than falsely describing it as
 impossible in Rune. The requested exhaustive zero-gap audit is **not complete**.
 
-Checklist counts: **36 fixed, 12 matches, 30 remaining, 1 pinned-framework capture limitation**.
+Checklist counts: **41 fixed, 12 matches, 25 remaining, 1 pinned-framework capture limitation**.
 
 ## Corrected defects
 
@@ -70,41 +70,91 @@ Checklist counts: **36 fixed, 12 matches, 30 remaining, 1 pinned-framework captu
 
 ## Outstanding — not hidden as framework impossibility
 
-| Item                                  | Status           | Concrete gap / next action                                                                                                                                                   |
-| ------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Inline file-link icon                 | remaining        | Pinned Markdown exposes external-link icons only, not local-link adornment. Needs a Rune-kit hook or a faithful custom inline renderer; click routing is fixed, icon is not. |
-| Markdown paragraph/list/table metrics | remaining        | Rune-kit layout differs from Chromium. Table padding matches CSS declarations but row-height/wrapping pairs need successful seeded replies.                                  |
-| HTML in Markdown                      | remaining        | React sanitizes and renders allowed HTML; Rune-kit is not an equivalent HTML renderer.                                                                                       |
-| Response copy feedback                | remaining        | Copied/checkmark/error/2-second reset not yet equivalent.                                                                                                                    |
-| User annotations/mentions             | remaining        | Message annotation chip/popover and sent mention pills not ported fully.                                                                                                     |
-| Attachment interactions               | remaining        | Generic sent/draft file cards lack source download behavior; image failure/retry handling differs.                                                                           |
-| Response selection/review comments    | remaining        | Text selection actions, comment creation and mark restoration still incomplete.                                                                                              |
-| Jump pill shadow                      | remaining        | Elevated fill/border follow source; secondary-button shadow and exact hover pixels need completion.                                                                          |
-| Chat toolbar/details                  | remaining        | Full session details content/aggregation and exact breadcrumb/popover geometry require further audit.                                                                        |
-| Pending inbox/running dock            | remaining        | Accepted-message and blocking-work controls not source-equivalent.                                                                                                           |
-| Context keyboard/popover              | remaining        | Context control is restored; hover/focus/outside-click semantics and anchoring need native runtime verification.                                                             |
-| Slash/mention ordering                | remaining        | Rune fuzzy ranking/skills/commands ordering differs from web rank buckets and live file search.                                                                              |
-| Undo attachments                      | remaining        | Existing action worker restores text only; must restore original attachment/mention context off-thread.                                                                      |
-| Full fork dialog                      | remaining        | Web before-earlier-message choices and retained draft behavior not fully ported.                                                                                             |
-| All question field types              | remaining        | Boolean/number/external/conditional fields, radio keyboard semantics, numeric shortcuts, custom-answer review labels and styling need completion.                            |
-| Permission card                       | remaining        | Enable full access control and exact request layout/pending lifecycle still differ.                                                                                          |
-| Files tree icons                      | remaining        | Still Rune-kit FileNode icons, not OpenCode theme file icons.                                                                                                                |
-| Files tabs/tree                       | remaining        | Pinned/preview semantics, tab keyboard behavior, actual breadcrumbs, search/collapse controls, and exact selected styling not complete.                                      |
-| File editor toolbar/selection         | remaining        | Open-in application discovery/menu and review comments absent; source editor lacks CodeMirror-equivalent gutter/selection behavior.                                          |
-| Large-editor performance              | remaining        | 256 KiB editable regression covered; 2 MiB interactive latency not yet profiled.                                                                                             |
-| Diff surface                          | remaining        | Review comments, source toolbar modes and exact line/gutter metrics need full pass.                                                                                          |
-| Image viewer                          | remaining        | Zoom steps, anchored zoom, pan, metadata, download and annotations incomplete.                                                                                               |
-| Rich file previews                    | remaining        | PDF/docx/video/HTML preview behavior incomplete. Markdown preview's relative-link base still needs source-directory handling.                                                |
-| Subagent list/header                  | remaining        | Running/attention/status/model/header labels and pagination need exact parity pass. Reader rows now shared.                                                                  |
-| Side-chat composer                    | remaining        | Attachments, own model picker, docks, slash restrictions and deletion missing/incomplete.                                                                                    |
-| Canvas list/tabs                      | remaining        | Deletion confirmation, timestamps, per-chat persistence, annotations and exact tab controls incomplete.                                                                      |
-| App canvas height                     | remaining        | Previous Apps page fixed-height container still present; not edited because parallel agent owns Apps.                                                                        |
-| Browser                               | remaining        | Per-chat tabs, persistent/shared profiles, local HTML routing, downloads and browser context menus incomplete.                                                               |
-| Terminal chrome                       | remaining        | Exact tab strip/toolbar styles, cwd connection status, resize geometry and empty-state content need completion.                                                              |
-| Successful-response goldens           | remaining        | Original fixture cannot be regenerated while opencode/big-pickle returns provider.free-limit HTTP 429. No replacement model or fabricated transcript used.                   |
-| Atomic native-child screenshots       | can't-do-in-Rune | Pinned headless Rune screenshot omits WK child views. Must separately snapshot/composite real WK output, explicitly not an atomic GPU/native frame.                          |
+| Item                                  | Status           | Concrete gap / next action                                                                                                                                                                                                     |
+| ------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Inline file-link icon                 | fixed            | Pinned MIT `oc-markdown` adapter adds source icon before local links without rewriting text/hrefs. Fresh authored-fixture pairs inspected in both themes and sizes.                                                            |
+| Markdown paragraph/list/table metrics | remaining        | Rune-kit layout differs from Chromium. Table padding matches CSS declarations but row-height/wrapping pairs need successful seeded replies.                                                                                    |
+| HTML in Markdown                      | remaining        | React sanitizes and renders allowed HTML; Rune-kit is not an equivalent HTML renderer.                                                                                                                                         |
+| Response copy feedback                | remaining        | Copied/checkmark and event-driven 2-second reset added for main/reader responses. Clipboard failure reporting still needs a runtime boundary check.                                                                            |
+| User annotations/mentions             | remaining        | Message annotation chip/popover and sent mention pills not ported fully.                                                                                                                                                       |
+| Attachment interactions               | remaining        | Generic sent/draft file cards lack source download behavior; image failure/retry handling differs.                                                                                                                             |
+| Response selection/review comments    | remaining        | Structured draft comments, UTF-16 annotation send encoding, response selection actions, source-selection comments and inline diff editor/cards added. Selection geometry, mark restoration and full interaction checks remain. |
+| Jump pill shadow                      | fixed            | Elevated fill/heavy border retained; source secondary chip shadow and chip-hover added. No artificial delayed show/hide.                                                                                                       |
+| Chat toolbar/details                  | remaining        | Full session details content/aggregation and exact breadcrumb/popover geometry require further audit.                                                                                                                          |
+| Pending inbox/running dock            | remaining        | Accepted-message and blocking-work controls not source-equivalent.                                                                                                                                                             |
+| Context keyboard/popover              | remaining        | Context control is restored; hover/focus/outside-click semantics and anchoring need native runtime verification.                                                                                                               |
+| Slash/mention ordering                | remaining        | Rune fuzzy ranking/skills/commands ordering differs from web rank buckets and live file search.                                                                                                                                |
+| Undo attachments                      | remaining        | Existing action worker restores text only; must restore original attachment/mention context off-thread.                                                                                                                        |
+| Full fork dialog                      | remaining        | Web before-earlier-message choices and retained draft behavior not fully ported.                                                                                                                                               |
+| All question field types              | remaining        | Boolean/number/external/conditional fields, radio keyboard semantics, numeric shortcuts, custom-answer review labels and styling need completion.                                                                              |
+| Permission card                       | remaining        | Enable full access control and exact request layout/pending lifecycle still differ.                                                                                                                                            |
+| Files tree icons                      | fixed            | Uses pinned `rune-theme-opencode::tree_icons::file` rather than generic Rune-kit FileNode glyphs.                                                                                                                              |
+| Files tabs/tree                       | remaining        | Glazed tabs, clean-preview replacement, double-click pin and arrow/Home/End selection added; refresh retains pins and replacements enforce memory budget. Breadcrumbs/search/collapse and interaction checks remain.           |
+| File editor toolbar/selection         | remaining        | Open-in application discovery/menu and review comments absent; source editor lacks CodeMirror-equivalent gutter/selection behavior.                                                                                            |
+| Large-editor performance              | remaining        | 256 KiB editable regression covered; 2 MiB interactive latency not yet profiled.                                                                                                                                               |
+| Diff surface                          | remaining        | Review comments, source toolbar modes and exact line/gutter metrics need full pass.                                                                                                                                            |
+| Image viewer                          | remaining        | Source zoom steps, fit/100%, dimensions, scrollable scaled preview, download worker and whole-image comments added. Actual viewport measurements, pointer-anchored zoom, drag-pan and region annotations remain.               |
+| Rich file previews                    | remaining        | PDF/docx/video/HTML preview behavior incomplete. Markdown preview's relative-link base still needs source-directory handling.                                                                                                  |
+| Subagent list/header                  | remaining        | Running/attention/status/model/header labels and pagination need exact parity pass. Reader rows now shared.                                                                                                                    |
+| Side-chat composer                    | remaining        | Delete confirmation and successful-delete draft cleanup added. Attachments, own model picker, docks, slash restrictions and exact tab layout remain.                                                                           |
+| Canvas list/tabs                      | remaining        | Delete confirmation and cross-chat tab invalidation added; selected/open tabs retain per-chat in-memory state. Relaunch persistence, timestamps, annotations and exact tab controls remain.                                    |
+| App canvas height                     | fixed            | Explicit user-requested exception to Apps ownership: native app host grows to available height, replacing fixed 360-point container.                                                                                           |
+| Browser                               | remaining        | Tabs/selection retain per-chat in-memory state; inactive native guests are destroyed, URLs restored when returning. Relaunch persistence, history, shared profiles, local HTML, downloads/context menus remain.                |
+| Terminal chrome                       | remaining        | Exact tab strip/toolbar styles, cwd connection status, resize geometry and empty-state content need completion.                                                                                                                |
+| Successful-response goldens           | fixed            | Reusable explicitly authored UI transcripts imported through isolated V2 API, not represented as model replies/recordings. 40 fresh scale-2 web/Rune pairs captured; no further model calls required.                          |
+| Atomic native-child screenshots       | can't-do-in-Rune | Pinned headless Rune screenshot omits WK child views. Must separately snapshot/composite real WK output, explicitly not an atomic GPU/native frame.                                                                            |
 
 ## Verification and images
+
+### Current continuation pass
+
+`tools/parity-fixture.ts` imports explicitly authored Markdown, tools and long-history
+UI fixtures into the isolated V2 service. The three bounded live attempts still
+returned quota failures. The imported fixture is intentionally not attributed to a
+model or a cloud recording. Existing fixture data is reused for subsequent captures.
+
+Fresh web-left/Rune-right pairs: `goldens/chat-pass4/pair-*.png` (40 pairs,
+dark/light, 1280×800 and 1600×1000, scale 2). Read representative pairs:
+
+- `goldens/chat-pass4/pair-chat-markdown-top-dark-1280x800.png`
+- `goldens/chat-pass4/pair-chat-markdown-bottom-light-1280x800.png`
+- `goldens/chat-pass4/pair-tools-details-dark-1600x1000.png`
+- `goldens/chat-pass4/pair-chat-markdown-bottom-light-1600x1000.png`
+
+Those captures include the Markdown adapter and initial review/file-tab changes,
+but predate the later task-bullet, copy feedback, inline diff editor, image controls,
+deletion and retained-tab changes. They are **not** evidence for those later controls.
+The pairs expose remaining wrapping/spacing differences; no pixel-parity claim.
+
+Later fresh pairs: `goldens/chat-pass6/pair-*.png` (40 combinations) and
+`goldens/workbench-pass2/pair-*.png` (24 combinations). Read the light 1280 Markdown
+bottom and dark 1600 Markdown top pairs from `chat-pass6`, plus
+`workbench-pass2/pair-files-dark-1280x800-pass2.png` and
+`workbench-pass2/pair-changes-light-1600x1000-pass2.png`. These confirm that task
+bullets now render and the workbench controls are present; they still expose
+source-editor gutter, diff header/mode location and spacing gaps. The subsequent
+source/preview selected-fill correction and removal of the non-source toolbar
+Comment button are source-checked changes, not present in these captures.
+
+Latest workbench pairs: `goldens/workbench-pass4/pair-*.png` (24 combinations),
+after the selected-fill/removal changes and a runtime-discovered scroller fix:
+the active tab is now intrinsic width (134 points), not stretched across the header
+(569 points). Read `pair-files-dark-1280x800-pass4.png`; gutter and editor parity
+remain open, not hidden by this correction.
+
+Release build, workspace tests (including all 30 upstream adapter tests and the
+annotation UTF-16/optional-field regression), root `bun check`, and canonical
+architecture checks passed during this pass. Final release build, all 47 Rust unit
+tests, root `bun check` and `bun format:check` passed. The additional all-features
+workspace test run passed as well. The source and images still do not satisfy the
+zero-remaining acceptance criterion; 25 items are deliberately left open.
+
+Both isolated processes were stopped after verifying their fixture environment.
+Ports 4495/4965 have no listeners and `/tmp/ocr-parity-chat` was removed. Imported
+payloads, projected transcripts, quota attempts and check logs are preserved locally
+in ignored `goldens/parity-pass-evidence.tar.gz`; no user service or storage was touched.
+
+### Earlier pass (historical)
 
 Isolated fixture: `/tmp/ocr-parity-chat`, OpenCode 4965, gateway 4495. User's service
 49374 and data directory were not accessed. Seed script executed all prompts but the

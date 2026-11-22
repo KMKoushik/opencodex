@@ -1,7 +1,7 @@
-// Paired captures use the same real, isolated gateway. No mocked messages or provider output.
+// Paired captures use the same isolated gateway and imported authored UI fixtures.
 /* global document */
 import { createRequire } from 'node:module';
-import { globSync, mkdirSync, readFileSync } from 'node:fs';
+import { globSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 const require = createRequire(import.meta.url);
 const { chromium } = require(
@@ -14,7 +14,7 @@ const base = process.env.OPENCODEX_GATEWAY;
 if (!fixture || !base)
   throw new Error('Set OPENCODEX_FIXTURE and OPENCODEX_GATEWAY to isolated services');
 const sessions = JSON.parse(readFileSync(`${fixture}/sessions.json`, 'utf8'));
-const out = 'apps/rune/goldens/chat-review';
+const out = process.env.OPENCODEX_CAPTURE_OUT ?? 'apps/rune/goldens/chat-review';
 mkdirSync(out, { recursive: true });
 const projects = await (await fetch(`${base}/api/projects`)).json();
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
@@ -60,11 +60,24 @@ try {
         [1, 'tools'],
       ]) {
         const info = await (await fetch(`${base}/api/sessions/${sessions[index].id}`)).json();
-        const project = page
-          .locator('.project-row')
-          .filter({ hasText: index === 4 ? 'orbit-web' : 'atlas-api' });
+        const project = page.locator('.project-row').filter({ hasText: 'atlas-api' });
         if ((await project.getAttribute('aria-expanded')) !== 'true') await project.click();
-        await page.getByRole('button', { name: info.title, exact: false }).first().click();
+        await page.locator('.session-entry').first().waitFor();
+        for (let more = 0; more < 10; more++) {
+          if (await page.getByRole('button', { name: info.title, exact: false }).first().count())
+            break;
+          const expand = page.getByRole('button', { name: 'Show more', exact: true });
+          if (!(await expand.count())) break;
+          await expand.first().click();
+          await page.waitForTimeout(150);
+        }
+        try {
+          await page.getByRole('button', { name: info.title, exact: false }).first().click();
+        } catch (error) {
+          writeFileSync(`${out}/navigation-error.txt`, await page.locator('body').innerText());
+          await page.screenshot({ path: `${out}/navigation-error.png` });
+          throw error;
+        }
         await page.locator('.timeline-scroll').waitFor();
         await page.waitForTimeout(800);
         for (const pos of index === 1 ? ['bottom'] : ['bottom', 'top', 'middle']) {
