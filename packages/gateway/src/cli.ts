@@ -12,6 +12,7 @@ if (process.argv[2] === '--canvas-host' && process.send) {
       assets: { type: 'string' },
       production: { type: 'boolean' },
       'parent-stdin': { type: 'boolean' },
+      'host-updates': { type: 'boolean' },
     },
     strict: true,
   });
@@ -19,8 +20,14 @@ if (process.argv[2] === '--canvas-host' && process.send) {
   if (!Number.isInteger(port) || port < 0 || port > 65535)
     throw new Error('Port must be between 0 and 65535.');
   const { startGateway } = await import('./server');
+  if (values['host-updates'] && !values['parent-stdin'])
+    throw new Error('--host-updates requires --parent-stdin.');
+  const updates = values['host-updates']
+    ? (await import('./parent-updates')).parentUpdates(process.stdin, (line) => console.log(line))
+    : undefined;
   const gateway = await startGateway({
     port,
+    updates,
     assets: values.assets
       ? resolve(values.assets)
       : values.production && process.env.OPENCODEX_COMPILED !== '1'

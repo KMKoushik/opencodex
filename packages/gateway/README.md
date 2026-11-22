@@ -98,3 +98,14 @@ using `data.update` plus `sh`, and local SQLite message search. Stdin EOF and
 SIGTERM both exited zero while the shared service remained alive. Screenshot
 checks reported the expected missing-renderer notice. Live Cloudflare/APNs delivery
 requires user credentials and was not exercised.
+
+# Native parent updates
+
+Rune starts the compiled CLI with `--parent-stdin --host-updates`. Its private
+stdin receives newline-delimited `{"update":DesktopUpdateState}` records (64 KiB
+maximum buffered record); stdout emits `OPENCODEX_HOST_UPDATE {"action":"check"}`
+or `download` / `install`. Gateway `/api/host/update` and its three existing POST
+actions use that state/command adapter, including through authenticated Remote
+access. No new unauthenticated listener or filesystem mailbox is introduced.
+EOF still closes only the gateway, never OpenCode. Ordinary standalone gateways
+have no host updater; Electron's existing in-process updater injection is unchanged.
