@@ -5,11 +5,13 @@ pub(crate) mod search;
 pub(crate) mod thread;
 #[derive(Clone)]
 pub enum Menu {
+    Choice(crate::pages::controls::Select),
     Search,
     Projects,
     Thread(String),
     Project(String),
-    EditProject(String),
+    App(String),
+    AppRun(String),
     Brand,
 }
 #[derive(Default)]
@@ -51,17 +53,41 @@ pub fn open_search(s: &mut State, tx: &mut Tx) {
     tx.focus("navigation-search", false);
 }
 pub fn open_projects(s: &mut State, tx: &mut Tx) {
+    s.menus.open = None;
+    s.open_session(None);
+    s.prefs.project = None;
+    s.pages.projects.dialog = None;
+    s.pages.projects.directory.clear();
+    s.pages.projects.error = None;
+    s.pages.projects.suggesting = false;
+    s.open_page(crate::pages::Route::ProjectSetup);
+    s.save();
+    tx.focus_when_shown("Project directory", false);
+}
+pub fn switch_projects(s: &mut State, tx: &mut Tx) {
     s.menus.open = Some(Menu::Projects);
     s.menus.search.clear();
     tx.focus("navigation-search", false);
 }
 pub fn view(s: &State) -> Option<El> {
+    if let Some(Menu::Choice(menu)) = s.menus.open.as_ref() {
+        return Some(crate::pages::controls::select_overlay(s, menu));
+    }
+    if let Some(dialog) = crate::settings::projects::dialog(s) {
+        return Some(dialog);
+    }
+    if let Some(dialog) = crate::apps::dialog(s) {
+        return Some(dialog);
+    }
     let menu = s.menus.open.as_ref()?;
     if matches!(menu, Menu::Search) {
         return Some(search::dialog(s));
     }
     let t = &s.theme;
-    let compact = matches!(menu, Menu::Thread(_) | Menu::Project(_) | Menu::Brand);
+    let compact = matches!(
+        menu,
+        Menu::Thread(_) | Menu::Project(_) | Menu::App(_) | Menu::AppRun(_) | Menu::Brand
+    );
     let width = if compact { 180.0 } else { 520.0 };
     let mut panel = col()
         .w(width)
@@ -78,11 +104,13 @@ pub fn view(s: &State) -> Option<El> {
         .fill(t.c("elevated"))
         .border(1.0, t.c("border-heavy"));
     let title = match menu {
+        Menu::Choice(_) => unreachable!(),
         Menu::Search => "Search threads",
-        Menu::Projects => "Open project",
+        Menu::Projects => "Switch project",
         Menu::Thread(_) => "Thread actions",
         Menu::Project(_) => "Project actions",
-        Menu::EditProject(_) => "Edit project",
+        Menu::App(_) => "App actions",
+        Menu::AppRun(_) => "Run a function",
         Menu::Brand => "OpenCodex",
     };
     if !compact {
@@ -180,34 +208,6 @@ pub fn view(s: &State) -> Option<El> {
     if let Menu::Thread(id) = menu {
         panel = thread::view(s, id, panel);
     }
-    if let Menu::EditProject(id) = menu {
-        panel = panel.child(
-            text_input(&s.menus.search, TextStyle::new(13.0, 400.0))
-                .key("rename-input")
-                .single_line()
-                .on_edit(|s: &mut State| &mut s.menus.search)
-                .w_full()
-                .h(36.0)
-                .px(10.0)
-                .color(t.c("text"))
-                .border(1.0, t.c("border"))
-                .radius(6.0),
-        );
-        let id = id.clone();
-        panel = panel.child(button(s, "Save").on_press(move |s: &mut State| {
-            let title = s.menus.search.text.trim().to_owned();
-            if title.is_empty() {
-                return;
-            }
-            s.page_write(
-                &format!("projects/{id}"),
-                "PATCH",
-                serde_json::json!({"name":title}),
-                "projects",
-            );
-            s.menus.open = None;
-        }));
-    }
     if let Menu::Project(id) = menu {
         let edit = id.clone();
         let work = id.clone();
@@ -233,26 +233,22 @@ pub fn view(s: &State) -> Option<El> {
             )
             .child(
                 button(s, "Edit project").on_press_tx(move |s: &mut State, tx| {
-                    s.menus.search = TextEdit::new(
-                        s.snapshot
-                            .projects
-                            .iter()
-                            .find(|p| p.id == edit)
-                            .map(|p| p.display_name())
-                            .unwrap_or(""),
+                    crate::settings::projects::open(
+                        s,
+                        crate::settings::projects::Dialog::Edit(edit.clone()),
+                        tx,
                     );
-                    s.menus.open = Some(Menu::EditProject(edit.clone()));
-                    tx.focus("rename-input", false);
                 }),
             )
             .child(
                 button(s, "Instructions")
                     .disabled(!s.snapshot.live)
-                    .on_press(move |s: &mut State| {
-                        s.menus.open = None;
-                        s.pages.instructions_project = Some(instructions.clone());
-                        s.page_get(&format!("projects/{instructions}/instructions"));
-                        s.open_page(crate::pages::Route::Settings("projects".into()));
+                    .on_press_tx(move |s: &mut State, tx| {
+                        crate::settings::projects::open(
+                            s,
+                            crate::settings::projects::Dialog::Instructions(instructions.clone()),
+                            tx,
+                        );
                     }),
             );
         if s.snapshot
@@ -264,9 +260,12 @@ pub fn view(s: &State) -> Option<El> {
             panel = panel.child(
                 button(s, "Manage worktrees")
                     .disabled(!s.snapshot.live)
-                    .on_press(move |s: &mut State| {
-                        s.menus.open = None;
-                        s.open_page(crate::pages::Route::Worktrees(work.clone()));
+                    .on_press_tx(move |s: &mut State, tx| {
+                        crate::settings::projects::open(
+                            s,
+                            crate::settings::projects::Dialog::Worktrees(work.clone()),
+                            tx,
+                        );
                     }),
             );
         }
@@ -287,12 +286,8 @@ pub fn view(s: &State) -> Option<El> {
             .is_some_and(|p| !s.prefs.closed_projects.contains(&p.canonical))
         {
             panel = panel.child(button(s, "Close project").on_press(move |s: &mut State| {
-                if let Some(p) = s.snapshot.projects.iter().find(|p| p.id == close) {
-                    s.prefs.closed_projects.push(p.canonical.clone());
-                }
+                crate::settings::projects::close_project(s, &close);
                 s.menus.open = None;
-                crate::sidebar::rebuild(s);
-                s.save();
             }));
         }
     }
@@ -309,6 +304,45 @@ pub fn view(s: &State) -> Option<El> {
             }));
         }
     }
+    if let Menu::App(_) = menu {
+        for (name, kind) in [
+            ("Change model…", "model"),
+            ("Change icon…", "icon"),
+            ("Delete app…", "delete"),
+        ] {
+            panel = panel.child(
+                button(s, name)
+                    .on_press_tx(move |s: &mut State, tx| crate::apps::open_dialog(s, kind, tx)),
+            );
+        }
+    }
+    if let Menu::AppRun(id) = menu {
+        if let Some(app) = crate::pages::data(s, "apps")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|apps| apps.iter().find(|a| a["id"] == *id))
+        {
+            for name in app["triggers"]
+                .as_object()
+                .into_iter()
+                .flat_map(|t| t.keys())
+            {
+                let id = id.clone();
+                let name = name.clone();
+                panel = panel.child(
+                    button(s, &format!("Run {name}"))
+                        .disabled(
+                            app["running"]
+                                .as_array()
+                                .is_some_and(|rs| rs.iter().any(|r| r == &name)),
+                        )
+                        .on_press(move |s: &mut State| {
+                            crate::apps::run(s, &id, &name);
+                            s.menus.open = None;
+                        }),
+                );
+            }
+        }
+    }
     let (x, y) = if compact {
         if matches!(menu, Menu::Brand) {
             (18.0, 80.0)
@@ -318,6 +352,9 @@ pub fn view(s: &State) -> Option<El> {
     } else {
         ((s.window_size.0 - width) * 0.5, 100.0)
     };
+    if compact {
+        panel = panel.on_key(compact_key);
+    }
     Some(
         el().key("navigation-overlay")
             .absolute(0.0, 0.0)
@@ -338,4 +375,120 @@ pub fn view(s: &State) -> Option<El> {
                 y.min(s.window_size.1 - 300.0),
             )),
     )
+}
+fn compact_key(s: &mut State, event: &rune::KeyEvent, tx: &mut Tx) -> bool {
+    let Some(menu) = s.menus.open.as_ref() else {
+        return false;
+    };
+    let mut labels: Vec<String> = Vec::new();
+    let back = match menu {
+        Menu::Project(id) => {
+            labels.extend(["Open project", "Edit project", "Instructions"].map(str::to_owned));
+            if s.snapshot
+                .projects
+                .iter()
+                .find(|p| p.id == *id)
+                .is_some_and(|p| p.vcs.is_some())
+            {
+                labels.push("Manage worktrees".into());
+            }
+            labels.push("Copy path".into());
+            if s.snapshot
+                .projects
+                .iter()
+                .find(|p| p.id == *id)
+                .is_some_and(|p| !s.prefs.closed_projects.contains(&p.canonical))
+            {
+                labels.push("Close project".into());
+            }
+            format!("project-actions-{id}")
+        }
+        Menu::Thread(id) => {
+            if let Some(t) = s.snapshot.sessions.get(id) {
+                if s.snapshot.live && s.menus.pending.is_none() {
+                    labels.push(
+                        if t.pinned.is_some() {
+                            "Unpin thread"
+                        } else {
+                            "Pin thread"
+                        }
+                        .into(),
+                    );
+                    let done = t.done.is_some_and(|at| at >= t.activity());
+                    if done || !s.snapshot.active.contains(id) {
+                        labels.push(
+                            if done {
+                                "Mark as not done"
+                            } else {
+                                "Mark as done"
+                            }
+                            .into(),
+                        );
+                    }
+                    labels.push("Mark as unread".into());
+                    labels.push(
+                        if t.muted.unwrap_or(false) {
+                            "Unmute notifications"
+                        } else {
+                            "Mute notifications"
+                        }
+                        .into(),
+                    );
+                    labels.extend(["Export as Markdown", "Export as JSON"].map(str::to_owned));
+                }
+            }
+            format!("thread-{id}")
+        }
+        Menu::Brand => {
+            labels.extend(["Projects", "Appearance", "Shortcuts", "Usage"].map(str::to_owned));
+            "brand-menu".into()
+        }
+        Menu::App(id) => {
+            labels.extend(["Change model…", "Change icon…", "Delete app…"].map(str::to_owned));
+            format!("app-actions-{id}")
+        }
+        Menu::AppRun(id) => {
+            if let Some(app) = crate::pages::data(s, "apps")
+                .and_then(serde_json::Value::as_array)
+                .and_then(|apps| apps.iter().find(|a| a["id"] == *id))
+            {
+                labels.extend(
+                    app["triggers"]
+                        .as_object()
+                        .into_iter()
+                        .flat_map(|t| t.keys())
+                        .filter(|name| {
+                            !app["running"]
+                                .as_array()
+                                .is_some_and(|rs| rs.iter().any(|r| r == *name))
+                        })
+                        .map(|name| format!("Run {name}")),
+                );
+            }
+            format!("app-run-{id}")
+        }
+        _ => return false,
+    };
+    if matches!(event.key, rune::Key::Escape | rune::Key::Tab) {
+        s.menus.open = None;
+        tx.return_focus(back, true);
+        return true;
+    }
+    if labels.is_empty() {
+        return false;
+    }
+    let focused = tx.focused().unwrap_or("");
+    let index = labels
+        .iter()
+        .position(|l| focused == format!("menu-{l}"))
+        .unwrap_or(0);
+    let next = match event.key {
+        rune::Key::Down => (index + 1) % labels.len(),
+        rune::Key::Up => (index + labels.len() - 1) % labels.len(),
+        rune::Key::Home => 0,
+        rune::Key::End => labels.len() - 1,
+        _ => return false,
+    };
+    tx.focus(format!("menu-{}", labels[next]), true);
+    true
 }

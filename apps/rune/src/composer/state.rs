@@ -389,6 +389,12 @@ pub fn poll(s: &mut State) -> bool {
             Reply::Data { tag, result } if tag.starts_with("notify:") => {
                 crate::notifications::receive(s, &tag, result);
             }
+            Reply::Data { tag, result } if tag.starts_with("project-") => {
+                crate::settings::projects::receive(s, &tag, result)
+            }
+            Reply::Data { tag, result } if tag.starts_with("app-") => {
+                crate::apps::receive(s, &tag, result)
+            }
             Reply::Data { tag, result } if tag.starts_with("menu-search:") => {
                 crate::menus::search::receive(s, tag.strip_prefix("menu-search:").unwrap(), result);
             }

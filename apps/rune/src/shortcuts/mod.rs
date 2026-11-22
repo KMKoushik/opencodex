@@ -48,12 +48,25 @@ pub fn dispatch(s: &mut State, event: &KeyEvent, tx: &mut Tx) -> bool {
         if s.menus.open.take().is_some() {
             return true;
         }
-        if s.pages.route != Route::Chat {
+        if s.pages.projects.dialog.is_some() {
+            if s.pages.projects.suggesting {
+                s.pages.projects.suggesting = false;
+            } else {
+                crate::settings::projects::close(s);
+            }
+            return true;
+        }
+        if s.pages.apps.dialog.is_some() {
+            crate::apps::close_dialog(s);
+            return true;
+        }
+        if s.pages.route != Route::Chat && s.pages.route != Route::ProjectSetup {
             s.open_page(Route::Chat);
             return true;
         }
     }
-    if s.menus.open.is_some() {
+    if s.menus.open.is_some() || s.pages.projects.dialog.is_some() || s.pages.apps.dialog.is_some()
+    {
         return false;
     }
     for &(_, chord, id) in COMMANDS {
@@ -103,8 +116,41 @@ pub fn execute(s: &mut State, id: &str, tx: &mut Tx) -> bool {
             tx.focus("message", false);
         }
         "chat.background" => {
-            s.open_session(None);
-            tx.focus("message", false);
+            if s.pages.route != Route::Chat
+                || !s.chat.data.running
+                || s.pages.pending.contains("session-background")
+            {
+                return false;
+            }
+            let blocked = s
+                .chat
+                .data
+                .messages
+                .iter()
+                .rev()
+                .find(|m| m.r#type == "assistant")
+                .is_some_and(|m| {
+                    m.time.completed.is_none()
+                        && m.fields
+                            .get("content")
+                            .and_then(serde_json::Value::as_array)
+                            .is_some_and(|parts| {
+                                parts.iter().any(|p| {
+                                    p["type"] == "tool"
+                                        && p["state"]["status"] == "running"
+                                        && (p["name"] == "shell" || p["name"] == "subagent")
+                                })
+                            })
+                });
+            let Some(id) = s.selected.clone().filter(|_| blocked) else {
+                return false;
+            };
+            s.page_mutate(
+                &format!("sessions/{id}/background"),
+                serde_json::json!({}),
+                "session-background",
+                false,
+            );
         }
         // Workspace and terminal registrations are supplied by the workbench integration.
         _ => return false,

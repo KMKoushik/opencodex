@@ -1,18 +1,59 @@
 //! Presentation routes; authoritative page data stays in the gateway.
 use crate::{State, sidebar::label};
-use rune::{El, TextEdit, col, el, row};
+use rune::{El, TextEdit, col, el};
 use serde_json::Value;
 use std::collections::BTreeMap;
+pub mod controls;
 pub mod offline;
+pub fn after_frame(rt: &rune::Runtime<State>, handle: &rune::AppHandle<State>) {
+    crate::settings::appearance::after_frame(rt, handle);
+    crate::tasks::board::after_frame(rt, handle);
+}
+pub fn invalidate(s: &mut State, changes: Vec<String>) {
+    if changes.is_empty() {
+        return;
+    }
+    if changes
+        .iter()
+        .any(|k| k == "all" || k == "apps" || k.starts_with("app:") || k.starts_with("source:"))
+    {
+        s.page_get("apps");
+    }
+    if s.pages.route == Route::Tasks && changes.iter().any(|k| k == "all" || k == "tasks") {
+        s.page_get("tasks");
+    }
+    if let Some(id) = s.pages.app.clone() {
+        if changes
+            .iter()
+            .any(|k| k == "all" || k == &format!("app:{id}") || k == &format!("source:{id}"))
+        {
+            s.page_get(&format!("apps/{id}/model"));
+            if s.pages.apps.runs_open || s.pages.apps.tab == "settings" {
+                s.page_get(&format!("apps/{id}/runs"));
+            }
+            if s.pages.apps.tab == "code" {
+                s.page_get(&format!("canvases/{id}/files"));
+            }
+        }
+    }
+    if let Some(crate::settings::projects::Dialog::Worktrees(id)) = &s.pages.projects.dialog {
+        if changes
+            .iter()
+            .any(|k| k == "all" || k == &format!("worktree:{id}"))
+        {
+            s.page_get(&format!("projects/{id}/worktrees"));
+        }
+    }
+}
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Route {
     #[default]
     Chat,
+    ProjectSetup,
     Settings(String),
     Tasks,
     Apps,
-    Worktrees(String),
 }
 #[derive(Default)]
 pub struct Pages {
@@ -21,9 +62,15 @@ pub struct Pages {
     pub pending: std::collections::BTreeSet<String>,
     pub errors: BTreeMap<String, String>,
     pub plugin_checks: BTreeMap<String, (f64, u8)>,
+    pub anchors: BTreeMap<String, [f32; 4]>,
+    pub appearance: crate::settings::appearance::Appearance,
+    pub projects: crate::settings::projects::Projects,
     pub task_title: TextEdit,
+    pub tasks: crate::tasks::board::Board,
     pub app: Option<String>,
+    pub apps: crate::apps::Apps,
     pub instructions: TextEdit,
+    pub instructions_dirty: bool,
     pub instructions_project: Option<String>,
     pub project_notice: Option<String>,
     pub remote: crate::settings::remote::Remote,
@@ -56,7 +103,6 @@ impl State {
                 self.page_get("side-chat-plugin");
                 self.page_get("canvas-plugin");
             }
-            Route::Worktrees(ref id) => self.page_get(&format!("projects/{id}/worktrees")),
             _ => {}
         }
         self.rows_revision += 1;
@@ -101,11 +147,22 @@ pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) -> bool 
         return crate::menus::thread::receive(s, tag, result);
     }
     if let Some(path) = tag.strip_prefix("page:") {
+        if path == "apps" {
+            s.rows_revision += 1;
+        }
         if let Ok(value) = &result {
             crate::settings::remote::receive(s, path, value);
+            if path.starts_with("apps/") && path.ends_with("/model") {
+                if let Some(directory) = value["directory"]
+                    .as_str()
+                    .filter(|d| !s.snapshot.models.contains_key(*d))
+                {
+                    s.command(oc_gateway::Command::Details(directory.into()));
+                }
+            }
         }
         s.pages.pending.remove(path);
-        if path.ends_with("/instructions") {
+        if path.ends_with("/instructions") && !s.pages.instructions_dirty {
             if let Ok(value) = &result {
                 s.pages.instructions = TextEdit::new(value["text"].as_str().unwrap_or(""));
             }
@@ -122,8 +179,20 @@ pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) -> bool 
     }
     if let Some(path) = tag.strip_prefix("page-refresh:") {
         s.pages.pending.remove(path);
+        if path == "session-background" {
+            if let Err(error) = result {
+                s.error = Some(format!("Could not move work to the background. {error}"));
+            }
+            if let Some(id) = s.selected.clone() {
+                s.command(oc_gateway::Command::OpenSession(id));
+            }
+            return true;
+        }
         match result {
             Ok(value) => {
+                if path.starts_with("apps/") && path.ends_with("/runs") {
+                    s.page_get("apps");
+                }
                 if path == "remote" {
                     s.pages.remote.dirty = false;
                 }
@@ -154,6 +223,13 @@ pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) -> bool 
 /// Follow OpenCode's plugin reload only while a relevant page is visible. No
 /// redraw timer: a wake can issue a read, and only its changed reply redraws.
 pub fn poll(s: &mut State, clock: f64, tx: &mut rune::Tx) {
+    if s.pages.route == Route::Tasks {
+        let minute = chrono::Local::now().timestamp() / 60;
+        if s.pages.tasks.minute != minute {
+            s.pages.tasks.minute = minute;
+        }
+        tx.wake_after(std::time::Duration::from_secs(60));
+    }
     let paths: &[&str] = match &s.pages.route {
         Route::Settings(section) if section == "general" => &["side-chat-plugin", "canvas-plugin"],
         Route::Tasks => &["tasks/plugin"],
@@ -190,7 +266,7 @@ pub fn view(s: &State) -> El {
         Route::Settings(section) => crate::settings::view(s, section),
         Route::Tasks => crate::tasks::view(s),
         Route::Apps => crate::apps::view(s),
-        Route::Worktrees(id) => worktrees(s, id),
+        Route::ProjectSetup => crate::settings::projects::setup(s),
         Route::Chat => el(),
     }
 }
@@ -230,14 +306,6 @@ pub fn primary_button(s: &State, title: &str) -> El {
         "primary-shadow",
     )
 }
-pub fn heading(s: &State, title: &str, description: &str) -> El {
-    col()
-        .w_full()
-        .gap(6.0)
-        .mb(24.0)
-        .child(label(&s.theme, title, 20.0, 600.0, "text"))
-        .child(label(&s.theme, description, 13.0, 400.0, "text-secondary"))
-}
 pub fn status(s: &State, path: &str) -> Option<El> {
     if let Some(error) = s.pages.errors.get(path) {
         return Some(
@@ -263,48 +331,4 @@ pub fn status(s: &State, path: &str) -> Option<El> {
 }
 pub fn data<'a>(s: &'a State, path: &str) -> Option<&'a Value> {
     s.pages.data.get(path)?.as_ref().ok()
-}
-fn worktrees(s: &State, id: &str) -> El {
-    let path = format!("projects/{id}/worktrees");
-    let mut body = col().w_full().grow(1.0).padding(32.0).child(heading(
-        s,
-        "Worktrees",
-        "Manage isolated workspaces for your threads.",
-    ));
-    if let Some(status) = status(s, &path) {
-        return body.child(status);
-    }
-    let entries = data(s, &path).and_then(Value::as_array);
-    if entries.is_none_or(Vec::is_empty) {
-        return body.child(label(
-            &s.theme,
-            "No worktrees yet",
-            14.0,
-            400.0,
-            "text-secondary",
-        ));
-    }
-    for item in entries.into_iter().flatten().take(200) {
-        body = body.child(
-            row()
-                .w_full()
-                .py(12.0)
-                .gap(12.0)
-                .child(label(
-                    &s.theme,
-                    item["directory"].as_str().unwrap_or("Worktree"),
-                    13.0,
-                    400.0,
-                    "text",
-                ))
-                .child(label(
-                    &s.theme,
-                    item["branch"].as_str().unwrap_or(""),
-                    12.0,
-                    400.0,
-                    "text-secondary",
-                )),
-        );
-    }
-    body
 }

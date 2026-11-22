@@ -5,6 +5,8 @@ use crate::{
     theme::Theme,
 };
 use rune::{El, ScrollSpec, col, el, row};
+pub mod appearance;
+pub mod projects;
 pub mod remote;
 
 pub const SECTIONS: &[(&str, &str)] = &[
@@ -23,18 +25,20 @@ pub fn view(s: &State, section: &str) -> El {
         .unwrap_or("Settings");
     let mut body = col()
         .w_full()
-        .max_w(720.0)
+        .max_w(if section == "projects" { 900.0 } else { 720.0 })
         .px(24.0)
         .pt(24.0)
         .pb(64.0)
-        .gap(16.0)
-        .child(
+        .gap(16.0);
+    if section != "projects" {
+        body = body.child(
             label(&s.theme, title, 20.0, 600.0, "text")
                 .font(rune::TextStyle::new(20.0, 600.0).lh(26.0))
                 .mb(8.0),
         );
+    }
     body = match section {
-        "appearance" => appearance(s, body),
+        "appearance" => appearance::view(s, body),
         "shortcuts" => {
             body=body.child(label(&s.theme,"Shortcuts work while OpenCodex is focused. Chat actions are available in an open conversation. Close a menu before using app shortcuts. Hold ⌘ to show thread numbers: pinned chats first, then chats in Focus.",14.0,400.0,"text-secondary").w_full().wrap().mb(24.0));
             let mut app = group(s, "App");
@@ -97,7 +101,7 @@ pub fn view(s: &State, section: &str) -> El {
                     .child(shortcut_row(s, "Insert a new line", "Shift+Enter")),
             )
         }
-        "projects" => projects(s, body),
+        "projects" => projects::view(s, body),
         "usage" => usage(s, body),
         "remote" => remote::view(s, body),
         _ => general(s, body),
@@ -140,9 +144,6 @@ pub fn navigation(s: &State, section: &str) -> El {
     }
     nav
 }
-fn section(s: &State, title: &str) -> El {
-    label(&s.theme, title, 13.0, 600.0, "text").mt(12.0)
-}
 fn shortcut_row(s: &State, title: &str, chord: &str) -> El {
     row()
         .w_full()
@@ -159,7 +160,7 @@ fn shortcut_row(s: &State, title: &str, chord: &str) -> El {
                 .border(1.0, s.theme.c("border")),
         )
 }
-fn setting_row(s: &State, title: &str, description: &str) -> El {
+pub(crate) fn setting_row(s: &State, title: &str, description: &str) -> El {
     setting_row_styled(s, title, description, vec![])
 }
 fn setting_row_styled(s: &State, title: &str, description: &str, spans: Vec<rune::Span>) -> El {
@@ -405,7 +406,7 @@ fn plugin_row(s: &State, path: &'static str, title: &str, missing: &str) -> El {
     }
     result
 }
-fn group(s: &State, title: &str) -> El {
+pub(crate) fn group(s: &State, title: &str) -> El {
     group_action(s, title, None)
 }
 fn group_action(s: &State, title: &str, action: Option<El>) -> El {
@@ -423,115 +424,19 @@ fn group_action(s: &State, title: &str, action: Option<El>) -> El {
         .radius(12.0)
         .fill(s.theme.c("elevated"))
         .border(1.0, s.theme.c("border"))
+        .padding(1.0)
         .child(header)
 }
-fn appearance(s: &State, mut body: El) -> El {
-    let mut modes = row().gap(6.0);
-    for (dark, name) in [(false, "Light"), (true, "Dark")] {
-        modes = modes.child(
-            button(s, name)
-                .fill(if s.theme.dark == dark {
-                    s.theme.c("selected")
-                } else {
-                    rune::Color::TRANSPARENT
-                })
-                .on_press(move |s: &mut State| apply(s, dark, None)),
-        );
-    }
-    body = body
-        .child(setting_row(s, "Theme", "Choose how OpenCodex looks.").child(modes))
-        .child(section(s, "Presets"));
-    let presets = crate::theme::presets(s.theme.dark);
-    for chunk in presets.chunks(3) {
-        let mut cards = row().w_full().gap(10.0);
-        for preset in chunk {
-            let id = preset.id.clone();
-            let surface = rune::color::hex(&preset.seed.surface).expect("preset surface");
-            let under = rune::color::hex(preset.under.as_deref().unwrap_or(&preset.seed.surface))
-                .expect("preset sidebar");
-            let accent = rune::color::hex(&preset.seed.accent).expect("preset accent");
-            cards = cards.child(
-                col()
-                    .grow(1.0)
-                    .w(0.0)
-                    .gap(8.0)
-                    .child(
-                        row()
-                            .h(52.0)
-                            .w_full()
-                            .radius(8.0)
-                            .fill(surface)
-                            .border(
-                                1.0,
-                                s.theme.c(if s.theme.preset.id == id {
-                                    "accent"
-                                } else {
-                                    "border"
-                                }),
-                            )
-                            .child(el().w(28.0).h_full().fill(under))
-                            .child(
-                                el().size(24.0, 8.0)
-                                    .mt(16.0)
-                                    .ml(16.0)
-                                    .radius(4.0)
-                                    .fill(accent),
-                            ),
-                    )
-                    .child(
-                        button(s, &preset.name)
-                            .on_press(move |s: &mut State| apply(s, s.theme.dark, Some(&id))),
-                    ),
-            );
-        }
-        body = body.child(cards);
-    }
-    let mut accents = row().gap(8.0);
-    for (name, color) in [
-        ("Blue", "#5b9bff"),
-        ("Purple", "#a78bfa"),
-        ("Green", "#5fbd93"),
-        ("Orange", "#e8a25b"),
-        ("Pink", "#e883ba"),
-    ] {
-        accents = accents.child(button(s, name).on_press(move |s: &mut State| {
-            s.prefs.accent = Some(color.into());
-            apply(s, s.theme.dark, None);
-        }));
-    }
-    body = body.child(setting_row(s, "Accent", "Highlight color").child(accents));
-    let size = s.prefs.chat_font_size.unwrap_or(14.0);
-    body.child(
-        setting_row(s, "Chat font size", &format!("{} px", size as u32))
-            .child(button(s, "−").on_press(|s: &mut State| {
-                s.prefs.chat_font_size =
-                    Some((s.prefs.chat_font_size.unwrap_or(14.0) - 1.0).max(12.0));
-                s.chat.disclosure_revision += 1;
-                s.save();
-            }))
-            .child(button(s, "+").on_press(|s: &mut State| {
-                s.prefs.chat_font_size =
-                    Some((s.prefs.chat_font_size.unwrap_or(14.0) + 1.0).min(20.0));
-                s.chat.disclosure_revision += 1;
-                s.save();
-            })),
-    )
-}
-pub fn apply(s: &mut State, dark: bool, preset: Option<&str>) {
-    s.prefs.dark = Some(dark);
-    if let Some(preset) = preset {
-        s.prefs.preset = preset.into();
-        s.prefs.accent = None;
-    }
-    s.theme = restored_theme(&s.prefs, dark);
-    s.rows_revision += 1;
-    s.chat.disclosure_revision += 1;
-    if let Some(wake) = s.waker.clone() {
-        s.assets = Some(crate::assets::Assets::load(&s.theme, wake, false));
-    }
-    s.save();
-}
 pub fn restored_theme(prefs: &crate::profile::Preferences, dark: bool) -> Theme {
+    if let Some(p) = &prefs.theme {
+        let dark = match p.mode.as_str() {
+            "light" => false,
+            "dark" => true,
+            _ => dark,
+        };
+        return appearance::derive(dark, p.variant(dark));
+    }
+    let dark = prefs.dark.unwrap_or(dark);
     let theme = Theme::new(dark, &prefs.preset);
     if let Some(accent) = prefs
         .accent
@@ -544,55 +449,6 @@ pub fn restored_theme(prefs: &crate::profile::Preferences, dark: bool) -> Theme 
     } else {
         theme
     }
-}
-fn projects(s: &State, mut body: El) -> El {
-    if let Some(notice) = &s.pages.project_notice {
-        body = body.child(label(&s.theme, notice, 13.0, 400.0, "text-secondary").role("status"));
-    }
-    for p in &s.snapshot.projects {
-        let id = p.id.clone();
-        let instructions = id.clone();
-        body = body.child(
-            setting_row(s, p.display_name(), &p.canonical)
-                .child(button(s, "Instructions").on_press(move |s: &mut State| {
-                    s.pages.instructions_project = Some(instructions.clone());
-                    s.page_get(&format!("projects/{instructions}/instructions"));
-                }))
-                .child(
-                    button(s, "Worktrees")
-                        .on_press(move |s: &mut State| s.open_page(Route::Worktrees(id.clone()))),
-                ),
-        );
-    }
-    if let Some(id) = &s.pages.instructions_project {
-        let path = format!("projects/{id}/instructions");
-        body = body.child(section(s, "Project instructions"));
-        if let Some(status) = pages::status(s, &path) {
-            return body.child(status);
-        }
-        body = body.child(
-            rune::text_input(
-                &s.pages.instructions,
-                rune::TextStyle::new(13.0, 400.0).mono(),
-            )
-            .key("project-instructions")
-            .on_edit(|s: &mut State| &mut s.pages.instructions)
-            .w_full()
-            .h(240.0)
-            .padding(12.0)
-            .color(s.theme.c("text"))
-            .border(1.0, s.theme.c("border"))
-            .radius(8.0),
-        );
-        body = body.child(
-            button(s, "Save instructions").on_press(move |s: &mut State| {
-                let path = path.clone();
-                let text = s.pages.instructions.text.clone();
-                s.page_write(&path, "PUT", serde_json::json!({"text":text}), &path);
-            }),
-        );
-    }
-    body
 }
 fn usage(s: &State, mut body: El) -> El {
     if let Some(status) = pages::status(s, "usage/limits") {
@@ -634,6 +490,19 @@ pub fn capture(s: &mut State) {
     if page.is_empty() {
         return;
     }
+    if crate::apps::capture(s, page) {
+        return;
+    }
+    if matches!(
+        page.as_str(),
+        "project-add-open"
+            | "project-edit-open"
+            | "project-instructions-open"
+            | "worktrees-open"
+            | "worktrees-confirm-open"
+    ) {
+        s.pages.projects.capture_focus = true;
+    }
     match page.as_str() {
         "home-empty" => return,
         "sidebar-project-collapsed" => {
@@ -654,7 +523,12 @@ pub fn capture(s: &mut State) {
             }
             return;
         }
-        "project-picker-open" | "project-open-dialog" => {
+        "project-open-dialog" => {
+            s.prefs.project = None;
+            s.pages.route = Route::ProjectSetup;
+            return;
+        }
+        "project-picker-open" => {
             s.menus.open = Some(crate::menus::Menu::Projects);
             return;
         }
@@ -684,15 +558,75 @@ pub fn capture(s: &mut State) {
             }
             return;
         }
-        "project-actions-open" | "project-edit-open" => {
-            if let Some(p) = s.project() {
+        "project-add-open" => {
+            s.pages.route = Route::Settings("projects".into());
+            s.pages.projects.dialog = Some(projects::Dialog::Open(true));
+            return;
+        }
+        "project-actions-open"
+        | "project-edit-open"
+        | "project-instructions-open"
+        | "worktrees-open"
+        | "worktrees-confirm-open" => {
+            s.pages.route = Route::Settings("projects".into());
+            s.menus.point = std::env::var("OCR_MENU_POINT").ok().and_then(|p| {
+                let (x, y) = p.split_once(',')?;
+                Some((x.parse().ok()?, y.parse().ok()?))
+            });
+            if let Some(p) = s.project().cloned() {
                 let id = p.id.clone();
+                if page == "project-instructions-open" || page.starts_with("worktrees-") {
+                    let kind = if page.starts_with("worktrees-") {
+                        "worktrees"
+                    } else {
+                        "instructions"
+                    };
+                    if let Some(url) = &crate::OPTIONS.get().unwrap().gateway {
+                        let url = url.clone();
+                        let path = format!("projects/{id}/{kind}");
+                        let fetchpath = path.clone();
+                        let result =
+                            std::thread::spawn(move || oc_gateway::capture_page(&url, &fetchpath))
+                                .join()
+                                .unwrap();
+                        pages::receive(s, &format!("page:{path}"), result);
+                    }
+                    if page == "worktrees-confirm-open" {
+                        s.pages.projects.removing =
+                            pages::data(s, &format!("projects/{id}/worktrees"))
+                                .and_then(serde_json::Value::as_array)
+                                .and_then(|v| {
+                                    v.iter().find(|t| {
+                                        t["strategy"] == "git" && t["directory"] != p.canonical
+                                    })
+                                })
+                                .and_then(|t| t["directory"].as_str())
+                                .map(str::to_owned);
+                    }
+                    s.pages.projects.dialog = Some(if page.starts_with("worktrees-") {
+                        projects::Dialog::Worktrees(id)
+                    } else {
+                        projects::Dialog::Instructions(id)
+                    });
+                    return;
+                }
                 s.menus.search = rune::TextEdit::new(p.display_name());
-                s.menus.open = Some(if page == "project-edit-open" {
-                    crate::menus::Menu::EditProject(id)
+                if page == "project-edit-open" {
+                    s.pages.projects.name = rune::TextEdit::new(p.display_name());
+                    s.pages.projects.color = p
+                        .icon
+                        .as_ref()
+                        .and_then(|i| i.color.clone())
+                        .unwrap_or_default();
+                    s.pages.projects.image = p
+                        .icon
+                        .as_ref()
+                        .and_then(|i| i.r#override.clone())
+                        .unwrap_or_default();
+                    s.pages.projects.dialog = Some(projects::Dialog::Edit(id));
                 } else {
-                    crate::menus::Menu::Project(id)
-                });
+                    s.menus.open = Some(crate::menus::Menu::Project(id));
+                }
             }
             return;
         }

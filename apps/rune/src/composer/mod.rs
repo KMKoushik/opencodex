@@ -6,7 +6,7 @@ use rune::{El, TextStyle, col, el, icon, row, text_input};
 mod access;
 pub mod capture;
 mod commands;
-mod fuzzy;
+pub(crate) mod fuzzy;
 mod icons;
 pub mod keys;
 pub mod menus;
@@ -88,7 +88,7 @@ pub fn view(s: &State, width: f32, height: f32) -> El {
             .label("Choose project")
             .focusable(true)
             .on_press_tx(|s: &mut State, tx| {
-                crate::menus::open_projects(s, tx);
+                crate::menus::switch_projects(s, tx);
             }),
         )
         .child(starters(s, inner));

@@ -1,6 +1,7 @@
 //! The native client talks only to the TypeScript gateway, never to OpenCode.
 mod client;
 pub mod messages;
+mod project_icon;
 pub mod prompt;
 mod snapshot;
 mod sse;
@@ -44,6 +45,7 @@ pub enum Command {
 pub struct Worker {
     latest: Arc<Mutex<Option<Arc<Snapshot>>>>,
     chat: Arc<Mutex<Option<Arc<messages::Messages>>>>,
+    page_changes: Arc<Mutex<std::collections::BTreeSet<String>>>,
     commands: mpsc::Sender<Command>,
     stop: Option<tokio::sync::oneshot::Sender<()>>,
 }
@@ -57,6 +59,8 @@ impl Worker {
         let mailbox = latest.clone();
         let chat = Arc::new(Mutex::new(None));
         let chat_mailbox = chat.clone();
+        let page_changes = Arc::new(Mutex::new(std::collections::BTreeSet::new()));
+        let pages_mailbox = page_changes.clone();
         let (commands, mut receiver) = mpsc::channel(16);
         let (stop, stopped) = tokio::sync::oneshot::channel();
         std::thread::Builder::new().name("gateway".into()).spawn(move || {
@@ -71,6 +75,7 @@ impl Worker {
                     *chat_mailbox.lock().expect("chat mailbox") = Some(Arc::new(s.clone()));
                     wake();
                 };
+                let invalidate=|key:String|{let mut changes=pages_mailbox.lock().expect("page events");if changes.len()>=64{changes.clear();changes.insert("all".into());}else{changes.insert(key);}drop(changes);wake();};
                 let run = async {
                     let mut snapshot = Snapshot::default();
                     let mut transcript: Option<messages::Messages> = None;
@@ -107,6 +112,8 @@ impl Worker {
                                                 }
                                                 "opencode" => {
                                                     let event: types::Event = serde_json::from_str(&data).map_err(|e| format!("Invalid gateway event: {e}"))?;
+                                                    if event.r#type.starts_with("rpc.opencodex.tasks."){invalidate("tasks".into());}
+                                                    if matches!(event.r#type.as_str(),"worktree.updated"|"worktree.resolved") {if let Some(id)=event.data["projectID"].as_str(){invalidate(format!("worktree:{id}"));}}
                                                     if let Some(chat) = &mut transcript {
                                                         let (changed, refresh) = chat.reduce(&event);
                                                         if changed { publish_chat(chat); }
@@ -120,6 +127,10 @@ impl Worker {
                                                     if changed { publish(&mut snapshot); }
                                                 }
                                                 "unavailable" => return Err("OpenCode is unavailable".into()),
+                                                "canvas" => {
+                                                    let event:serde_json::Value=serde_json::from_str(&data).map_err(|e|format!("Invalid canvas event: {e}"))?;
+                                                    match event["type"].as_str(){Some("list")=>invalidate("apps".into()),Some("app")|Some("source")=>{if let Some(id)=event["id"].as_str(){invalidate(format!("{}:{id}",event["type"].as_str().unwrap()));}},_=>{}}
+                                                },
                                                 _ => {}
                                             }
                                         }
@@ -200,6 +211,7 @@ impl Worker {
         Self {
             latest,
             chat,
+            page_changes,
             commands,
             stop: Some(stop),
         }
@@ -209,6 +221,11 @@ impl Worker {
     }
     pub fn take_messages(&self) -> Option<Arc<messages::Messages>> {
         self.chat.lock().expect("chat mailbox").take()
+    }
+    pub fn take_page_changes(&self) -> Vec<String> {
+        std::mem::take(&mut *self.page_changes.lock().expect("page events"))
+            .into_iter()
+            .collect()
     }
     pub fn command(&self, command: Command) -> Result<(), String> {
         self.commands.try_send(command).map_err(|e| e.to_string())

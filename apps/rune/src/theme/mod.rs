@@ -36,22 +36,28 @@ pub struct Theme {
     shadows: BTreeMap<String, Vec<Shadow>>,
 }
 pub fn presets(dark: bool) -> Vec<Preset> {
+    preset_list(dark).to_vec()
+}
+pub fn preset(dark: bool, id: &str) -> &'static Preset {
+    let choices = preset_list(dark);
+    choices.iter().find(|p| p.id == id).unwrap_or(&choices[0])
+}
+pub fn preview_border(seed: &Seed) -> Color {
+    rune::color::hex(&css(mix(rgb(&seed.surface), rgb(&seed.ink), 0.16)))
+        .expect("theme preview border")
+}
+fn preset_list(dark: bool) -> &'static [Preset] {
     static ALL: std::sync::OnceLock<BTreeMap<String, Vec<Preset>>> = std::sync::OnceLock::new();
     ALL.get_or_init(|| {
         serde_json::from_str(include_str!("../../presets.json")).expect("bundled theme seeds")
     })
     .get(if dark { "dark" } else { "light" })
     .expect("appearance")
-    .clone()
+    .as_slice()
 }
 impl Theme {
     pub fn new(dark: bool, id: &str) -> Self {
-        let choices = presets(dark);
-        let p = choices
-            .iter()
-            .find(|p| p.id == id)
-            .unwrap_or(&choices[0])
-            .clone();
+        let p = preset(dark, id).clone();
         Self::derive(dark, p.clone(), p.seed.clone(), false)
     }
     /// Custom surfaces deliberately invalidate a preset's published sidebar tone.

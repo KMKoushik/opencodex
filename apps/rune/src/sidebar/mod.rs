@@ -285,13 +285,19 @@ pub fn view(s: &State) -> El {
         )
         .child(
             nav(t, &i::APPS, "Apps")
-                .fill(if s.pages.route == crate::pages::Route::Apps {
-                    t.c("selected")
-                } else {
-                    rune::Color::TRANSPARENT
-                })
-                .on_press(|s: &mut State| s.open_page(crate::pages::Route::Apps)),
-        );
+                .fill(
+                    if s.pages.route == crate::pages::Route::Apps && s.pages.app.is_none() {
+                        t.c("selected")
+                    } else {
+                        rune::Color::TRANSPARENT
+                    },
+                )
+                .on_press(|s: &mut State| {
+                    s.pages.app = None;
+                    s.open_page(crate::pages::Route::Apps)
+                }),
+        )
+        .child(crate::apps::sidebar(s));
     let list = col()
         .key("project-list")
         .w_full()
@@ -497,11 +503,7 @@ fn render_item(s: &State, n: usize) -> El {
                         .w(24.0)
                         .group_opacity(0.0, 1.0)
                         .on_press(move |s: &mut State| {
-                            if let Some(p) = s.snapshot.projects.iter().find(|p| p.id == close) {
-                                s.prefs.closed_projects.push(p.canonical.clone());
-                            }
-                            rebuild(s);
-                            s.save();
+                            crate::settings::projects::close_project(s, &close);
                         }),
                 )
         }
