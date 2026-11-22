@@ -22,6 +22,8 @@ pub struct Editor {
 }
 #[derive(Default)]
 pub struct Board {
+    pub capture_focus: bool,
+    pub starting: Option<String>,
     pub filter: String,
     pub adding: Option<String>,
     pub editor: Option<Editor>,
@@ -182,6 +184,21 @@ pub fn view(s: &State) -> El {
             .w(200.0),
         );
     let mut body = col()
+        .on_layout_tx(|s: &mut State, _, tx| {
+            if s.pages.tasks.capture_focus {
+                s.pages.tasks.capture_focus = false;
+                tx.focus_when_shown(
+                    if s.pages.tasks.editor.is_some() {
+                        "Edit task title"
+                    } else {
+                        "New task"
+                    },
+                    false,
+                );
+            } else {
+                tx.live_only();
+            }
+        })
         .w_full()
         .max_w(1440.0)
         .grow(1.0)
@@ -532,15 +549,18 @@ pub fn edit(s: &mut State, task: &Value, tx: &mut rune::Tx) {
     {
         save_with_focus(s, tx, false);
     }
-    s.pages.tasks.editor = Some(Editor {
+    s.pages.tasks.editor = Some(editor_for(task));
+    tx.focus_when_shown("Edit task title", false);
+}
+pub fn editor_for(task: &Value) -> Editor {
+    Editor {
         id: task["id"].as_str().unwrap().into(),
         title: TextEdit::new(task["title"].as_str().unwrap_or("")),
         notes: TextEdit::new(task["notes"].as_str().unwrap_or("")),
         directory: task["project"]["directory"].as_str().unwrap_or("").into(),
         bucket: task["bucket"].as_str().unwrap().into(),
         assignee: task["assignee"].as_str().unwrap_or("user").into(),
-    });
-    tx.focus_when_shown("Edit task title", false);
+    }
 }
 pub fn save(s: &mut State, tx: &mut rune::Tx) {
     save_with_focus(s, tx, true);

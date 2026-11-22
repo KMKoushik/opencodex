@@ -662,7 +662,7 @@ pub fn capture(s: &mut State) {
         _ => {}
     }
     s.pages.route = match page.as_str() {
-        "tasks" | "tasks-empty" => Route::Tasks,
+        "tasks" | "tasks-empty" | "tasks-edit-open" | "tasks-new-open" => Route::Tasks,
         "apps" | "apps-empty" => Route::Apps,
         "usage-limits-open" => Route::Settings("usage".into()),
         "settings-remote-access" => Route::Settings("remote".into()),
@@ -709,5 +709,22 @@ pub fn capture(s: &mut State) {
             _ => "usage/limits",
         };
         pages::receive(s, &format!("page:{path}"), result);
+    }
+    if page == "tasks-edit-open" {
+        if let Some(task) = pages::data(s, "tasks")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|tasks| {
+                tasks
+                    .iter()
+                    .find(|t| t["title"] == "Review the API changes")
+            })
+        {
+            s.pages.tasks.editor = Some(crate::tasks::board::editor_for(task));
+            s.pages.tasks.capture_focus = true;
+        }
+    }
+    if page == "tasks-new-open" {
+        s.pages.tasks.adding = Some("today".into());
+        s.pages.tasks.capture_focus = true;
     }
 }

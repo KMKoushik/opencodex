@@ -383,6 +383,25 @@ impl Theme {
     pub fn c(&self, token: &str) -> Color {
         self.colors[token]
     }
+    /// Component-local CSS color-mix recipes still derive only from semantic tokens.
+    pub fn tint(&self, token: &str, amount: f32) -> Color {
+        self.c(token).alpha(amount)
+    }
+    pub fn blend(&self, first: &str, second: &str, first_fraction: f32) -> Color {
+        let t = first_fraction.clamp(0.0, 1.0);
+        let a = self.c(first).premul_srgb(1.0);
+        let b = self.c(second).premul_srgb(1.0);
+        let out: [f32; 4] = std::array::from_fn(|n| a[n] * t + b[n] * (1.0 - t));
+        if out[3] == 0.0 {
+            return Color::TRANSPARENT;
+        }
+        Color {
+            r: rune::color::srgb_decode(out[0] / out[3]),
+            g: rune::color::srgb_decode(out[1] / out[3]),
+            b: rune::color::srgb_decode(out[2] / out[3]),
+            a: out[3],
+        }
+    }
     pub fn paint(&self, mut el: El, token: &str) -> El {
         if let Some(stops) = self.gradients.get(token) {
             el = el.linear_gradient(std::f32::consts::PI, stops.clone());

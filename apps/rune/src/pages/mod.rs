@@ -181,6 +181,9 @@ pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) -> bool 
     }
     if let Some(path) = tag.strip_prefix("page-refresh:") {
         s.pages.pending.remove(path);
+        if path == "task-start" {
+            s.pages.tasks.starting = None;
+        }
         if path == "session-background" {
             if let Err(error) = result {
                 s.error = Some(format!("Could not move work to the background. {error}"));
@@ -292,17 +295,29 @@ pub fn button(s: &State, title: &str) -> El {
     )
 }
 pub fn primary_button(s: &State, title: &str) -> El {
+    primary_sized(s, title, false)
+}
+pub fn primary_small_button(s: &State, title: &str) -> El {
+    primary_sized(s, title, true)
+}
+fn primary_sized(s: &State, title: &str, small: bool) -> El {
     s.theme.shadow(
         s.theme.paint(
             el().role("button")
                 .key(format!("page-action-{title}"))
                 .label(title)
                 .focusable(true)
-                .px(14.0)
-                .h(32.0)
+                .px(if small { 10.0 } else { 14.0 })
+                .h(if small { 28.0 } else { 32.0 })
                 .center()
                 .radius(8.0)
-                .child(label(&s.theme, title, 13.0, 600.0, "on-primary")),
+                .child(label(
+                    &s.theme,
+                    title,
+                    if small { 12.0 } else { 13.0 },
+                    if small { 500.0 } else { 600.0 },
+                    "on-primary",
+                )),
             "primary-glaze",
         ),
         "primary-shadow",

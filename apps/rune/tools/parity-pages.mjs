@@ -69,6 +69,11 @@ try {
           await page.locator('.settings-page').waitFor();
         }
         if (state === 'tasks-empty' || state === 'tasks') await click('Tasks');
+        if (state === 'tasks-edit-open' || state === 'tasks-new-open') {
+          await click('Tasks');
+          if (state === 'tasks-edit-open') await click('Review the API changes');
+          else await click('Add a task to Today');
+        }
         if (state === 'apps-empty' || state === 'apps') await click('Apps');
         if (
           [
@@ -181,6 +186,8 @@ try {
           }
         }
         await page.evaluate(() => document.fonts.ready);
+        // Park the pointer away from controls: native captures start unhovered too.
+        await page.mouse.move(width - 2, height - 2);
         await page.waitForTimeout(500);
         const stem = `${state}-${theme}-${width}x${height}-${process.env.OCR_LABEL ?? 'final'}`;
         await page.screenshot({ path: `${out}/web-${stem}.png` });

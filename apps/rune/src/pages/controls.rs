@@ -47,6 +47,9 @@ pub struct Select {
     pub active: usize,
 }
 pub fn ghost(s: &State, title: &str) -> El {
+    ghost_tone(s, title, "text-secondary")
+}
+pub fn ghost_tone(s: &State, title: &str, tone: &str) -> El {
     el().role("button")
         .label(title)
         .focusable(true)
@@ -55,7 +58,7 @@ pub fn ghost(s: &State, title: &str) -> El {
         .center()
         .radius(8.0)
         .hover(s.theme.c("hover"))
-        .child(label(&s.theme, title, 12.0, 500.0, "text-secondary"))
+        .child(label(&s.theme, title, 12.0, 500.0, tone))
 }
 pub fn segment(
     s: &State,

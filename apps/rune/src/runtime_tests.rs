@@ -198,6 +198,13 @@ fn task_drag_container_does_not_swallow_card_controls_or_escape() {
     assert!(rt.state.pages.tasks.editor.is_none());
     assert_eq!(rt.state.pages.route, pages::Route::Tasks);
     assert!(rt.state.error.is_none(), "cancel never sends a task update");
+    let mut bounded = rune::TextEdit::new("ab-tail");
+    bounded.set_selection(1, 2);
+    assert!(pages::controls::limit_input(&mut bounded, "😀x", 8));
+    assert_eq!(
+        bounded.text, "a😀-tail",
+        "UTF-16 limits retain the untouched suffix and do not split a scalar"
+    );
     rt.update(|s,_|{s.pages.data.insert("tasks".into(),Ok(serde_json::Value::Array((0..2000).map(|n|serde_json::json!({"id":format!("task-{n}"),"title":format!("Review change {n}"),"notes":"Check the API and update its documentation.","bucket":"today","order":n,"time":{"moved":0}})).collect())));});
     let start = std::time::Instant::now();
     rt.frame(0.4);
