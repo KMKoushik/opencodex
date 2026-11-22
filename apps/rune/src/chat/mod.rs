@@ -21,7 +21,9 @@ pub(crate) mod details;
 mod document;
 pub(crate) use attachments::download as download_attachment;
 pub(crate) use document::open as open_document;
+mod measure;
 mod media;
+pub use measure::ScrollStart;
 #[cfg(target_os = "macos")]
 mod pasteboard;
 pub mod preview;
@@ -41,7 +43,8 @@ pub struct Chat {
     pub position: Rc<Cell<rune::ScrollPos>>,
     pub jump: bool,
     pub loading_earlier: bool,
-    pub scroll_applied: bool,
+    pub scroll_start: ScrollStart,
+    pub measurements: measure::Measurements,
     pub details: bool,
     pub context: bool,
     pub comment_editor: Option<comments::Editor>,
@@ -93,7 +96,8 @@ impl Default for Chat {
             position: Rc::new(Cell::default()),
             jump: false,
             loading_earlier: false,
-            scroll_applied: false,
+            scroll_start: ScrollStart::Initial,
+            measurements: Default::default(),
             details: false,
             context: false,
             comment_editor: None,
@@ -197,9 +201,10 @@ pub fn view(s: &State, width: f32) -> El {
                 .w_full()
                 .items_center()
                 .growth(GrowthSpec::default())
+                .whole_rows()
                 .virtual_rows(
                     s.chat.rows.len() + 2,
-                    100.0,
+                    s.chat.measurements.estimate(),
                     |s: &State, n| {
                         if n == 0 {
                             "history-status".into()
@@ -244,7 +249,13 @@ pub fn view(s: &State, width: f32) -> El {
                             }
                             return end;
                         }
-                        render_row(s, &s.chat.rows[n - 1])
+                        let r = &s.chat.rows[n - 1];
+                        let id = r.id.clone();
+                        render_row(s, r).on_layout_tx(move |s: &mut State, rect, tx| {
+                            if !s.chat.measurements.record(&id, rect[2], s.prefs.chat_font_size.unwrap_or(14.0), rect[3]) {
+                                tx.live_only();
+                            }
+                        })
                     },
                 )
                 .virtual_rows_version(

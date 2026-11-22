@@ -101,22 +101,40 @@ pub(crate) fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
             s.chat.jump = away;
             changed = true;
         }
-        if at.viewport[1] > 0.0 && !s.chat.scroll_applied {
+        if at.viewport[1] > 0.0 && s.chat.scroll_start != chat::ScrollStart::Applied {
             let scroll = &OPTIONS.get().unwrap().scroll;
-            if scroll == "top" {
+            // Match the web's top-of-history priming before reading a fractional
+            // extent. Only virtual windows mount; opening at the end is unchanged.
+            if scroll == "middle" && s.chat.scroll_start == chat::ScrollStart::Initial {
                 tx.scroll_to_instant(chat::scroll_key(s), 0.0, 0.0);
+                s.chat.scroll_start = chat::ScrollStart::Priming;
+                changed = true;
+            } else if scroll == "middle"
+                && s.chat.data.cursor.is_some()
+                && s.chat.data.error.is_none()
+            {
+                // A prepended page preserves its anchor. Re-prime only when a
+                // page actually arrives, not on every frame while fetching it.
+                if chat_updated {
+                    tx.scroll_to_instant(chat::scroll_key(s), 0.0, 0.0);
+                    changed = true;
+                }
+            } else {
+                if scroll == "top" {
+                    tx.scroll_to_instant(chat::scroll_key(s), 0.0, 0.0);
+                }
+                if scroll == "middle" {
+                    tx.scroll_to_instant(chat::scroll_key(s), 0.0, at.max[1] * 0.5);
+                }
+                s.chat.scroll_start = chat::ScrollStart::Applied;
+                changed = true;
             }
-            if scroll == "middle" {
-                tx.scroll_to_instant(chat::scroll_key(s), 0.0, at.max[1] * 0.5);
-            }
-            s.chat.scroll_applied = true;
-            changed = true;
         }
         if !chat_updated
             && s.worker.is_some()
             && at.viewport[1] > 0.0
             && at.offset[1] < 240.0
-            && s.chat.scroll_applied
+            && s.chat.scroll_start != chat::ScrollStart::Initial
             && !s.chat.loading_earlier
             && s.chat.data.error.is_none()
             && s.chat.data.cursor.is_some()
