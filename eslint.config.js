@@ -16,6 +16,7 @@ export default tseslint.config(
       '**/coverage/**',
       'test-results/**',
       'playwright-report/**',
+      'bench/.build/**',
       'packages/gateway/src/canvas-runtime.generated.ts',
       'packages/gateway/src/canvas-types.generated.ts',
     ],

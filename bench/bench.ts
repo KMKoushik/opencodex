@@ -129,6 +129,10 @@ const launchEnv = Object.fromEntries(
 ) as Record<string, string>;
 
 async function launch(dataDir: string, extraEnv: Record<string, string>): Promise<Launch> {
+  if (snapshot().some((p) => p.command.startsWith(bundlePrefix ?? executable)))
+    throw new Error(
+      'This exact app path is already running. Close it before benchmarking; existing app instances will never be counted or terminated.',
+    );
   const log = join(dataDir, `markers-${Date.now()}.log`);
   const stdoutLog = `${log}.stdout`;
   writeFileSync(log, '');
