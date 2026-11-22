@@ -37,6 +37,7 @@ struct Options {
     work: Option<String>,
     composer_state: String,
     page: String,
+    size: (f32, f32),
 }
 static OPTIONS: OnceLock<Options> = OnceLock::new();
 struct State {
@@ -94,7 +95,7 @@ impl State {
             composer: Default::default(),
             docks: Default::default(),
             error: None,
-            window_size: (1240.0, 840.0),
+            window_size: options.size,
             waker: None,
             chat_settle_due: None,
             chat_settled: false,
@@ -120,7 +121,13 @@ impl State {
             .project
             .as_ref()
             .and_then(|d| self.snapshot.projects.iter().find(|p| &p.canonical == d))
-            .or_else(|| self.snapshot.projects.first())
+            .filter(|p| !self.prefs.closed_projects.contains(&p.canonical))
+            .or_else(|| {
+                self.snapshot
+                    .projects
+                    .iter()
+                    .find(|p| !self.prefs.closed_projects.contains(&p.canonical))
+            })
     }
     fn open_session(&mut self, id: Option<String>) {
         self.pages.route = pages::Route::Chat;
@@ -356,6 +363,7 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
     shell
 }
 fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
+    pages::poll(s, clock, tx);
     notifications::clear_on_focus(s);
     let mut changed = false;
     if s.menus.toast_due.is_some_and(|due| clock >= due) {
@@ -465,7 +473,11 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
         }
         notifications::snapshot(s, &snapshot);
         let reconnected = snapshot.live && !s.snapshot.live;
+        let first_projects = s.snapshot.projects.is_empty() && !snapshot.projects.is_empty();
         s.snapshot = snapshot;
+        if first_projects {
+            sidebar::initialize(s);
+        }
         if reconnected && s.pages.route != pages::Route::Chat {
             s.open_page(s.pages.route.clone());
         }
@@ -547,6 +559,12 @@ fn main() {
             work: value("--work"),
             composer_state: value("--composer-state").unwrap_or_default(),
             page: value("--page").unwrap_or_default(),
+            size: value("--size")
+                .and_then(|v| {
+                    let (w, h) = v.split_once('x')?;
+                    Some((w.parse().ok()?, h.parse().ok()?))
+                })
+                .unwrap_or((1240.0, 840.0)),
         })
         .ok();
     if let Some(id) = value("--profile-chat") {
@@ -684,6 +702,7 @@ fn main() {
                 s.chat.expand(mode);
             }
             composer::capture::setup(&mut s);
+            sidebar::initialize(&mut s);
             settings::capture(&mut s);
             sidebar::rebuild(&mut s);
         }

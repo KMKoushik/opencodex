@@ -21,6 +21,6 @@ pub fn view(s: &State) -> El {
     ))
     .child(button(s, "Try again").mt(12.0).on_press(|s: &mut State| {
         s.command(oc_gateway::Command::Refresh);
-        s.page_mutate("connection", serde_json::json!({}), "connection", false);
+        s.page_get("connection");
     }))
 }

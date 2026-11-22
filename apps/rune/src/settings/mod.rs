@@ -46,15 +46,56 @@ pub fn view(s: &State, section: &str) -> El {
                 ));
             }
             for &(name, chord, _) in crate::shortcuts::COMMANDS {
+                if matches!(
+                    name,
+                    "Focus message"
+                        | "Choose model"
+                        | "Choose thinking level"
+                        | "Cycle thinking level"
+                        | "Move running work to the background"
+                ) || chord == "mod+alt+n"
+                {
+                    continue;
+                }
                 let keys = chord
                     .replace("mod+", "⌘")
                     .replace("ctrl+", "⌃")
                     .replace("alt+", "⌥")
                     .replace("shift+", "⇧")
                     .to_uppercase();
-                app = app.child(shortcut_row(s, name, &keys));
+                if name == "Focus thread navigation" {
+                    app = app.child(shortcut_row(
+                        s,
+                        "Close sidebar overlay / leave settings or tasks",
+                        "Esc",
+                    ));
+                }
+                app = app.child(shortcut_row(
+                    s,
+                    name,
+                    if name == "New chat" {
+                        "⌘N / ⌘⌥N"
+                    } else {
+                        &keys
+                    },
+                ));
             }
-            body.child(app)
+            let mut chat = group(s, "Chat");
+            for (name, keys) in [
+                ("Focus message", "⌘⇧L"),
+                ("Choose model", "⌘⇧M"),
+                ("Choose thinking level", "⌘⇧E"),
+                ("Cycle thinking level", "⌃T"),
+                ("Move running work to the background", "⌃B"),
+                ("Stop response", "Esc Esc"),
+            ] {
+                chat = chat.child(shortcut_row(s, name, keys));
+            }
+            body.child(app).child(chat).child(
+                group(s, "Message input")
+                    .child(shortcut_row(s, "Send message", "Enter"))
+                    .child(shortcut_row(s, "Insert a new line", "Shift+Enter")),
+            )
         }
         "projects" => projects(s, body),
         "usage" => usage(s, body),
@@ -79,6 +120,10 @@ pub fn navigation(s: &State, section: &str) -> El {
     );
     for &(id, name) in SECTIONS {
         let icon = match id {
+            "general" => &crate::icons::GENERAL,
+            "appearance" => &crate::icons::APPEARANCE,
+            "shortcuts" => &crate::icons::KEYBOARD,
+            "remote" => &crate::icons::GLOBE,
             "projects" => &crate::icons::FOLDER,
             "usage" => &crate::icons::USAGE,
             _ => &crate::icons::SETTINGS,
@@ -115,6 +160,22 @@ fn shortcut_row(s: &State, title: &str, chord: &str) -> El {
         )
 }
 fn setting_row(s: &State, title: &str, description: &str) -> El {
+    setting_row_styled(s, title, description, vec![])
+}
+fn setting_row_styled(s: &State, title: &str, description: &str, spans: Vec<rune::Span>) -> El {
+    let mut content = col()
+        .grow(1.0)
+        .min_w(0.0)
+        .gap(2.0)
+        .child(label(&s.theme, title, 13.0, 400.0, "text"));
+    if !description.is_empty() {
+        content = content.child(
+            label(&s.theme, description, 12.0, 400.0, "text-secondary")
+                .spans(spans)
+                .w_full()
+                .wrap(),
+        );
+    }
     row()
         .w_full()
         .min_h(52.0)
@@ -123,43 +184,51 @@ fn setting_row(s: &State, title: &str, description: &str) -> El {
         .gap(16.0)
         .center_y()
         .border_sides([1.0, 0.0, 0.0, 0.0], s.theme.c("border"))
-        .child(
-            col()
-                .grow(1.0)
-                .min_w(0.0)
-                .gap(4.0)
-                .child(label(&s.theme, title, 13.0, 500.0, "text"))
-                .child(
-                    label(&s.theme, description, 12.0, 400.0, "text-secondary")
-                        .w_full()
-                        .wrap(),
-                ),
-        )
+        .child(content)
 }
 fn general(s: &State, mut body: El) -> El {
+    let connection = data(s, "connection");
+    let connected = connection.is_some_and(|v| v["status"] == "connected");
+    let status = match s.pages.data.get("connection") {
+        Some(Err(_)) => "The local gateway is unavailable.".into(),
+        _ if connected => format!(
+            "Connected · v{}",
+            connection.unwrap()["version"].as_str().unwrap_or("")
+        ),
+        _ => connection
+            .and_then(|v| v["message"].as_str())
+            .unwrap_or("Checking…")
+            .into(),
+    };
     let mut service = group(s, "OpenCode")
         .child(
             setting_row(
                 s,
                 "Service",
-                if s.snapshot.live {
-                    "Connected"
-                } else {
-                    "Disconnected"
-                },
+                s.pages
+                    .errors
+                    .get("connection")
+                    .map(String::as_str)
+                    .unwrap_or(&status),
             )
             .child(
-                button(s, if s.snapshot.live { "Check" } else { "Connect" }).on_press(
-                    |s: &mut State| {
-                        s.page_mutate("connection", serde_json::json!({}), "connection", false)
-                    },
-                ),
+                button(s, if connected { "Check" } else { "Connect" })
+                    .disabled(s.pages.pending.contains("connection"))
+                    .on_press(|s: &mut State| {
+                        if data(s, "connection").is_some_and(|v| v["status"] == "connected") {
+                            s.page_get("connection");
+                        } else {
+                            s.page_mutate("connection", serde_json::json!({}), "connection", false);
+                        }
+                    }),
             ),
         )
         .child(setting_row(
             s,
             "Live updates",
-            if s.snapshot.live {
+            if !connected {
+                "Unavailable"
+            } else if s.snapshot.live {
                 "Connected"
             } else {
                 "Reconnecting…"
@@ -177,16 +246,9 @@ fn general(s: &State, mut body: El) -> El {
             "Install a small OpenCode plugin so agents can make canvases: charts, dashboards, diagrams, and small tools shown beside the chat in your theme.",
         ),
     ] {
-        let active = data(s, path).is_some_and(|v| v["state"] == "active");
-        service = service.child(setting_row(s, title, description).child(
-            button(s, if active { "Installed" } else { "Install" }).on_press(
-                move |s: &mut State| {
-                    if !active {
-                        s.page_write(path, "PUT", serde_json::json!({}), path);
-                    }
-                },
-            ),
-        ));
+        if connected {
+            service = service.child(plugin_row(s, path, title, description));
+        }
     }
     body = body.child(service);
     let mut notifications = group(s, "Notifications");
@@ -204,51 +266,164 @@ fn general(s: &State, mut body: El) -> El {
         ),
     ] {
         let enabled = s.prefs.notifications.get(kind).copied().unwrap_or(false);
-        let mut toggle = row()
-            .gap(2.0)
-            .padding(3.0)
-            .radius(8.0)
-            .fill(s.theme.c("surface-under"));
+        let mut toggle = s.theme.shadow(
+            s.theme
+                .paint(row().gap(2.0).padding(2.0).radius(9.0), "well"),
+            "well-shadow",
+        );
         for (value, name) in [(false, "Off"), (true, "On")] {
-            toggle = toggle.child(
-                button(s, name)
-                    .fill(if enabled == value {
-                        s.theme.c("elevated")
+            let option = el()
+                .role("radio")
+                .label(name)
+                .focusable(true)
+                .h(26.0)
+                .px(10.0)
+                .center()
+                .radius(7.0)
+                .child(label(
+                    &s.theme,
+                    name,
+                    12.0,
+                    500.0,
+                    if enabled == value {
+                        "text"
                     } else {
-                        rune::Color::TRANSPARENT
-                    })
-                    .on_press(move |s: &mut State| {
-                        s.prefs.notifications.insert(kind.into(), value);
-                        s.save();
-                    }),
-            );
+                        "text-secondary"
+                    },
+                ));
+            let option = if enabled == value {
+                s.theme
+                    .shadow(s.theme.paint(option, "glaze"), "glaze-shadow")
+            } else {
+                option
+            };
+            toggle = toggle.child(option.on_press(move |s: &mut State| {
+                s.prefs.notifications.insert(kind.into(), value);
+                s.save();
+            }));
         }
         notifications = notifications.child(setting_row(s, title, description).child(toggle));
     }
     body = body.child(notifications);
     if let Some(p) = s.project() {
-        body =
-            body.child(group(s, "Project").child(setting_row(s, p.display_name(), &p.canonical)));
+        let directory = p.canonical.clone();
+        body = body.child(group(s, "Project").child(
+            setting_row(s, p.display_name(), &p.canonical).child(
+                button(s, "Close project").on_press(move |s: &mut State| {
+                    s.prefs.closed_projects.push(directory.clone());
+                    s.prefs.project = None;
+                    s.open_session(None);
+                    s.open_page(Route::Settings("general".into()));
+                    crate::sidebar::rebuild(s);
+                    s.save();
+                }),
+            ),
+        ));
+    } else {
+        body = body.child(group(s, "Project").child(setting_row(s, "No project open", "")));
     }
-    body.child(group(s, "Updates").child(setting_row(
-        s,
-        "OpenCodex",
-        "0.1.0 · Native preview. Automatic updates are not available yet.",
-    )))
+    body
+}
+fn plugin_row(s: &State, path: &'static str, title: &str, missing: &str) -> El {
+    let value = data(s, path);
+    let state = value.and_then(|v| v["state"].as_str()).unwrap_or("");
+    let description = match state {
+        "missing" => missing,
+        "outdated" => {
+            "An older version is installed. Update it to match this version of OpenCodex."
+        }
+        "loading" => "Installed. Waiting for OpenCode to load it…",
+        "active" if path == "side-chat-plugin" => {
+            "Active. Side chats can read the main chat’s latest progress."
+        }
+        "active" => "Active. Agents can make canvases.",
+        "failed" => "OpenCode couldn’t load the plugin.",
+        "unavailable" => "",
+        _ => "Checking…",
+    };
+    let mut parts = vec![description];
+    if let Some(value) = value {
+        parts.push(value["message"].as_str().unwrap_or(""));
+        if state == "loading"
+            && s.pages
+                .plugin_checks
+                .get(path)
+                .is_some_and(|(_, count)| *count >= 30)
+        {
+            parts.push("If it doesn’t load, restart OpenCode with opencode service restart.");
+        }
+        parts.push(value["path"].as_str().unwrap_or(""));
+    }
+    let text = if let Some(error) = s.pages.errors.get(path) {
+        error.clone()
+    } else {
+        match s.pages.data.get(path) {
+            Some(Err(error)) => error.clone(),
+            _ => parts
+                .into_iter()
+                .filter(|p| !p.is_empty())
+                .collect::<Vec<_>>()
+                .join(" "),
+        }
+    };
+    let spans = value
+        .and_then(|v| v["path"].as_str())
+        .filter(|_| !s.pages.errors.contains_key(path))
+        .and_then(|path| {
+            text.rfind(path).map(|start| {
+                vec![
+                    rune::Span::new(start, start + path.len())
+                        .mono()
+                        .color(s.theme.c("text-tertiary")),
+                ]
+            })
+        })
+        .unwrap_or_default();
+    let mut result = setting_row_styled(s, title, &text, spans);
+    if matches!(state, "missing" | "outdated") {
+        result = result.child(
+            button(
+                s,
+                if state == "missing" {
+                    "Install"
+                } else {
+                    "Update"
+                },
+            )
+            .disabled(s.pages.pending.contains(path))
+            .on_press(move |s: &mut State| s.page_write(path, "PUT", serde_json::json!({}), path)),
+        );
+    }
+    if matches!(state, "loading" | "active" | "failed" | "outdated") {
+        result = result.child(
+            button(s, "Remove")
+                .disabled(s.pages.pending.contains(path))
+                .on_press(move |s: &mut State| {
+                    s.page_mutate(path, serde_json::Value::Null, path, true)
+                }),
+        );
+    }
+    result
 }
 fn group(s: &State, title: &str) -> El {
+    group_action(s, title, None)
+}
+fn group_action(s: &State, title: &str, action: Option<El>) -> El {
+    let mut header = row()
+        .w_full()
+        .h(52.0)
+        .px(16.0)
+        .center_y()
+        .child(label(&s.theme, title, 13.0, 600.0, "text").grow(1.0));
+    if let Some(action) = action {
+        header = header.child(action);
+    }
     col()
         .w_full()
         .radius(12.0)
         .fill(s.theme.c("elevated"))
         .border(1.0, s.theme.c("border"))
-        .child(
-            label(&s.theme, title, 13.0, 600.0, "text")
-                .w_full()
-                .h(52.0)
-                .px(16.0)
-                .py(16.0),
-        )
+        .child(header)
 }
 fn appearance(s: &State, mut body: El) -> El {
     let mut modes = row().gap(6.0);
@@ -371,6 +546,9 @@ pub fn restored_theme(prefs: &crate::profile::Preferences, dark: bool) -> Theme 
     }
 }
 fn projects(s: &State, mut body: El) -> El {
+    if let Some(notice) = &s.pages.project_notice {
+        body = body.child(label(&s.theme, notice, 13.0, 400.0, "text-secondary").role("status"));
+    }
     for p in &s.snapshot.projects {
         let id = p.id.clone();
         let instructions = id.clone();
@@ -457,8 +635,23 @@ pub fn capture(s: &mut State) {
         return;
     }
     match page.as_str() {
+        "home-empty" => return,
+        "sidebar-project-collapsed" => {
+            if let Some(id) = s.project().map(|p| p.id.clone()) {
+                s.folded.insert(id);
+            }
+            return;
+        }
         "thread-search-open" => {
             s.menus.open = Some(crate::menus::Menu::Search);
+            if let Some(url) = &crate::OPTIONS.get().unwrap().gateway {
+                let url = url.clone();
+                let result =
+                    std::thread::spawn(move || oc_gateway::capture_page(&url, "session-search"))
+                        .join()
+                        .unwrap();
+                crate::menus::search::receive(s, "", result);
+            }
             return;
         }
         "project-picker-open" | "project-open-dialog" => {
@@ -478,6 +671,10 @@ pub fn capture(s: &mut State) {
             return;
         }
         "thread-context-menu" | "thread-actions-open" => {
+            s.menus.point = std::env::var("OCR_MENU_POINT").ok().and_then(|point| {
+                let (x, y) = point.split_once(',')?;
+                Some((x.parse().ok()?, y.parse().ok()?))
+            });
             if let Some(id) = s
                 .selected
                 .as_ref()
@@ -505,7 +702,7 @@ pub fn capture(s: &mut State) {
             snapshot.error = Some("Gateway unavailable".into());
             return;
         }
-        "find-chat-open" => {
+        "find-chat-open" | "find-markdown-open" | "find-long-open" => {
             s.find.open = true;
             return;
         }
@@ -514,8 +711,30 @@ pub fn capture(s: &mut State) {
     s.pages.route = match page.as_str() {
         "tasks" | "tasks-empty" => Route::Tasks,
         "apps" | "apps-empty" => Route::Apps,
+        "usage-limits-open" => Route::Settings("usage".into()),
+        "settings-remote-access" => Route::Settings("remote".into()),
         _ => Route::Settings(page.trim_start_matches("settings-").into()),
     };
+    if matches!(&s.pages.route, Route::Settings(v) if v == "general")
+        || s.pages.route == Route::Tasks
+    {
+        let paths: &[&str] = if s.pages.route == Route::Tasks {
+            &["tasks/plugin"]
+        } else {
+            &["connection", "side-chat-plugin", "canvas-plugin"]
+        };
+        if let Some(url) = &crate::OPTIONS.get().unwrap().gateway {
+            for path in paths {
+                let url = url.clone();
+                let tag = format!("page:{path}");
+                let path = path.to_string();
+                let result = std::thread::spawn(move || oc_gateway::capture_page(&url, &path))
+                    .join()
+                    .unwrap();
+                pages::receive(s, &tag, result);
+            }
+        }
+    }
     // Snapshot capture fetches real data before advancing the virtual clock.
     let path = match &s.pages.route {
         Route::Tasks => Some("tasks"),

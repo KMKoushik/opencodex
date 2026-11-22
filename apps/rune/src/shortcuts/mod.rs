@@ -53,6 +53,9 @@ pub fn dispatch(s: &mut State, event: &KeyEvent, tx: &mut Tx) -> bool {
             return true;
         }
     }
+    if s.menus.open.is_some() {
+        return false;
+    }
     for &(_, chord, id) in COMMANDS {
         if rune::Chord::parse(chord).is_ok_and(|chord| chord.matches_tx(event, tx)) {
             return execute(s, id, tx);

@@ -118,6 +118,11 @@ pub struct Send {
     pub branch: Option<String>,
 }
 pub enum Request {
+    Export {
+        session: String,
+        format: String,
+        destination: String,
+    },
     Write {
         tag: String,
         path: String,
@@ -195,6 +200,21 @@ impl PromptWorker {
                     let run = async {
                         while let Some(request) = rx.recv().await {
                             let reply = match request {
+                                Request::Export {
+                                    session,
+                                    format,
+                                    destination,
+                                } => Reply::Data {
+                                    tag: format!("menu-export:{session}"),
+                                    result: client
+                                        .composer_action(
+                                            &session,
+                                            "export",
+                                            &format,
+                                            Some(destination),
+                                        )
+                                        .await,
+                                },
                                 Request::PrepareAttachment { key, mut item } => {
                                     item.preview();
                                     Reply::Attachment {

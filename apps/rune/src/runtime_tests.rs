@@ -12,6 +12,7 @@ fn native_subagent_readers_cannot_interrupt_but_side_chats_can() {
         work: None,
         composer_state: String::new(),
         page: String::new(),
+        size: (1280.0, 800.0),
     });
     let mut state = State::new();
     state.selected = Some("child".into());
@@ -53,6 +54,7 @@ fn long_sidebar_only_mounts_visible_rows() {
         work: None,
         composer_state: String::new(),
         page: String::new(),
+        size: (1280.0, 800.0),
     });
     let mut state = State::new();
     let project = oc_gateway::types::Project {

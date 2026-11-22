@@ -207,9 +207,6 @@ pub fn view(s: &State, width: f32) -> El {
                 ),
         );
     let mut body = col().key("timeline").w_full().grow(1.0).min_h(0.0);
-    if s.find.open {
-        body = body.child(crate::find::view(s));
-    }
     if let Some(info) = &s.chat.data.info {
         let side = info
             .metadata
@@ -294,6 +291,9 @@ pub fn view(s: &State, width: f32) -> El {
         .is_some_and(|info| info.revert.is_some())
     {
         body=body.child(label(t,"Conversation undone. Use /redo to restore it, or send a message to continue from here.",12.0,400.0,"text-tertiary").role("status").px(24.0).py(8.0).wrap());
+    }
+    if s.find.open {
+        body = body.child(crate::find::view(s));
     }
     body
 }

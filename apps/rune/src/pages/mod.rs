@@ -19,20 +19,26 @@ pub struct Pages {
     pub route: Route,
     pub data: BTreeMap<String, Result<Value, String>>,
     pub pending: std::collections::BTreeSet<String>,
+    pub errors: BTreeMap<String, String>,
+    pub plugin_checks: BTreeMap<String, (f64, u8)>,
     pub task_title: TextEdit,
     pub app: Option<String>,
     pub instructions: TextEdit,
     pub instructions_project: Option<String>,
+    pub project_notice: Option<String>,
     pub remote: crate::settings::remote::Remote,
 }
 impl State {
     pub fn page_write(&mut self, path: &str, method: &str, body: Value, refresh: &str) {
-        self.prompt_request(oc_gateway::prompt::Request::Write {
+        self.pages.errors.remove(refresh);
+        if self.prompt_request(oc_gateway::prompt::Request::Write {
             tag: format!("page-refresh:{refresh}"),
             path: path.into(),
             method: method.into(),
             body,
-        });
+        }) {
+            self.pages.pending.insert(refresh.into());
+        }
     }
     pub fn open_page(&mut self, route: Route) {
         self.composer.menu = None;
@@ -56,13 +62,21 @@ impl State {
         self.rows_revision += 1;
     }
     pub fn page_get(&mut self, path: &str) {
+        self.pages.errors.remove(path);
         if !self.pages.pending.insert(path.into()) {
             return;
         }
+        let query = if matches!(path, "side-chat-plugin" | "canvas-plugin") {
+            self.project()
+                .map(|p| vec![("directory".into(), p.canonical.clone())])
+                .unwrap_or_default()
+        } else {
+            vec![]
+        };
         if !self.prompt_request(oc_gateway::prompt::Request::Get {
             tag: format!("page:{path}"),
             path: path.into(),
-            query: vec![],
+            query,
         }) {
             self.pages.pending.remove(path);
             self.pages
@@ -71,15 +85,21 @@ impl State {
         }
     }
     pub fn page_mutate(&mut self, path: &str, body: Value, refresh: &str, delete: bool) {
-        self.prompt_request(oc_gateway::prompt::Request::Mutate {
+        self.pages.errors.remove(refresh);
+        if self.prompt_request(oc_gateway::prompt::Request::Mutate {
             tag: format!("page-refresh:{refresh}"),
             path: path.into(),
             body,
             delete,
-        });
+        }) {
+            self.pages.pending.insert(refresh.into());
+        }
     }
 }
 pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) -> bool {
+    if tag.starts_with("menu-thread:") || tag.starts_with("menu-export:") {
+        return crate::menus::thread::receive(s, tag, result);
+    }
     if let Some(path) = tag.strip_prefix("page:") {
         if let Ok(value) = &result {
             crate::settings::remote::receive(s, path, value);
@@ -101,8 +121,12 @@ pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) -> bool 
         return true;
     }
     if let Some(path) = tag.strip_prefix("page-refresh:") {
+        s.pages.pending.remove(path);
         match result {
             Ok(value) => {
+                if path == "remote" {
+                    s.pages.remote.dirty = false;
+                }
                 if path == "task-start" {
                     if let Some(id) = value["session"]["id"].as_str() {
                         s.open_session(Some(id.into()));
@@ -120,12 +144,46 @@ pub fn receive(s: &mut State, tag: &str, result: Result<Value, String>) -> bool 
             }
             Err(e) => {
                 s.error = Some(e.clone());
-                s.pages.data.insert(path.into(), Err(e));
+                s.pages.errors.insert(path.into(), e);
             }
         }
         return true;
     }
     false
+}
+/// Follow OpenCode's plugin reload only while a relevant page is visible. No
+/// redraw timer: a wake can issue a read, and only its changed reply redraws.
+pub fn poll(s: &mut State, clock: f64, tx: &mut rune::Tx) {
+    let paths: &[&str] = match &s.pages.route {
+        Route::Settings(section) if section == "general" => &["side-chat-plugin", "canvas-plugin"],
+        Route::Tasks => &["tasks/plugin"],
+        _ => return,
+    };
+    for &path in paths {
+        if !data(s, path).is_some_and(|v| v["state"] == "loading") {
+            s.pages.plugin_checks.remove(path);
+            continue;
+        }
+        let (due, count) = *s
+            .pages
+            .plugin_checks
+            .entry(path.into())
+            .or_insert((clock + 2.0, 0));
+        if count >= 30 {
+            continue;
+        }
+        if s.pages.pending.contains(path) {
+            continue;
+        }
+        if clock >= due {
+            s.pages
+                .plugin_checks
+                .insert(path.into(), (clock + 2.0, count + 1));
+            s.page_get(path);
+            continue;
+        }
+        tx.wake_after(std::time::Duration::from_secs_f64((due - clock).max(0.05)));
+    }
 }
 pub fn view(s: &State) -> El {
     match &s.pages.route {
@@ -137,17 +195,40 @@ pub fn view(s: &State) -> El {
     }
 }
 pub fn button(s: &State, title: &str) -> El {
-    el().role("button")
-        .key(format!("page-action-{title}"))
-        .label(title)
-        .focusable(true)
-        .px(12.0)
-        .h(30.0)
-        .center()
-        .radius(6.0)
-        .border(1.0, s.theme.c("border"))
-        .hover(s.theme.c("hover"))
-        .child(label(&s.theme, title, 12.0, 500.0, "text"))
+    s.theme.shadow(
+        s.theme.paint(
+            el().role("button")
+                .key(format!("page-action-{title}"))
+                .label(title)
+                .focusable(true)
+                .px(10.0)
+                .h(28.0)
+                .center()
+                .radius(8.0)
+                .border(1.0, s.theme.c("chip-border"))
+                .hover(s.theme.c("hover"))
+                .child(label(&s.theme, title, 12.0, 500.0, "text")),
+            "chip",
+        ),
+        "chip-shadow",
+    )
+}
+pub fn primary_button(s: &State, title: &str) -> El {
+    s.theme.shadow(
+        s.theme.paint(
+            el().role("button")
+                .key(format!("page-action-{title}"))
+                .label(title)
+                .focusable(true)
+                .px(14.0)
+                .h(32.0)
+                .center()
+                .radius(8.0)
+                .child(label(&s.theme, title, 13.0, 600.0, "on-primary")),
+            "primary-glaze",
+        ),
+        "primary-shadow",
+    )
 }
 pub fn heading(s: &State, title: &str, description: &str) -> El {
     col()
@@ -158,6 +239,14 @@ pub fn heading(s: &State, title: &str, description: &str) -> El {
         .child(label(&s.theme, description, 13.0, 400.0, "text-secondary"))
 }
 pub fn status(s: &State, path: &str) -> Option<El> {
+    if let Some(error) = s.pages.errors.get(path) {
+        return Some(
+            label(&s.theme, error, 13.0, 400.0, "error")
+                .role("alert")
+                .w_full()
+                .wrap(),
+        );
+    }
     match s.pages.data.get(path) {
         None => Some(label(&s.theme, "Loading…", 13.0, 400.0, "text-secondary")),
         Some(Err(e)) => Some(

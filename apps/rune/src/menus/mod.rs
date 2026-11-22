@@ -1,12 +1,13 @@
 use crate::{State, sidebar::label};
 use rune::{El, ScrollSpec, TextEdit, TextStyle, Tx, col, el, row, text_input};
 pub mod native;
+pub(crate) mod search;
+pub(crate) mod thread;
 #[derive(Clone)]
 pub enum Menu {
     Search,
     Projects,
     Thread(String),
-    Rename(String),
     Project(String),
     EditProject(String),
     Brand,
@@ -18,6 +19,13 @@ pub struct Menus {
     pub toast: Option<String>,
     pub toast_due: Option<f64>,
     pub point: Option<(f32, f32)>,
+    pub pending: Option<String>,
+    pub error: Option<String>,
+    pub results: Vec<serde_json::Value>,
+    pub search_pending: Option<String>,
+    pub cursor: Option<String>,
+    pub notice: Option<String>,
+    pub search_revision: u64,
 }
 fn button(s: &State, title: &str) -> El {
     row()
@@ -36,6 +44,10 @@ fn button(s: &State, title: &str) -> El {
 pub fn open_search(s: &mut State, tx: &mut Tx) {
     s.menus.open = Some(Menu::Search);
     s.menus.search.clear();
+    s.menus.results.clear();
+    s.menus.cursor = None;
+    s.menus.error = None;
+    search::load(s, false);
     tx.focus("navigation-search", false);
 }
 pub fn open_projects(s: &mut State, tx: &mut Tx) {
@@ -45,22 +57,30 @@ pub fn open_projects(s: &mut State, tx: &mut Tx) {
 }
 pub fn view(s: &State) -> Option<El> {
     let menu = s.menus.open.as_ref()?;
+    if matches!(menu, Menu::Search) {
+        return Some(search::dialog(s));
+    }
     let t = &s.theme;
     let compact = matches!(menu, Menu::Thread(_) | Menu::Project(_) | Menu::Brand);
-    let width = if compact { 200.0 } else { 520.0 };
+    let width = if compact { 180.0 } else { 520.0 };
     let mut panel = col()
         .w(width)
         .max_h(520.0)
         .padding(if compact { 4.0 } else { 16.0 })
         .gap(if compact { 0.0 } else { 8.0 })
-        .radius(if compact { 8.0 } else { 12.0 })
+        .radius(if matches!(menu, Menu::Brand) {
+            9.0
+        } else if compact {
+            8.0
+        } else {
+            12.0
+        })
         .fill(t.c("elevated"))
         .border(1.0, t.c("border-heavy"));
     let title = match menu {
         Menu::Search => "Search threads",
         Menu::Projects => "Open project",
         Menu::Thread(_) => "Thread actions",
-        Menu::Rename(_) => "Rename thread",
         Menu::Project(_) => "Project actions",
         Menu::EditProject(_) => "Edit project",
         Menu::Brand => "OpenCodex",
@@ -83,7 +103,19 @@ pub fn view(s: &State) -> Option<El> {
             text_input(&s.menus.search, TextStyle::new(13.0, 400.0))
                 .key("navigation-search")
                 .on_edit(|s: &mut State| &mut s.menus.search)
-                .placeholder("Search…", t.c("text-tertiary"))
+                .placeholder(
+                    if matches!(menu, Menu::Search) {
+                        "Search titles and messages…"
+                    } else {
+                        "Search…"
+                    },
+                    t.c("text-tertiary"),
+                )
+                .on_input_change(|s: &mut State, _| {
+                    if matches!(s.menus.open, Some(Menu::Search)) {
+                        search::load(s, false);
+                    }
+                })
                 .w_full()
                 .h(36.0)
                 .px(10.0)
@@ -97,22 +129,7 @@ pub fn view(s: &State) -> Option<El> {
         });
         match menu {
             Menu::Search => {
-                let mut threads: Vec<_> = s
-                    .snapshot
-                    .sessions
-                    .values()
-                    .filter(|v| v.title.to_lowercase().contains(&query))
-                    .collect();
-                threads.sort_by(|a, b| b.activity().total_cmp(&a.activity()));
-                for thread in threads.into_iter().take(100) {
-                    let id = thread.id.clone();
-                    list = list.child(button(s, &thread.title).w_full().on_press(
-                        move |s: &mut State| {
-                            s.menus.open = None;
-                            s.open_session(Some(id.clone()));
-                        },
-                    ));
-                }
+                list = search::view(s, list);
             }
             Menu::Projects => {
                 for project in s
@@ -161,30 +178,9 @@ pub fn view(s: &State) -> Option<El> {
         panel = panel.child(list);
     }
     if let Menu::Thread(id) = menu {
-        for (name, action) in [
-            ("Rename", "rename"),
-            ("Pin / unpin", "pin"),
-            ("Mute / unmute", "mute"),
-            ("Mark unread", "unread"),
-            ("Fork thread", "fork"),
-        ] {
-            let id = id.clone();
-            panel = panel.child(
-                button(s, name).on_press(move |s: &mut State| thread_action(s, &id, action)),
-            );
-        }
-        let id = id.clone();
-        panel = panel.child(
-            button(s, "Copy thread link").on_press_tx(move |s: &mut State, tx| {
-                tx.copy(format!("opencodex://session/{id}"));
-                s.menus.open = None;
-                s.menus.toast = Some("Thread link copied".into());
-                s.menus.toast_due = Some(tx.clock() + 2.0);
-                tx.wake_after(std::time::Duration::from_secs(2));
-            }),
-        );
+        panel = thread::view(s, id, panel);
     }
-    if let Menu::Rename(id) | Menu::EditProject(id) = menu {
+    if let Menu::EditProject(id) = menu {
         panel = panel.child(
             text_input(&s.menus.search, TextStyle::new(13.0, 400.0))
                 .key("rename-input")
@@ -197,28 +193,18 @@ pub fn view(s: &State) -> Option<El> {
                 .border(1.0, t.c("border"))
                 .radius(6.0),
         );
-        let project = matches!(menu, Menu::EditProject(_));
         let id = id.clone();
         panel = panel.child(button(s, "Save").on_press(move |s: &mut State| {
             let title = s.menus.search.text.trim().to_owned();
             if title.is_empty() {
                 return;
             }
-            if project {
-                s.page_write(
-                    &format!("projects/{id}"),
-                    "PATCH",
-                    serde_json::json!({"name":title}),
-                    "projects",
-                );
-            } else {
-                s.page_mutate(
-                    &format!("sessions/{id}/action"),
-                    serde_json::json!({"action":"rename","title":title}),
-                    "sessions",
-                    false,
-                );
-            }
+            s.page_write(
+                &format!("projects/{id}"),
+                "PATCH",
+                serde_json::json!({"name":title}),
+                "projects",
+            );
             s.menus.open = None;
         }));
     }
@@ -226,7 +212,25 @@ pub fn view(s: &State) -> Option<El> {
         let edit = id.clone();
         let work = id.clone();
         let close = id.clone();
+        let open = id.clone();
+        let instructions = id.clone();
         panel = panel
+            .child(
+                button(s, "Open project")
+                    .disabled(!s.snapshot.live)
+                    .on_press(move |s: &mut State| {
+                        if let Some(project) = s.snapshot.projects.iter().find(|p| p.id == open) {
+                            let path = project.canonical.clone();
+                            s.prefs.project = Some(path.clone());
+                            s.prefs.closed_projects.retain(|p| p != &path);
+                            s.folded.remove(&open);
+                        }
+                        s.menus.open = None;
+                        s.open_session(None);
+                        crate::sidebar::rebuild(s);
+                        s.save();
+                    }),
+            )
             .child(
                 button(s, "Edit project").on_press_tx(move |s: &mut State, tx| {
                     s.menus.search = TextEdit::new(
@@ -241,11 +245,48 @@ pub fn view(s: &State) -> Option<El> {
                     tx.focus("rename-input", false);
                 }),
             )
-            .child(button(s, "Worktrees").on_press(move |s: &mut State| {
-                s.menus.open = None;
-                s.open_page(crate::pages::Route::Worktrees(work.clone()));
-            }))
-            .child(button(s, "Close project").on_press(move |s: &mut State| {
+            .child(
+                button(s, "Instructions")
+                    .disabled(!s.snapshot.live)
+                    .on_press(move |s: &mut State| {
+                        s.menus.open = None;
+                        s.pages.instructions_project = Some(instructions.clone());
+                        s.page_get(&format!("projects/{instructions}/instructions"));
+                        s.open_page(crate::pages::Route::Settings("projects".into()));
+                    }),
+            );
+        if s.snapshot
+            .projects
+            .iter()
+            .find(|p| &p.id == id)
+            .is_some_and(|p| p.vcs.is_some())
+        {
+            panel = panel.child(
+                button(s, "Manage worktrees")
+                    .disabled(!s.snapshot.live)
+                    .on_press(move |s: &mut State| {
+                        s.menus.open = None;
+                        s.open_page(crate::pages::Route::Worktrees(work.clone()));
+                    }),
+            );
+        }
+        if let Some(p) = s.snapshot.projects.iter().find(|p| &p.id == id) {
+            let path = p.canonical.clone();
+            panel = panel.child(
+                button(s, "Copy path").on_press_tx(move |s: &mut State, tx| {
+                    tx.copy(path.clone());
+                    s.menus.open = None;
+                    s.pages.project_notice = Some("Project path copied.".into());
+                }),
+            );
+        }
+        if s.snapshot
+            .projects
+            .iter()
+            .find(|p| &p.id == id)
+            .is_some_and(|p| !s.prefs.closed_projects.contains(&p.canonical))
+        {
+            panel = panel.child(button(s, "Close project").on_press(move |s: &mut State| {
                 if let Some(p) = s.snapshot.projects.iter().find(|p| p.id == close) {
                     s.prefs.closed_projects.push(p.canonical.clone());
                 }
@@ -253,27 +294,27 @@ pub fn view(s: &State) -> Option<El> {
                 crate::sidebar::rebuild(s);
                 s.save();
             }));
-        if let Some(p) = s.snapshot.projects.iter().find(|p| &p.id == id) {
-            let path = p.canonical.clone();
-            panel = panel.child(
-                button(s, "Copy path").on_press_tx(move |s: &mut State, tx| {
-                    tx.copy(path.clone());
-                    s.menus.open = None;
-                    s.menus.toast = Some("Project path copied".into());
-                    s.menus.toast_due = Some(tx.clock() + 2.0);
-                    tx.wake_after(std::time::Duration::from_secs(2));
-                }),
-            );
         }
     }
     if matches!(menu, Menu::Brand) {
-        panel = panel.child(button(s, "Settings").on_press(|s: &mut State| {
-            s.menus.open = None;
-            s.open_page(crate::pages::Route::Settings("general".into()));
-        }));
+        for (section, name) in [
+            ("projects", "Projects"),
+            ("appearance", "Appearance"),
+            ("shortcuts", "Shortcuts"),
+            ("usage", "Usage"),
+        ] {
+            panel = panel.child(button(s, name).on_press(move |s: &mut State| {
+                s.menus.open = None;
+                s.open_page(crate::pages::Route::Settings(section.into()));
+            }));
+        }
     }
     let (x, y) = if compact {
-        s.menus.point.unwrap_or((150.0, 380.0))
+        if matches!(menu, Menu::Brand) {
+            (18.0, 80.0)
+        } else {
+            s.menus.point.unwrap_or((150.0, 380.0))
+        }
     } else {
         ((s.window_size.0 - width) * 0.5, 100.0)
     };
@@ -292,44 +333,9 @@ pub fn view(s: &State) -> Option<El> {
                     })
                     .on_press(|s: &mut State| s.menus.open = None),
             )
-            .child(panel.absolute(
+            .child(t.shadow(panel, "shadow").absolute(
                 x.min(s.window_size.0 - width - 8.0),
                 y.min(s.window_size.1 - 300.0),
             )),
     )
-}
-fn thread_action(s: &mut State, id: &str, action: &str) {
-    let Some(thread) = s.snapshot.sessions.get(id) else {
-        return;
-    };
-    let (path, body, refresh) = match action {
-        "rename" => {
-            s.menus.search = TextEdit::new(&thread.title);
-            s.menus.open = Some(Menu::Rename(id.into()));
-            return;
-        }
-        "pin" => (
-            format!("sessions/{id}/focus"),
-            serde_json::json!({"action":if thread.pinned.is_some(){"unpin"}else{"pin"}}),
-            "sessions",
-        ),
-        "mute" => (
-            format!("sessions/{id}/mute"),
-            serde_json::json!({"muted":!thread.muted.unwrap_or(false)}),
-            "sessions",
-        ),
-        "unread" => (
-            format!("sessions/{id}/unread"),
-            serde_json::json!({"action":"mark"}),
-            "sessions",
-        ),
-        "fork" => (
-            format!("sessions/{id}/action"),
-            serde_json::json!({"action":"fork"}),
-            "fork",
-        ),
-        _ => return,
-    };
-    s.page_mutate(&path, body, refresh, false);
-    s.menus.open = None;
 }
