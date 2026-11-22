@@ -53,44 +53,68 @@ pub fn view(s: &State) -> El {
             .center_y()
             .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
             .child(
-                icon_button(t, &crate::icons::BACK, "Back to subagents").on_press(
-                    |s: &mut State| {
+                icon_button(t, &crate::icons::BACK, "Back to subagents")
+                    .key("subagents-back")
+                    .autofocus()
+                    .on_press_tx(|s: &mut State, tx| {
                         s.workbench.reader = None;
                         s.workbench.reader_chat = Default::default();
                         s.workbench.reader_worker = None;
-                    },
-                ),
+                        tx.focus("subagents-heading", false);
+                    }),
             )
             .child(detail);
         if chat.data.running {
             header = header.child(activity(s, "Responding"));
         }
-        body = body
-            .child(header)
-            .child(crate::chat::reader(s, chat, s.panel_width().max(340.0)));
+        // Timeline's footer belongs to the scroll content, not a fixed bottom dock.
+        let mut footer = col().w_full().px(16.0).gap(8.0);
         if let Some(error) = &chat.data.error {
-            body = body.child(label(t, error, 12.0, 400.0, "error").wrap());
+            footer = footer
+                .child(label(t, error, 12.0, 400.0, "error").wrap())
+                .child(
+                    super::documents::button(s, "Retry").on_press(|s: &mut State| {
+                        if let (Some(id), Some(worker)) =
+                            (&s.workbench.reader, &s.workbench.reader_worker)
+                        {
+                            let command = if s.workbench.reader_chat.rows.is_empty() {
+                                oc_gateway::Command::OpenSession(id.clone())
+                            } else {
+                                oc_gateway::Command::EarlierMessages(id.clone())
+                            };
+                            if let Err(error) = worker.command(command) {
+                                s.workbench.error = Some(error);
+                            }
+                        }
+                    }),
+                );
         }
         let outcome = chat.data.info.as_ref().and_then(|i| i.outcome.as_deref());
         if !chat.data.running && outcome == Some("failed") {
-            body = body.child(label(t, "This subagent run failed.", 12.0, 400.0, "error").px(16.0));
+            footer = footer.child(label(t, "This subagent run failed.", 12.0, 400.0, "error"));
         }
-        return body.child(super::reader_requests::permissions(s)).child(
+        footer = footer.child(super::reader_requests::permissions(s)).child(
             label(
                 t,
                 super::reader_requests::status(s).unwrap_or(if chat.data.running {
                     ""
                 } else {
-                    status(outcome)
+                    match outcome {
+                        Some("succeeded") => "Completed",
+                        Some("interrupted") => "Stopped",
+                        _ => "Idle",
+                    }
                 }),
                 12.0,
                 400.0,
                 "text-tertiary",
             )
-            .px(16.0)
             .py(12.0)
             .role("status"),
         );
+        return body
+            .child(header)
+            .child(super::sessions::reader(s).child(footer));
     }
     let running = s
         .workbench
@@ -109,7 +133,12 @@ pub fn view(s: &State) -> El {
         .gap(8.0)
         .center_y()
         .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
-        .child(label(t, "Delegated sessions", 14.0, 500.0, "text").grow(1.0));
+        .child(
+            label(t, "Delegated sessions", 14.0, 500.0, "text")
+                .grow(1.0)
+                .key("subagents-heading")
+                .focusable(true),
+        );
     let mut filters = row()
         .gap(2.0)
         .padding(2.0)
@@ -237,91 +266,104 @@ pub fn view(s: &State) -> El {
             .scroll(ScrollSpec {
                 stick_bottom: false,
             })
-            .child(col().growth(GrowthSpec::default()).w_full().virtual_rows(
-                indices.len(),
-                62.0,
-                move |s: &State, n| format!("agent-{}", s.workbench.agents[keys[n]]["id"]).into(),
-                move |s: &State, n| {
-                    let v = &s.workbench.agents[indices[n]];
-                    let id = v["id"].as_str().unwrap_or("").to_owned();
-                    let running = s.snapshot.active.contains(&id);
-                    let mut meta = row()
-                        .gap(6.0)
-                        .center_y()
-                        .child(
-                            label(
-                                &s.theme,
-                                v["agent"]
-                                    .as_str()
-                                    .filter(|s| !s.is_empty())
-                                    .unwrap_or("Subagent"),
-                                12.0,
-                                400.0,
-                                "text-tertiary",
-                            )
-                            .truncate(),
-                        )
-                        .child(label(&s.theme, "·", 12.0, 400.0, "text-tertiary"));
-                    meta = meta.child(if running {
-                        activity(s, "Running")
-                    } else {
-                        label(
-                            &s.theme,
-                            status(v["outcome"].as_str()),
-                            12.0,
-                            400.0,
-                            if v["outcome"] == "failed" {
-                                "error"
-                            } else {
-                                "text-tertiary"
-                            },
-                        )
-                    });
-                    row()
-                        .w_full()
-                        .px(12.0)
-                        .py(10.0)
-                        .gap(10.0)
-                        .hover(s.theme.c("hover"))
-                        .child(
-                            el().size(28.0, 28.0)
-                                .radius(14.0)
-                                .fill(s.theme.c("accent-soft"))
-                                .center()
-                                .child(
-                                    icon(&crate::chat::icons::SUBAGENTS, 18.0)
-                                        .color(s.theme.c("accent-text")),
-                                ),
-                        )
-                        .child(
-                            col()
-                                .grow(1.0)
-                                .min_w(0.0)
+            .child(
+                col()
+                    .growth(GrowthSpec::default())
+                    .w_full()
+                    .virtual_rows(
+                        indices.len(),
+                        62.0,
+                        move |s: &State, n| {
+                            format!("agent-{}", s.workbench.agents[keys[n]]["id"]).into()
+                        },
+                        move |s: &State, n| {
+                            let v = &s.workbench.agents[indices[n]];
+                            let id = v["id"].as_str().unwrap_or("").to_owned();
+                            let running = s.snapshot.active.contains(&id);
+                            let mut meta = row()
+                                .gap(6.0)
+                                .center_y()
                                 .child(
                                     label(
                                         &s.theme,
-                                        v["title"]
+                                        v["agent"]
                                             .as_str()
                                             .filter(|s| !s.is_empty())
-                                            .unwrap_or("Untitled subagent"),
-                                        s.prefs.chat_font_size.unwrap_or(14.0),
+                                            .unwrap_or("Subagent"),
+                                        12.0,
                                         400.0,
-                                        "text-secondary",
+                                        "text-tertiary",
                                     )
                                     .truncate(),
                                 )
-                                .child(meta),
-                        )
-                        .child(
-                            icon(&crate::icons::RIGHT, 16.0)
-                                .color(s.theme.c("text-tertiary"))
-                                .self_center(),
-                        )
-                        .role("button")
-                        .focusable(true)
-                        .on_press(move |s: &mut State| s.open_workspace_reader(id.clone()))
-                },
-            )),
+                                .child(label(&s.theme, "·", 12.0, 400.0, "text-tertiary"));
+                            meta = meta.child(if running {
+                                activity(s, "Running")
+                            } else {
+                                label(
+                                    &s.theme,
+                                    status(v["outcome"].as_str()),
+                                    12.0,
+                                    400.0,
+                                    if v["outcome"] == "failed" {
+                                        "error"
+                                    } else {
+                                        "text-tertiary"
+                                    },
+                                )
+                            });
+                            row()
+                                .w_full()
+                                .px(12.0)
+                                .py(10.0)
+                                .gap(10.0)
+                                .hover(s.theme.c("hover"))
+                                .child(
+                                    el().size(28.0, 28.0)
+                                        .radius(14.0)
+                                        .fill(s.theme.c("accent-soft"))
+                                        .center()
+                                        .child(
+                                            icon(&crate::chat::icons::SUBAGENTS, 18.0)
+                                                .color(s.theme.c("accent-text")),
+                                        ),
+                                )
+                                .child(
+                                    col()
+                                        .grow(1.0)
+                                        .min_w(0.0)
+                                        .child(
+                                            label(
+                                                &s.theme,
+                                                v["title"]
+                                                    .as_str()
+                                                    .filter(|s| !s.is_empty())
+                                                    .unwrap_or("Untitled subagent"),
+                                                s.prefs.chat_font_size.unwrap_or(14.0),
+                                                400.0,
+                                                "text-secondary",
+                                            )
+                                            .truncate(),
+                                        )
+                                        .child(meta),
+                                )
+                                .child(
+                                    icon(&crate::icons::RIGHT, 16.0)
+                                        .color(s.theme.c("text-tertiary"))
+                                        .self_center(),
+                                )
+                                .role("button")
+                                .focusable(true)
+                                .on_press_tx(move |s: &mut State, tx| {
+                                    s.open_workspace_reader(id.clone());
+                                    tx.focus("subagents-back", false);
+                                })
+                        },
+                        // Active-session events must invalidate cached virtual rows too: otherwise
+                        // a completed session keeps its old spinning indicator indefinitely.
+                    )
+                    .virtual_rows_version(s.snapshot.revision),
+            ),
     );
     if s.workbench.agent_cursor.is_some() {
         let pending = s.workbench.pending.contains("agents-more");
@@ -361,6 +403,9 @@ fn status(outcome: Option<&str>) -> &'static str {
 }
 pub fn activity(s: &State, name: &str) -> El {
     el().size(10.0, 10.0)
+        // Never transfer the loop's cooling rotation to the replacement Idle text.
+        .key("session-activity")
+        .transition(rune::Transition::none())
         .radius(5.0)
         .border(1.5, s.theme.c("border-heavy"))
         .child(
@@ -368,6 +413,9 @@ pub fn activity(s: &State, name: &str) -> El {
                 .radius(5.0)
                 .border_sides([1.5, 1.5, 0.0, 0.0], s.theme.c("text-secondary")),
         )
+        // Only mounted running rows/header/tab indicators construct this element.
+        // Rune suspends its own loop when it is not visible; no application timer.
+        .looping(rune::LoopSpec::rotation(0.9))
         .role("img")
         .label(name)
         .help(name)

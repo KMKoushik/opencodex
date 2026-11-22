@@ -22,6 +22,69 @@ pub(super) fn state() -> State {
     s
 }
 #[test]
+fn subagent_ring_has_web_period_and_disappears_when_idle_or_hidden() {
+    let mut s = state();
+    s.workbench.agents =
+        vec![serde_json::json!({"id":"child","title":"Explore","agent":"explore"})];
+    std::sync::Arc::make_mut(&mut s.snapshot)
+        .active
+        .insert("child".into());
+    let mut rt = rune::Runtime::new(
+        s,
+        |s: &State, _: &mut rune::Cx<State>| {
+            if s.workbench.open {
+                super::subagents::view(s)
+            } else {
+                rune::el()
+            }
+        },
+        (820.0, 760.0),
+        rune::Env::new(true, 2.0),
+    );
+    rt.frame(0.0);
+    let ring = rt
+        .elements()
+        .into_iter()
+        .find(|e| e.label.as_deref() == Some("Running") && e.role == "img")
+        .expect("visible running indicator");
+    assert_eq!([ring.rect[2], ring.rect[3]], [10.0, 10.0]);
+    let phase = ring.loop_phase.expect("clock-driven rotation");
+    rt.frame(0.225);
+    let next = rt
+        .elements()
+        .into_iter()
+        .find(|e| e.label.as_deref() == Some("Running") && e.role == "img")
+        .unwrap()
+        .loop_phase
+        .unwrap();
+    assert!(
+        ((next - phase) - 0.25).abs() < 0.001,
+        "quarter turn in 225 ms: {phase} → {next}"
+    );
+    rt.update(|s, _| {
+        let snapshot = std::sync::Arc::make_mut(&mut s.snapshot);
+        snapshot.active.clear();
+        snapshot.revision += 1;
+    });
+    rt.frame(0.0);
+    assert!(
+        !rt.elements().iter().any(|e| e.loop_phase.is_some()),
+        "{:?}",
+        rt.elements()
+            .into_iter()
+            .filter(|e| e.loop_phase.is_some())
+            .collect::<Vec<_>>()
+    );
+    rt.update(|s, _| {
+        std::sync::Arc::make_mut(&mut s.snapshot)
+            .active
+            .insert("child".into());
+        s.workbench.open = false;
+    });
+    rt.frame(0.0);
+    assert!(!rt.elements().iter().any(|e| e.loop_phase.is_some()));
+}
+#[test]
 fn save_acknowledges_only_captured_revision_and_navigation_preserves_edits() {
     let mut s = state();
     documents::receive(

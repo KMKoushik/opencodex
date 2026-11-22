@@ -3,6 +3,83 @@ use crate::{State, sidebar::label};
 use rune::{El, GrowthSpec, ScrollSpec, TextEdit, col, row};
 use serde_json::json;
 
+pub(super) fn poll_reader(s: &mut State, clock: f64, tx: &mut rune::Tx) -> bool {
+    let mut changed = false;
+    if let Some(data) = s
+        .workbench
+        .reader_worker
+        .as_ref()
+        .and_then(oc_gateway::Worker::take_messages)
+    {
+        if s.workbench.reader.as_deref() == Some(&data.session_id) {
+            s.workbench.reader_chat.media.request(
+                data.clone(),
+                crate::sidecar::url(),
+                s.waker.clone(),
+            );
+            s.workbench.reader_chat.accept(data);
+            changed = true;
+        }
+    }
+    if s.workbench.reader_chat.media.take() {
+        s.workbench.reader_chat.disclosure_revision += 1;
+        changed = true;
+    }
+    let visible = s.pages.route == crate::pages::Route::Chat
+        && s.workbench.open
+        && matches!(s.workbench.panel, Panel::Side | Panel::Subagents);
+    let reader = &s.workbench.reader_chat;
+    let position = reader.position.get();
+    let reached_fork = s.workbench.panel == Panel::Side
+        && reader.data.info.as_ref().is_some_and(|info| {
+            reader
+                .data
+                .messages
+                .iter()
+                .any(|message| message.time.created < info.time.created)
+        });
+    if visible
+        && position.viewport[1] > 0.0
+        && position.offset[1] < 240.0
+        && reader.data.cursor.is_some()
+        && reader.data.error.is_none()
+        && !reader.loading_earlier
+        && !reached_fork
+    {
+        if let (Some(worker), Some(id)) = (&s.workbench.reader_worker, &s.workbench.reader) {
+            match worker.command(oc_gateway::Command::EarlierMessages(id.clone())) {
+                Ok(()) => {
+                    s.workbench.reader_chat.loading_earlier = true;
+                    changed = true;
+                }
+                Err(error) => s.workbench.error = Some(error),
+            }
+        }
+    }
+    let chat = &mut s.workbench.reader_chat;
+    if visible && s.workbench.reader.is_some() && chat.data.running {
+        if chat.tick_due.is_none_or(|due| clock >= due) {
+            chat.tick_due = Some(clock + 1.0);
+            chat.now_ms = crate::unix_ms() as f64;
+            tx.wake_after(std::time::Duration::from_secs(1));
+            changed = true;
+        }
+    } else {
+        chat.tick_due = None;
+    }
+    // The reader's unrelated sidebar snapshot is disposable, not workbench state.
+    if let Some(worker) = &s.workbench.reader_worker {
+        let _ = worker.take();
+    }
+    changed
+}
+
+pub(super) fn reader(s: &State) -> El {
+    let position = s.workbench.reader_chat.position.clone();
+    crate::chat::reader(s, &s.workbench.reader_chat, s.panel_width().max(340.0))
+        .on_scroll_offset(move |at| position.set(at))
+}
+
 pub fn tabs(s: &State) -> El {
     use super::panel_tabs as tabs;
     let mut strip = tabs::strip("Side chats");
@@ -229,14 +306,19 @@ pub fn view(s: &State, side: bool) -> El {
             col().grow(1.0).w_full().px(16.0).py(24.0)
                 .child(label(t, "Side chat", 14.0, 500.0, "text").mb(8.0))
                 .child(label(t, format!("It knows the main chat up to {start}. Questions here don’t interrupt the main chat. Edits ask for approval first."), 14.0, 400.0, "text-secondary").wrap())
-        } else { crate::chat::reader(
-            s,
-            &s.workbench.reader_chat,
-            s.panel_width().max(340.0),
-        ) });
+        } else { reader(s).child(super::reader_requests::permissions(s).px(16.0)) });
         if side {
-            body = body.child(super::reader_requests::permissions(s)).child(
+            body = body.child(
                 super::reader_requests::form(s)
+                    .map(|form| {
+                        col()
+                            .w_full()
+                            .px(16.0)
+                            .py(12.0)
+                            .gap(8.0)
+                            .child(super::side_composer::main_status(s))
+                            .child(form)
+                    })
                     .unwrap_or_else(|| super::side_composer::view(s, id)),
             );
         } else {

@@ -476,41 +476,7 @@ pub fn poll(s: &mut State, clock: f64, _tx: &mut rune::Tx) -> bool {
         .unwrap_or_default();
     reader_requests::poll(s);
     let mut changed = preview::poll(s, _tx);
-    if let Some(data) = s
-        .workbench
-        .reader_worker
-        .as_ref()
-        .and_then(oc_gateway::Worker::take_messages)
-    {
-        if s.workbench.reader.as_deref() == Some(&data.session_id) {
-            s.workbench.reader_chat.media.request(
-                data.clone(),
-                crate::sidecar::url(),
-                s.waker.clone(),
-            );
-            s.workbench.reader_chat.accept(data);
-            changed = true;
-        }
-    }
-    if s.workbench.reader_chat.media.take() {
-        s.workbench.reader_chat.disclosure_revision += 1;
-        changed = true;
-    }
-    if s.workbench.open && s.workbench.reader.is_some() && s.workbench.reader_chat.data.running {
-        let chat = &mut s.workbench.reader_chat;
-        if chat.tick_due.is_none_or(|due| clock >= due) {
-            chat.tick_due = Some(clock + 1.0);
-            chat.now_ms = crate::unix_ms() as f64;
-            _tx.wake_after(std::time::Duration::from_secs(1));
-            changed = true;
-        }
-    } else {
-        s.workbench.reader_chat.tick_due = None;
-    }
-    // Drain unrelated sidebar snapshots without rebuilding or refetching the workbench.
-    if let Some(worker) = &s.workbench.reader_worker {
-        let _ = worker.take();
-    }
+    changed |= sessions::poll_reader(s, clock, _tx);
     for reply in replies {
         if reply.epoch != s.workbench.epoch {
             continue;

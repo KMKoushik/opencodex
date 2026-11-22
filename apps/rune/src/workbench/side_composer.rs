@@ -105,6 +105,50 @@ pub fn slash(s: &mut State, id: &str, text: &str, revision: u64) -> bool {
     );
     true
 }
+pub(super) fn main_status(s: &State) -> El {
+    let t = &s.theme;
+    let waiting = crate::docks::active(s);
+    let failed = s
+        .chat
+        .data
+        .info
+        .as_ref()
+        .is_some_and(|i| i.outcome.as_deref() == Some("failed"));
+    row()
+        .gap(6.0)
+        .center_y()
+        .child(el().size(6.0, 6.0).radius(3.0).fill(t.c(if waiting {
+            "warning"
+        } else if s.chat.data.running {
+            "accent"
+        } else if failed {
+            "error"
+        } else {
+            "text-tertiary"
+        })))
+        .child(
+            label(
+                t,
+                if waiting {
+                    if crate::docks::waiting_label(s) == "Waiting for permission" {
+                        "Main chat needs approval"
+                    } else {
+                        "Main chat has a question"
+                    }
+                } else if s.chat.data.running {
+                    "Main chat is working"
+                } else if failed {
+                    "Main chat’s last run failed"
+                } else {
+                    "Main chat is idle"
+                },
+                12.0,
+                400.0,
+                if waiting { "warning" } else { "text-tertiary" },
+            )
+            .role("status"),
+        )
+}
 pub fn view(s: &State, id: &str) -> El {
     let t = &s.theme;
     let draft = s.composer.drafts.get(id);
@@ -128,55 +172,12 @@ pub fn view(s: &State, id: &str) -> El {
                 .find(|m| m.id == r.id && m.provider_id == r.provider_id)
         })
     });
-    let waiting = crate::docks::active(s);
-    let main_failed = s
-        .chat
-        .data
-        .info
-        .as_ref()
-        .is_some_and(|i| i.outcome.as_deref() == Some("failed"));
-    let mut area = col().w_full().px(16.0).py(12.0).gap(8.0).child(
-        row()
-            .gap(6.0)
-            .center_y()
-            .child(el().size(6.0, 6.0).radius(3.0).fill(t.c(if waiting {
-                "warning"
-            } else if s.chat.data.running {
-                "accent"
-            } else if main_failed {
-                "error"
-            } else {
-                "text-tertiary"
-            })))
-            .child(
-                label(
-                    t,
-                    if waiting {
-                        if crate::docks::waiting_label(s) == "Waiting for permission" {
-                            "Main chat needs approval"
-                        } else {
-                            "Main chat has a question"
-                        }
-                    } else if s.chat.data.running {
-                        "Main chat is working"
-                    } else if s
-                        .chat
-                        .data
-                        .info
-                        .as_ref()
-                        .is_some_and(|i| i.outcome.as_deref() == Some("failed"))
-                    {
-                        "Main chat’s last run failed"
-                    } else {
-                        "Main chat is idle"
-                    },
-                    12.0,
-                    400.0,
-                    if waiting { "warning" } else { "text-tertiary" },
-                )
-                .role("status"),
-            ),
-    );
+    let mut area = col()
+        .w_full()
+        .px(16.0)
+        .py(12.0)
+        .gap(8.0)
+        .child(main_status(s));
     let mut card = t.shadow(
         t.paint(
             col()
