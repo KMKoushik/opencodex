@@ -53,6 +53,7 @@ pub fn activity(
             .expanded(open)
             .on_press_tx(move |s: &mut State, tx| {
                 s.chat.toggle(&id);
+                tx.keep_on_screen(id.clone());
                 tx.instant();
             }),
     );
@@ -116,6 +117,7 @@ fn work(s: &State, r: &Row) -> El {
                 .focusable(true)
                 .on_press_tx(move |s: &mut State, tx| {
                     s.chat.toggle(&id);
+                    tx.keep_on_screen(id.clone());
                     tx.instant();
                 })
         }
@@ -211,12 +213,12 @@ fn tool_row(s: &State, id: &str, tool: &Value) -> El {
         .focusable(true)
         .on_press_tx(move |s: &mut State, tx| {
             s.chat.toggle(&key);
+            tx.keep_on_screen(key.clone());
             tx.instant();
         });
     let mut body = col().key(id).w_full().child(header);
     if open {
         let mut details = col()
-            .w_full()
             .mt(4.0)
             .ml(22.0)
             .mr(8.0)

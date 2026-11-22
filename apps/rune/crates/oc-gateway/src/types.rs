@@ -96,6 +96,7 @@ pub struct SessionInfo {
     pub time: Times,
     pub model: Option<ModelRef>,
     pub metadata: Option<Value>,
+    pub revert: Option<Value>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Connection {

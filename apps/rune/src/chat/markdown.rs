@@ -57,7 +57,13 @@ pub fn render(s: &State, source: &str, streaming: bool, width: f32) -> El {
         })
         .image_frame(|body, frame| {
             let source = frame.src.to_owned();
-            body.on_press(move |s: &mut State| s.chat.preview = Some(source.clone()))
+            body.size(96.0, 76.0)
+                .max_w(96.0)
+                .radius(10.0)
+                .pixels_fit(frame.image.pixels(), rune::SurfaceFit::Fill)
+                .role("button")
+                .focusable(true)
+                .on_press(move |s: &mut State| s.chat.preview = Some(source.clone()))
         })
         .selectable(true)
         .streaming(streaming)

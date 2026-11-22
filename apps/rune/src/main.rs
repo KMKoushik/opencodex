@@ -131,6 +131,7 @@ impl State {
             .filter(|_| self.chat.data.cursor.is_some())
         {
             self.chat.loading_earlier = true;
+            self.chat.disclosure_revision += 1;
             self.command(oc_gateway::Command::EarlierMessages(id));
         }
     }
@@ -528,6 +529,7 @@ fn main() {
         });
     let handle = app.handle();
     let bench = std::env::var("OPENCODEX_BENCH").as_deref() == Ok("1");
+    #[cfg(unix)]
     if bench && !headless {
         let signal_handle = handle.clone();
         std::thread::spawn(move || {

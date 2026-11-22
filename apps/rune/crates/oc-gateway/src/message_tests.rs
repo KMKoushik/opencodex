@@ -114,4 +114,11 @@ fn turns_choose_last_answer_skip_empty_reasoning_and_retain_header_across_prepen
     );
     let rows = project.project(&store, &BTreeMap::new());
     assert_eq!(rows[2].id, id);
+    store.info=Some(serde_json::from_value(json!({"id":"fixture","location":{"directory":"/fixture"},"time":{"created":0},"revert":{"messageID":"user"}})).unwrap());
+    let rows = project.project(&store, &BTreeMap::new());
+    assert_eq!(
+        rows.len(),
+        1,
+        "revert hides the staged boundary and later responses, not older history"
+    );
 }

@@ -54,6 +54,15 @@ impl Default for Chat {
     }
 }
 impl Chat {
+    pub fn read_only(&self) -> bool {
+        self.data.info.as_ref().is_some_and(|info| {
+            info.parent_id.is_some()
+                && !info
+                    .metadata
+                    .as_ref()
+                    .is_some_and(|m| m["opencodexSideChat"].is_object())
+        })
+    }
     pub fn expand(&mut self, mode: &str) {
         for row in &self.rows {
             if matches!(row.kind, Kind::Turn { .. }) {
@@ -76,6 +85,9 @@ impl Chat {
         self.disclosure_revision += 1;
     }
     pub fn accept(&mut self, data: Arc<Messages>) {
+        if self.loading_earlier || self.data.error != data.error {
+            self.disclosure_revision += 1;
+        }
         self.data = data;
         self.loading_earlier = false;
         self.rebuild();
@@ -155,12 +167,42 @@ pub fn view(s: &State, width: f32) -> El {
                         .wrapping_add(s.chat.disclosure_revision),
                 ),
         );
-    let mut body = col()
-        .key("timeline")
-        .w_full()
-        .grow(1.0)
-        .min_h(0.0)
-        .child(scroll);
+    let mut body = col().key("timeline").w_full().grow(1.0).min_h(0.0);
+    if let Some(info) = &s.chat.data.info {
+        let side = info
+            .metadata
+            .as_ref()
+            .and_then(|m| m["opencodexSideChat"]["parentID"].as_str());
+        if let Some(parent) = side.or(info.parent_id.as_deref()) {
+            let parent = parent.to_owned();
+            body = body.child(
+                row()
+                    .w_full()
+                    .h(32.0)
+                    .px(24.0)
+                    .gap(8.0)
+                    .center_y()
+                    .child(label(
+                        t,
+                        if s.chat.read_only() {
+                            "Subagent conversation · Read only"
+                        } else {
+                            "Side chat"
+                        },
+                        12.0,
+                        500.0,
+                        "text-secondary",
+                    ))
+                    .child(
+                        label(t, "Back to parent", 12.0, 400.0, "link")
+                            .role("button")
+                            .focusable(true)
+                            .on_press(move |s: &mut State| s.open_session(Some(parent.clone()))),
+                    ),
+            );
+        }
+    }
+    body = body.child(scroll);
     if s.chat.jump {
         let height = rune::memo::layout_size("timeline")
             .map(|size| size[1])
@@ -202,6 +244,14 @@ pub fn view(s: &State, width: f32) -> El {
                 .py(8.0)
                 .wrap(),
         );
+    }
+    if s.chat
+        .data
+        .info
+        .as_ref()
+        .is_some_and(|info| info.revert.is_some())
+    {
+        body=body.child(label(t,"Conversation undone. Use /redo to restore it, or send a message to continue from here.",12.0,400.0,"text-tertiary").role("status").px(24.0).py(8.0).wrap());
     }
     body
 }

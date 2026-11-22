@@ -65,7 +65,7 @@ fn collect(blocks: &[Block], out: &mut Vec<String>) {
 }
 fn load(client: Gateway, data: &Messages, old: Arc<Images>) -> Images {
     let mut sources = Vec::new();
-    for message in &data.messages {
+    for message in data.visible() {
         if let Some(files) = message
             .fields
             .get("files")

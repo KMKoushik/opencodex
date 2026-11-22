@@ -77,6 +77,9 @@ pub fn run(url: &str, id: String, duration: Duration) -> Result<(), String> {
                 );
                 rendered = true;
             }
+            if rendered && !rt.state.chat.data.running {
+                break;
+            }
         }
     }
     frames.sort_by(f64::total_cmp);

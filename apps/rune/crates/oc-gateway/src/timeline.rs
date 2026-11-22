@@ -61,7 +61,7 @@ impl Projector {
         let mut work = Vec::new();
         let mut next_groups = BTreeMap::new();
         let mut claimed = BTreeSet::new();
-        for message in &data.messages {
+        for message in data.visible() {
             let entries = if let Some((old, entries)) = self
                 .cache
                 .get(&message.id)
@@ -93,7 +93,7 @@ impl Projector {
         self.cache.retain(|id, _| ids.contains(id.as_str()));
         let row_ids: BTreeSet<_> = rows.iter().map(|row| row.id.as_str()).collect();
         self.answers.retain(|id, _| row_ids.contains(id.as_str()));
-        let times = turn_times(data);
+        let times = turn_times(data.visible());
         let mut out = Vec::new();
         let mut next_owners = BTreeMap::new();
         claimed.clear();
@@ -336,10 +336,10 @@ fn is_user(row: &Row) -> bool {
     matches!(&row.kind,Kind::Message(m) if m.r#type == "user")
 }
 type TurnTime = (f64, Option<f64>, Option<String>);
-fn turn_times(data: &Messages) -> BTreeMap<String, TurnTime> {
+fn turn_times(messages: &[Arc<Message>]) -> BTreeMap<String, TurnTime> {
     let mut times = BTreeMap::new();
     let mut key = String::new();
-    for m in &data.messages {
+    for m in messages {
         if m.r#type == "user" {
             key = m.id.clone();
             times.insert(key.clone(), (m.time.created, None, None));
