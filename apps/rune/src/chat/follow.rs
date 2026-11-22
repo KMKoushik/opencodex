@@ -25,6 +25,9 @@ pub fn viewport(view: El, reader: bool) -> El {
         }
     })
     .press_on_down()
+    // Timeline's scroll node has tabIndex=0; keep its reading keys reachable
+    // after a viewport press or a keyboard focus transfer from Find.
+    .focusable(true)
 }
 
 pub fn resume(jump: &mut bool, distance: f32) -> bool {
