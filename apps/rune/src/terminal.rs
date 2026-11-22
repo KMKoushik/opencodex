@@ -26,6 +26,7 @@ pub struct Drawer {
     loaded: bool,
     creating: bool,
     listing: bool,
+    closing: std::collections::BTreeSet<String>,
     pub error: Option<String>,
     theme: std::collections::BTreeMap<String, String>,
     revision: u64,
@@ -42,6 +43,7 @@ impl Default for Drawer {
             loaded: false,
             creating: false,
             listing: false,
+            closing: Default::default(),
             error: None,
             theme: Default::default(),
             revision: 0,
@@ -120,13 +122,19 @@ impl State {
     }
     fn close_terminal_tab(&mut self, index: usize) {
         let t = &self.terminal.tabs[index];
-        self.terminal_request(
+        if self.terminal.closing.contains(&t.id) {
+            return;
+        }
+        let id = t.id.clone();
+        if self.terminal_request(
             format!("close:{}", t.id),
             Operation::TerminalClose {
                 directory: t.directory.clone(),
                 id: t.id.clone(),
             },
-        );
+        ) {
+            self.terminal.closing.insert(id);
+        }
     }
 }
 pub fn start(s: &mut State, client: oc_gateway::Gateway, wake: rune::Waker) {
@@ -157,6 +165,9 @@ pub fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
         }
         if r.tag.starts_with("create:") {
             s.terminal.creating = false;
+        }
+        if let Some(id) = r.tag.strip_prefix("close:") {
+            s.terminal.closing.remove(id);
         }
         match r.result {
             Err(e) => s.terminal.error = Some(e),
@@ -306,6 +317,7 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
             current == Some(i),
             button,
             tabs::close(s, &format!("Close Terminal {}", number + 1))
+                .disabled(s.terminal.closing.contains(&tab.id))
                 .help("Close terminal and end shell")
                 .on_press(move |s: &mut State| s.close_terminal_tab(i)),
         ));
@@ -313,12 +325,14 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
     let header = row()
         .h(40.0)
         .w_full()
+        .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
         .pr(8.0)
         .center_y()
         .gap(8.0)
-        .child(strip)
+        .child(tabs::viewport(strip))
         .child(
             icon_button(t, &icons::PLUS, "New terminal")
+                .mx(6.0)
                 .disabled(s.terminal.creating)
                 .on_press(|s: &mut State| s.create_terminal()),
         )
@@ -411,8 +425,8 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
     body.child(
         el().key("terminal-resize")
             .w_full()
-            .h(6.0)
-            .absolute(0.0, 0.0)
+            .h(8.0)
+            .absolute(0.0, -4.0)
             .cursor(rune::Cursor::ResizeRow)
             .role("separator")
             .label("Resize terminal")
@@ -420,7 +434,8 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
             .on_drag(|s: &mut State, d, tx| match d.phase {
                 rune::Phase::Down => d.data = s.terminal.height,
                 rune::Phase::Move => {
-                    s.terminal.height = (d.data - d.dy).clamp(120.0, s.window_size.1 * 0.6);
+                    s.terminal.height =
+                        (d.data - d.dy).clamp(120.0, (s.window_size.1 * 0.6).max(120.0));
                     tx.instant();
                 }
                 rune::Phase::Up => {
@@ -435,7 +450,8 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
                     rune::Key::Down => -32.0,
                     _ => return false,
                 };
-                s.terminal.height = (s.terminal.height + d).clamp(120.0, s.window_size.1 * 0.6);
+                s.terminal.height =
+                    (s.terminal.height + d).clamp(120.0, (s.window_size.1 * 0.6).max(120.0));
                 true
             }),
     )
@@ -444,6 +460,19 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
 pub fn capture(s: &mut State) -> Result<(), String> {
     let directory = s.workspace_directory();
     let d = directory.clone();
+    let sidebar = if s.prefs.sidebar_closed {
+        0.0
+    } else {
+        s.sidebar_width()
+    };
+    let size = Size {
+        cols: ((s.window_size.0 - sidebar - 20.0) / 7.826172)
+            .floor()
+            .max(2.0) as u16,
+        rows: ((s.terminal.height.min(s.window_size.1 * 0.6) - 40.0 - 32.5 - 14.0) / 16.0)
+            .floor()
+            .max(1.0) as u16,
+    };
     let url = crate::OPTIONS
         .get()
         .unwrap()
@@ -470,19 +499,10 @@ pub fn capture(s: &mut State) -> Result<(), String> {
         })?;
         let wake = Arc::new((Mutex::new(false), Condvar::new()));
         let notify = wake.clone();
-        let w = oc_terminal::Worker::start(
-            client,
-            d,
-            Some(terminal.id.clone()),
-            Size {
-                cols: 116,
-                rows: 12,
-            },
-            move || {
-                *notify.0.lock().unwrap() = true;
-                notify.1.notify_one();
-            },
-        );
+        let w = oc_terminal::Worker::start(client, d, Some(terminal.id.clone()), size, move || {
+            *notify.0.lock().unwrap() = true;
+            notify.1.notify_one();
+        });
         let end = Instant::now() + Duration::from_secs(20);
         let mut frame = None;
         let mut last = Instant::now();
@@ -519,6 +539,7 @@ pub fn capture(s: &mut State) -> Result<(), String> {
     let mut view = TerminalView::new(Palette::from_tokens(|n| s.theme.c(n)));
     view.blink(false);
     view.frame = frame;
+    view.set_focused(true);
     s.terminal.tabs.push(Tab {
         id,
         cwd: directory.clone(),
