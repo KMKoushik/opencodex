@@ -13,6 +13,7 @@ pub(crate) mod panel_tabs;
 mod reader_requests;
 mod sessions;
 mod side_composer;
+mod side_restore;
 mod subagents;
 #[cfg(test)]
 mod tests;
@@ -113,6 +114,8 @@ pub struct Workbench {
     pub side_sending: Option<(String, u64)>,
     pub side_context_revision: Option<u64>,
     pub side_model_open: bool,
+    pub side_thinking_open: bool,
+    pub side_model_search: TextEdit,
     pub side_quote: Option<String>,
     pub side_origin: Option<(String, u64)>,
     pub details: BTreeMap<String, Value>,
@@ -158,6 +161,8 @@ impl Default for Workbench {
             side_sending: None,
             side_context_revision: None,
             side_model_open: false,
+            side_thinking_open: false,
+            side_model_search: TextEdit::new(""),
             side_quote: None,
             side_origin: None,
             details: Default::default(),
@@ -616,10 +621,36 @@ fn receive(s: &mut State, tag: &str, p: worker::Payload) {
         }
     } else if tag == "side-send" {
         if let Some((id, revision)) = s.workbench.side_sending.take() {
-            if let Some(revision) = s.workbench.side_context_revision.take() {
-                s.composer.drafts.acknowledge(&id, revision);
+            if let Some(restored) = p.side_restored {
+                match restored {
+                    Ok(restored) => {
+                        let context = s.workbench.side_context_revision.take();
+                        if s.workbench.side_revisions.get(&id).copied().unwrap_or(0) == revision
+                            && context == Some(s.composer.drafts.get(&id).revision)
+                        {
+                            s.workbench
+                                .side_drafts
+                                .insert(id.clone(), TextEdit::new(restored.text));
+                            let draft = s.composer.drafts.edit(&id);
+                            draft.attachments = restored.attachments;
+                            draft.images = vec![None; draft.attachments.len()];
+                            draft.mentions = restored.mentions;
+                            draft.comments.clear();
+                            s.composer.drafts.touch(&id);
+                        }
+                    }
+                    Err(error) => s.workbench.error = Some(error),
+                }
+                s.open_workspace_reader(id);
+                return;
             }
-            if s.workbench.side_revisions.get(&id).copied().unwrap_or(0) == revision {
+            let context_revision = s.workbench.side_context_revision.take();
+            if s.workbench.side_revisions.get(&id).copied().unwrap_or(0) == revision
+                && context_revision == Some(s.composer.drafts.get(&id).revision)
+            {
+                s.composer
+                    .drafts
+                    .acknowledge(&id, context_revision.unwrap());
                 s.workbench
                     .side_drafts
                     .insert(id.clone(), TextEdit::new(""));

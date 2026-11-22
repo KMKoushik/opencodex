@@ -288,12 +288,17 @@ pub fn browser_tabs(s: &State) -> El {
             }),
         ));
     }
-    strip.child(
-        crate::sidebar::icon_button(&s.theme, &crate::icons::PLUS, "New tab").on_press_tx(
-            |s: &mut State, tx| {
-                s.new_browser_tab("about:blank");
-                tx.focus("browser-address", true);
-            },
-        ),
-    )
+    row()
+        .grow(1.0)
+        .min_w(0.0)
+        .center_y()
+        .child(tabs::viewport(strip))
+        .child(
+            crate::sidebar::icon_button(&s.theme, &crate::icons::PLUS, "New tab").on_press_tx(
+                |s: &mut State, tx| {
+                    s.new_browser_tab("about:blank");
+                    tx.focus("browser-address", true);
+                },
+            ),
+        )
 }

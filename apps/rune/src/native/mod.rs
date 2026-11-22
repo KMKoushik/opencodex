@@ -18,6 +18,7 @@ use oc_webview::{Event, FocusRequest, WebView};
 use rune::{El, TextEdit, TextStyle, Tx, col, row, text_input};
 use serde_json::{Value, json};
 use std::rc::Rc;
+use storage::{restore_tabs, save_tabs, sync_chat_tabs};
 
 pub struct Browser {
     key: u64,
@@ -580,139 +581,6 @@ pub fn poll(s: &mut State, tx: &mut Tx) -> bool {
     }
     changed
 }
-fn sync_chat_tabs(s: &mut State) {
-    if s.native.session == s.selected {
-        return;
-    }
-    annotations::cancel(s);
-    let n = &mut s.native;
-    let old = ChatTabs {
-        browsers: std::mem::take(&mut n.browsers),
-        browser: n.browser,
-        canvases: std::mem::take(&mut n.canvas_tabs),
-        canvas: n.selected_canvas.take(),
-    };
-    for b in &old.browsers {
-        b.web.hide();
-    }
-    let next = n.retained.remove(&s.selected);
-    n.retained.insert(n.session.clone(), old);
-    n.session = s.selected.clone();
-    n.delete_canvas = None;
-    n.list_loaded = false;
-    if let Some(next) = next {
-        n.browser = next.browser;
-        n.canvas_tabs = next.canvases;
-        n.selected_canvas = next.canvas;
-        n.browsers = next.browsers;
-    } else {
-        restore_tabs(s);
-    }
-    s.native.tabs_dirty |= s.native.preferences_loaded;
-}
-fn restore_tabs(s: &mut State) {
-    let key = s
-        .selected
-        .clone()
-        .unwrap_or_else(|| format!("directory:{}", s.workspace_directory()));
-    let next = s.native.saved.get(&key).cloned().unwrap_or_default();
-    s.native.browser = next.browser.min(next.browsers.len().saturating_sub(1));
-    s.native.canvas_tabs = next
-        .canvases
-        .into_iter()
-        .filter(|id| canvas::valid_id(id))
-        .take(12)
-        .collect();
-    s.native.selected_canvas = next.canvas.filter(|id| s.native.canvas_tabs.contains(id));
-    for url in next
-        .browsers
-        .into_iter()
-        .filter_map(|url| address_url(if url.is_empty() { "about:blank" } else { &url }))
-        .take(12)
-    {
-        let web = web(s, false);
-        let error = if url.starts_with("file:") {
-            None
-        } else {
-            web.load_url(&url).err()
-        };
-        s.native.browsers.push(Browser {
-            key: browser_key(),
-            web,
-            address: TextEdit::new(if url == "about:blank" {
-                String::new()
-            } else {
-                url.clone()
-            }),
-            error,
-        });
-        if url.starts_with("file:") {
-            let key = s.native.browsers.last().unwrap().key;
-            s.native_request(format!("browser-file:{key}"), Operation::LocalHTML(url));
-        }
-    }
-}
-fn saved(t: &ChatTabs) -> storage::Tabs {
-    storage::Tabs {
-        browsers: t
-            .browsers
-            .iter()
-            .map(|b| {
-                let url = b.web.state().url;
-                if url.is_empty() && b.address.text.is_empty() {
-                    "about:blank".into()
-                } else if url.is_empty() {
-                    b.address.text.clone()
-                } else {
-                    url
-                }
-            })
-            .collect(),
-        browser: t.browser,
-        canvases: t.canvases.clone(),
-        canvas: t.canvas.clone(),
-    }
-}
-fn save_tabs(s: &mut State) {
-    for (id, tabs) in &s.native.retained {
-        if let Some(id) = id {
-            s.native.saved.insert(id.clone(), saved(tabs));
-        }
-    }
-    let key = s
-        .selected
-        .clone()
-        .unwrap_or_else(|| format!("directory:{}", s.workspace_directory()));
-    s.native.saved.insert(
-        key,
-        storage::Tabs {
-            browsers: s
-                .native
-                .browsers
-                .iter()
-                .map(|b| {
-                    let url = b.web.state().url;
-                    if url.is_empty() && b.address.text.is_empty() {
-                        "about:blank".into()
-                    } else if url.is_empty() {
-                        b.address.text.clone()
-                    } else {
-                        url
-                    }
-                })
-                .collect(),
-            browser: s.native.browser,
-            canvases: s.native.canvas_tabs.clone(),
-            canvas: s.native.selected_canvas.clone(),
-        },
-    );
-    while s.native.saved.len() > 128 {
-        s.native.saved.pop_first();
-    }
-    if let Some(storage) = &s.native.storage {
-        storage.save(s.native.saved.clone());
-    }
-}
 pub fn coverage(s: &State) {
     // Hide before painting Rune overlays; no readbacks, timers or redraw loop.
     let covered = s.native.tooltip
@@ -726,6 +594,7 @@ pub fn coverage(s: &State) {
         || s.chat.comment_editor.is_some()
         || s.workbench.delete_side.is_some()
         || s.workbench.side_model_open
+        || s.workbench.side_thinking_open
         || s.native.delete_canvas.is_some();
     if let Some(c) = &s.native.canvas {
         c.web.set_covered(covered);
@@ -778,6 +647,9 @@ pub fn canvas_panel(s: &State) -> El {
                 .gap(4.0)
                 .pr(6.0)
                 .radius(8.0)
+                .center_y()
+                .hover_group()
+                .hover_group_focus()
                 .hover(s.theme.c("hover"))
                 .child(
                     row()
@@ -807,11 +679,15 @@ pub fn canvas_panel(s: &State) -> El {
                         .on_press(move |s: &mut State| s.open_canvas(id.clone())),
                 )
                 .child(
-                    crate::pages::button(s, "Delete")
-                        .label(format!("Delete {title}"))
-                        .on_press(move |s: &mut State| {
-                            s.native.delete_canvas = Some((delete_id.clone(), delete_title.clone()))
-                        }),
+                    crate::sidebar::icon_button(
+                        &s.theme,
+                        &icons::DELETE,
+                        &format!("Delete {title}"),
+                    )
+                    .group_opacity(0.0, 1.0)
+                    .on_press(move |s: &mut State| {
+                        s.native.delete_canvas = Some((delete_id.clone(), delete_title.clone()))
+                    }),
                 ),
         );
     }
@@ -879,7 +755,12 @@ pub fn canvas_tabs(s: &State) -> El {
             }),
         ));
     }
-    let mut header = row().grow(1.0).min_w(0.0).center_y().gap(8.0).child(tabs);
+    let mut header = row()
+        .grow(1.0)
+        .min_w(0.0)
+        .center_y()
+        .gap(8.0)
+        .child(tab::viewport(tabs));
     if s.native.selected_canvas.is_some() {
         header = header.child(
             crate::sidebar::icon_button(

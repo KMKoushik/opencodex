@@ -9,6 +9,10 @@ use std::{
 };
 
 pub enum Operation {
+    UndoSide {
+        id: String,
+        message: std::sync::Arc<oc_gateway::types::Message>,
+    },
     LocalHTML(String),
     SaveData {
         uri: String,
@@ -59,6 +63,7 @@ pub struct Reply {
     pub result: Result<Payload, String>,
 }
 pub struct Payload {
+    pub side_restored: Option<Result<super::side_restore::Restored, String>>,
     pub value: Value,
     pub diff: Vec<PreparedFile>,
     pub highlights: HashMap<u64, Vec<syntax::Highlight>>,
@@ -125,6 +130,17 @@ impl Worker {
 }
 async fn run(client: &Gateway, op: Operation) -> Result<Value, String> {
     match op {
+        Operation::UndoSide { id, message } => {
+            // Validate and decode before mutating history, never on the UI thread.
+            super::side_restore::decode(&message)?;
+            let _: Value = client
+                .post(
+                    &format!("sessions/{id}/action"),
+                    serde_json::json!({"action":"undo","messageID":message.id}),
+                )
+                .await?;
+            Ok(serde_json::json!({"__sideRestored":message.as_ref()}))
+        }
         Operation::LocalHTML(value) => {
             let url = url::Url::parse(&value).map_err(|e| e.to_string())?;
             if url.scheme() != "file" || url.host_str().is_some_and(|h| h != "localhost") {
@@ -213,6 +229,34 @@ async fn run(client: &Gateway, op: Operation) -> Result<Value, String> {
         } => {
             use base64::Engine;
             oc_gateway::prompt::validate_attachments(&attachments)?;
+            let slash = body
+                .as_object_mut()
+                .and_then(|body| body.remove("__sideSlash"))
+                .and_then(|v| v.as_str().map(str::to_owned));
+            if let Some(name) = slash {
+                let info = client.session(&id).await?;
+                let directory = info.location.directory;
+                let query = [("directory", directory.as_str())];
+                let (skills, commands): (Vec<Value>, Vec<Value>) = tokio::try_join!(
+                    client.get_bounded("workspace/skills", &query, 16 * 1024 * 1024),
+                    client.get_bounded("workspace/commands", &query, 16 * 1024 * 1024)
+                )?;
+                if let Some(skill) = skills.iter().find(|v| v["name"] == name) {
+                    body["skill"] = skill["id"].clone();
+                } else if commands.iter().any(|v| v["name"] == name) {
+                    body["command"] = Value::String(name.clone());
+                } else {
+                    return Err(format!(
+                        "Unknown command /{name}. Type / to see available commands."
+                    ));
+                }
+            }
+            if body["text"]
+                .as_str()
+                .is_some_and(|v| v.encode_utf16().count() > 200_000)
+            {
+                return Err("The draft is too long. Shorten it before sending.".into());
+            }
             body["files"]=Value::Array(attachments.iter().map(|a|serde_json::json!({"name":a.name,"uri":format!("data:{};base64,{}",a.mime,base64::engine::general_purpose::STANDARD.encode(a.bytes.as_slice()))})).collect());
             client.post(&format!("sessions/{id}/prompt"), body).await
         }
@@ -285,6 +329,11 @@ pub fn prepare(value: Value) -> Payload {
             Ok(image)
         });
     Payload {
+        side_restored: value.get("__sideRestored").map(|v| {
+            serde_json::from_value(v.clone())
+                .map_err(|e| e.to_string())
+                .and_then(|m| super::side_restore::decode(&m))
+        }),
         value,
         diff: prepared,
         highlights,

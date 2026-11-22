@@ -33,10 +33,17 @@ pub fn view(s: &State) -> El {
                 .map(|m| m.name.as_str())
                 .unwrap_or(&model.id);
             detail = detail.child(
-                label(t, name, 12.0, 400.0, "text-tertiary")
-                    .label(format!("Model: {name}"))
-                    .help(format!("{} · {}", model.provider_id, model.id))
-                    .truncate(),
+                row()
+                    .gap(6.0)
+                    .center_y()
+                    .min_w(0.0)
+                    .child(provider(s, &model.provider_id, 14.0))
+                    .child(
+                        label(t, name, 12.0, 400.0, "text-tertiary")
+                            .label(format!("Model: {name}"))
+                            .help(format!("{} · {}", model.provider_id, model.id))
+                            .truncate(),
+                    ),
             );
         }
         let mut header = row()
@@ -97,16 +104,25 @@ pub fn view(s: &State) -> El {
         .count();
     let mut bar = row()
         .w_full()
-        .px(12.0)
-        .py(8.0)
+        .px(10.0)
+        .py(5.0)
         .gap(8.0)
         .center_y()
+        .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
         .child(label(t, "Delegated sessions", 14.0, 500.0, "text").grow(1.0));
-    for (filter, title) in [
+    let mut filters = row()
+        .gap(2.0)
+        .padding(2.0)
+        .radius(9.0)
+        .fill(t.c("well"))
+        .role("radiogroup")
+        .label("Show subagents");
+    for (filter, title, count) in [
         (
             false,
+            "All",
             format!(
-                "All {}{}",
+                "{}{}",
                 s.workbench.agents.len(),
                 if s.workbench.agent_cursor.is_some() {
                     "+"
@@ -115,19 +131,67 @@ pub fn view(s: &State) -> El {
                 }
             ),
         ),
-        (true, format!("Running {running}")),
+        (true, "Running", running.to_string()),
     ] {
-        bar = bar.child(
-            super::documents::button(s, &title)
-                .checked(s.workbench.agents_running_only == filter)
-                .fill(t.c(if s.workbench.agents_running_only == filter {
-                    "selected"
+        let selected = s.workbench.agents_running_only == filter;
+        let button = row()
+            .h(26.0)
+            .px(10.0)
+            .gap(6.0)
+            .center_y()
+            .radius(7.0)
+            .child(label(
+                t,
+                title,
+                12.0,
+                500.0,
+                if selected { "text" } else { "text-secondary" },
+            ))
+            .child(
+                label(t, count, 10.5, 500.0, "text-secondary")
+                    .font(rune::TextStyle {
+                        family: rune::Family::Mono,
+                        ..rune::TextStyle::new(10.5, 500.0)
+                    })
+                    .px(5.0)
+                    .radius(4.0)
+                    .fill(t.c("secondary")),
+            )
+            .role("radio")
+            .checked(selected)
+            .focusable(true)
+            .key(if filter {
+                "agents-running"
+            } else {
+                "agents-all"
+            })
+            .on_press(move |s: &mut State| s.workbench.agents_running_only = filter)
+            .on_key(move |s: &mut State, key, tx| {
+                if matches!(
+                    key.key,
+                    rune::Key::Left | rune::Key::Right | rune::Key::Up | rune::Key::Down
+                ) {
+                    s.workbench.agents_running_only = !filter;
+                    tx.focus(
+                        if filter {
+                            "agents-all"
+                        } else {
+                            "agents-running"
+                        },
+                        true,
+                    );
+                    true
                 } else {
-                    "surface"
-                }))
-                .on_press(move |s: &mut State| s.workbench.agents_running_only = filter),
-        );
+                    false
+                }
+            });
+        filters = filters.child(if selected {
+            t.shadow(t.paint(button, "glaze"), "glaze-shadow")
+        } else {
+            button
+        });
     }
+    bar = bar.child(t.shadow(filters, "well-shadow"));
     body = body.child(bar);
     if s.workbench.pending.contains("agents") && s.workbench.agents.is_empty() {
         return body.child(
@@ -215,7 +279,6 @@ pub fn view(s: &State) -> El {
                     });
                     row()
                         .w_full()
-                        .min_h(62.0)
                         .px(12.0)
                         .py(10.0)
                         .gap(10.0)
@@ -249,7 +312,11 @@ pub fn view(s: &State) -> El {
                                 )
                                 .child(meta),
                         )
-                        .child(icon(&crate::icons::RIGHT, 16.0).color(s.theme.c("text-tertiary")))
+                        .child(
+                            icon(&crate::icons::RIGHT, 16.0)
+                                .color(s.theme.c("text-tertiary"))
+                                .self_center(),
+                        )
                         .role("button")
                         .focusable(true)
                         .on_press(move |s: &mut State| s.open_workspace_reader(id.clone()))
@@ -293,10 +360,44 @@ fn status(outcome: Option<&str>) -> &'static str {
     }
 }
 pub fn activity(s: &State, name: &str) -> El {
-    el().size(8.0, 8.0)
-        .radius(4.0)
-        .fill(s.theme.c("accent-text"))
+    el().size(10.0, 10.0)
+        .radius(5.0)
+        .border(1.5, s.theme.c("border-heavy"))
+        .child(
+            el().size(10.0, 10.0)
+                .radius(5.0)
+                .border_sides([1.5, 1.5, 0.0, 0.0], s.theme.c("text-secondary")),
+        )
         .role("img")
         .label(name)
         .help(name)
+}
+
+pub fn provider(s: &State, provider: &str, size: f32) -> El {
+    let alias = match provider {
+        "codex" | "chatgpt" => "openai",
+        "claude" => "anthropic",
+        "gemini" | "google-vertex" => "google",
+        "copilot" | "github-copilot-enterprise" => "github-copilot",
+        "ollama-cloud" => "ollama",
+        "azure-cognitive-services" => "azure",
+        id => id,
+    };
+    if let Some(image) = s.composer.providers.get(alias) {
+        el().size(size, size).pixels(image.pixels())
+    } else {
+        label(
+            &s.theme,
+            &provider
+                .chars()
+                .next()
+                .unwrap_or('?')
+                .to_uppercase()
+                .to_string(),
+            size * 0.7,
+            500.0,
+            "text-tertiary",
+        )
+        .size(size, size)
+    }
 }

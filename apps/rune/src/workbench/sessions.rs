@@ -52,14 +52,16 @@ pub fn tabs(s: &State) -> El {
     if s.workbench.sides.is_empty() {
         strip = strip.child(label(&s.theme, "Side chat", 12.0, 400.0, "text-tertiary"));
     }
-    strip.child(
-        crate::sidebar::icon_button(&s.theme, &crate::icons::PLUS, "New side chat")
-            .disabled(
-                s.workbench.sides.len() >= 8
-                    || s.workbench.pending.contains("side-create")
-                    || s.workbench.pending.contains("sides"),
-            )
-            .on_press(|s: &mut State| s.create_workspace_side(String::new())),
+    tabs::viewport(
+        strip.child(
+            crate::sidebar::icon_button(&s.theme, &crate::icons::PLUS, "New side chat")
+                .disabled(
+                    s.workbench.sides.len() >= 8
+                        || s.workbench.pending.contains("side-create")
+                        || s.workbench.pending.contains("sides"),
+                )
+                .on_press(|s: &mut State| s.create_workspace_side(String::new())),
+        ),
     )
 }
 
@@ -118,6 +120,12 @@ impl State {
         if text.trim().is_empty() && draft.attachments.is_empty() && draft.comments.is_empty() {
             return;
         }
+        let revision = self.workbench.side_revisions.get(&id).copied().unwrap_or(0);
+        self.workbench.side_context_revision = Some(draft.revision);
+        if super::side_composer::slash(self, &id, &text, revision) {
+            return;
+        }
+        let draft = self.composer.drafts.get(&id);
         let model = draft
             .model
             .as_ref()
@@ -135,19 +143,21 @@ impl State {
             self.workbench.error = Some("Select a model before sending.".into());
             return;
         };
-        let revision = self.workbench.side_revisions.get(&id).copied().unwrap_or(0);
-        let (text, annotations) = crate::chat::comments::annotated(&text, &draft.comments);
         let attachments = draft.attachments.clone();
-        self.workbench.side_context_revision = Some(draft.revision);
-        if super::side_composer::slash(self, &id, &text, revision) {
-            return;
-        }
+        let slash = super::side_restore::parse_slash(&text);
+        let prompt = slash
+            .as_ref()
+            .map(|(_, args)| args.as_str())
+            .unwrap_or(&text);
+        let draft = self.composer.drafts.get(&id);
+        let (text, annotations) = crate::chat::comments::annotated(prompt, &draft.comments);
+        let mentions = super::side_restore::prompt_mentions(&text, &draft.mentions);
         self.workbench.side_sending = Some((id.clone(), revision));
         self.workspace_request(
             "side-send".into(),
             Operation::SendSide {
                 id,
-                body: json!({"text":text,"model":model,"mentions":[],"annotations":annotations}),
+                body: json!({"text":text,"model":model,"mentions":mentions,"annotations":annotations,"__sideSlash":slash.map(|(name,_)|name)}),
                 attachments,
             },
         );

@@ -21,9 +21,8 @@ pub fn slash(s: &mut State, id: &str, text: &str, revision: u64) -> bool {
             "/{name} isn’t available in side chats. Use it in the main chat."
         ))
     } else if !["undo", "redo", "compact"].contains(&name) {
-        Some(format!(
-            "Unknown command /{name}. Type / to see available commands."
-        ))
+        // Server commands and skills are resolved from a fresh catalog on the worker.
+        return false;
     } else if !args.trim().is_empty() {
         Some(format!("/{name} does not take arguments."))
     } else if name == "compact"
@@ -50,7 +49,15 @@ pub fn slash(s: &mut State, id: &str, text: &str, revision: u64) -> bool {
         return true;
     }
     let mut body = json!({"action":name});
+    let mut undone = None;
     if name == "undo" {
+        let start = s
+            .workbench
+            .reader_chat
+            .data
+            .info
+            .as_ref()
+            .map(|info| info.time.created);
         let message = s
             .workbench
             .reader_chat
@@ -58,19 +65,42 @@ pub fn slash(s: &mut State, id: &str, text: &str, revision: u64) -> bool {
             .visible()
             .iter()
             .rev()
-            .find(|m| m.r#type == "user");
+            .find(|m| m.r#type == "user" && start.is_some_and(|start| m.time.created >= start));
         let Some(message) = message else {
-            s.workbench.error = Some("There is nothing to undo in this side chat.".into());
+            let reached_fork = start.is_some_and(|start| {
+                s.workbench
+                    .reader_chat
+                    .data
+                    .messages
+                    .iter()
+                    .any(|m| m.time.created < start)
+            });
+            s.workbench.error = Some(
+                if reached_fork {
+                    "There is nothing to undo in this side chat."
+                } else {
+                    "No earlier user message is loaded. Load earlier history to undo."
+                }
+                .into(),
+            );
             return true;
         };
         body["messageID"] = json!(message.id);
+        undone = Some(message.clone());
     }
     s.workbench.side_sending = Some((id.into(), revision));
     s.workspace_request(
         "side-send".into(),
-        Operation::Post {
-            path: format!("sessions/{id}/action"),
-            body,
+        if let Some(message) = undone {
+            Operation::UndoSide {
+                id: id.into(),
+                message,
+            }
+        } else {
+            Operation::Post {
+                path: format!("sessions/{id}/action"),
+                body,
+            }
         },
     );
     true
@@ -98,23 +128,36 @@ pub fn view(s: &State, id: &str) -> El {
                 .find(|m| m.id == r.id && m.provider_id == r.provider_id)
         })
     });
+    let waiting = crate::docks::active(s);
+    let main_failed = s
+        .chat
+        .data
+        .info
+        .as_ref()
+        .is_some_and(|i| i.outcome.as_deref() == Some("failed"));
     let mut area = col().w_full().px(16.0).py(12.0).gap(8.0).child(
         row()
             .gap(6.0)
             .center_y()
-            .child(
-                el().size(6.0, 6.0)
-                    .radius(3.0)
-                    .fill(t.c(if s.chat.data.running {
-                        "accent"
-                    } else {
-                        "text-tertiary"
-                    })),
-            )
+            .child(el().size(6.0, 6.0).radius(3.0).fill(t.c(if waiting {
+                "warning"
+            } else if s.chat.data.running {
+                "accent"
+            } else if main_failed {
+                "error"
+            } else {
+                "text-tertiary"
+            })))
             .child(
                 label(
                     t,
-                    if s.chat.data.running {
+                    if waiting {
+                        if crate::docks::waiting_label(s) == "Waiting for permission" {
+                            "Main chat needs approval"
+                        } else {
+                            "Main chat has a question"
+                        }
+                    } else if s.chat.data.running {
                         "Main chat is working"
                     } else if s
                         .chat
@@ -129,7 +172,7 @@ pub fn view(s: &State, id: &str) -> El {
                     },
                     12.0,
                     400.0,
-                    "text-tertiary",
+                    if waiting { "warning" } else { "text-tertiary" },
                 )
                 .role("status"),
             ),
@@ -246,19 +289,86 @@ pub fn view(s: &State, id: &str) -> El {
                 );
             }),
         )
+        .child(el().grow(1.0))
         .child(
-            super::documents::button(
-                s,
-                model
-                    .map(|m| m.name.as_str())
-                    .or_else(|| selected.map(|m| m.id.as_str()))
-                    .unwrap_or("Select model"),
+            row()
+                .h(28.0)
+                .px(8.0)
+                .gap(6.0)
+                .center_y()
+                .radius(6.0)
+                .fill(t.c("control"))
+                .border(1.0, t.c("border"))
+                .child(
+                    selected
+                        .map(|m| super::subagents::provider(s, &m.provider_id, 14.0))
+                        .unwrap_or_else(el),
+                )
+                .child(
+                    label(
+                        t,
+                        model
+                            .map(|m| m.name.as_str())
+                            .or_else(|| selected.map(|m| m.id.as_str()))
+                            .unwrap_or("Choose model"),
+                        12.0,
+                        400.0,
+                        "text",
+                    )
+                    .truncate(),
+                )
+                .child(rune::icon(&crate::icons::DOWN, 14.0).color(t.c("text-tertiary")))
+                .key("side-model")
+                .role("button")
+                .label("Model")
+                .focusable(true)
+                .disabled(s.workbench.side_sending.is_some())
+                .on_press(|s: &mut State| {
+                    s.workbench.side_model_search.clear();
+                    s.workbench.side_model_open = !s.workbench.side_model_open;
+                }),
+        );
+    let has_variants = model.is_some_and(|m| !m.variants.is_empty());
+    let variant = selected
+        .and_then(|m| m.variant.as_deref())
+        .filter(|v| *v != "default")
+        .unwrap_or("Default");
+    let variant = variant
+        .chars()
+        .next()
+        .map(|c| c.to_uppercase().to_string() + &variant[c.len_utf8()..])
+        .unwrap_or_default();
+    controls = controls.child(
+        row()
+            .h(28.0)
+            .px(8.0)
+            .gap(6.0)
+            .center_y()
+            .radius(6.0)
+            .child(
+                label(
+                    t,
+                    if has_variants {
+                        &variant
+                    } else {
+                        "No thinking options"
+                    },
+                    12.0,
+                    400.0,
+                    "text-secondary",
+                )
+                .truncate(),
             )
-            .key("side-model")
-            .disabled(s.workbench.side_sending.is_some())
-            .on_press(|s: &mut State| s.workbench.side_model_open = !s.workbench.side_model_open),
-        )
-        .child(el().grow(1.0));
+            .child(rune::icon(&crate::icons::DOWN, 14.0).color(t.c("text-tertiary")))
+            .key("side-thinking")
+            .role("button")
+            .label("Thinking level")
+            .focusable(true)
+            .disabled(!has_variants || s.workbench.side_sending.is_some())
+            .on_press(|s: &mut State| {
+                s.workbench.side_thinking_open = !s.workbench.side_thinking_open
+            }),
+    );
     if s.workbench.reader_chat.data.running {
         controls = controls.child(
             super::documents::button(s, "Stop").on_press(|s: &mut State| {
@@ -289,8 +399,8 @@ pub fn view(s: &State, id: &str) -> El {
     area = area.child(card.child(controls));
     if s.workbench.side_model_open {
         let mut menu = col()
-            .w(280.0)
-            .max_h(300.0)
+            .w(360.0)
+            .max_h(420.0)
             .padding(6.0)
             .radius(12.0)
             .fill(t.c("elevated"))
@@ -298,12 +408,50 @@ pub fn view(s: &State, id: &str) -> El {
             .scroll(rune::ScrollSpec {
                 stick_bottom: false,
             });
-        for m in catalog.into_iter().flat_map(|c| &c.data) {
+        menu = menu.child(
+            text_input(&s.workbench.side_model_search, TextStyle::new(13.0, 400.0))
+                .key("side-model-search")
+                .label("Search models")
+                .placeholder("Search models", t.c("text-tertiary"))
+                .autofocus()
+                .w_full()
+                .h(36.0)
+                .px(8.0)
+                .color(t.c("text"))
+                .on_edit(|s: &mut State| &mut s.workbench.side_model_search),
+        );
+        let terms: Vec<_> = s
+            .workbench
+            .side_model_search
+            .text
+            .split_whitespace()
+            .map(str::to_lowercase)
+            .collect();
+        let mut models: Vec<_> = catalog
+            .into_iter()
+            .flat_map(|c| &c.data)
+            .filter(|m| m.enabled)
+            .filter(|m| {
+                let hay = format!("{} {} {}", m.provider_id, m.name, m.id).to_lowercase();
+                terms.iter().all(|term| hay.contains(term))
+            })
+            .collect();
+        models.sort_by(|a, b| {
+            a.provider_id
+                .cmp(&b.provider_id)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
+        for m in models {
             let key = id.to_owned();
             let selected = oc_gateway::types::ModelRef {
                 provider_id: m.provider_id.clone(),
                 id: m.id.clone(),
-                variant: None,
+                variant: s
+                    .prefs
+                    .model_variants
+                    .get(&format!("{}/{}", m.provider_id, m.id))
+                    .cloned()
+                    .flatten(),
             };
             menu = menu.child(super::documents::button(s, &m.name).on_press(
                 move |s: &mut State| {
@@ -316,6 +464,46 @@ pub fn view(s: &State, id: &str) -> El {
         area = area.child(
             menu.anchored("side-model", rune::Side::Top, rune::Align::Start, 6.0)
                 .modal(true, |s: &mut State| s.workbench.side_model_open = false),
+        );
+    }
+    if s.workbench.side_thinking_open {
+        let mut menu = col()
+            .w(200.0)
+            .padding(5.0)
+            .radius(10.0)
+            .fill(t.c("elevated"))
+            .border(1.0, t.c("border-heavy"));
+        for (variant, title) in std::iter::once((None, "Default".to_owned())).chain(
+            model.into_iter().flat_map(|m| &m.variants).map(|v| {
+                let title =
+                    v.id.chars()
+                        .next()
+                        .map(|c| c.to_uppercase().to_string() + &v.id[c.len_utf8()..])
+                        .unwrap_or_default();
+                (Some(v.id.clone()), title)
+            }),
+        ) {
+            let key = id.to_owned();
+            let chosen = selected.cloned();
+            menu = menu.child(super::documents::button(s, &title).on_press(
+                move |s: &mut State| {
+                    if let Some(mut model) = chosen.clone() {
+                        model.variant = variant.clone();
+                        s.prefs.model_variants.insert(
+                            format!("{}/{}", model.provider_id, model.id),
+                            variant.clone(),
+                        );
+                        s.composer.drafts.edit(&key).model = Some(model);
+                        s.composer.drafts.touch(&key);
+                        s.save();
+                    }
+                    s.workbench.side_thinking_open = false;
+                },
+            ));
+        }
+        area = area.child(
+            menu.anchored("side-thinking", rune::Side::Top, rune::Align::End, 6.0)
+                .modal(true, |s: &mut State| s.workbench.side_thinking_open = false),
         );
     }
     area

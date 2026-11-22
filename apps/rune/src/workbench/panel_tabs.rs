@@ -4,7 +4,6 @@ use rune::{El, icon, row};
 
 pub fn strip(name: &str) -> El {
     row()
-        .grow(1.0)
         .min_w(0.0)
         .h(40.0)
         .pl(10.0)
@@ -12,6 +11,9 @@ pub fn strip(name: &str) -> El {
         .center_y()
         .role("tablist")
         .label(name)
+}
+pub fn viewport(tabs: El) -> El {
+    row().h(40.0).grow(1.0).min_w(0.0).scroll_x().child(tabs)
 }
 pub fn button(s: &State, name: &str, glyph: &'static rune::Icon, active: bool) -> El {
     row()
@@ -38,7 +40,7 @@ pub fn button(s: &State, name: &str, glyph: &'static rune::Icon, active: bool) -
         .focusable(true)
 }
 pub fn close(s: &State, name: &str) -> El {
-    crate::sidebar::icon_button(&s.theme, &crate::icons::CLOSE, name)
+    crate::sidebar::icon_button_size(&s.theme, &crate::icons::CLOSE, name, 12.0)
         .size(18.0, 18.0)
         .radius(5.0)
 }

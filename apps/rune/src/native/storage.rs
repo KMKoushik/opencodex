@@ -86,3 +86,124 @@ impl Storage {
         let _ = self.signal.try_send(());
     }
 }
+use super::{
+    Browser, ChatTabs, Operation, State, TextEdit, address_url, annotations, browser_key, canvas,
+    web,
+};
+
+pub(super) fn sync_chat_tabs(s: &mut State) {
+    if s.native.session == s.selected {
+        return;
+    }
+    annotations::cancel(s);
+    let n = &mut s.native;
+    let old = ChatTabs {
+        browsers: std::mem::take(&mut n.browsers),
+        browser: n.browser,
+        canvases: std::mem::take(&mut n.canvas_tabs),
+        canvas: n.selected_canvas.take(),
+    };
+    for b in &old.browsers {
+        b.web.hide();
+    }
+    let next = n.retained.remove(&s.selected);
+    n.retained.insert(n.session.clone(), old);
+    n.session = s.selected.clone();
+    n.delete_canvas = None;
+    n.list_loaded = false;
+    if let Some(next) = next {
+        n.browser = next.browser;
+        n.canvas_tabs = next.canvases;
+        n.selected_canvas = next.canvas;
+        n.browsers = next.browsers;
+    } else {
+        restore_tabs(s);
+    }
+    s.native.tabs_dirty |= s.native.preferences_loaded;
+}
+pub(super) fn restore_tabs(s: &mut State) {
+    let key = s
+        .selected
+        .clone()
+        .unwrap_or_else(|| format!("directory:{}", s.workspace_directory()));
+    let next = s.native.saved.get(&key).cloned().unwrap_or_default();
+    s.native.browser = next.browser.min(next.browsers.len().saturating_sub(1));
+    s.native.canvas_tabs = next
+        .canvases
+        .into_iter()
+        .filter(|id| canvas::valid_id(id))
+        .take(12)
+        .collect();
+    s.native.selected_canvas = next.canvas.filter(|id| s.native.canvas_tabs.contains(id));
+    for url in next
+        .browsers
+        .into_iter()
+        .filter_map(|url| address_url(if url.is_empty() { "about:blank" } else { &url }))
+        .take(12)
+    {
+        let web = web(s, false);
+        let error = if url.starts_with("file:") {
+            None
+        } else {
+            web.load_url(&url).err()
+        };
+        s.native.browsers.push(Browser {
+            key: browser_key(),
+            web,
+            address: TextEdit::new(if url == "about:blank" {
+                String::new()
+            } else {
+                url.clone()
+            }),
+            error,
+        });
+        if url.starts_with("file:") {
+            let key = s.native.browsers.last().unwrap().key;
+            s.native_request(format!("browser-file:{key}"), Operation::LocalHTML(url));
+        }
+    }
+}
+fn browser_url(b: &Browser) -> String {
+    let url = b.web.state().url;
+    if url.is_empty() && b.address.text.is_empty() {
+        "about:blank".into()
+    } else if url.is_empty() {
+        b.address.text.clone()
+    } else {
+        url
+    }
+}
+fn saved(t: &ChatTabs) -> Tabs {
+    Tabs {
+        browsers: t.browsers.iter().map(browser_url).collect(),
+        browser: t.browser,
+        canvases: t.canvases.clone(),
+        canvas: t.canvas.clone(),
+    }
+}
+pub(super) fn save_tabs(s: &mut State) {
+    for (id, tabs) in &s.native.retained {
+        if let Some(id) = id {
+            s.native.saved.insert(id.clone(), saved(tabs));
+        }
+    }
+    let key = s
+        .selected
+        .clone()
+        .unwrap_or_else(|| format!("directory:{}", s.workspace_directory()));
+    s.native.saved.insert(
+        key,
+        Tabs {
+            browsers: s.native.browsers.iter().map(browser_url).collect(),
+            browser: s.native.browser,
+            canvases: s.native.canvas_tabs.clone(),
+            canvas: s.native.selected_canvas.clone(),
+        },
+    );
+    while s.native.saved.len() > 128 {
+        s.native.saved.pop_first();
+    }
+    if let Some(storage) = &s.native.storage {
+        storage.save(s.native.saved.clone());
+    }
+}
