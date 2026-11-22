@@ -74,3 +74,42 @@ unscored: the headless CLI cannot export the WKWebView child.
 
 All screenshots are real Electron / native same-data pairs. No historical
 screenshots, shared OpenCode state, model calls, live redraw loops, or masks.
+
+## Side timeline viewport correction
+
+The subsequent `rune-fx-scroll` measurement used real Electron/CDP on isolated
+gateway 4515 / OpenCode 4985, in dark/light at 1280×800. The composer was not the
+source of the remaining transcript shift: its vertical geometry already matched.
+`tools/sweep/scroll-measure.mjs` records the surrounding live rectangles, including
+the CSS override that an earlier footer measurement missed.
+
+| Rectangle                | Electron y / height | Rune y / height after |
+| ------------------------ | ------------------: | --------------------: |
+| Panel header             |              0 / 40 |                0 / 40 |
+| Side transcript viewport |            40 / 592 |              40 / 592 |
+| Side timeline footer     |            580 / 52 |              580 / 52 |
+| Side composer area       |           632 / 168 |             632 / 168 |
+| Main-chat status         |            644 / 18 |              644 / 18 |
+| Side composer card       |           670 / 118 |             670 / 118 |
+| Side input               |            684 / 52 |              684 / 52 |
+| Side action row          |            744 / 34 |              744 / 34 |
+
+`.chat > .timeline .timeline-footer` has higher specificity than the row padding:
+its 32px bottom padding plus 20px status strut is **52px**, not 40px. Correcting
+that and using Rune's `whole_rows()` (LegendList rounds measured rows) places the
+side Markdown root at y=-158 in both renderers instead of Rune's -145.7.
+Internal Markdown remains fractional and unchanged. Reader row width now excludes
+the panel's 1px border; rows no longer extend past the viewport. The shell's
+existing half-pixel split remains: Electron content x=577.5, width=658.5, versus
+Rune x=577, width=659. No artificial transcript offset compensates for it.
+
+At 1600px, rows, the footer and composer area also honor the web's centered
+768px maximum width instead of filling the entire panel. This gives a 736px
+side Markdown/card content width, not the previous 787px, without changing the
+full-width header or transcript viewport.
+
+Worst dark/light blurred MAE improves from 4.0950 to 0.9583 for `side-chat-new`
+and from 4.0887 to 0.9520 for `panel-side-chat`, with stable gateway snapshot
+digests for every pair. Remaining checkbox painting, inline decoration and narrow
+main-composer control differences are not a viewport/composer-height mismatch.
+See `tools/sweep/SCROLL.md` for the companion long-history fix and performance.

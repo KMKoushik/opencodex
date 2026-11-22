@@ -152,7 +152,7 @@ pub(super) fn main_status(s: &State) -> El {
 pub fn view(s: &State, id: &str) -> El {
     let t = &s.theme;
     let draft = s.composer.drafts.get(id);
-    let content_width = (s.panel_width() - 1.0 - 32.0 - 24.0).max(0.0);
+    let content_width = ((s.panel_width() - 1.0).min(768.0) - 32.0 - 24.0).max(0.0);
     let selected = draft
         .model
         .as_ref()
@@ -175,6 +175,8 @@ pub fn view(s: &State, id: &str) -> El {
     });
     let mut area = col()
         .w_full()
+        .max_w(768.0)
+        .self_center()
         .px(16.0)
         .py(12.0)
         .gap(8.0)
