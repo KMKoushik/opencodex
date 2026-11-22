@@ -35,7 +35,9 @@ pub fn local(s: &mut State) -> bool {
         s.error = Some(format!("/{name} needs a thread. Send a message first."));
         return true;
     };
-    if !s.draft().attachments.is_empty() {
+    if !matches!(name.as_str(), "undo" | "redo")
+        && (!s.draft().attachments.is_empty() || !s.draft().comments.is_empty())
+    {
         s.error = Some("Send or remove attached context before running a thread action.".into());
         return true;
     }
@@ -52,6 +54,15 @@ pub fn local(s: &mut State) -> bool {
         return true;
     }
     let revision = s.draft().revision;
+    if name == "undo" {
+        super::undo::start(s);
+        s.composer.menu = None;
+        return true;
+    }
+    if name == "fork" {
+        super::fork::open(s);
+        return true;
+    }
     if name == "side" {
         s.workbench.side_origin = Some((id, revision));
         s.create_workspace_side(args);

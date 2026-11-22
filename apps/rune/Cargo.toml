@@ -23,6 +23,7 @@ rune-notify = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525b
 qrcode = { version = "0.14", default-features = false }
 tokio = { version = "1", features = ["rt", "time", "sync"] }
 base64 = "0.22"
+regress = "0.12"
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3"

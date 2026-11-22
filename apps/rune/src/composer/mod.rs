@@ -6,13 +6,19 @@ use rune::{El, TextStyle, col, el, icon, row, text_input};
 mod access;
 pub mod capture;
 mod commands;
-mod context;
+pub(crate) mod context;
+#[cfg(test)]
+mod context_tests;
+mod fork;
 mod fuzzy;
 mod icons;
 pub mod keys;
 pub mod menus;
 mod providers;
+pub(crate) mod running;
+mod running_output;
 pub mod state;
+mod undo;
 use state::Menu;
 
 pub fn view(s: &State, width: f32, height: f32) -> El {
@@ -117,12 +123,13 @@ pub fn area(s: &State, width: f32) -> El {
                 "text-tertiary",
             ));
     }
-    if crate::docks::active(s) {
+    if crate::docks::has_question(s) {
         return col()
             .key("composer-area")
             .w(column)
             .px(24.0)
             .py(12.0)
+            .child(running::view(s))
             .child(crate::docks::view(s));
     }
     let inner = (column - 48.0).max(200.0);
@@ -260,7 +267,23 @@ pub fn area(s: &State, width: f32) -> El {
         .px(8.0)
         .gap(6.0)
         .center_y()
-        .child(icon(&i::SHIELD, 16.0).color(t.c("text-secondary")))
+        .radius(8.0)
+        .hover(t.c("hover"))
+        .child(
+            icon(
+                if s.draft().full_access {
+                    &icons::SHIELD_ENERGY
+                } else {
+                    &i::SHIELD
+                },
+                16.0,
+            )
+            .color(t.c(if s.draft().full_access {
+                "accent"
+            } else {
+                "text-secondary"
+            })),
+        )
         .child(label(
             t,
             if s.draft().full_access {
@@ -270,7 +293,11 @@ pub fn area(s: &State, width: f32) -> El {
             },
             12.5,
             500.0,
-            "text-secondary",
+            if s.draft().full_access {
+                "accent"
+            } else {
+                "text-secondary"
+            },
         ))
         .key("permission-picker")
         .role("button")
@@ -280,8 +307,12 @@ pub fn area(s: &State, width: f32) -> El {
             "Permissions: enable full access"
         })
         .disabled(s.composer.access_pending)
+        .opacity(if s.composer.access_pending { 0.45 } else { 1.0 })
         .focusable(true)
         .on_press_tx(|s: &mut State, tx| {
+            if s.composer.access_pending {
+                return;
+            }
             if s.draft().full_access {
                 access::change(s, false);
             } else {
@@ -504,6 +535,8 @@ pub fn area(s: &State, width: f32) -> El {
         .w(column)
         .px(24.0)
         .py(12.0)
+        .child(running::view(s))
+        .child(crate::docks::view(s))
         .child(composer);
     if s.selected.is_none() {
         area = area.child(workspace);

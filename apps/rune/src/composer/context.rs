@@ -1,6 +1,98 @@
 use crate::{State, sidebar::label};
 use rune::{Align, El, Shape, Side, col, el, row};
 
+#[derive(Clone, Copy, Default, PartialEq)]
+pub enum Visibility {
+    #[default]
+    Closed,
+    Hovered,
+    Focused,
+    HoveredFocused,
+    Dismissed {
+        hovered: bool,
+        focused: bool,
+    },
+}
+#[derive(Clone, Copy)]
+pub enum Event {
+    Hover(bool),
+    Focus(bool),
+    Open,
+    Dismiss,
+}
+impl Visibility {
+    fn interests(self) -> (bool, bool) {
+        match self {
+            Self::Closed => (false, false),
+            Self::Hovered => (true, false),
+            Self::Focused => (false, true),
+            Self::HoveredFocused => (true, true),
+            Self::Dismissed { hovered, focused } => (hovered, focused),
+        }
+    }
+    fn open(self) -> bool {
+        matches!(self, Self::Hovered | Self::Focused | Self::HoveredFocused)
+    }
+}
+pub fn step(state: &mut Visibility, event: Event) {
+    let (mut hovered, mut focused) = state.interests();
+    let dismissed = matches!(state, Visibility::Dismissed { .. });
+    match event {
+        Event::Dismiss => {
+            *state = Visibility::Dismissed { hovered, focused };
+            return;
+        }
+        Event::Hover(value) => hovered = value,
+        Event::Focus(value) => focused = value,
+        Event::Open => {
+            *state = if hovered {
+                Visibility::HoveredFocused
+            } else {
+                Visibility::Focused
+            };
+            return;
+        }
+    }
+    if dismissed && matches!(event, Event::Hover(false) | Event::Focus(false)) {
+        *state = Visibility::Dismissed { hovered, focused };
+    } else {
+        *state = match (hovered, focused) {
+            (false, false) => Visibility::Closed,
+            (true, false) => Visibility::Hovered,
+            (false, true) => Visibility::Focused,
+            (true, true) => Visibility::HoveredFocused,
+        };
+    }
+}
+pub fn dispatch(s: &mut State, event: Event) {
+    step(&mut s.composer.context_visibility, event);
+    s.chat.context = s.composer.context_visibility.open();
+}
+pub fn poll(s: &mut State, tx: &mut rune::Tx) -> bool {
+    let running_changed = super::running::poll(s, tx) | crate::docks::date::poll(s);
+    // Input is dispatched after poll. Observe its resulting focus once; a no-change
+    // wake does not commit or draw, and never schedules another wake of its own.
+    if tx.input_waiting() {
+        tx.wake_after(std::time::Duration::ZERO);
+    }
+    let focused = tx.focused();
+    if s.chat.context && s.composer.menu.is_some() {
+        dispatch(s, Event::Dismiss);
+        return true;
+    }
+    if s.composer.context_focus.as_deref() == focused {
+        return running_changed;
+    }
+    let was_trigger = s.composer.context_focus.as_deref() == Some("context-indicator");
+    let is_trigger = focused == Some("context-indicator");
+    s.composer.context_focus = focused.map(str::to_owned);
+    let was_open = s.chat.context;
+    if was_trigger != is_trigger {
+        dispatch(s, Event::Focus(is_trigger));
+    }
+    was_open != s.chat.context || running_changed
+}
+
 fn total(tokens: &serde_json::Value) -> u64 {
     tokens["input"].as_u64().unwrap_or(0)
         + tokens["output"].as_u64().unwrap_or(0)
@@ -95,19 +187,29 @@ pub fn view(s: &State) -> El {
         .radius(7.0)
         .hover(t.c("hover"))
         .child(ring)
-        .on_hover_change(|s: &mut State, inside, _| s.chat.context = inside)
-        .on_press(|s: &mut State| s.chat.context = true)
+        .on_hover_change(|s: &mut State, inside, tx| {
+            poll(s, tx);
+            dispatch(s, Event::Hover(inside));
+        })
+        .on_press_tx(|s: &mut State, tx| {
+            s.composer.context_focus = tx.focused().map(str::to_owned);
+            dispatch(s, Event::Open);
+        })
         .on_key(|s: &mut State, event, _| {
             if event.key == rune::Key::Escape {
-                s.chat.context = false;
+                dispatch(s, Event::Dismiss);
                 true
             } else {
                 false
             }
         });
     if s.chat.context {
+        wrapper = wrapper.fill(t.c("hover"));
         let width = (s.window_size.0 - 24.0).min(280.0);
         let mut panel = col()
+            .key("context-popover")
+            .on_hover_change(|s: &mut State, inside, _| dispatch(s, Event::Hover(inside)))
+            .on_press(|_: &mut State| {})
             .w(width)
             .padding(14.0)
             .radius(12.0)
@@ -178,12 +280,10 @@ pub fn view(s: &State) -> El {
                 .mt(4.0),
             );
         }
-        wrapper = wrapper.child(t.shadow(panel, "shadow").anchored(
-            "context-indicator",
-            Side::Top,
-            Align::End,
-            8.0,
-        ));
+        let panel =
+            t.shadow(panel, "shadow")
+                .anchored("context-indicator", Side::Top, Align::End, 8.0);
+        wrapper = wrapper.child(panel);
     }
     wrapper
 }
