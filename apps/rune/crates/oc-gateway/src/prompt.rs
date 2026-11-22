@@ -118,6 +118,12 @@ pub struct Send {
     pub branch: Option<String>,
 }
 pub enum Request {
+    Write {
+        tag: String,
+        path: String,
+        method: String,
+        body: Value,
+    },
     PrepareAttachment {
         key: String,
         item: Attachment,
@@ -239,6 +245,27 @@ impl PromptWorker {
                                         tag,
                                         result: client.get(&path, &q).await,
                                     }
+                                }
+                                Request::Write {
+                                    tag,
+                                    path,
+                                    method,
+                                    body,
+                                } => {
+                                    let result =
+                                        match reqwest::Method::from_bytes(method.as_bytes()) {
+                                            Ok(method) => match client
+                                                .response(&path, &[], method, Some(body), false)
+                                                .await
+                                            {
+                                                Ok(response) => {
+                                                    response.json().await.map_err(|e| e.to_string())
+                                                }
+                                                Err(error) => Err(error),
+                                            },
+                                            Err(error) => Err(error.to_string()),
+                                        };
+                                    Reply::Data { tag, result }
                                 }
                                 Request::Mutate {
                                     tag,

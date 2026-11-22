@@ -10,6 +10,16 @@ pub mod types;
 pub use client::Gateway;
 pub use snapshot::Snapshot;
 
+/// Screenshot-only page fetch. Call before rendering, on a capture worker.
+pub fn capture_page(url: &str, path: &str) -> Result<serde_json::Value, String> {
+    let client = Gateway::new(url, None)?;
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| e.to_string())?
+        .block_on(client.get(path, &[]))
+}
+
 #[cfg(test)]
 mod message_tests;
 #[cfg(test)]
