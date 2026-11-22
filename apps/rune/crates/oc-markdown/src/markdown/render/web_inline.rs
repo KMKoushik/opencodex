@@ -230,8 +230,10 @@ impl Renderer {
                 }
             }
             for &(a, b, _) in &inl.links {
+                let (start, end) = (a.max(range.start), b.min(range.end));
+                if start >= end { continue; }
                 let Some(ink) = self.link_span(a, b, &inl).underline else { continue; };
-                for (rect, ln) in rune::text::range_boxes(&layout, a, b, false) {
+                for (rect, ln) in rune::text::range_boxes(&layout, start, end, false) {
                     if ln == number {
                         row = row.child(el().absolute(rect.x0 as f32, baseline + 3.0)
                             .size((rect.x1 - rect.x0) as f32, 1.0).fill(ink).inert());
