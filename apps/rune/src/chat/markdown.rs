@@ -1,16 +1,18 @@
 use crate::State;
+use oc_markdown::{Markdown, MarkdownStyle};
 use rune::{El, TextStyle};
-use rune_kit::{Markdown, MarkdownStyle};
 
 pub fn render(s: &State, source: &str, streaming: bool, width: f32) -> El {
     let t = &s.theme;
     let font_size = s.prefs.chat_font_size.unwrap_or(14.0);
     let mut style = MarkdownStyle::neutral(t.dark)
+        .web_layout()
         .text(t.c("text"))
         .muted(t.c("text-secondary"))
         .body_font(TextStyle::new(font_size, 400.0).lh(font_size * 1.625))
         .link(t.c("link"))
         .link_underline(t.c("link-underline"))
+        .file_link_icon(&super::icons::SOURCE, 13.0, 4.0)
         .inline_code_bg(t.c("code-bg"))
         .inline_code_font(13.0 / 14.0, 400.0)
         // Rune represents chip padding with sized narrow-space glyphs. Five points
@@ -33,6 +35,11 @@ pub fn render(s: &State, source: &str, streaming: bool, width: f32) -> El {
         .table_header_text(t.c("text"))
         .table_cell_padding(12.0, 10.0)
         .table_full_width(true)
+        .table_font(TextStyle::new(font_size, 400.0).lh(font_size * 1.625))
+        .table_tabular_figures(true)
+        .table_column_align(false)
+        .table_margin(16.0, 0.0)
+        .code_margin(16.0, 0.0)
         .syntax(rune_kit::markdown::Syntax::Keyword, t.c("syntax-keyword"))
         .syntax(rune_kit::markdown::Syntax::String, t.c("syntax-string"))
         .syntax(rune_kit::markdown::Syntax::Comment, t.c("syntax-comment"))
@@ -48,13 +55,14 @@ pub fn render(s: &State, source: &str, streaming: bool, width: f32) -> El {
     }
     let images = s.chat.media.images.clone();
     let reader_images = s.workbench.reader_chat.media.images.clone();
+    let border = t.c("border");
     Markdown::new(source)
         .on_link_tx(|s: &mut State, href, tx| s.open_link(href, tx))
         .highlights(if s.find.open {
-            rune_kit::markdown::find(
+            oc_markdown::find(
                 source,
                 s.find.query.text.trim(),
-                rune_kit::markdown::Case::Insensitive,
+                oc_markdown::Case::Insensitive,
             )
         } else {
             vec![]
@@ -81,6 +89,6 @@ pub fn render(s: &State, source: &str, streaming: bool, width: f32) -> El {
         .streaming(streaming)
         // StreamText uses react-markdown's default pre/code nodes: no invented
         // language heading, syntax colouring or per-fence copy control.
-        .code_frame(|body, _| body.radius(10.0))
+        .code_frame(move |body, _| body.radius(10.0).border(1.0, border).border_layout())
         .render(&style)
 }

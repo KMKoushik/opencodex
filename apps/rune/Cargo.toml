@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = [".", "crates/oc-gateway", "crates/oc-terminal", "crates/oc-webview"]
+members = [".", "crates/oc-gateway", "crates/oc-terminal", "crates/oc-webview", "crates/oc-markdown"]
 
 [package]
 name = "opencodex"
@@ -14,6 +14,8 @@ rune-kit = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbd
 oc-gateway = { path = "crates/oc-gateway" }
 oc-terminal = { path = "crates/oc-terminal" }
 oc-webview = { path = "crates/oc-webview" }
+oc-markdown = { path = "crates/oc-markdown" }
+rune-theme-opencode = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de" }
 url = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

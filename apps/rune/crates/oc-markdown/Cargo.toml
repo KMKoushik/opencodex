@@ -1,0 +1,21 @@
+[package]
+name = "oc-markdown"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT"
+
+[features]
+default = ["markdown"]
+markdown = []
+# Kept for the pinned source's feature guards; the web renderer enables neither.
+math = []
+mermaid = []
+
+[dependencies]
+rune = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de" }
+rune-kit = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de", default-features = false, features = ["markdown"] }
+pulldown-cmark = "0.13"
+
+[dev-dependencies]
+rune-theme-opencode = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de" }

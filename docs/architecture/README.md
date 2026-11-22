@@ -4,6 +4,19 @@
 
 This is the project's single maintained architecture diagram. It shows implemented behavior, not a future feature plan.
 
+## Native presentation adapters
+
+Rune's `oc-markdown` package is a locally owned, MIT-licensed copy of the pinned
+Rune-kit incremental Markdown renderer. The pinned public API cannot prepend
+local-file icons without altering text, so this adapter adds vector adornments
+and opt-in React layout metrics while retaining upstream parsing, cache budgets,
+selection mapping and tests. It owns no durable agent state. Draft review comments
+remain local until explicit send; the existing gateway annotations contract carries
+UTF-16 ranges into OpenCode message metadata. Native file reveal validates the
+target through `/api/workspace/file-location` before invoking Finder on its worker.
+Browser/canvas tabs retain per-chat presentation state in memory; inactive browser
+guests are destroyed and their URLs restored on return, not kept running indefinitely.
+
 ## Reading the diagram
 
 **Audience:** contributors working across the web, desktop, and backend boundaries.

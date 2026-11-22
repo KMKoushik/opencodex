@@ -14,7 +14,7 @@
       "color": "#7bb8ff",
       "align": "left",
       "lines": [
-        "Shell/chat/drafts/docks; settings/tasks/apps/workbench",
+        "Shell/chat/drafts/review; oc-markdown pinned renderer",
         "Live sidebar/chat worker: /api + SSE; reconnect refresh",
         "Prompt/workbench workers: bounded /api, safe writes, diffs",
         "Native menus/notifications/find; oc-terminal PTY drawer",
