@@ -200,6 +200,7 @@ asserting pixel parity. Isolated fixture only: `/tmp/ocr-panels2`, service 4979,
 actual Chrome Intl strings (`22 Nov, 23:01` and `23:01` at the fixed epoch), not a
 WebKit-only formatting oracle. Cleanup verified each stopped process's actual isolated
 HOME; ports 4979/4509 have no listeners and the temporary fixture directory was removed.
+
 | Item                                  | Status           | Concrete gap / next action                                                                                                                                                                                                     |
 | ------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Inline file-link icon                 | fixed            | Verified source icons before local links (not external URLs) in fresh goldens/pc-transcript-final/pair-chat-markdown-*.png pairs, both sizes/appearances.                                                                      |
