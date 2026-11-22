@@ -8,6 +8,7 @@ pub struct ModelRef {
     pub id: String,
     #[serde(rename = "providerID")]
     pub provider_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub variant: Option<String>,
 }
 
@@ -149,6 +150,8 @@ pub struct Model {
     pub enabled: bool,
     #[serde(default)]
     pub variants: Vec<Variant>,
+    #[serde(default)]
+    pub limit: Value,
 }
 #[derive(Clone, Debug, Deserialize)]
 pub struct Provider {

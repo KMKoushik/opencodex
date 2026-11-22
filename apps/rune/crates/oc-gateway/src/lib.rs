@@ -162,6 +162,9 @@ impl Drop for Worker {
 
 /// Headless capture waits for real data before its virtual clock starts; never used by a window.
 pub fn capture(client: Gateway) -> Result<Snapshot, String> {
+    capture_directory(client, None)
+}
+pub fn capture_directory(client: Gateway, directory: Option<String>) -> Result<Snapshot, String> {
     std::thread::spawn(move || {
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -169,7 +172,9 @@ pub fn capture(client: Gateway) -> Result<Snapshot, String> {
             .map_err(|e| e.to_string())?
             .block_on(async {
                 let mut snapshot = Snapshot::load(&client).await?;
-                if let Some(directory) = snapshot.projects.first().map(|p| p.canonical.clone()) {
+                if let Some(directory) =
+                    directory.or_else(|| snapshot.projects.first().map(|p| p.canonical.clone()))
+                {
                     snapshot.details(&client, &directory).await?;
                 }
                 Ok(snapshot)

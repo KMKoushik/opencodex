@@ -8,8 +8,38 @@ pub struct Attachment {
     pub name: String,
     pub mime: String,
     pub bytes: Arc<Vec<u8>>,
+    pub thumbnail: Option<Thumbnail>,
+}
+#[derive(Clone)]
+pub struct Thumbnail {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Arc<[u8]>,
 }
 impl Attachment {
+    pub fn preview(&mut self) {
+        if !self.image() {
+            return;
+        }
+        let Ok(mut reader) = image::ImageReader::new(std::io::Cursor::new(self.bytes.as_slice()))
+            .with_guessed_format()
+        else {
+            return;
+        };
+        let mut limits = image::Limits::default();
+        limits.max_image_width = Some(8192);
+        limits.max_image_height = Some(8192);
+        limits.max_alloc = Some(64 * 1024 * 1024);
+        reader.limits(limits);
+        if let Ok(image) = reader.decode() {
+            let thumb = image.thumbnail(88, 88).into_rgba8();
+            self.thumbnail = Some(Thumbnail {
+                width: thumb.width(),
+                height: thumb.height(),
+                rgba: thumb.into_raw().into(),
+            });
+        }
+    }
     pub fn image(&self) -> bool {
         self.mime.starts_with("image/")
     }
@@ -41,12 +71,14 @@ impl Attachment {
             _ => "application/octet-stream",
         }
         .to_owned();
-        let item = Self {
+        let mut item = Self {
             name,
             mime,
             bytes: Arc::new(bytes),
+            thumbnail: None,
         };
         validate_attachments(std::slice::from_ref(&item))?;
+        item.preview();
         Ok(item)
     }
 }
@@ -86,6 +118,18 @@ pub struct Send {
     pub branch: Option<String>,
 }
 pub enum Request {
+    PrepareAttachment {
+        key: String,
+        item: Attachment,
+    },
+    IndexFiles(String),
+    Action {
+        session: String,
+        revision: u64,
+        name: String,
+        args: String,
+        destination: Option<String>,
+    },
     Send(Send),
     ReadAttachment {
         key: String,
@@ -104,6 +148,11 @@ pub enum Request {
     },
 }
 pub enum Reply {
+    Action {
+        session: String,
+        revision: u64,
+        result: Result<Value, String>,
+    },
     Sent {
         key: String,
         revision: u64,
@@ -140,6 +189,33 @@ impl PromptWorker {
                     let run = async {
                         while let Some(request) = rx.recv().await {
                             let reply = match request {
+                                Request::PrepareAttachment { key, mut item } => {
+                                    item.preview();
+                                    Reply::Attachment {
+                                        key,
+                                        result: Ok(item),
+                                    }
+                                }
+                                Request::IndexFiles(directory) => Reply::Data {
+                                    tag: format!("files:{directory}"),
+                                    result: client.composer_files(&directory).await,
+                                },
+                                Request::Action {
+                                    session,
+                                    revision,
+                                    name,
+                                    args,
+                                    destination,
+                                } => {
+                                    let result = client
+                                        .composer_action(&session, &name, &args, destination)
+                                        .await;
+                                    Reply::Action {
+                                        session,
+                                        revision,
+                                        result,
+                                    }
+                                }
                                 Request::Send(send) => {
                                     let mut session = send.session.clone();
                                     let result = client.send_prompt(&send, &mut session).await;
@@ -218,6 +294,119 @@ impl Drop for PromptWorker {
     }
 }
 impl Gateway {
+    async fn composer_files(&self, directory: &str) -> Result<Value, String> {
+        // A bounded local-search catalog, loaded away from keyboard input. Never walk .git.
+        let mut folders = std::collections::VecDeque::from([String::new()]);
+        let mut files = vec![];
+        let mut bytes = 0;
+        let mut visited = 0;
+        while let Some(path) = folders.pop_front() {
+            if visited >= 64 || files.len() >= 2000 || bytes >= 1024 * 1024 {
+                break;
+            }
+            visited += 1;
+            let mut query = vec![("directory", directory)];
+            if !path.is_empty() {
+                query.push(("path", path.trim_end_matches('/')));
+            }
+            let entries: Vec<Value> = self.get("workspace/files", &query).await?;
+            for item in entries {
+                let Some(path) = item["path"].as_str() else {
+                    continue;
+                };
+                if path
+                    .split('/')
+                    .any(|p| p == ".git" || p == "node_modules" || p == "target")
+                {
+                    continue;
+                }
+                if item["type"] == "directory" {
+                    if folders.len() < 128 {
+                        folders.push_back(path.into());
+                    }
+                } else {
+                    bytes += path.len();
+                    files.push(item);
+                    if files.len() >= 2000 {
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(json!(files))
+    }
+    async fn composer_action(
+        &self,
+        id: &str,
+        name: &str,
+        args: &str,
+        destination: Option<String>,
+    ) -> Result<Value, String> {
+        if name == "export" {
+            let format = if args == "json" { "json" } else { "markdown" };
+            let response = self
+                .response(
+                    &format!("sessions/{id}/export"),
+                    &[("format", format)],
+                    reqwest::Method::GET,
+                    None,
+                    false,
+                )
+                .await?;
+            let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+            std::fs::write(destination.ok_or("Choose an export destination")?, bytes)
+                .map_err(|e| e.to_string())?;
+            return Ok(Value::Null);
+        }
+        if name == "side" {
+            let side: Value = self
+                .post(&format!("sessions/{id}/side-chats"), json!({}))
+                .await?;
+            let sid = side["id"].as_str().ok_or("Side chat has no id")?;
+            if !args.trim().is_empty() {
+                if let Err(error) = self
+                    .post::<Value>(&format!("sessions/{sid}/prompt"), json!({"text":args}))
+                    .await
+                {
+                    let _ = self
+                        .response(
+                            &format!("sessions/{id}/side-chats/{sid}"),
+                            &[],
+                            reqwest::Method::DELETE,
+                            None,
+                            false,
+                        )
+                        .await;
+                    return Err(error);
+                }
+            }
+            return Ok(json!({"open":sid}));
+        }
+        let mut body = json!({"action":name});
+        let mut restored = None;
+        if name == "rename" {
+            body["title"] = json!(args.trim());
+        }
+        if name == "undo" {
+            let messages = self.messages(id, None).await?;
+            let message = messages
+                .data
+                .iter()
+                .filter(|m| m.r#type == "user")
+                .max_by(|a, b| a.time.created.total_cmp(&b.time.created))
+                .ok_or("No earlier user message is loaded.")?;
+            body["messageID"] = json!(message.id);
+            restored = message.fields.get("text").cloned();
+        }
+        let value: Value = self.post(&format!("sessions/{id}/action"), body).await?;
+        Ok(if name == "fork" {
+            json!({"open":value["id"]})
+        } else if let Some(text) = restored {
+            json!({"restored":text})
+        } else {
+            Value::Null
+        })
+    }
     pub async fn send_prompt(
         &self,
         send: &Send,
@@ -240,14 +429,14 @@ impl Gateway {
         }
         let id = session.as_ref().expect("created session");
         if send.session.is_none() && send.worktree {
-            let _: Value = self
-                .post(
-                    &format!("sessions/{id}/worktree"),
-                    json!({"branch":send.branch}),
-                )
-                .await?;
+            let body = send
+                .branch
+                .as_ref()
+                .map(|branch| json!({"branch":branch}))
+                .unwrap_or_else(|| json!({}));
+            let _: Value = self.post(&format!("sessions/{id}/worktree"), body).await?;
         }
-        if send.full_access {
+        if send.session.is_none() && send.full_access {
             let _: Value = self
                 .post(&format!("sessions/{id}/access"), json!({"mode":"full"}))
                 .await?;
@@ -308,9 +497,13 @@ pub fn capture(
             ] {
                 values.push((
                     format!("{kind}:{directory}"),
-                    client
-                        .get(path, &[("directory", directory.as_str())])
-                        .await?,
+                    if kind == "files" {
+                        client.composer_files(&directory).await?
+                    } else {
+                        client
+                            .get(path, &[("directory", directory.as_str())])
+                            .await?
+                    },
                 ));
             }
             if let Some(id) = session {
