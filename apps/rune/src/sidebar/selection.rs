@@ -238,6 +238,7 @@ pub fn key(s: &mut State, id: &str, event: &rune::KeyEvent, tx: &mut rune::Tx) -
                 .filter(|(row, _)| row == id)
                 .map(|(_, rect)| (rect[0], rect[1] + rect[3] + 4.0));
             s.menus.open = Some(crate::menus::Menu::Thread(id.into()));
+            s.menus.thread_toolbar = false;
             if let Some(first) = crate::menus::thread::enabled_labels(s, id).first() {
                 tx.focus_when_shown(format!("menu-{first}"), true);
             }

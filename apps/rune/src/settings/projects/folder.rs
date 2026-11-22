@@ -247,9 +247,11 @@ pub fn form(s: &State, register: bool) -> El {
             .wrap(),
         );
     }
-    let input = text_input(
+    let input = ui::line_input(
         &s.pages.projects.directory,
         TextStyle::new(13.0, 400.0).mono().lh(19.5),
+        34.0,
+        0.0,
     )
     .key("Project directory")
     .label("Project directory")

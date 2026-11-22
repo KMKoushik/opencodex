@@ -523,21 +523,37 @@ pub fn view(s: &State) -> El {
                 .radius(7.0)
                 .fill(t.c("surface-under"))
                 .child(
-                    crate::sidebar::icon_button(t, &crate::chat::icons::SOURCE, "Edit source")
-                        .checked(!doc.preview)
-                        .fill(t.c(if !doc.preview {
-                            "control"
+                    crate::sidebar::icon_button_ink(
+                        t,
+                        &crate::chat::icons::SOURCE,
+                        "Edit source",
+                        16.0,
+                        if !doc.preview {
+                            "text"
                         } else {
-                            "surface-under"
-                        }))
-                        .disabled(doc.saving.is_some())
-                        .on_press(move |s: &mut State| s.workbench.docs[index].preview = false),
+                            "text-secondary"
+                        },
+                    )
+                    .checked(!doc.preview)
+                    .fill(t.c(if !doc.preview {
+                        "control"
+                    } else {
+                        "surface-under"
+                    }))
+                    .disabled(doc.saving.is_some())
+                    .on_press(move |s: &mut State| s.workbench.docs[index].preview = false),
                 )
                 .child(
-                    crate::sidebar::icon_button(
+                    crate::sidebar::icon_button_ink(
                         t,
                         &crate::chat::icons::PREVIEW,
                         "Preview Markdown",
+                        16.0,
+                        if doc.preview {
+                            "text"
+                        } else {
+                            "text-secondary"
+                        },
                     )
                     .checked(doc.preview)
                     .fill(t.c(if doc.preview {

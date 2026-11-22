@@ -122,8 +122,8 @@ pub fn view(s: &State) -> El {
     }));
     let header = row()
         .w_full()
-        .gap(16.0)
-        .center_y()
+        .gap(8.0)
+        .items_end()
         .child(
             col()
                 .grow(1.0)
@@ -154,20 +154,23 @@ pub fn view(s: &State) -> El {
                     "text-tertiary",
                 )),
         )
-        .child(ui::segment(
-            s,
-            "Filter by assignee",
-            if s.prefs.task_assignee.is_empty() {
-                "all"
-            } else {
-                &s.prefs.task_assignee
-            },
-            &[("all", "Everyone"), ("user", "Me"), ("agent", "Agent")],
-            |s, v| {
-                s.prefs.task_assignee = v.into();
-                s.save();
-            },
-        ))
+        .child(
+            ui::segment(
+                s,
+                "Filter by assignee",
+                if s.prefs.task_assignee.is_empty() {
+                    "all"
+                } else {
+                    &s.prefs.task_assignee
+                },
+                &[("all", "Everyone"), ("user", "Me"), ("agent", "Agent")],
+                |s, v| {
+                    s.prefs.task_assignee = v.into();
+                    s.save();
+                },
+            )
+            .mb(1.0),
+        )
         .child(
             ui::select(
                 s,
@@ -181,6 +184,7 @@ pub fn view(s: &State) -> El {
                 options,
                 |s, v| s.pages.tasks.filter = v.into(),
             )
+            .pl(9.0)
             .w(200.0),
         );
     let mut body = col()
@@ -279,6 +283,7 @@ pub fn view(s: &State) -> El {
         let mut head = row()
             .w_full()
             .h(30.0)
+            .pb(2.0)
             .pl(6.0)
             .pr(2.0)
             .gap(8.0)
@@ -301,10 +306,11 @@ pub fn view(s: &State) -> El {
             .child(el().grow(1.0));
         if bucket != "done" {
             head = head.child(
-                crate::sidebar::icon_button(
+                crate::sidebar::icon_button_size(
                     &s.theme,
-                    &crate::icons::PLUS,
+                    &crate::icons::ADD,
                     &format!("Add a task to {title}"),
+                    15.0,
                 )
                 .on_press_tx(move |s: &mut State, tx| add(s, bucket, tx)),
             );
@@ -388,7 +394,7 @@ pub fn view(s: &State) -> El {
                     .center_y()
                     .radius(8.0)
                     .hover(s.theme.c("hover"))
-                    .child(rune::icon(&crate::icons::PLUS, 14.0).color(s.theme.c("text-tertiary")))
+                    .child(rune::icon(&crate::icons::ADD, 14.0).color(s.theme.c("text-tertiary")))
                     .child(label(&s.theme, "New task", 13.0, 400.0, "text-tertiary"))
                     .on_press_tx(move |s: &mut State, tx| add(s, bucket, tx)),
             );

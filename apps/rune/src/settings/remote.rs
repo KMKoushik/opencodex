@@ -3,7 +3,7 @@ use crate::{
     pages::{self, button, data},
     sidebar::label,
 };
-use rune::{El, TextEdit, TextStyle, row, text_input};
+use rune::{El, TextEdit, TextStyle, row};
 use serde_json::{Value, json};
 #[derive(Default)]
 pub struct Remote {
@@ -224,7 +224,7 @@ pub fn view(s: &State, mut body: El) -> El {
             "port" => &s.pages.remote.port,
             _ => &s.pages.remote.token,
         };
-        let input = text_input(edit, TextStyle::new(13.0, 400.0))
+        let input = pages::controls::line_input(edit, TextStyle::new(13.0, 400.0), 32.0, 1.0)
             .transition(rune::Transition::none())
             .key(format!("remote-{key}"))
             .label(title)
@@ -284,7 +284,7 @@ pub fn view(s: &State, mut body: El) -> El {
                 } else {
                     ""
                 },
-                s.theme.c("text-tertiary"),
+                s.theme.c("text").alpha(0.5),
             )
             .w(if key == "port" { 96.0 } else { 240.0 })
             .h(32.0)

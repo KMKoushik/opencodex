@@ -5,6 +5,7 @@ import { GLYPHS } from '../../web/src/features/apps/app-glyphs';
 import { CANVAS_GLYPH_GROUPS } from '../../../packages/contracts/src/canvas';
 const names = {
   back: 'ArrowLeft02Icon',
+  back_chevron: 'ArrowLeft01Icon',
   forward: 'ArrowRight02Icon',
   down: 'ArrowDown01Icon',
   right: 'ArrowRight01Icon',
@@ -39,6 +40,7 @@ const names = {
   plus: 'PlusSignIcon',
   add: 'Add01Icon',
   sidebar_open: 'PanelLeftIcon',
+  filter: 'FilterHorizontalIcon',
   close: 'Cancel01Icon',
   inbox: 'InboxIcon',
   book: 'BookOpen01Icon',

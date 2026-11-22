@@ -25,6 +25,7 @@ pub struct Menus {
     pub project_counts: std::collections::BTreeMap<String, usize>,
     pub sidebar_focus: Option<String>,
     pub thread_anchor: Option<(String, [f32; 4])>,
+    pub thread_toolbar: bool,
     pub thread_menu_height: Option<(String, f32)>,
     pub open: Option<Menu>,
     pub search: TextEdit,

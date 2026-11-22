@@ -574,7 +574,7 @@ pub fn area(s: &State, width: f32) -> El {
             },
         ));
     if from {
-        branch_control = branch_control.child(icon(&i::DOWN, 12.0).color(t.c("text-tertiary")));
+        branch_control = branch_control.child(icon(&i::DOWN, 14.0).color(t.c("text-tertiary")));
     }
     let branch_control = branch_control
         .role("button")

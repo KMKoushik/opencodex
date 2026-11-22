@@ -1,5 +1,23 @@
 //! Workbench Hugeicons, matching the web controls (24px viewBox).
 use rune::Icon;
+// @pierre/trees' built-in file icon palette (not the application's text palette).
+pub fn tree_color(path: &str, directory: bool, dark: bool) -> rune::Color {
+    let value = if directory {
+        "#84848a"
+    } else {
+        match (path.rsplit('.').next().unwrap_or(""), dark) {
+            ("md" | "markdown", true) => "#5ecc71",
+            ("md" | "markdown", false) => "#199f43",
+            ("html" | "htm", true) => "#ffa359",
+            ("html" | "htm", false) => "#d47628",
+            ("ts" | "tsx", true) => "#69b1ff",
+            ("ts" | "tsx", false) => "#1a85d4",
+            (_, true) => "#adadb1",
+            (_, false) => "#84848a",
+        }
+    };
+    rune::color::hex(value).expect("Pierre icon palette")
+}
 // Pierre Trees built-in glyphs (the same symbols used by WorkspaceTree).
 pub const TREE_CHEVRON: Icon = Icon {
     name: "file-tree-icon-chevron",

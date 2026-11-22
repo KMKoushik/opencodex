@@ -4,7 +4,7 @@ use crate::{
     State, icons,
     sidebar::{icon_button, label},
 };
-use rune::{El, GrowthSpec, ScrollSpec, TextStyle, col, el, icon, row, text_input};
+use rune::{El, GrowthSpec, ScrollSpec, TextStyle, col, el, icon, row};
 
 pub fn kit(s: &State) -> rune_kit::Kit {
     let t = &s.theme;
@@ -163,9 +163,15 @@ fn panel(s: &State, cx: &mut rune::Cx<State>) -> El {
         header = header.child(sessions::tabs(s));
     } else {
         header = header.child(
-            label(t, s.workbench.panel.label(), 12.0, 400.0, "text")
-                .pl(12.0)
-                .grow(1.0),
+            label(
+                t,
+                s.workbench.panel.label(),
+                12.0,
+                400.0,
+                if files { "text-tertiary" } else { "text" },
+            )
+            .pl(if files { 22.0 } else { 12.0 })
+            .grow(1.0),
         );
     }
     header = header
@@ -386,31 +392,36 @@ fn tree(s: &State) -> El {
             .gap(4.0)
             .center_y()
             .child(
-                text_input(&s.workbench.search, TextStyle::new(12.0, 400.0))
-                    .key("workspace-filter")
-                    .label(if changes {
-                        "Filter changed files"
-                    } else {
-                        "Find files"
-                    })
-                    .placeholder("Filter files…", t.c("text-tertiary"))
-                    .grow(1.0)
-                    .min_w(0.0)
-                    .h(28.0)
-                    .px(9.0)
-                    .radius(8.0)
-                    .border(1.0, t.c("border-heavy"))
-                    .color(t.c("text"))
-                    .on_edit(|s: &mut State| &mut s.workbench.search)
-                    .on_input_change(|s: &mut State, tx| {
-                        if s.workbench.panel == Panel::Changes {
-                            super::tree::rebuild(s);
-                            return;
-                        }
-                        s.workbench.search_due = Some(tx.clock() + 0.18);
-                        tx.wake_after(std::time::Duration::from_millis(180));
-                    })
-                    .on_submit(|s: &mut State, _| s.search_workspace()),
+                crate::pages::controls::line_input(
+                    &s.workbench.search,
+                    TextStyle::new(12.0, 400.0),
+                    28.0,
+                    0.0,
+                )
+                .key("workspace-filter")
+                .label(if changes {
+                    "Filter changed files"
+                } else {
+                    "Find files"
+                })
+                .placeholder("Filter files…", t.c("text").alpha(0.5))
+                .grow(1.0)
+                .min_w(0.0)
+                .h(28.0)
+                .px(9.0)
+                .radius(8.0)
+                .border(1.0, t.c("border-heavy"))
+                .color(t.c("text"))
+                .on_edit(|s: &mut State| &mut s.workbench.search)
+                .on_input_change(|s: &mut State, tx| {
+                    if s.workbench.panel == Panel::Changes {
+                        super::tree::rebuild(s);
+                        return;
+                    }
+                    s.workbench.search_due = Some(tx.clock() + 0.18);
+                    tx.wake_after(std::time::Duration::from_millis(180));
+                })
+                .on_submit(|s: &mut State, _| s.search_workspace()),
             )
             .child(
                 documents::button(s, "−")
@@ -605,12 +616,28 @@ fn tree_row(s: &State, n: usize, changes: bool) -> El {
         .hover(t.c("hover"))
         .child(
             icon(glyph, 16.0)
+                // Pierre's compact-density icon nudge is 0.8px, including the
+                // rotated closed-folder half-nudge in both axes.
+                .offset(
+                    if dir && !open { 0.4 } else { 0.0 },
+                    if dir && open {
+                        0.8
+                    } else if dir {
+                        0.4
+                    } else {
+                        0.0
+                    },
+                )
                 .rotate(if dir && !open {
                     -std::f32::consts::FRAC_PI_2
                 } else {
                     0.0
                 })
-                .color(t.c("text-secondary")),
+                .color(if !dir && s.workbench.change_lookup.contains_key(&path) {
+                    t.c("text-secondary")
+                } else {
+                    super::icons::tree_color(&path, dir, t.dark)
+                }),
         )
         .child(
             label(t, name, 12.5, 400.0, "text-secondary")
@@ -666,7 +693,14 @@ fn tree_row(s: &State, n: usize, changes: bool) -> El {
             el().w(12.0)
                 .h(24.0)
                 .center()
-                .children(changed.then(|| el().size(6.0, 6.0).radius(3.0).fill(t.c("warning")))),
+                // Pierre: translateY(.65ex - 50%) on a 6px glyph, 12.5px SF.
+                .children(changed.then(|| {
+                    el().size(6.0, 6.0)
+                        .radius(3.0)
+                        .fill(t.c("warning"))
+                        .dim(0.5)
+                        .offset(0.0, 1.2767)
+                })),
         );
     }
     let keyboard_path = path.clone();

@@ -1,7 +1,4 @@
-use crate::{
-    State, icons as i,
-    sidebar::{icon_button, label},
-};
+use crate::{State, icons as i, sidebar::label};
 use oc_gateway::{
     messages::Messages,
     timeline::{Kind, Projector, Row},
@@ -434,7 +431,7 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
     let t = &s.theme;
     let chat = conversation(s, reader);
     let side_chat = reader && !chat.read_only();
-    let inset = if side_chat { 16.0 } else { 24.0 };
+    let inset = if reader { 16.0 } else { 24.0 };
     let padding = match &r.kind {
         Kind::Turn { .. } => 12.0,
         Kind::Activity { .. } => 8.0,
@@ -627,7 +624,12 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
                         .expanded(!open)
                         .child(label(t, title, 13.0, 400.0, "text-tertiary"))
                         .child(
-                            icon(if open { &i::RIGHT } else { &i::DOWN }, 12.0)
+                            icon(&i::RIGHT, 12.0)
+                                .rotate(if open {
+                                    0.0
+                                } else {
+                                    std::f32::consts::FRAC_PI_2
+                                })
                                 .color(t.c("text-tertiary")),
                         )
                         .on_press_tx(move |s: &mut State, tx| {
@@ -725,32 +727,55 @@ pub fn toolbar(s: &State) -> El {
         .gap(8.0)
         .center_y()
         .child(
-            icon_button(t, &icons::MORE, "Thread actions")
-                .on_layout_tx(|s: &mut State, rect, tx| {
-                    s.pages.anchors.insert("Thread actions".into(), rect);
-                    tx.live_only();
-                })
-                .on_press(|s: &mut State| {
-                    if let Some(id) = &s.selected {
-                        s.menus.open = Some(crate::menus::Menu::Thread(id.clone()));
-                        s.menus.point = s
-                            .pages
-                            .anchors
-                            .get("Thread actions")
-                            .map(|r| (r[0] + r[2] - 180.0, r[1] + r[3] + 4.0));
-                    }
-                }),
+            crate::sidebar::icon_button_ink(
+                t,
+                &icons::MORE,
+                "Thread actions",
+                16.0,
+                if matches!(s.menus.open, Some(crate::menus::Menu::Thread(_)))
+                    && s.menus.thread_toolbar
+                {
+                    "text"
+                } else {
+                    "text-secondary"
+                },
+            )
+            .on_layout_tx(|s: &mut State, rect, tx| {
+                s.pages.anchors.insert("Thread actions".into(), rect);
+                tx.live_only();
+            })
+            .on_press(|s: &mut State| {
+                if let Some(id) = &s.selected {
+                    s.menus.open = Some(crate::menus::Menu::Thread(id.clone()));
+                    s.menus.thread_toolbar = true;
+                    s.menus.point = s
+                        .pages
+                        .anchors
+                        .get("Thread actions")
+                        .map(|r| (r[0] + r[2] - 180.0, r[1] + r[3] + 4.0));
+                }
+            }),
         )
         .child(
-            crate::sidebar::icon_button_size(t, &icons::INFO, "Session details", 17.0)
-                .key("session-details-toggle")
-                .fill(if s.chat.details {
-                    t.c("hover")
+            crate::sidebar::icon_button_ink(
+                t,
+                &icons::INFO,
+                "Session details",
+                17.0,
+                if s.chat.details {
+                    "text"
                 } else {
-                    rune::Color::TRANSPARENT
-                })
-                .checked(s.chat.details)
-                .on_press(details::toggle),
+                    "text-secondary"
+                },
+            )
+            .key("session-details-toggle")
+            .fill(if s.chat.details {
+                t.c("hover")
+            } else {
+                rune::Color::TRANSPARENT
+            })
+            .checked(s.chat.details)
+            .on_press(details::toggle),
         )
         .child(
             crate::sidebar::icon_button_size(t, &icons::PANEL, "Toggle workspace", 17.0)

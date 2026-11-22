@@ -1,7 +1,7 @@
 use super::{fuzzy, state::Menu};
 use crate::{State, sidebar::label};
 use oc_gateway::{prompt::Request, types::ModelRef};
-use rune::{Align, El, Key, Side, TextStyle, Tx, col, row, text_input};
+use rune::{Align, El, Key, Side, TextStyle, Tx, col, row};
 use serde_json::{Value, json};
 
 #[derive(Clone)]
@@ -573,20 +573,24 @@ pub fn view(s: &State) -> Option<El> {
                 .border_layout()
                 .child(rune::icon(&crate::icons::SEARCH, 16.0).color(t.c("text-tertiary")))
                 .child(
-                    text_input(&s.composer.search, TextStyle::new(13.0, 400.0))
-                        .key("composer-search")
-                        .h(24.0)
-                        .grow(1.0)
-                        .min_w(0.0)
-                        .single_line()
-                        .color(t.c("text"))
-                        .placeholder("Search models…", t.c("text-tertiary"))
-                        .on_edit(|s: &mut State| &mut s.composer.search)
-                        .on_input_change(|s: &mut State, tx| {
-                            filter(s);
-                            tx.instant();
-                        })
-                        .on_input_key(keys),
+                    crate::pages::controls::line_input(
+                        &s.composer.search,
+                        TextStyle::new(13.0, 400.0),
+                        24.0,
+                        0.0,
+                    )
+                    .key("composer-search")
+                    .grow(1.0)
+                    .min_w(0.0)
+                    .single_line()
+                    .color(t.c("text"))
+                    .placeholder("Search models…", t.c("text-tertiary"))
+                    .on_edit(|s: &mut State| &mut s.composer.search)
+                    .on_input_change(|s: &mut State, tx| {
+                        filter(s);
+                        tx.instant();
+                    })
+                    .on_input_key(keys),
                 ),
         );
     }
@@ -656,7 +660,9 @@ pub fn view(s: &State) -> Option<El> {
                                     .child(rune::el().grow(1.0))
                                     .child(
                                         label(t, &c.detail, 11.0, 500.0, "text-tertiary").font(
-                                            rune::TextStyle::new(11.0, 500.0).mono().lh(16.5),
+                                            rune::TextStyle::new(11.0, 500.0)
+                                                .features("'tnum' 1")
+                                                .lh(16.5),
                                         ),
                                     )
                                     .child(

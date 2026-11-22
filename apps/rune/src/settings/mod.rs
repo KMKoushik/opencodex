@@ -189,7 +189,7 @@ fn shortcut_row(s: &State, title: &str, chord: &str) -> El {
         .border_sides([1.0, 0.0, 0.0, 0.0], s.theme.c("border"))
         .child(label(&s.theme, title, 13.0, 400.0, "text").grow(1.0))
         .child(
-            label(&s.theme, chord, 12.0, 400.0, "text-secondary")
+            label(&s.theme, chord, 14.0, 400.0, "text-secondary")
                 .px(8.0)
                 .py(4.0)
                 .radius(5.0)
@@ -601,6 +601,7 @@ pub fn capture(s: &mut State) {
             return;
         }
         "thread-context-menu" | "thread-actions-open" => {
+            s.menus.thread_toolbar = page == "thread-actions-open";
             s.menus.point = std::env::var("OCR_MENU_POINT").ok().and_then(|point| {
                 let (x, y) = point.split_once(',')?;
                 Some((x.parse().ok()?, y.parse().ok()?))

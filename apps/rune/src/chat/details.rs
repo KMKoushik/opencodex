@@ -294,7 +294,13 @@ fn pair(s: &State, title: &str, value: String) -> El {
         .gap(8.0)
         .center_y()
         .child(label(&s.theme, title, 12.0, 400.0, "text-secondary").grow(1.0))
-        .child(label(&s.theme, value, 12.0, 400.0, "text-secondary"))
+        .child(
+            label(&s.theme, value, 12.0, 400.0, "text-secondary").font(
+                rune::TextStyle::new(12.0, 400.0)
+                    .lh(18.0)
+                    .features("'tnum' 1"),
+            ),
+        )
 }
 fn with_icon(s: &State, glyph: &'static rune::Icon, content: El) -> El {
     row()
@@ -344,7 +350,13 @@ fn disclosure(
                 .color(s.theme.c("text-secondary")),
             )
             .child(el().grow(1.0))
-            .child(label(&s.theme, value, 12.0, 400.0, "text-secondary"))
+            .child(
+                label(&s.theme, value, 12.0, 400.0, "text-secondary").font(
+                    rune::TextStyle::new(12.0, 400.0)
+                        .lh(18.0)
+                        .features("'tnum' 1"),
+                ),
+            )
             .on_press(move |s: &mut State| s.chat.toggle(&key)),
     );
     if open {
@@ -531,21 +543,23 @@ pub fn view(s: &State, width: f32) -> El {
                         .child(
                             row()
                                 .center_y()
-                                .child(label(
-                                    t,
-                                    format!("+{}", number(adds)),
-                                    12.0,
-                                    400.0,
-                                    "success",
-                                ))
-                                .child(label(t, " / ", 12.0, 400.0, "text-secondary"))
-                                .child(label(
-                                    t,
-                                    format!("−{}", number(deletes)),
-                                    12.0,
-                                    400.0,
-                                    "error",
-                                )),
+                                .child(
+                                    label(t, format!("+{}", number(adds)), 12.0, 400.0, "success")
+                                        .font(
+                                            rune::TextStyle::new(12.0, 400.0)
+                                                .lh(18.0)
+                                                .features("'tnum' 1"),
+                                        ),
+                                )
+                                .child(label(t, " / ", 12.0, 400.0, "text"))
+                                .child(
+                                    label(t, format!("−{}", number(deletes)), 12.0, 400.0, "error")
+                                        .font(
+                                            rune::TextStyle::new(12.0, 400.0)
+                                                .lh(18.0)
+                                                .features("'tnum' 1"),
+                                        ),
+                                ),
                         ),
                 )
                 .py(4.0)

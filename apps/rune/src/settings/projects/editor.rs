@@ -25,7 +25,7 @@ fn input(
     value: &TextEdit,
     edit: impl Fn(&mut State) -> &mut TextEdit + 'static,
 ) -> El {
-    text_input(value, TextStyle::new(13.0, 400.0))
+    ui::line_input(value, TextStyle::new(13.0, 400.0), 36.0, 1.0)
         .key(name)
         .label(name)
         .single_line()
@@ -200,7 +200,7 @@ pub fn view(s: &State, id: &str) -> El {
     let url = input(s, "Website or icon URL", &p.url, |s| {
         &mut s.pages.projects.url
     })
-    .placeholder("https://example.com", s.theme.c("text-tertiary"))
+    .placeholder("https://example.com", s.theme.c("text").alpha(0.5))
     .on_input_key(|s: &mut State, e, _| {
         if e.key == rune::Key::Escape {
             close(s);

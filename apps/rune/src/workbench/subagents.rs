@@ -54,7 +54,7 @@ pub fn view(s: &State) -> El {
             .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"))
             .border_layout()
             .child(
-                icon_button(t, &crate::icons::BACK, "Back to subagents")
+                icon_button(t, &crate::icons::BACK_CHEVRON, "Back to subagents")
                     .key("subagents-back")
                     .autofocus()
                     .on_press_tx(|s: &mut State, tx| {

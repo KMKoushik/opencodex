@@ -33,6 +33,19 @@ pub fn limit_key(edit: &mut rune::TextEdit, event: &rune::KeyEvent, max: usize) 
 }
 
 pub type Choose = Arc<dyn Fn(&mut State, &str)>;
+/// Center the painted line, rather than only the editor's fixed-height box.
+/// `border` is the inset reserved by `border_layout`, not the painted stroke.
+pub fn line_input(edit: &rune::TextEdit, style: rune::TextStyle, height: f32, border: f32) -> El {
+    let line = if style.line_height > 0.0 {
+        style.line_height
+    } else {
+        style.size * 1.5
+    };
+    rune::text_input(edit, style.lh(line))
+        .single_line()
+        .h(height)
+        .py(((height - 2.0 * border - line) / 2.0).max(0.0))
+}
 #[derive(Clone)]
 pub struct Choice {
     pub value: String,
@@ -173,7 +186,7 @@ pub fn select(
                 .role("combobox")
                 .label(name)
                 .focusable(true)
-                .h(30.0)
+                .h(32.0)
                 .px(10.0)
                 .gap(8.0)
                 .center_y()
@@ -181,7 +194,7 @@ pub fn select(
                 .border(1.0, s.theme.c("chip-border"))
                 .border_layout()
                 .pl(5.0)
-                .child(preview)
+                .children(id.contains("theme").then_some(preview))
                 .child(label(&s.theme, current, 13.0, 400.0, "text").grow(1.0))
                 .child(rune::icon(&crate::icons::DOWN, 14.0).color(s.theme.c("text-tertiary")))
                 .on_layout_tx(move |s: &mut State, rect, tx| {

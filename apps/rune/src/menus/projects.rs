@@ -1,6 +1,6 @@
 //! Source: projects/project-switcher.tsx. Query and active row are presentation state.
 use crate::{State, icons as i, sidebar::label};
-use rune::{El, Key, KeyEvent, ScrollSpec, TextEdit, TextStyle, Tx, col, el, row, text_input};
+use rune::{El, Key, KeyEvent, ScrollSpec, TextEdit, TextStyle, Tx, col, el, row};
 use serde_json::{Value, json};
 
 #[derive(Default)]
@@ -373,22 +373,28 @@ pub fn view(s: &State) -> El {
                 "border"
             }),
         )
+        .border_layout()
         .child(rune::icon(&i::SEARCH, 16.0).color(s.theme.c("text-tertiary")))
         .child(
-            text_input(&s.menus.projects.query, TextStyle::new(13.0, 400.0))
-                .key("project-switcher-search")
-                .role("combobox")
-                .label("Search projects or enter a folder path")
-                .single_line()
-                .grow(1.0)
-                .color(s.theme.c("text"))
-                .placeholder(
-                    "Search projects or enter a folder path…",
-                    s.theme.c("text-tertiary"),
-                )
-                .on_edit(|s: &mut State| &mut s.menus.projects.query)
-                .on_input_change(changed)
-                .on_input_key(navigate),
+            crate::pages::controls::line_input(
+                &s.menus.projects.query,
+                TextStyle::new(13.0, 400.0).lh(19.5),
+                39.5,
+                0.0,
+            )
+            .key("project-switcher-search")
+            .role("combobox")
+            .label("Search projects or enter a folder path")
+            .single_line()
+            .grow(1.0)
+            .color(s.theme.c("text"))
+            .placeholder(
+                "Search projects or enter a folder path…",
+                s.theme.c("text-tertiary"),
+            )
+            .on_edit(|s: &mut State| &mut s.menus.projects.query)
+            .on_input_change(changed)
+            .on_input_key(navigate),
         );
     let mut panel = col()
         .key("project-switcher-popup")

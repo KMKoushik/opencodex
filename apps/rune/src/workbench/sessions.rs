@@ -137,7 +137,7 @@ pub fn tabs(s: &State) -> El {
     }
     tabs::viewport(
         strip.child(
-            crate::sidebar::icon_button_size(&s.theme, &crate::icons::PLUS, "New side chat", 14.0)
+            crate::sidebar::icon_button_size(&s.theme, &crate::icons::PLUS, "New side chat", 15.0)
                 .disabled(
                     s.workbench.sides.len() >= 8
                         || s.workbench.pending.contains("side-create")

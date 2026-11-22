@@ -89,7 +89,7 @@ pub fn dialog(s: &State) -> El {
                     handled
                 })
                 .on_input_change(|s: &mut State, _| changed(s))
-                .placeholder("Search titles and messages…", t.c("text-tertiary"))
+                .placeholder("Search titles and messages…", t.c("text").alpha(0.5))
                 .color(t.c("text")),
         );
     let panel = super::overlay::surface(

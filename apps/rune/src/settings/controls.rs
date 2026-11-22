@@ -90,6 +90,11 @@ pub fn range(
         )
         .child(
             label(&s.theme, output, 12.0, 400.0, "text-secondary")
+                .font(
+                    rune::TextStyle::new(12.0, 400.0)
+                        .lh(18.0)
+                        .features("'tnum' 1"),
+                )
                 .w(out_width)
                 .align(rune::Align::End),
         )

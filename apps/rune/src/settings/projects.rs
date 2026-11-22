@@ -250,7 +250,7 @@ pub fn view(s: &State, mut body: El) -> El {
             ),
     );
     if let Some(notice) = &s.pages.project_notice {
-        body = body.child(label(&s.theme, notice, 13.0, 400.0, "text-secondary").role("status"));
+        body = body.child(label(&s.theme, notice, 14.0, 400.0, "text-secondary").role("status"));
     }
     let search = s.pages.projects.search.text.trim().to_lowercase();
     let items: Vec<_> = s
@@ -339,7 +339,6 @@ pub fn view(s: &State, mut body: El) -> El {
                         &format!("Actions for {name}"),
                         18.0,
                     )
-                    .size(32.0, 32.0)
                     .key(&key)
                     .on_layout_tx(move |s: &mut State, r, tx| {
                         s.pages.anchors.insert(anchor.clone(), r);
@@ -660,9 +659,9 @@ fn worktrees(s: &State, id: &str) -> El {
             label(
                 &s.theme,
                 "No worktrees yet. Choose “New worktree” below a new chat.",
-                13.0,
+                12.0,
                 400.0,
-                "text-secondary",
+                "text-tertiary",
             )
             .w_full()
             .wrap(),

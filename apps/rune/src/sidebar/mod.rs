@@ -253,20 +253,36 @@ fn render_item(s: &State, n: usize) -> El {
             if title == "Pinned" {
                 heading
             } else {
-                let toggle = icon_button_ink(t, &i::INBOX, "Focus view", 14.0, "text-tertiary")
-                    .mr(if title == "Focus" { 0.0 } else { -2.0 })
-                    .key("thread-view-toggle")
-                    .on_press(|s: &mut State| {
-                        s.prefs.focus = !s.prefs.focus;
-                        s.menus.selection.picked.clear();
-                        s.inactive_open = false;
-                        s.inactive_visible = 10;
-                        if s.prefs.focus {
-                            focus::load(s, false);
-                        }
-                        rebuild(s);
-                        s.save();
-                    });
+                let toggle = icon_button_ink(
+                    t,
+                    &i::INBOX,
+                    "Focus view",
+                    14.0,
+                    if title == "Focus" {
+                        "text"
+                    } else {
+                        "text-tertiary"
+                    },
+                )
+                .checked(title == "Focus")
+                .fill(if title == "Focus" {
+                    t.c("selected")
+                } else {
+                    Color::TRANSPARENT
+                })
+                .mr(if title == "Focus" { 0.0 } else { -2.0 })
+                .key("thread-view-toggle")
+                .on_press(|s: &mut State| {
+                    s.prefs.focus = !s.prefs.focus;
+                    s.menus.selection.picked.clear();
+                    s.inactive_open = false;
+                    s.inactive_visible = 10;
+                    if s.prefs.focus {
+                        focus::load(s, false);
+                    }
+                    rebuild(s);
+                    s.save();
+                });
                 if title == "Focus" {
                     heading.child(
                         row()
@@ -275,7 +291,7 @@ fn render_item(s: &State, n: usize) -> El {
                             .child(
                                 icon_button_ink(
                                     t,
-                                    &glyphs::FILTER,
+                                    &i::FILTER,
                                     "Filter projects",
                                     14.0,
                                     "text-tertiary",
@@ -576,6 +592,7 @@ fn render_item(s: &State, n: usize) -> El {
                     }
                     s.menus.point = Some((point.x, point.y));
                     s.menus.open = Some(crate::menus::Menu::Thread(actions.clone()));
+                    s.menus.thread_toolbar = false;
                     if let Some(first) = crate::menus::thread::enabled_labels(s, &actions).first() {
                         tx.focus_when_shown(format!("menu-{first}"), false);
                     }
