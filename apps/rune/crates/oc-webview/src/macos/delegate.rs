@@ -72,7 +72,7 @@ define_class!(
                 // nil target frames are handled by WKUIDelegate, never navigated here.
                 let decision = self.ivars().navigation.decide(&url, main);
                 match decision {
-                    Decision::Allow => handler.call((1,)),
+                    Decision::Allow => {let download:bool=msg_send![action,shouldPerformDownload];handler.call((if download{2}else{1},));},
                     Decision::Block => { self.ivars().emit(Event::Blocked(url)); handler.call((0,)); }
                     Decision::External => {
                         // Only HTTP(S) can reach this branch. Never pass arbitrary URL schemes
@@ -86,6 +86,31 @@ define_class!(
                 }
             }
         }
+
+        #[unsafe(method(webView:decidePolicyForNavigationResponse:decisionHandler:))]
+        unsafe fn response_policy(&self,_view:*mut AnyObject,response:*mut AnyObject,handler:&Block<dyn Fn(isize)>) {
+            let display:bool=unsafe{msg_send![response,canShowMIMEType]};
+            handler.call((if display{1}else{2},));
+        }
+        #[unsafe(method(webView:navigationAction:didBecomeDownload:))]
+        unsafe fn action_download(&self,_view:*mut AnyObject,_action:*mut AnyObject,download:*mut AnyObject){unsafe{let _:()=msg_send![download,setDelegate:self];}}
+        #[unsafe(method(webView:navigationResponse:didBecomeDownload:))]
+        unsafe fn response_download(&self,_view:*mut AnyObject,_response:*mut AnyObject,download:*mut AnyObject){unsafe{let _:()=msg_send![download,setDelegate:self];}}
+        #[unsafe(method(download:decideDestinationUsingResponse:suggestedFilename:completionHandler:))]
+        unsafe fn download_destination(&self,_download:*mut AnyObject,_response:*mut AnyObject,name:*mut AnyObject,handler:&Block<dyn Fn(*mut AnyObject)>) {
+            unsafe {
+                let panel:Retained<AnyObject>=msg_send![AnyClass::get(c"NSSavePanel").unwrap(),savePanel];
+                let _:()=msg_send![&*panel,setNameFieldStringValue:name];
+                let handler=handler.copy();let held=panel.clone();
+                let completion=RcBlock::new(move|response:isize|{
+                    let url=if response==1{msg_send![&*held,URL]}else{std::ptr::null_mut()};
+                    handler.call((url,));
+                });
+                let _:()=msg_send![&*panel,beginWithCompletionHandler:&*completion];
+            }
+        }
+        #[unsafe(method(download:didFailWithError:resumeData:))]
+        unsafe fn download_failed(&self,_download:*mut AnyObject,error:*mut AnyObject,_data:*mut AnyObject){unsafe{self.ivars().emit(Event::Error(string(msg_send![error,localizedDescription])));}}
 
         #[unsafe(method(webView:createWebViewWithConfiguration:forNavigationAction:windowFeatures:))]
         unsafe fn new_window(&self, _view: *mut AnyObject, _configuration: *mut AnyObject, action: *mut AnyObject, _features: *mut AnyObject) -> *mut AnyObject {

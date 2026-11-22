@@ -20,6 +20,11 @@ pub enum Operation {
         directory: String,
         id: String,
     },
+    UndoSide {
+        id: String,
+        message: std::sync::Arc<oc_gateway::types::Message>,
+    },
+    LocalHTML(String),
     SaveData {
         uri: String,
         destination: std::path::PathBuf,
@@ -55,6 +60,7 @@ pub enum Operation {
     SendSide {
         id: String,
         body: Value,
+        attachments: Vec<oc_gateway::prompt::Attachment>,
     },
 }
 pub struct Request {
@@ -70,6 +76,7 @@ pub struct Reply {
 pub struct Payload {
     pub preview: Option<String>,
     pub apps: Vec<super::open_apps::App>,
+    pub side_restored: Option<Result<super::side_restore::Restored, String>>,
     pub value: Value,
     pub diff: Vec<diff::FileDiff>,
     pub highlights: HashMap<u64, Vec<syntax::Highlight>>,
@@ -207,6 +214,42 @@ async fn run(client: &Gateway, op: Operation) -> Result<Value, String> {
         } => Ok(serde_json::json!({"__path":path,"text":text,"revision":revision})),
         Operation::DiscoverApps => super::open_apps::discover(),
         Operation::OpenApp { directory, id } => super::open_apps::open(&directory, &id),
+        Operation::UndoSide { id, message } => {
+            // Validate and decode before mutating history, never on the UI thread.
+            super::side_restore::decode(&message)?;
+            let _: Value = client
+                .post(
+                    &format!("sessions/{id}/action"),
+                    serde_json::json!({"action":"undo","messageID":message.id}),
+                )
+                .await?;
+            Ok(serde_json::json!({"__sideRestored":message.as_ref()}))
+        }
+        Operation::LocalHTML(value) => {
+            let url = url::Url::parse(&value).map_err(|e| e.to_string())?;
+            if url.scheme() != "file" || url.host_str().is_some_and(|h| h != "localhost") {
+                return Err("Choose a local HTML file.".into());
+            }
+            let path = url
+                .to_file_path()
+                .map_err(|_| "Choose a local HTML file.")?
+                .canonicalize()
+                .map_err(|e| e.to_string())?;
+            if !path.is_file()
+                || !path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+                    e.eq_ignore_ascii_case("html") || e.eq_ignore_ascii_case("htm")
+                })
+            {
+                return Err("Choose a local HTML file.".into());
+            }
+            let root =
+                url::Url::from_directory_path(path.parent().ok_or("Missing preview folder")?)
+                    .map_err(|_| "Invalid preview folder")?;
+            let mut file = url::Url::from_file_path(path).map_err(|_| "Invalid preview file")?;
+            file.set_query(url.query());
+            file.set_fragment(url.fragment());
+            Ok(serde_json::json!({"url":file.as_str(),"root":root.as_str()}))
+        }
         Operation::SaveData { uri, destination } => {
             use base64::Engine;
             let (_, data) = uri
@@ -263,7 +306,42 @@ async fn run(client: &Gateway, op: Operation) -> Result<Value, String> {
                 .post(&format!("sessions/{id}/side-chats"), serde_json::json!({}))
                 .await
         }
-        Operation::SendSide { id, body } => {
+        Operation::SendSide {
+            id,
+            mut body,
+            attachments,
+        } => {
+            use base64::Engine;
+            oc_gateway::prompt::validate_attachments(&attachments)?;
+            let slash = body
+                .as_object_mut()
+                .and_then(|body| body.remove("__sideSlash"))
+                .and_then(|v| v.as_str().map(str::to_owned));
+            if let Some(name) = slash {
+                let info = client.session(&id).await?;
+                let directory = info.location.directory;
+                let query = [("directory", directory.as_str())];
+                let (skills, commands): (Vec<Value>, Vec<Value>) = tokio::try_join!(
+                    client.get_bounded("workspace/skills", &query, 16 * 1024 * 1024),
+                    client.get_bounded("workspace/commands", &query, 16 * 1024 * 1024)
+                )?;
+                if let Some(skill) = skills.iter().find(|v| v["name"] == name) {
+                    body["skill"] = skill["id"].clone();
+                } else if commands.iter().any(|v| v["name"] == name) {
+                    body["command"] = Value::String(name.clone());
+                } else {
+                    return Err(format!(
+                        "Unknown command /{name}. Type / to see available commands."
+                    ));
+                }
+            }
+            if body["text"]
+                .as_str()
+                .is_some_and(|v| v.encode_utf16().count() > 200_000)
+            {
+                return Err("The draft is too long. Shorten it before sending.".into());
+            }
+            body["files"]=Value::Array(attachments.iter().map(|a|serde_json::json!({"name":a.name,"uri":format!("data:{};base64,{}",a.mime,base64::engine::general_purpose::STANDARD.encode(a.bytes.as_slice()))})).collect());
             client.post(&format!("sessions/{id}/prompt"), body).await
         }
     }
@@ -358,6 +436,11 @@ pub fn prepare(mut value: Value) -> Payload {
                 }
             })
             .collect(),
+        side_restored: value.get("__sideRestored").map(|v| {
+            serde_json::from_value(v.clone())
+                .map_err(|e| e.to_string())
+                .and_then(|m| super::side_restore::decode(&m))
+        }),
         value,
         diff: prepared,
         highlights,

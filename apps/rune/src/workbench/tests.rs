@@ -80,6 +80,43 @@ fn one_preview_tab_replaces_clean_previews_and_closing_a_background_tab_keeps_se
     assert_eq!(s.workbench.selected, Some(0));
     assert_eq!(s.workbench.docs[0].path, "replacement.txt");
 }
+
+#[test]
+fn side_acknowledgement_treats_text_and_context_as_one_captured_draft() {
+    for changed in ["text", "context", "neither"] {
+        let mut s = state();
+        let id = "side".to_owned();
+        s.workbench
+            .side_drafts
+            .insert(id.clone(), TextEdit::new("captured prompt"));
+        s.workbench.side_revisions.insert(id.clone(), 1);
+        s.workbench.side_sending = Some((id.clone(), 1));
+        let draft = s.composer.drafts.edit(&id);
+        draft
+            .mentions
+            .push(serde_json::json!({"type":"file","path":"README.md","token":"@README.md"}));
+        s.workbench.side_context_revision = Some(draft.revision);
+        match changed {
+            "text" => {
+                s.workbench.side_revisions.insert(id.clone(), 2);
+            }
+            "context" => s.composer.drafts.touch(&id),
+            _ => {}
+        }
+        receive(
+            &mut s,
+            "side-send",
+            worker::prepare(serde_json::Value::Null),
+        );
+        if changed == "neither" {
+            assert!(s.workbench.side_drafts[&id].text.is_empty());
+            assert!(s.composer.drafts.get(&id).mentions.is_empty());
+        } else {
+            assert_eq!(s.workbench.side_drafts[&id].text, "captured prompt");
+            assert_eq!(s.composer.drafts.get(&id).mentions.len(), 1);
+        }
+    }
+}
 #[test]
 fn file_links_keep_directory_identity_and_large_text_remains_editable() {
     let mut s = state();

@@ -43,6 +43,7 @@ pub struct PaintLine {
 }
 #[derive(Clone)]
 pub struct Frame {
+    pub status: &'static str,
     pub lines: Vec<Arc<PaintLine>>,
     pub cursor: (usize, usize, CursorShape),
     pub mode: TermMode,
@@ -97,6 +98,7 @@ impl Engine {
             revision: 0,
             palette: None,
             frame: Frame {
+                status: "Connecting…",
                 lines: vec![],
                 cursor: (0, 0, CursorShape::Block),
                 mode: TermMode::empty(),
@@ -157,6 +159,9 @@ impl Engine {
             }
         }
         replies
+    }
+    pub fn connection_status(&mut self, status: &'static str) {
+        self.frame.status = status;
     }
     pub fn resize(&mut self, size: Size) {
         self.term.resize(size);

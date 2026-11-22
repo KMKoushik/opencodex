@@ -1,5 +1,10 @@
 //! Native web guests. Gateway HTML remains inside the runtime's opaque sandbox.
+mod annotations;
+mod browser;
+pub use browser::{browser_panel, browser_tabs};
 mod canvas;
+mod icons;
+mod storage;
 use crate::{
     OPTIONS, State,
     sidebar::label,
@@ -13,21 +18,29 @@ use oc_webview::{Event, FocusRequest, WebView};
 use rune::{El, TextEdit, TextStyle, Tx, col, row, text_input};
 use serde_json::{Value, json};
 use std::rc::Rc;
+use storage::{restore_tabs, save_tabs, sync_chat_tabs};
 
 pub struct Browser {
+    key: u64,
     pub web: WebView,
     pub address: TextEdit,
     pub error: Option<String>,
 }
+fn browser_key() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
 #[derive(Default)]
 struct ChatTabs {
-    browsers: Vec<String>,
+    browsers: Vec<Browser>,
     browser: usize,
     canvases: Vec<String>,
     canvas: Option<String>,
 }
 #[derive(Default)]
 pub struct Native {
+    empty_address: TextEdit,
+    annotations: annotations::Annotations,
     pub tooltip: bool,
     pub window: Option<rune::WindowHandle>,
     pub canvas: Option<canvas::Canvas>,
@@ -44,6 +57,11 @@ pub struct Native {
     revision: [u64; 6],
     session: Option<String>,
     retained: std::collections::HashMap<Option<String>, ChatTabs>,
+    storage: Option<storage::Storage>,
+    preferences_loaded: bool,
+    saved: storage::Saved,
+    tabs_dirty: bool,
+    browser_lru: Vec<u64>,
     pub error: Option<String>,
 }
 pub fn attach_window(s: &mut State, w: rune::WindowHandle) {
@@ -66,6 +84,7 @@ fn web(s: &State, bridge: bool) -> WebView {
         .map(|u| u.origin().ascii_serialization());
     let web = WebView::new(oc_webview::Options {
         bridge,
+        persistent: !bridge,
         navigation: oc_webview::Navigation {
             origins: if bridge {
                 origin.into_iter().collect()
@@ -106,9 +125,11 @@ fn web(s: &State, bridge: bool) -> WebView {
     web
 }
 pub fn start(s: &mut State, client: oc_gateway::Gateway, wake: rune::Waker) {
+    s.native.storage = Some(storage::Storage::start(wake.clone()));
     s.native.worker = Some(Worker::start(client, wake));
 }
 pub fn capture(s: &mut State) -> Result<(), String> {
+    sync_chat_tabs(s);
     if s.workbench.panel == Panel::Canvas && s.workbench.open {
         if let Some(url) = &OPTIONS.get().unwrap().gateway {
             s.native.canvases = crate::workbench::capture_get(url, "canvases".into(), vec![])?
@@ -128,6 +149,30 @@ pub fn capture(s: &mut State) -> Result<(), String> {
     Ok(())
 }
 impl State {
+    fn navigate_browser(&mut self) {
+        let Some(b) = self.native.browsers.get_mut(self.native.browser) else {
+            return;
+        };
+        let Some(url) = address_url(&b.address.text) else {
+            return;
+        };
+        b.address = TextEdit::new(url.clone());
+        // A late filesystem reply must not replace a more recent navigation.
+        let old_key = b.key;
+        b.key = browser_key();
+        let key = b.key;
+        for entry in &mut self.native.browser_lru {
+            if *entry == old_key {
+                *entry = key;
+            }
+        }
+        if url.starts_with("file:") {
+            self.native_request(format!("browser-file:{key}"), Operation::LocalHTML(url));
+        } else {
+            b.error = b.web.load_url(&url).err();
+        }
+        self.native.tabs_dirty = true;
+    }
     pub fn open_browser(&mut self, value: &str) {
         self.add_browser(value, false);
     }
@@ -148,21 +193,46 @@ impl State {
         {
             self.native.browser = i;
         } else {
-            if self.native.browsers.len() >= 16 {
-                self.native.error = Some("Close a browser tab before opening another.".into());
-                return;
+            if self.native.browsers.len() >= 12 {
+                let oldest = usize::from(self.native.browser == 0);
+                self.native.browsers.remove(oldest);
+                if self.native.browser > oldest {
+                    self.native.browser -= 1;
+                }
             }
             let web = web(self, false);
-            let error = web.load_url(&url).err();
-            self.native.browsers.push(Browser {
-                web,
-                address: TextEdit::new(url),
-                error,
-            });
-            self.native.browser = self.native.browsers.len() - 1;
+            let error = if url.starts_with("file:") {
+                None
+            } else {
+                web.load_url(&url).err()
+            };
+            let index = if force {
+                (self.native.browser + 1).min(self.native.browsers.len())
+            } else {
+                self.native.browsers.len()
+            };
+            self.native.browsers.insert(
+                index,
+                Browser {
+                    key: browser_key(),
+                    web,
+                    address: TextEdit::new(if url == "about:blank" {
+                        String::new()
+                    } else {
+                        url.clone()
+                    }),
+                    error,
+                },
+            );
+            self.native.browser = index;
         }
         self.workbench.open = true;
         self.workbench.panel = Panel::Browser;
+        if url.starts_with("file:") {
+            let key = self.native.browsers[self.native.browser].key;
+            self.native_request(format!("browser-file:{key}"), Operation::LocalHTML(url));
+        }
+        self.native.tabs_dirty = true;
     }
     pub fn open_link(&mut self, href: &str, tx: &mut Tx) {
         if let Some(id) = href
@@ -175,6 +245,18 @@ impl State {
         if let Some((directory, path)) =
             crate::workbench::file_target(href, &self.workspace_directory())
         {
+            if path
+                .rsplit('.')
+                .next()
+                .is_some_and(|e| e.eq_ignore_ascii_case("html") || e.eq_ignore_ascii_case("htm"))
+            {
+                if let Ok(url) =
+                    url::Url::from_file_path(std::path::Path::new(&directory).join(&path))
+                {
+                    self.open_browser(url.as_str());
+                    return;
+                }
+            }
             self.workbench.open = true;
             self.workbench.panel = Panel::Files;
             self.open_workspace_target(directory, path, false);
@@ -212,15 +294,15 @@ impl State {
         }
         sync_chat_tabs(self);
         if !self.native.canvas_tabs.contains(&id) {
-            if self.native.canvas_tabs.len() >= 32 {
-                self.native.error = Some("Close a canvas tab before opening another.".into());
-                return;
+            if self.native.canvas_tabs.len() >= 12 {
+                self.native.canvas_tabs.remove(0);
             }
             self.native.canvas_tabs.push(id.clone());
         }
         self.native.selected_canvas = Some(id);
         self.workbench.open = true;
         self.workbench.panel = Panel::Canvas;
+        self.native.tabs_dirty = true;
     }
     fn native_request(&mut self, tag: String, op: Operation) -> bool {
         if self.native.pending.contains(&tag) {
@@ -264,7 +346,13 @@ pub fn address_url(value: &str) -> Option<String> {
     }
     if text.contains("://") {
         let u = url::Url::parse(text).ok()?;
-        return matches!(u.scheme(), "http" | "https").then(|| u.into());
+        return (matches!(u.scheme(), "http" | "https")
+            || (u.scheme() == "file"
+                && u.host_str().is_none_or(|h| h == "localhost")
+                && u.path().rsplit('.').next().is_some_and(|e| {
+                    e.eq_ignore_ascii_case("html") || e.eq_ignore_ascii_case("htm")
+                })))
+        .then(|| u.into());
     }
     let local = url::Url::parse(&format!("http://{text}"))
         .ok()
@@ -288,13 +376,58 @@ pub fn address_url(value: &str) -> Option<String> {
     Some(u.into())
 }
 pub fn poll(s: &mut State, tx: &mut Tx) -> bool {
-    let mut changed = false;
+    let mut changed = annotations::poll(s);
+    let loaded = s
+        .native
+        .storage
+        .as_ref()
+        .and_then(|w| w.loaded.lock().unwrap().take());
+    if let Some(result) = loaded {
+        s.native.preferences_loaded = true;
+        match result {
+            Ok(saved) => {
+                s.native.saved = saved;
+                if !s.native.tabs_dirty
+                    && s.native.browsers.is_empty()
+                    && s.native.canvas_tabs.is_empty()
+                {
+                    restore_tabs(s);
+                }
+            }
+            Err(e) => s.native.error = Some(e),
+        }
+        changed = true;
+    }
+    if let Some(error) = s
+        .native
+        .storage
+        .as_ref()
+        .and_then(|w| w.error.lock().unwrap().take())
+    {
+        s.native.error = Some(error);
+        changed = true;
+    }
     if s.native.session != s.selected {
         sync_chat_tabs(s);
         changed = true;
     }
     let panel = s.pages.route == crate::pages::Route::Chat && s.workbench.open;
     let canvas_visible = panel && s.workbench.panel == Panel::Canvas;
+    if panel && s.workbench.panel == Panel::Browser {
+        browser::limit_live(s);
+    }
+    if let Some(target) = s.native.annotations.target.as_ref() {
+        let visible = if let Some(id) = target.strip_prefix("canvas:") {
+            canvas_visible && s.native.selected_canvas.as_deref() == Some(id)
+        } else {
+            panel
+                && s.workbench.panel == Panel::Browser
+                && target == &format!("browser:{}", s.native.browser)
+        };
+        if !visible || s.native.session != s.selected {
+            annotations::cancel(s);
+        }
+    }
     let target = if s.pages.route == crate::pages::Route::Apps {
         s.pages.app.clone()
     } else if canvas_visible {
@@ -329,15 +462,52 @@ pub fn poll(s: &mut State, tx: &mut Tx) -> bool {
         }
         s.native.pending.remove(&r.tag);
         changed = true;
-        if let Some(id) = r.tag.strip_prefix("canvas-delete:") {
+        if let Some(key) = r
+            .tag
+            .strip_prefix("browser-file:")
+            .and_then(|i| i.parse::<u64>().ok())
+        {
+            if let Some(browser) = s
+                .native
+                .browsers
+                .iter_mut()
+                .chain(
+                    s.native
+                        .retained
+                        .values_mut()
+                        .flat_map(|tabs| tabs.browsers.iter_mut()),
+                )
+                .find(|b| b.key == key)
+            {
+                match r.result {
+                    Ok(p) => {
+                        browser.error = browser
+                            .web
+                            .load_local_file(
+                                p.value["url"].as_str().unwrap_or(""),
+                                p.value["root"].as_str().unwrap_or(""),
+                            )
+                            .err();
+                    }
+                    Err(error) => browser.error = Some(error),
+                }
+            }
+        } else if let Some(id) = r.tag.strip_prefix("canvas-delete:") {
             match r.result {
                 Ok(_) => {
+                    s.native.tabs_dirty = true;
                     s.native.canvases.retain(|c| c["id"] != id);
                     s.native.canvas_tabs.retain(|c| c != id);
                     if s.native.selected_canvas.as_deref() == Some(id) {
                         s.native.selected_canvas = None;
                     }
                     for tabs in s.native.retained.values_mut() {
+                        tabs.canvases.retain(|c| c != id);
+                        if tabs.canvas.as_deref() == Some(id) {
+                            tabs.canvas = None;
+                        }
+                    }
+                    for tabs in s.native.saved.values_mut() {
                         tabs.canvases.retain(|c| c != id);
                         if tabs.canvas.as_deref() == Some(id) {
                             tabs.canvas = None;
@@ -370,11 +540,16 @@ pub fn poll(s: &mut State, tx: &mut Tx) -> bool {
             changed = true;
             match event {
                 Event::Changed(p) => {
+                    s.native.tabs_dirty = true;
                     if p.loading {
                         b.error = None;
                     }
                     if tx.focused() != Some("browser-address") {
-                        b.address = TextEdit::new(p.url);
+                        b.address = TextEdit::new(if p.url == "about:blank" {
+                            String::new()
+                        } else {
+                            p.url
+                        });
                     }
                 }
                 Event::NewWindow(url) => popups.push(url),
@@ -400,37 +575,11 @@ pub fn poll(s: &mut State, tx: &mut Tx) -> bool {
     for url in popups {
         s.new_browser_tab(&url);
     }
+    if s.native.tabs_dirty && s.native.preferences_loaded {
+        save_tabs(s);
+        s.native.tabs_dirty = false;
+    }
     changed
-}
-fn sync_chat_tabs(s: &mut State) {
-    if s.native.session == s.selected {
-        return;
-    }
-    let n = &mut s.native;
-    let old = ChatTabs {
-        browsers: n.browsers.iter().map(|b| b.web.state().url).collect(),
-        browser: n.browser,
-        canvases: std::mem::take(&mut n.canvas_tabs),
-        canvas: n.selected_canvas.take(),
-    };
-    n.browsers.clear();
-    let next = n.retained.remove(&s.selected).unwrap_or_default();
-    n.retained.insert(n.session.clone(), old);
-    n.session = s.selected.clone();
-    n.delete_canvas = None;
-    n.browser = next.browser;
-    n.canvas_tabs = next.canvases;
-    n.selected_canvas = next.canvas;
-    n.list_loaded = false;
-    for url in next.browsers {
-        let web = web(s, false);
-        let error = web.load_url(&url).err();
-        s.native.browsers.push(Browser {
-            web,
-            address: TextEdit::new(url),
-            error,
-        });
-    }
 }
 pub fn coverage(s: &State) {
     // Hide before painting Rune overlays; no readbacks, timers or redraw loop.
@@ -444,6 +593,8 @@ pub fn coverage(s: &State) {
         || s.workbench.file_actions.is_some()
         || s.chat.comment_editor.is_some()
         || s.workbench.delete_side.is_some()
+        || s.workbench.side_model_open
+        || s.workbench.side_thinking_open
         || s.native.delete_canvas.is_some();
     if let Some(c) = &s.native.canvas {
         c.web.set_covered(covered);
@@ -462,22 +613,28 @@ pub fn canvas_panel(s: &State) -> El {
         .iter()
         .filter(|c| c["sessionID"].as_str() == s.selected.as_deref())
         .collect();
-    let mut list = col().grow(1.0).w_full().min_h(0.0).padding(12.0).gap(8.0);
+    let mut list = col()
+        .grow(1.0)
+        .w_full()
+        .min_h(0.0)
+        .padding(8.0)
+        .scroll(rune::ScrollSpec {
+            stick_bottom: false,
+        });
     if let Some(e) = &s.native.error {
         list = list.child(label(&s.theme, e, 12.0, 400.0, "error"));
     }
     if own.is_empty() {
-        return list.child(label(
-            &s.theme,
-            if s.native.list_loaded {
-                "No canvases in this chat"
-            } else {
-                "Loading canvases…"
-            },
-            14.0,
-            500.0,
-            "text",
-        ));
+        return list.child(if s.native.list_loaded {
+            crate::workbench::empty_state(
+                s,
+                &crate::chat::icons::CANVAS,
+                "No canvases in this chat",
+                "Ask the agent for a dashboard, chart, diagram, or report and it can make one.",
+            )
+        } else {
+            label(&s.theme, "Loading canvases…", 14.0, 400.0, "text-tertiary").role("status")
+        });
     }
     for c in own.into_iter().take(200) {
         let id = c["id"].as_str().unwrap_or("").to_owned();
@@ -487,18 +644,50 @@ pub fn canvas_panel(s: &State) -> El {
         list = list.child(
             row()
                 .w_full()
-                .gap(8.0)
+                .gap(4.0)
+                .pr(6.0)
+                .radius(8.0)
+                .center_y()
+                .hover_group()
+                .hover_group_focus()
+                .hover(s.theme.c("hover"))
                 .child(
-                    crate::pages::button(s, &title)
+                    row()
+                        .px(10.0)
+                        .py(8.0)
+                        .gap(10.0)
+                        .center_y()
+                        .child(
+                            rune::icon(&crate::chat::icons::CANVAS, 16.0)
+                                .color(s.theme.c("text-secondary")),
+                        )
+                        .child(
+                            col()
+                                .min_w(0.0)
+                                .child(label(&s.theme, &title, 14.0, 400.0, "text").truncate())
+                                .child(label(
+                                    &s.theme,
+                                    oc_webview::updated_label(c["updated"].as_f64().unwrap_or(0.0)),
+                                    12.0,
+                                    400.0,
+                                    "text-tertiary",
+                                )),
+                        )
                         .grow(1.0)
+                        .role("button")
+                        .focusable(true)
                         .on_press(move |s: &mut State| s.open_canvas(id.clone())),
                 )
                 .child(
-                    crate::pages::button(s, "Delete")
-                        .label(format!("Delete {title}"))
-                        .on_press(move |s: &mut State| {
-                            s.native.delete_canvas = Some((delete_id.clone(), delete_title.clone()))
-                        }),
+                    crate::sidebar::icon_button(
+                        &s.theme,
+                        &icons::DELETE,
+                        &format!("Delete {title}"),
+                    )
+                    .group_opacity(0.0, 1.0)
+                    .on_press(move |s: &mut State| {
+                        s.native.delete_canvas = Some((delete_id.clone(), delete_title.clone()))
+                    }),
                 ),
         );
     }
@@ -519,8 +708,9 @@ fn delete_canvas_dialog(s: &State) -> El {
         .absolute(12.0,80.0).modal(true,|s: &mut State| s.native.delete_canvas=None)
 }
 pub fn canvas_tabs(s: &State) -> El {
-    let mut tabs = row().grow(1.0).min_w(0.0).h(40.0).gap(4.0).center_y();
-    for id in &s.native.canvas_tabs {
+    use crate::workbench::panel_tabs as tab;
+    let mut tabs = tab::strip("Canvases");
+    for (index, id) in s.native.canvas_tabs.iter().enumerate() {
         let title = s
             .native
             .canvases
@@ -530,125 +720,67 @@ pub fn canvas_tabs(s: &State) -> El {
             .unwrap_or("Canvas");
         let select = id.clone();
         let close = id.clone();
-        tabs = tabs
-            .child(
-                crate::pages::button(s, title)
-                    .on_press(move |s: &mut State| s.native.selected_canvas = Some(select.clone())),
-            )
-            .child(
-                crate::pages::button(s, "×")
-                    .label("Close canvas tab")
-                    .on_press(move |s: &mut State| {
-                        s.native.canvas_tabs.retain(|id| id != &close);
-                        if s.native.selected_canvas.as_ref() == Some(&close) {
-                            s.native.selected_canvas = s.native.canvas_tabs.last().cloned();
-                        }
-                    }),
-            );
+        let active = s.native.selected_canvas.as_ref() == Some(id);
+        tabs = tabs.child(tab::pill(
+            s,
+            active,
+            tab::button(s, title, &crate::chat::icons::CANVAS, active)
+                .key(format!("canvas-tab-{index}"))
+                .on_press(move |s: &mut State| {
+                    s.native.selected_canvas = Some(select.clone());
+                    s.native.tabs_dirty = true;
+                })
+                .on_key(move |s: &mut State, key, tx| {
+                    if !matches!(key.key, rune::Key::Left | rune::Key::Right) {
+                        return false;
+                    }
+                    let Some(next) = tab::next(&key.key, index, s.native.canvas_tabs.len()) else {
+                        return false;
+                    };
+                    s.native.selected_canvas = Some(s.native.canvas_tabs[next].clone());
+                    s.native.tabs_dirty = true;
+                    tx.focus(format!("canvas-tab-{next}"), false);
+                    true
+                }),
+            tab::close(s, &format!("Close {title}")).on_press(move |s: &mut State| {
+                s.native.canvas_tabs.retain(|id| id != &close);
+                if s.native.selected_canvas.as_ref() == Some(&close) {
+                    s.native.selected_canvas = s
+                        .native
+                        .canvas_tabs
+                        .get(index.min(s.native.canvas_tabs.len().saturating_sub(1)))
+                        .cloned();
+                }
+                s.native.tabs_dirty = true;
+            }),
+        ));
     }
-    tabs.child(
-        crate::pages::button(s, "+")
-            .label("Canvases in this chat")
-            .on_press(|s: &mut State| s.native.selected_canvas = None),
-    )
-}
-pub fn browser_panel(s: &State) -> El {
-    let mut body = col().grow(1.0).w_full().min_h(0.0);
-    let mut tabs = row().w_full().h(32.0).gap(4.0).center_y();
-    for (i, b) in s.native.browsers.iter().enumerate() {
-        let p = b.web.state();
-        tabs = tabs
-            .child(
-                crate::pages::button(
-                    s,
-                    if p.title.is_empty() {
-                        "New tab"
-                    } else {
-                        &p.title
-                    },
-                )
-                .max_w(160.0)
-                .on_press(move |s: &mut State| s.native.browser = i),
+    let mut header = row()
+        .grow(1.0)
+        .min_w(0.0)
+        .center_y()
+        .gap(8.0)
+        .child(tab::viewport(tabs));
+    if s.native.selected_canvas.is_some() {
+        header = header.child(
+            crate::sidebar::icon_button(
+                &s.theme,
+                &icons::COMMENT,
+                if s.native.annotations.target.is_some() {
+                    "Cancel comment"
+                } else {
+                    "Comment on canvas"
+                },
             )
-            .child(
-                crate::pages::button(s, "×")
-                    .label("Close browser tab")
-                    .on_press(move |s: &mut State| {
-                        s.native.browsers.remove(i);
-                        s.native.browser = s
-                            .native
-                            .browser
-                            .min(s.native.browsers.len().saturating_sub(1));
-                    }),
-            );
-    }
-    body = body.child(
-        tabs.child(
-            crate::pages::button(s, "+")
-                .label("New browser tab")
-                .on_press(|s: &mut State| s.new_browser_tab("about:blank")),
-        ),
-    );
-    let Some(b) = s.native.browsers.get(s.native.browser) else {
-        return body.child(
-            crate::pages::button(s, "Open a page")
-                .on_press(|s: &mut State| s.open_browser("https://example.org")),
+            .on_press(|s: &mut State| annotations::toggle(s, true)),
         );
-    };
-    body = body.child(
-        row()
-            .w_full()
-            .h(40.0)
-            .px(8.0)
-            .gap(4.0)
-            .center_y()
-            .child(
-                crate::pages::button(s, "←")
-                    .label("Back")
-                    .disabled(!b.web.state().can_go_back)
-                    .on_press(|s: &mut State| s.native.browsers[s.native.browser].web.back()),
-            )
-            .child(
-                crate::pages::button(s, "→")
-                    .label("Forward")
-                    .disabled(!b.web.state().can_go_forward)
-                    .on_press(|s: &mut State| s.native.browsers[s.native.browser].web.forward()),
-            )
-            .child(
-                crate::pages::button(s, "↻")
-                    .label("Reload")
-                    .on_press(|s: &mut State| s.native.browsers[s.native.browser].web.reload()),
-            )
-            .child(
-                text_input(&b.address, TextStyle::new(12.0, 400.0))
-                    .key("browser-address")
-                    .grow(1.0)
-                    .min_w(0.0)
-                    .h(28.0)
-                    .px(8.0)
-                    .radius(6.0)
-                    .fill(s.theme.c("control"))
-                    .color(s.theme.c("text"))
-                    .on_edit(|s: &mut State| &mut s.native.browsers[s.native.browser].address)
-                    .on_submit(|s: &mut State, _| {
-                        let b = &mut s.native.browsers[s.native.browser];
-                        if let Some(url) = address_url(&b.address.text) {
-                            b.error = b.web.load_url(&url).err();
-                        }
-                    }),
-            ),
-    );
-    if let Some(e) = &b.error {
-        body = body.child(label(&s.theme, e, 12.0, 400.0, "error"));
     }
-    body.child(
-        b.web
-            .host::<State>("browser-page")
-            .grow(1.0)
-            .min_h(0.0)
-            .w_full()
-            .focusable(true)
-            .key("browser-page-focus")
-            .on_press(|s: &mut State| s.native.browsers[s.native.browser].web.focus()),
+    header.child(
+        crate::sidebar::icon_button(&s.theme, &crate::icons::PLUS, "Canvases in this chat")
+            .checked(s.native.selected_canvas.is_none())
+            .on_press(|s: &mut State| {
+                s.native.selected_canvas = None;
+                s.native.tabs_dirty = true;
+            }),
     )
 }

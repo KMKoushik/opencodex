@@ -30,7 +30,7 @@ load rather than queueing unbounded work.
 
 ## API and ownership
 
-- `load_url`, `load_html(html, base_url)`, `back`, `forward`, `reload`, `stop`.
+- `load_url`, `load_html(html, base_url)`, `load_local_file(url, root)`, `back`, `forward`, `reload`, `stop`.
 - `state()` is an event-maintained snapshot (title, URL, loading, estimated progress, history
   availability). Native KVO produces coalesced `Event::Changed`; there is no state polling.
 - `drain_events()` also returns errors, blocked/external navigations, new-window URLs, focus
@@ -41,12 +41,25 @@ load rather than queueing unbounded work.
   frame navigations. This is **not a subresource/network firewall**; retain the gateway CSP.
   Off-origin main-frame HTTP(S) links can open through NSWorkspace. No arbitrary schemes are
   handed to the OS. New-window requests never create unmanaged WKWebViews.
-- Each surface owns a fresh **nonpersistent WKWebsiteDataStore**; browser, canvas and preview
-  cookies/cache are never shared. This intentionally differs from Electron's persistent
-  browser profile. There is no Node, preload, filesystem bridge or OpenCode client.
+- Surfaces default to a fresh **nonpersistent WKWebsiteDataStore**. `persistent: true`
+  selects WebKit's shared default persistent store; the app uses this for browser tabs,
+  while canvases retain independent nonpersistent stores. There is no Node, preload,
+  filesystem bridge or OpenCode client.
   Camera/microphone and device-motion permission requests are explicitly denied.
 - `evaluate` reports a string description (use `JSON.stringify` for structured results).
-  `snapshot` asynchronously returns PNG bytes; write them on a worker, not the frame thread.
+  `evaluate_isolated` awaits JavaScript in the private annotation content world.
+  `snapshot` and `snapshot_region` asynchronously return PNG bytes; write them on a worker,
+  not the frame thread.
+- Local HTML requires an explicit file URL and directory grant. The application canonicalizes
+  these on its worker before calling `load_local_file`. A per-surface, opaque preview origin
+  serves resources through `WKURLSchemeHandler`; no `file://` origin or WebKit directory read
+  grant reaches the guest. A bounded worker canonicalizes every resource and rejects symlink
+  escapes, traversal, NUL/backslash paths and non-GET/HEAD methods. Twelve grants per surface,
+  sixteen concurrent requests and 64 MiB per resource bound retention and work.
+- The annotation `WKContentWorld` is retained for the whole native surface lifetime, so separate
+  evaluations share overlay state without exposing globals to page scripts.
+- Browser downloads use a native save panel and WebKit's download delegate. Cancellation
+  declines the destination; errors are reported through the event queue.
 - `set_background([r,g,b,a])` changes WebKit's loading/under-page color, in sRGB 0–1.
   Normal AppKit context menus remain enabled. Debug builds enable Web Inspector / Inspect
   Element; release builds do not enable developer extras.

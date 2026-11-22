@@ -18,6 +18,9 @@ impl Surface {
     pub fn load_url(&self, _: &str) -> Result<(), String> {
         Ok(())
     }
+    pub fn load_local_file(&self, _: &str, _: &str) -> Result<(), String> {
+        Err("WKWebView requires macOS".into())
+    }
     pub fn load_html(&self, _: &str, _: Option<&str>) -> Result<(), String> {
         Ok(())
     }
@@ -33,7 +36,10 @@ impl Surface {
     pub fn evaluate(&self, _: &str, callback: Completion) {
         callback(Err("WKWebView requires macOS".into()));
     }
-    pub fn snapshot(&self, callback: SnapshotCompletion) {
+    pub fn snapshot(&self, _: Option<Rect>, callback: SnapshotCompletion) {
+        callback(Err("WKWebView requires macOS".into()));
+    }
+    pub fn evaluate_isolated(&self, _: &str, callback: Completion) {
         callback(Err("WKWebView requires macOS".into()));
     }
     pub fn native_frame(&self) -> Option<Rect> {
@@ -42,4 +48,10 @@ impl Surface {
     pub fn is_visible(&self) -> bool {
         false
     }
+}
+pub fn updated_label(_: f64) -> String {
+    String::new()
+}
+pub fn short_time(_: f64) -> String {
+    "now".into()
 }

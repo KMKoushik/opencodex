@@ -14,6 +14,7 @@ use raw_window_handle::RawWindowHandle;
 use std::{cell::RefCell, collections::VecDeque};
 
 mod delegate;
+mod local_pages;
 use delegate::{Delegate, Shared};
 
 const BRIDGE: &str = include_str!("bridge.js");
@@ -48,6 +49,8 @@ struct Native {
     view: Retained<AnyObject>,
     container: Retained<AnyObject>,
     delegate: Retained<Delegate>,
+    _local_pages: Retained<local_pages::Handler>,
+    annotation_world: Retained<AnyObject>,
     monitor: Option<Retained<AnyObject>>,
     visible: bool,
 }
@@ -172,14 +175,21 @@ impl Surface {
             .as_deref()
             .ok_or("attach the surface before presenting")?;
         let options = self.options.borrow();
-        // Every surface has its own nonpersistent store. No cookies, cache, process pools or
-        // host script handlers are shared with a browser guest or another canvas.
         unsafe {
             let config = object(c"WKWebViewConfiguration");
-            let store: Retained<AnyObject> = msg_send![
-                AnyClass::get(c"WKWebsiteDataStore").unwrap(),
-                nonPersistentDataStore
-            ];
+            let local_pages = local_pages::Handler::new(self.shared.navigation.files.clone());
+            let _: () = msg_send![&*config,setURLSchemeHandler:&*local_pages,forURLScheme:&*NSString::from_str("opencodex-preview")];
+            let store: Retained<AnyObject> = if options.persistent {
+                msg_send![
+                    AnyClass::get(c"WKWebsiteDataStore").unwrap(),
+                    defaultDataStore
+                ]
+            } else {
+                msg_send![
+                    AnyClass::get(c"WKWebsiteDataStore").unwrap(),
+                    nonPersistentDataStore
+                ]
+            };
             let _: () = msg_send![&*config, setWebsiteDataStore: &*store];
             let delegate = Delegate::new(self.shared.clone());
             let controller: *mut AnyObject = msg_send![&*config, userContentController];
@@ -230,6 +240,8 @@ impl Surface {
                 view,
                 container,
                 delegate,
+                _local_pages: local_pages,
+                annotation_world: msg_send![AnyClass::get(c"WKContentWorld").unwrap(),worldWithName:&*NSString::from_str("OpenCodex annotations")],
                 monitor,
                 visible: true,
             });
@@ -322,6 +334,45 @@ impl Surface {
         }
         self.load(Content::Url(url.into()))
     }
+    pub fn load_local_file(&self, url: &str, root: &str) -> Result<(), String> {
+        if self.options.borrow().bridge {
+            return Err("Local pages cannot use the canvas bridge".into());
+        }
+        let file = url::Url::parse(url).map_err(|e| e.to_string())?;
+        let root = url::Url::parse(root).map_err(|e| e.to_string())?;
+        if file.scheme() != "file"
+            || root.scheme() != "file"
+            || !root.as_str().ends_with('/')
+            || !file.as_str().starts_with(root.as_str())
+        {
+            return Err("Invalid local page grant".into());
+        }
+        let mut grants = self.shared.navigation.files.borrow_mut();
+        let token = if let Some((token, _)) = grants.iter().find(|(_, r)| r == root.as_str()) {
+            token.clone()
+        } else {
+            if grants.len() >= 12 {
+                grants.remove(0);
+            }
+            let token = unsafe {
+                let uuid: Retained<AnyObject> = msg_send![AnyClass::get(c"NSUUID").unwrap(), UUID];
+                string(msg_send![&*uuid, UUIDString]).to_ascii_lowercase()
+            };
+            grants.push((token.clone(), root.to_string()));
+            token
+        };
+        drop(grants);
+        let mut target =
+            url::Url::parse(&format!("opencodex-preview://{token}/")).map_err(|e| e.to_string())?;
+        target.set_path(
+            file.path()
+                .strip_prefix(root.path())
+                .ok_or("Invalid preview file")?,
+        );
+        target.set_query(file.query());
+        target.set_fragment(file.fragment());
+        self.load(Content::Url(target.into()))
+    }
     pub fn load_html(&self, html: &str, base: Option<&str>) -> Result<(), String> {
         if let Some(base) = base {
             if self.shared.navigation.decide(base, true) != Decision::Allow {
@@ -375,10 +426,28 @@ impl Surface {
         }
     }
     pub fn state(&self) -> PageState {
-        self.shared.state.borrow().clone()
+        let mut state = self.shared.state.borrow().clone();
+        state.url = local_pages::display(&self.shared.navigation.files.borrow(), &state.url);
+        state
     }
     pub fn drain_events(&self) -> Vec<Event> {
-        self.shared.events.borrow_mut().drain(..).collect()
+        self.shared
+            .events
+            .borrow_mut()
+            .drain(..)
+            .map(|event| match event {
+                Event::Changed(mut state) => {
+                    state.url =
+                        local_pages::display(&self.shared.navigation.files.borrow(), &state.url);
+                    Event::Changed(state)
+                }
+                Event::NewWindow(url) => Event::NewWindow(local_pages::display(
+                    &self.shared.navigation.files.borrow(),
+                    &url,
+                )),
+                event => event,
+            })
+            .collect()
     }
     pub fn focus(&self, web: bool) {
         let parent = self.parent.borrow();
@@ -433,7 +502,33 @@ impl Surface {
             let _: () = msg_send![&*n.view, evaluateJavaScript: &*NSString::from_str(js), completionHandler: &*block];
         }
     }
-    pub fn snapshot(&self, callback: SnapshotCompletion) {
+    pub fn evaluate_isolated(&self, js: &str, callback: Completion) {
+        let native = self.native.borrow();
+        let Some(n) = native.as_ref() else {
+            callback(Err("webview not created".into()));
+            return;
+        };
+        let callback = RefCell::new(Some(callback));
+        let block = RcBlock::new(move |value: *mut AnyObject, error: *mut AnyObject| {
+            let result = unsafe {
+                if !error.is_null() {
+                    Err(string(msg_send![error, localizedDescription]))
+                } else if value.is_null() {
+                    Ok("null".into())
+                } else {
+                    Ok(string(msg_send![value, description]))
+                }
+            };
+            if let Some(callback) = callback.borrow_mut().take() {
+                callback(result);
+            }
+        });
+        unsafe {
+            let args = object(c"NSDictionary");
+            let _: () = msg_send![&*n.view,callAsyncJavaScript:&*NSString::from_str(js),arguments:&*args,inFrame:std::ptr::null::<AnyObject>(),inContentWorld:&*n.annotation_world,completionHandler:&*block];
+        }
+    }
+    pub fn snapshot(&self, crop: Option<Rect>, callback: SnapshotCompletion) {
         let native = self.native.borrow();
         let Some(n) = native.as_ref() else {
             callback(Err("webview not created".into()));
@@ -455,7 +550,11 @@ impl Surface {
             }
         });
         unsafe {
-            let _: () = msg_send![&*n.view, takeSnapshotWithConfiguration: std::ptr::null::<AnyObject>(), completionHandler: &*block];
+            let config = object(c"WKSnapshotConfiguration");
+            if let Some(crop) = crop {
+                let _: () = msg_send![&*config,setRect:rect(crop)];
+            }
+            let _: () = msg_send![&*n.view, takeSnapshotWithConfiguration: &*config, completionHandler: &*block];
         }
     }
     pub fn native_frame(&self) -> Option<Rect> {
@@ -472,6 +571,23 @@ impl Surface {
             let hidden: bool = msg_send![&*n.view, isHidden];
             !hidden
         })
+    }
+}
+pub fn updated_label(milliseconds: f64) -> String {
+    date_label(milliseconds, "MMMdjmm")
+}
+pub fn short_time(milliseconds: f64) -> String {
+    date_label(milliseconds, "jmm")
+}
+fn date_label(milliseconds: f64, template: &str) -> String {
+    if !milliseconds.is_finite() {
+        return String::new();
+    }
+    unsafe {
+        let formatter = object(c"NSDateFormatter");
+        let _: () = msg_send![&*formatter,setLocalizedDateFormatFromTemplate:&*NSString::from_str(template)];
+        let date: Retained<AnyObject> = msg_send![AnyClass::get(c"NSDate").unwrap(),dateWithTimeIntervalSince1970:milliseconds/1000.0];
+        string(msg_send![&*formatter,stringFromDate:&*date])
     }
 }
 

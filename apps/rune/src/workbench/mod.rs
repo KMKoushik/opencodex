@@ -15,7 +15,12 @@ mod editor;
 mod links;
 pub use details::view as details_view;
 pub use links::file_target;
+pub(crate) mod panel_tabs;
+mod reader_requests;
 mod sessions;
+mod side_composer;
+mod side_restore;
+mod subagents;
 #[cfg(test)]
 mod tests;
 mod view;
@@ -25,6 +30,7 @@ pub use documents::button as comment_button;
 use rune::{TextEdit, Waker};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
+pub(crate) use view::empty_state;
 pub use view::layout;
 use worker::{Operation, Request, Worker};
 
@@ -114,6 +120,7 @@ pub struct Workbench {
     pub selected: Option<usize>,
     pub split: bool,
     pub agents: Vec<Value>,
+    pub agents_running_only: bool,
     pub agent_cursor: Option<String>,
     pub sides: Vec<Value>,
     pub reader: Option<String>,
@@ -121,11 +128,16 @@ pub struct Workbench {
     pub side_drafts: BTreeMap<String, TextEdit>,
     pub side_revisions: BTreeMap<String, u64>,
     pub side_sending: Option<(String, u64)>,
+    pub side_context_revision: Option<u64>,
+    pub side_model_open: bool,
+    pub side_thinking_open: bool,
+    pub side_model_search: TextEdit,
     pub side_quote: Option<String>,
     pub side_origin: Option<(String, u64)>,
     pub details: BTreeMap<String, Value>,
     pub reader_worker: Option<oc_gateway::Worker>,
     pub reader_chat: crate::chat::Chat,
+    requests: reader_requests::Requests,
 }
 impl Default for Workbench {
     fn default() -> Self {
@@ -165,6 +177,7 @@ impl Default for Workbench {
             selected: None,
             split: false,
             agents: Vec::new(),
+            agents_running_only: false,
             agent_cursor: None,
             sides: Vec::new(),
             reader: None,
@@ -172,11 +185,16 @@ impl Default for Workbench {
             side_drafts: Default::default(),
             side_revisions: Default::default(),
             side_sending: None,
+            side_context_revision: None,
+            side_model_open: false,
+            side_thinking_open: false,
+            side_model_search: TextEdit::new(""),
             side_quote: None,
             side_origin: None,
             details: Default::default(),
             reader_worker: None,
             reader_chat: Default::default(),
+            requests: Default::default(),
         }
     }
 }
@@ -241,10 +259,23 @@ impl State {
             return;
         }
         self.workbench.open = !self.workbench.open || self.workbench.panel != panel;
+        if self.workbench.panel != panel {
+            self.workbench.reader = None;
+        }
         self.workbench.panel = panel;
-        self.workbench.reader = None;
         if self.workbench.open {
             self.load_panel(false);
+            if panel == Panel::Side && self.workbench.reader.is_none() {
+                if let Some(id) = self
+                    .workbench
+                    .sides
+                    .last()
+                    .and_then(|v| v["id"].as_str())
+                    .map(str::to_owned)
+                {
+                    self.open_workspace_reader(id);
+                }
+            }
         }
     }
     pub fn workspace_request(&mut self, tag: String, op: Operation) {
@@ -443,6 +474,7 @@ pub fn poll(s: &mut State, clock: f64, _tx: &mut rune::Tx) -> bool {
         .as_ref()
         .map(Worker::take)
         .unwrap_or_default();
+    reader_requests::poll(s);
     let mut changed = preview::poll(s, _tx);
     if let Some(data) = s
         .workbench
@@ -559,6 +591,9 @@ fn receive(s: &mut State, tag: &str, p: worker::Payload) {
         s.workbench.apps_menu = false;
         return;
     }
+    if tag.starts_with("reader-") && reader_requests::receive(s, tag, p.value.clone()) {
+        return;
+    }
     if tag.starts_with("detail-") {
         s.workbench.details.insert(tag.into(), p.value);
         return;
@@ -626,6 +661,23 @@ fn receive(s: &mut State, tag: &str, p: worker::Payload) {
             .map(str::to_owned);
     } else if tag == "sides" {
         s.workbench.sides = p.value.as_array().cloned().unwrap_or_default();
+        if s.workbench.panel == Panel::Side
+            && !s
+                .workbench
+                .sides
+                .iter()
+                .any(|v| v["id"].as_str() == s.workbench.reader.as_deref())
+        {
+            if let Some(id) = s
+                .workbench
+                .sides
+                .last()
+                .and_then(|v| v["id"].as_str())
+                .map(str::to_owned)
+            {
+                s.open_workspace_reader(id);
+            }
+        }
     } else if tag.starts_with("reader:") {
         s.workbench.messages = p.value["data"]
             .as_array()
@@ -636,11 +688,21 @@ fn receive(s: &mut State, tag: &str, p: worker::Payload) {
     } else if let Some(id) = tag.strip_prefix("side-delete:") {
         s.workbench.sides.retain(|v| v["id"] != id);
         s.workbench.side_drafts.remove(id);
+        s.composer.drafts.entries.remove(id);
         s.workbench.side_revisions.remove(id);
         s.workbench.delete_side = None;
         if s.workbench.reader.as_deref() == Some(id) {
             s.workbench.reader = None;
             s.workbench.reader_chat = Default::default();
+            if let Some(next) = s
+                .workbench
+                .sides
+                .last()
+                .and_then(|v| v["id"].as_str())
+                .map(str::to_owned)
+            {
+                s.open_workspace_reader(next);
+            }
         }
     } else if tag == "side-create" {
         let auto_send = s.workbench.side_origin.is_some();
@@ -662,7 +724,36 @@ fn receive(s: &mut State, tag: &str, p: worker::Payload) {
         }
     } else if tag == "side-send" {
         if let Some((id, revision)) = s.workbench.side_sending.take() {
-            if s.workbench.side_revisions.get(&id).copied().unwrap_or(0) == revision {
+            if let Some(restored) = p.side_restored {
+                match restored {
+                    Ok(restored) => {
+                        let context = s.workbench.side_context_revision.take();
+                        if s.workbench.side_revisions.get(&id).copied().unwrap_or(0) == revision
+                            && context == Some(s.composer.drafts.get(&id).revision)
+                        {
+                            s.workbench
+                                .side_drafts
+                                .insert(id.clone(), TextEdit::new(restored.text));
+                            let draft = s.composer.drafts.edit(&id);
+                            draft.attachments = restored.attachments;
+                            draft.images = vec![None; draft.attachments.len()];
+                            draft.mentions = restored.mentions;
+                            draft.comments.clear();
+                            s.composer.drafts.touch(&id);
+                        }
+                    }
+                    Err(error) => s.workbench.error = Some(error),
+                }
+                s.open_workspace_reader(id);
+                return;
+            }
+            let context_revision = s.workbench.side_context_revision.take();
+            if s.workbench.side_revisions.get(&id).copied().unwrap_or(0) == revision
+                && context_revision == Some(s.composer.drafts.get(&id).revision)
+            {
+                s.composer
+                    .drafts
+                    .acknowledge(&id, context_revision.unwrap());
                 s.workbench
                     .side_drafts
                     .insert(id.clone(), TextEdit::new(""));
@@ -727,7 +818,12 @@ pub fn capture(s: &mut State) -> Result<(), String> {
         )?;
         receive(s, "changes", value);
     }
-    if let Some(path) = OPTIONS.get().unwrap().file.clone() {
+    let capture_path = OPTIONS.get().unwrap().file.clone().or_else(|| {
+        (panel == Panel::Side)
+            .then(|| s.workbench.reader.clone())
+            .flatten()
+    });
+    if let Some(path) = capture_path {
         if matches!(panel, Panel::Files | Panel::Changes) {
             documents::capture(s, &url, &directory, &path, panel == Panel::Changes)?;
         } else if matches!(panel, Panel::Side | Panel::Subagents) {

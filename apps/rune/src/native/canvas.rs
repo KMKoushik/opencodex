@@ -357,6 +357,7 @@ pub fn event(s: &mut State, event: Event, tx: &mut Tx) {
                 return;
             };
             match m["type"].as_str().unwrap_or("") {
+                "annotation" => super::annotations::canvas_result(s, m["result"].clone()),
                 "ready" => {
                     c.ready = true;
                     c.initialized = false;
