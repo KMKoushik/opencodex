@@ -12,6 +12,7 @@ pub struct Preferences {
     pub closed_projects: Vec<String>,
     pub sidebar_width: Option<f32>,
     pub sidebar_closed: bool,
+    pub workbench_width: Option<f32>,
     pub focus: bool,
     pub dark: Option<bool>,
     pub preset: String,

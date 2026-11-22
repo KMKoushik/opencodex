@@ -16,22 +16,17 @@ use state::Menu;
 
 pub fn view(s: &State, width: f32, height: f32) -> El {
     if s.selected.is_some() {
-        return row()
-            .w_full()
-            .h_full()
-            .min_h(0.0)
-            .child(
-                col()
-                    .key("chat")
-                    .grow(1.0)
-                    .h_full()
-                    .min_w(0.0)
-                    .min_h(0.0)
-                    .items_center()
-                    .child(crate::chat::view(s, width - 44.0))
-                    .child(area(s, width - 44.0)),
-            )
-            .child(crate::chat::rail(s));
+        return row().w_full().h_full().min_h(0.0).child(
+            col()
+                .key("chat")
+                .grow(1.0)
+                .h_full()
+                .min_w(0.0)
+                .min_h(0.0)
+                .items_center()
+                .child(crate::chat::view(s, width))
+                .child(area(s, width)),
+        );
     }
     let t = &s.theme;
     let column = (width - if s.selected.is_some() { 44.0 } else { 0.0 }).min(768.0);
@@ -198,7 +193,13 @@ pub fn area(s: &State, width: f32) -> El {
                 .map(|m| m.provider_id.as_str())
                 .unwrap_or("opencode"),
         ))
-        .child(label(t, s.model_name(), 12.5, 500.0, "text"))
+        .child(label(
+            t,
+            if inner < 320.0 { "" } else { s.model_name() },
+            12.5,
+            500.0,
+            "text",
+        ))
         .child(icon(&i::DOWN, 14.0).color(t.c("text-tertiary")))
         .key("model-picker")
         .role("button")

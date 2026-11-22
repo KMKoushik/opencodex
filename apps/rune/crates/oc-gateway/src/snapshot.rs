@@ -15,6 +15,8 @@ pub struct Snapshot {
     pub models: BTreeMap<String, ModelCatalog>,
     pub branches: BTreeMap<String, String>,
     pub attention: BTreeMap<String, String>,
+    pub workspace_revision: u64,
+    pub workspace_directory: Option<String>,
 }
 impl Snapshot {
     pub async fn load(client: &Gateway) -> Result<Self, String> {
@@ -81,8 +83,16 @@ impl Snapshot {
         }
         Ok(())
     }
-    /// Returns true only for sidebar-visible changes. Token deltas never publish or wake UI.
+    /// Returns true for sidebar/workspace changes. Token deltas never publish or wake UI.
     pub fn reduce(&mut self, event: Event) -> bool {
+        if matches!(
+            event.r#type.as_str(),
+            "filesystem.changed" | "vcs.branch.updated"
+        ) {
+            self.workspace_revision = self.workspace_revision.wrapping_add(1);
+            self.workspace_directory = event.location.as_ref().map(|l| l.directory.clone());
+            return true;
+        }
         let data = &event.data;
         let Some(id) = data["sessionID"].as_str() else {
             return false;

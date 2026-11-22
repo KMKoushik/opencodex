@@ -8,12 +8,14 @@ use oc_gateway::{
 };
 use rune::{El, GrowthSpec, ScrollSpec, TextStyle, col, el, icon, row, text};
 use std::{cell::Cell, collections::BTreeMap, rc::Rc, sync::Arc};
-mod icons;
+pub(crate) mod icons;
 mod markdown;
 mod media;
 pub mod preview;
 pub mod probe;
+mod reader;
 mod tools;
+pub use reader::reader;
 
 pub struct Chat {
     pub data: Arc<Messages>,
@@ -329,8 +331,8 @@ fn history(s: &State) -> El {
         })
 }
 fn width_for_row(s: &State) -> f32 {
-    rune::memo::layout_size("main")
-        .map(|size| size[0] - 44.0)
+    rune::memo::layout_size("chat")
+        .map(|size| size[0])
         .unwrap_or(
             s.window_size.0
                 - if s.prefs.sidebar_closed {
@@ -404,6 +406,24 @@ fn render_row(s: &State, r: &Row) -> El {
                 }
                 Kind::Message(m) if m.r#type == "user" => {
                     let mut bubble = col().w_full().items_end().gap(8.0);
+                    if let Some(side) = m
+                        .fields
+                        .get("metadata")
+                        .and_then(|v| v["opencodexFromSideChat"]["sessionID"].as_str())
+                    {
+                        let side = side.to_owned();
+                        bubble = bubble.child(
+                            label(t, "From side chat", 11.0, 400.0, "text-tertiary")
+                                .role("button")
+                                .focusable(true)
+                                .on_press(move |s: &mut State| {
+                                    s.workbench.open = true;
+                                    s.workbench.panel = crate::workbench::Panel::Side;
+                                    s.load_panel(false);
+                                    s.open_workspace_reader(side.clone());
+                                }),
+                        );
+                    }
                     if let Some(files) = m.fields.get("files").and_then(serde_json::Value::as_array)
                     {
                         for file in files {
@@ -572,49 +592,17 @@ pub fn toolbar(s: &State) -> El {
         )
         .child(
             icon_button(t, &icons::INFO, "Session details")
-                .on_press(|s: &mut State| s.chat.details = !s.chat.details),
+                .on_press(|s: &mut State| s.toggle_session_details()),
         )
         .child(
-            icon_button(t, &icons::PANEL, "Toggle workspace")
-                .help("Workspace panels — milestone 3"),
+            icon_button(t, &icons::PANEL, "Toggle workspace").on_press(|s: &mut State| {
+                let panel = s.workbench.panel;
+                s.select_panel(panel);
+            }),
         )
 }
 fn details(s: &State, width: f32) -> El {
-    let t = &s.theme;
-    let mut view = col()
-        .w(288.0)
-        .absolute((width - 300.0).max(12.0), 8.0)
-        .radius(12.0)
-        .padding(16.0)
-        .gap(8.0)
-        .fill(t.c("elevated"))
-        .border(1.0, t.c("border-heavy"));
-    if let Some(info) = &s.chat.data.info {
-        view = view
-            .child(label(t, "Session details", 14.0, 600.0, "text"))
-            .child(label(
-                t,
-                &info.location.directory,
-                12.0,
-                400.0,
-                "text-secondary",
-            ));
-        if let Some(parent) = &info.parent_id {
-            view = view.child(label(
-                t,
-                "Subagent conversation",
-                12.0,
-                500.0,
-                "text-secondary",
-            ));
-            let parent = parent.clone();
-            view = view.child(
-                label(t, "Back to parent", 12.0, 400.0, "link")
-                    .on_press(move |s: &mut State| s.open_session(Some(parent.clone()))),
-            );
-        }
-    }
-    view
+    crate::workbench::details_view(s, width)
 }
 fn format_duration(ms: f64) -> String {
     let seconds = (ms / 1000.0).round() as u64;
@@ -634,34 +622,4 @@ fn format_duration(ms: f64) -> String {
             format!("{}h {minutes}m", seconds / 3600)
         }
     }
-}
-pub fn rail(s: &State) -> El {
-    let t = &s.theme;
-    let mut rail = col()
-        .w(44.0)
-        .h_full()
-        .px(4.0)
-        .pb(6.0)
-        .gap(4.0)
-        .border_sides([0.0, 0.0, 0.0, 1.0], t.c("border"))
-        .border_layout();
-    for (glyph, name) in [
-        (&icons::OPEN, "Open in app"),
-        (&icons::FILES, "Files"),
-        (&icons::CHANGES, "Changes"),
-        (&icons::SUBAGENTS, "Subagents"),
-        (&icons::CHAT, "Side chats"),
-        (&icons::CANVAS, "Canvas"),
-        (&icons::TERMINAL, "Terminal"),
-    ] {
-        rail = rail.child(
-            el().size(36.0, 36.0)
-                .center()
-                .radius(10.0)
-                .hover(t.c("hover"))
-                .child(icon(glyph, 18.0).color(t.c("text-tertiary")))
-                .help(format!("{name} — workspace milestone")),
-        );
-    }
-    rail
 }

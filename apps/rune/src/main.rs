@@ -15,6 +15,7 @@ mod shortcuts;
 mod sidebar;
 mod tasks;
 mod theme;
+mod workbench;
 
 #[cfg(test)]
 mod runtime_tests;
@@ -37,6 +38,9 @@ struct Options {
     work: Option<String>,
     composer_state: String,
     page: String,
+    panel: Option<String>,
+    file: Option<String>,
+    size: (f32, f32),
 }
 static OPTIONS: OnceLock<Options> = OnceLock::new();
 struct State {
@@ -58,6 +62,7 @@ struct State {
     history_index: usize,
     composer: composer::state::Composer,
     docks: docks::Docks,
+    workbench: workbench::Workbench,
     error: Option<String>,
     window_size: (f32, f32),
     waker: Option<rune::Waker>,
@@ -93,8 +98,9 @@ impl State {
             history_index: 0,
             composer: Default::default(),
             docks: Default::default(),
+            workbench: Default::default(),
             error: None,
-            window_size: (1240.0, 840.0),
+            window_size: options.size,
             waker: None,
             chat_settle_due: None,
             chat_settled: false,
@@ -137,6 +143,7 @@ impl State {
         self.select_session(id);
     }
     fn select_session(&mut self, id: Option<String>) {
+        workbench::reset(self);
         self.chat = chat::Chat::default();
         self.composer.menu = None;
         self.docks = Default::default();
@@ -152,6 +159,9 @@ impl State {
             });
         }
         self.selected = id;
+        if self.workbench.open {
+            self.load_panel(false);
+        }
         self.refresh_docks();
     }
     fn navigate(&mut self, forward: bool) {
@@ -244,16 +254,22 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
     if let Some(p) = s.project() {
         toolbar = toolbar
             .child(rune::icon(&icons::FOLDER, 14.0).color(t.c("text-secondary")))
-            .child(sidebar::label(
-                t,
-                p.display_name(),
-                13.0,
-                400.0,
-                "text-secondary",
-            ))
+            .child(
+                sidebar::label(t, p.display_name(), 13.0, 400.0, "text-secondary")
+                    .truncate()
+                    .max_w(if s.workbench.open && w - width - s.panel_width() < 500.0 {
+                        12.0
+                    } else {
+                        180.0
+                    }),
+            )
             .child(sidebar::label(t, "/", 13.0, 400.0, "text-tertiary"));
     }
-    toolbar = toolbar.child(sidebar::label(t, title, 13.0, 500.0, "text"));
+    toolbar = toolbar.child(
+        sidebar::label(t, title, 13.0, 500.0, "text")
+            .truncate()
+            .min_w(0.0),
+    );
     if s.selected.is_some() {
         toolbar = toolbar.child(el().grow(1.0)).child(chat::toolbar(s));
     }
@@ -303,7 +319,11 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
             {
                 pages::offline::view(s)
             } else if s.pages.route == pages::Route::Chat {
-                composer::view(s, w - width, h)
+                composer::view(
+                    s,
+                    w - width - s.panel_width() - if s.selected.is_some() { 44.0 } else { 0.0 },
+                    h,
+                )
             } else {
                 pages::view(s)
             },
@@ -331,7 +351,11 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
             || sidebar::view(s),
         ));
     }
-    shell = shell.child(main);
+    shell = shell.child(if s.pages.route == pages::Route::Chat {
+        workbench::layout(s, main, cx)
+    } else {
+        main
+    });
     if let Some(message) = &s.menus.toast {
         shell = shell.child(
             sidebar::label(t, message, 13.0, 400.0, "text")
@@ -490,6 +514,10 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
         changed = true;
         tx.instant();
     }
+    if workbench::poll(s, clock, tx) {
+        changed = true;
+        tx.instant();
+    }
     changed
 }
 pub fn unix_ms() -> u128 {
@@ -547,6 +575,14 @@ fn main() {
             work: value("--work"),
             composer_state: value("--composer-state").unwrap_or_default(),
             page: value("--page").unwrap_or_default(),
+            panel: value("--panel"),
+            file: value("--file"),
+            size: value("--size")
+                .and_then(|v| {
+                    let (w, h) = v.split_once('x')?;
+                    Some((w.parse().ok()?, h.parse().ok()?))
+                })
+                .unwrap_or((1240.0, 840.0)),
         })
         .ok();
     if let Some(id) = value("--profile-chat") {
@@ -685,6 +721,9 @@ fn main() {
             }
             composer::capture::setup(&mut s);
             settings::capture(&mut s);
+            if let Err(error) = workbench::capture(&mut s) {
+                s.error = Some(error);
+            }
             sidebar::rebuild(&mut s);
         }
         s
@@ -703,6 +742,7 @@ fn main() {
                 Some(url) => match Gateway::new(url, None) {
                     Ok(client) => {
                         composer::state::start(s, client.clone(), wake.clone());
+                        workbench::start(s, client.clone(), wake.clone());
                         s.worker =
                             Some(Worker::start(client, s.prefs.project.clone(), move || {
                                 wake()

@@ -52,6 +52,12 @@ pub fn local(s: &mut State) -> bool {
         return true;
     }
     let revision = s.draft().revision;
+    if name == "side" {
+        s.workbench.side_origin = Some((id, revision));
+        s.create_workspace_side(args);
+        s.composer.menu = None;
+        return true;
+    }
     if name == "new" {
         s.composer.drafts.acknowledge(&id, revision);
         s.open_session(None);

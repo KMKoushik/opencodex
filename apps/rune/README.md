@@ -197,15 +197,15 @@ The transcript occupies the remaining bounded height above the composer or reque
 `State::open_session` and
 `State::chat.data` expose the selected session, native info, running state and errors;
 `State::chat.read_only()` distinguishes native subagent readers from side chats. Workspace
-rail entries remain visual shell slots, not implemented panels; thread actions, full session
+rail entries now open native workbench panels; thread actions, full session
 details and file-link workbench routing are not complete. Rune's built-in Markdown has different
 paragraph/list spacing and numbered-marker baselines from the web, so these captures are not
-pixel-identical. A structured standalone diff editor is still a workspace feature; transcript
-diff fences and tool outputs are readable here.
+pixel-identical. The structured diff reader lives in the native workbench; transcript
+diff fences and tool outputs remain readable here.
 
 - M4 owns Tasks, Apps, Settings, search/history menus, and embedded HTML surfaces; those
   navigation rows are visual shell entries only in M1.
-- `/side` opens the native side session as a regular chat;
+- `/side` opens the native Side chat workspace panel;
   conversation `/undo` restores text but not the original attachment context.
 - Mention search uses a prefetched bounded index instead of the web's debounced live search.
   It excludes `.git`, `node_modules`, and `target`, and can be stale until the project is reloaded.
@@ -264,3 +264,58 @@ Images are intentionally ignored and remain under `goldens/pages/`. Representati
 - `pair-apps-empty-light-1600x1000-reviewed.png`
 
 Testing used only `/tmp/ocr-pages`, service port 4951 and gateway port 4481.
+## Native workbench
+
+`src/workbench` owns the 44-point rail, spring-sized inspector (340-point minimum,
+820-point preferred width), keyboard/drag splitter, expanded mode, document tabs, lazy
+directory listings and debounced gateway file search. The document surface supports
+virtualized text, images, and revision-safe editing/saving through the gateway's existing
+version-preconditioned PUT. Dirty buffers survive navigation and failed/conflicting saves.
+The Changes surface uses Rune-kit's virtualized unified/split diff, word changes, syntax,
+selection/copy, and a full-context request. Diff parsing, pairing, highlighting and image
+decoding are worker tasks. File/diff GET responses are capped at 16 MiB; twelve documents
+and 64 MiB retained data, 128 folders and 50,000 cached directory entries bound memory.
+Filesystem/branch events invalidate workspace data; reconnect refreshes authoritative data.
+Token events do not refetch files.
+
+Subagents and Side chat panels list native sessions and read live projected conversations.
+The compact side composer sends through the existing prompt route; `/side [question]`
+creates a side fork and sends the optional question. Native side history excludes messages
+predating the fork. Main-chat messages marked with `opencodexFromSideChat` link back to
+the panel. The session popover reads context, checkout, changes, cost, MCP and skills.
+
+Embedding hooks in `src/workbench/view.rs` are:
+
+```rust,ignore
+fn canvas_host(s: &State, cx: &mut rune::Cx<State>) -> rune::El
+fn terminal_host(s: &State, cx: &mut rune::Cx<State>) -> rune::El
+```
+
+Their keyed, bounded `canvas-host` / `terminal-host` slots are ready for the separately
+owned native crates. Terminal integration should call `TerminalView::element(key, cx,
+accessor)` there, `poll_tx(clock, tx)` from app polling, and its focused `ime()` handler.
+No placeholder claims to be a connected terminal or loaded web page.
+
+Headless capture accepts `--panel files|changes|subagents|side-chat|canvas|terminal` and
+`--file PATH` to open a document (or a child session ID for a conversation reader).
+`tools/workbench-compare.mjs` captures both renderers against the same isolated fixture,
+both themes and sizes; use `OPENCODEX_FIXTURE`, `OPENCODEX_GATEWAY` and optional
+`OCR_CAPTURE_VERSION`. Captures live in ignored `goldens/workbench`.
+
+Two permanent tests cover captured-save acknowledgement/navigation retention and bounded
+virtual scene sizes. A removed real-gateway scripted runtime smoke also verified rail/file
+opening, safe writes, 409 conflict draft retention, side creation/send and diff opening.
+Seven alternating `--profile perf` samples measured 5,000-file first CPU frames at
+**2.523 ms median** (2.456–15.073), 2,000 changed source-line diff first CPU frames at
+**44.942 ms** (41.932–54.971), and worker parsing/word pairing/highlighting at
+**1.287 ms** (1.225–2.485). These synthetic headless CPU numbers exclude network,
+GPU upload/presentation and OS input; the diff expands to 4,000 added/removed rows.
+
+This is functional workbench coverage, not 1:1 completion: editing above 128 KiB remains
+read-only; image zoom, rich media/Markdown previews, review comments, pinned/preview tab
+semantics, per-session panel layouts, application discovery menus, full session-cost
+aggregation, subagent tool-detail disclosures, side attachments/request docks/deletion,
+and exact typography/controls/empty-state parity remain. The first diff frame still has
+roughly 40 ms fixed overhead in Rune's layout/text path even for a tiny diff (view building
+itself was measured below 0.1 ms); native presentation and its precise cause remain
+unverified. No redraw loop, loading delay or optimistic performance marker hides this.
