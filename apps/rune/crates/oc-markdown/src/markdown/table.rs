@@ -299,11 +299,17 @@ impl Renderer {
         let head_font = self.head_font();
         let body_font = self.body_font();
         let head_pad = self.head_pad();
-        let build_head = || self.table_row(&t.head, head_maps, t, &cols, widths, head_font, s.table_head_text, head_pad, "columnheader").key("th");
+        let collapsed_borders = self.collapsed_table_borders();
+        let border_row = |row: El, header: bool| {
+            if !collapsed_borders { return row; }
+            row.child(el().key("border-bottom").pin(Some(0.0), None, Some(0.0), Some(-0.5)).h(1.0)
+                .fill(if header { s.table_head_rule.unwrap_or(s.table_rule) } else { s.table_rule }).a11y_hidden())
+        };
+        let build_head = || border_row(self.table_row(&t.head, head_maps, t, &cols, widths, head_font, s.table_head_text, head_pad, "columnheader").key("th"), true);
         let rule = |key: String| el().key(key).w_full().h(if s.web_layout { 1.0 } else { 0.5 }).fill(s.table_rule).a11y_hidden();
         let row_at = |i: usize, cells: &[Inline]| {
             let rmap = row_maps.get(i).map_or(&[][..], Vec::as_slice);
-            self.table_row(cells, rmap, t, &cols, widths, body_font, s.text, s.table_pad, "cell").key(format!("r{i}"))
+            border_row(self.table_row(cells, rmap, t, &cols, widths, body_font, s.text, s.table_pad, "cell").key(format!("r{i}")), false)
         };
         if let Some(body) = &s.table_body {
             // The frame doesn't clip, so the card's shadow shows past it; the header row and
@@ -389,9 +395,14 @@ impl Renderer {
                     }),
                     None => row_at(i, cells),
                 };
-                frame = frame.child(sep).child(row);
+                if !collapsed_borders { frame = frame.child(sep); }
+                frame = frame.child(row);
             }
-            if ring.is_none() {
+            if collapsed_borders {
+                // The outer half of the final collapsed border belongs to the
+                // table, not its final row. Internal borders are shared halves.
+                frame = frame.pb(0.5);
+            } else if ring.is_none() {
                 let end = rule("s-end".into());
                 frame = frame.child(match s.table_head_rule { Some(c) if t.rows.is_empty() => end.fill(c), _ => end });
             }
@@ -427,6 +438,7 @@ impl Renderer {
         let total: f32 = cols.natural.iter().sum();
         let mut r = row().role("row").w_full();
         let table_dir = super::bidi::table_dir(t);
+        let collapsed_borders = self.collapsed_table_borders();
         for (j, (natural, min)) in cols.natural.iter().zip(&cols.min).enumerate() {
             let inl = cells.get(j).unwrap_or(&empty);
             let align = if self.s.table_align { t.align.get(j).copied().unwrap_or_default() } else { Align::Start };
@@ -464,10 +476,17 @@ impl Renderer {
             r = r.child(
                 // Clipped: a word wider than a shrunk column (or a row still streaming in) must
                 // not run into the next column.
-                cell.pl(self.pad_left(j, pad_x)).pr(pad_x).py(pad_y).clip_soft(0.0).child(selected),
+                cell.pl(self.pad_left(j, pad_x)).pr(pad_x)
+                    .pt(pad_y + if collapsed_borders && cell_role == "cell" { 0.5 } else { 0.0 })
+                    .pb(pad_y + if collapsed_borders { 0.5 } else { 0.0 })
+                    .clip_soft(0.0).child(selected),
             );
         }
         r
+    }
+
+    fn collapsed_table_borders(&self) -> bool {
+        self.s.web_layout && self.s.table_outline.is_none() && self.s.table_frame.is_none() && self.s.table_body.is_none()
     }
 
     /// Column widths from the header and every finished row, cached by content and font. A last

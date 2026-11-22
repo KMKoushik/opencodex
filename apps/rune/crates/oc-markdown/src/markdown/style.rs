@@ -114,6 +114,7 @@ pub(super) struct TaskPaint {
     pub(super) size: f32,
     pub(super) left: f32,
     pub(super) top: Option<f32>,
+    pub(super) inline_height: Option<f32>,
 }
 
 /// A block quote's rule and text (see [`MarkdownStyle::quote`]).
@@ -255,6 +256,7 @@ impl MarkdownStyle {
                 size: 16.0,
                 left: 8.0,
                 top: None,
+                inline_height: None,
             },
             diagram: DiagramPaint {
                 text: c.text_base,
@@ -379,6 +381,13 @@ impl MarkdownStyle {
         (t.fill_on, t.border_on, t.mark, t.fill_off, t.border_off) = (fill_on, fill_on, mark, fill_off, border_off);
         self
     }
+    /// CSS replaced-element height, when an enclosing surface overrides the
+    /// checkbox input's height. The checkbox glyph stays centred inside it;
+    /// its bottom participates in the first line's baseline alignment.
+    pub fn task_inline_height(mut self, height: f32) -> Self {
+        self.task.inline_height = Some(height.max(0.0));
+        self
+    }
     pub fn rule(mut self, c: Color) -> Self {
         self.rule = c;
         self
@@ -403,6 +412,13 @@ impl MarkdownStyle {
     /// both, name `ui-monospace` in the mono slot of `AppSpec::families`.
     pub fn code_block_font(mut self, f: TextStyle) -> Self {
         self.code_block = f;
+        self
+    }
+    /// A CSS pre's inherited font forms a strut even when its code child uses
+    /// a smaller font. Union their baseline-aligned line boxes, rather than
+    /// treating the code child's line-height as the entire pre line.
+    pub fn code_block_strut(mut self, strut: TextStyle) -> Self {
+        self.code_block.line_height = super::render::code_line_height(self.code_block, strut);
         self
     }
     /// Inline code's size as a multiple of the surrounding text, and its weight (the family is
@@ -697,9 +713,9 @@ impl std::hash::Hash for MarkdownStyle {
             highlight_current_ring.map(|(c, w)| (c, f32_bits(w))),
         )
             .hash(state);
-        let TaskPaint { fill_on, border_on, border_off, fill_off, hover, focus_ring, mark, check, radius, motion, size, left, top } = task;
+        let TaskPaint { fill_on, border_on, border_off, fill_off, hover, focus_ring, mark, check, radius, motion, size, left, top, inline_height } = task;
         (fill_on, border_on, border_off, fill_off, hover, focus_ring, mark, check as *const Icon as usize, f32_bits(radius), f32_bits(motion.duration), f32_bits(motion.bounce)).hash(state);
-        (f32_bits(size), f32_bits(left), top.map(f32_bits)).hash(state);
+        (f32_bits(size), f32_bits(left), top.map(f32_bits), inline_height.map(f32_bits)).hash(state);
         let DiagramPaint {
             text,
             muted,

@@ -413,6 +413,8 @@ pub(super) fn conversation_mut(s: &mut State, reader: bool) -> &mut Chat {
 pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> El {
     let t = &s.theme;
     let chat = conversation(s, reader);
+    let side_chat = reader && !chat.read_only();
+    let inset = if side_chat { 16.0 } else { 24.0 };
     let padding = match &r.kind {
         Kind::Turn { .. } => 12.0,
         Kind::Activity { .. } => 8.0,
@@ -461,10 +463,11 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
                             s,
                             text,
                             message.time.completed.is_none() && !crate::docks::active(s),
-                            width - 48.0,
+                            width - 2.0 * inset,
                             &message_id,
                             ordinal,
                             if reader { "" } else { &r.id },
+                            reader,
                         )
                         .key(response_key.clone()),
                     );
@@ -549,9 +552,10 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
                                         .lh(s.prefs.chat_font_size.unwrap_or(14.0) * 1.625),
                                 )
                                 .color(t.c("text"))
+                                .exact_lines()
                                 .wrap()
                                 .selectable(true)
-                                .max_w(((width - 48.0) * 0.7).min(456.0))
+                                .max_w(if side_chat { width - 2.0 * inset } else { ((width - 2.0 * inset) * 0.7).min(456.0) })
                                 .px(12.0)
                                 .py(8.0)
                                 .radius(16.0)
@@ -683,7 +687,7 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
             col()
                 .key(r.id.clone())
                 .w(width)
-                .px(24.0)
+                .px(inset)
                 .pb(padding)
                 .min_w(0.0)
                 .child(content)

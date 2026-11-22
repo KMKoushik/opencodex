@@ -10,6 +10,7 @@ mod html;
 mod web_inline;
 
 pub(super) use code::code_overflows_at;
+pub(super) use web_inline::code_line_height;
 
 pub(super) struct Renderer {
     pub(super) s: MarkdownStyle,
@@ -169,9 +170,23 @@ pub(super) fn margins(b: &Block, s: &MarkdownStyle) -> (f32, f32) {
 /// vertical padding or border, so its first child's top margin and its last child's bottom
 /// margin pass through it, and a list item's 8 through the list: a quote that ends a list item
 /// spaces the list 16 from what follows, as it would standing alone.
-pub(super) fn collapsed(b: &Block, s: &MarkdownStyle, i: usize, in_item: bool) -> (f32, f32) {
+pub(super) fn collapsed(b: &Block, s: &MarkdownStyle, i: usize, in_item: bool, top_level: bool) -> (f32, f32) {
     if s.web_layout {
-        return (if i == 0 { 0.0 } else if matches!(b, Block::Heading(..)) { 24.0 } else if in_item { 0.0 } else { 16.0 }, 0.0);
+        // The sibling rule is `.markdown > * + *`, not a descendant rule.
+        // Nested paragraphs/lists have Tailwind's zero margins; only h1–h4
+        // introduce their own 24px margin, which can collapse through a list
+        // or quote's first child (neither has vertical padding/borders).
+        let mut top: f32 = if matches!(b, Block::Heading(1..=4, _)) { 24.0 } else { 0.0 };
+        let mut child = b;
+        loop {
+            child = match child {
+                Block::Quote(blocks) => match blocks.first() { Some(b) => b, None => break },
+                Block::List { items, .. } => match items.first().and_then(|item| item.first()) { Some(b) => b, None => break },
+                _ => break,
+            };
+            if matches!(child, Block::Heading(1..=4, _)) { top = 24.0; }
+        }
+        return (if top_level && i > 0 { top.max(16.0) } else { top }, 0.0);
     }
     (collapsed_top(b, s, i, in_item), collapsed_bottom(b, s, i, in_item))
 }

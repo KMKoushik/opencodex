@@ -187,7 +187,7 @@ impl Renderer {
                                 continue;
                             }
                         }
-                        let (mt, mb) = collapsed(b, &self.s, i, *in_item);
+                        let (mt, mb) = collapsed(b, &self.s, i, *in_item, *top_level);
                         let top = match b {
                             _ if i == 0 => 0.0,
                             Block::Heading(..) | Block::Rule | Block::Image { .. } => mt.max(*prev_mb),
@@ -392,6 +392,9 @@ impl Renderer {
     #[allow(clippy::too_many_arguments)]
     fn task_item_body(&self, (k, n): (usize, usize), indent: f32, item: &[Block], item_body: El, item_idx: usize, checked: bool) -> El {
         let t = &self.s.task;
+        let baseline = t.inline_height.map(|_| super::web_inline::inline_baseline(self.s.body));
+        let content_top = t.inline_height.zip(baseline).map_or(0.0, |(height, baseline)| (height - baseline).max(0.0));
+        let control_top = t.inline_height.zip(baseline).map_or_else(|| t.top.unwrap_or(((self.s.body.line_height - t.size) * 0.5).max(0.0)), |(height, baseline)| content_top + baseline - height + (height - t.size) * 0.5);
         let interactive = self.on_task.is_some() && !self.tasks_read_only;
         let (fill, border) = if checked {
             (t.fill_on, t.border_on)
@@ -403,7 +406,7 @@ impl Renderer {
             .size(t.size, t.size)
             .ml(t.left)
             .mr(if self.s.web_layout { 4.0 } else { (indent - t.left - t.size).max(0.0) })
-            .mt(t.top.unwrap_or(((self.s.body.line_height - t.size) * 0.5).max(0.0)))
+            .mt(control_top)
             .center()
             .radius(t.radius)
             .fill(fill)
@@ -425,9 +428,9 @@ impl Renderer {
             .focus_selected(checked)
             .focusable(interactive)
             .w_full();
-        if self.s.web_layout { r = r.child(self.list_marker(None, k, indent, self.s.body.size * 0.4).a11y_hidden()); }
+        if self.s.web_layout { r = r.child(self.list_marker(None, k, indent, self.s.body.size * 0.4).mt(content_top).a11y_hidden()); }
         r = r.child(control)
-            .child(item_body.grow(1.0).shrink());
+            .child(item_body.grow(1.0).shrink().pt(content_top));
         if let Some(on_task) = self.on_task.as_ref().filter(|_| !self.tasks_read_only) {
             let block_key = self.current_block_key.borrow().clone();
             r = on_task(r.cursor(Cursor::Pointer), block_key, item_idx, !checked);
@@ -465,7 +468,7 @@ impl Renderer {
         match b {
             Block::Html(nodes) => self.html_nodes(nodes, true, "html"),
             Block::Para(inl) => self.para(inl, inl_map, s.body, self.flow.get().ink.unwrap_or(s.text)),
-            Block::Heading(l, inl) => self.para(inl, inl_map, s.headings[(*l as usize).clamp(1, 4) - 1], if *l >= 4 && !s.web_layout { s.muted } else { s.text }).role("heading").level(u32::from(*l)),
+            Block::Heading(l, inl) => self.para(inl, inl_map, if s.web_layout && *l >= 5 { s.body } else { s.headings[(*l as usize).clamp(1, 4) - 1] }, if *l >= 4 && !s.web_layout { s.muted } else { s.text }).role("heading").level(u32::from(*l)),
             Block::Code(code) => {
                 let n = self.next_source.get();
                 self.next_source.set(n + 1);
@@ -534,7 +537,7 @@ impl Renderer {
             }
             Block::Image { src, alt, title } => self.image(src, alt, title),
             Block::Rule if s.rule.a <= 0.0 => el().w_full().h(0.0),
-            Block::Rule => el().w_full().h(0.5).fill(s.rule),
+            Block::Rule => el().w_full().h(if s.web_layout { 1.0 } else { 0.5 }).fill(s.rule),
             Block::List { .. } | Block::Quote(_) => unreachable!(),
         }
     }
