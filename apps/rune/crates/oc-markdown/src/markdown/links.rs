@@ -142,10 +142,14 @@ impl Renderer {
             }
         }
         if inl.links.is_empty() || (self.on_link.is_none() && self.on_link_secondary.is_none()) { return e; }
-        let default = match self.s.link_hover {
+        let default = if self.s.web_inline.is_some() && self.s.link_hover.is_none() {
+            // The web stylesheet keeps its underline unchanged on hover. Its
+            // CSS-offset decoration is painted by web_inline, not the font.
+            LinkPaint::new()
+        } else { match self.s.link_hover {
             Some(c) => LinkPaint::new().color(c).underline(c),
             None => LinkPaint::new().underline(self.s.accent),
-        };
+        }};
         let hover = |url: &str| self.link_look.as_ref().and_then(|f| f(url)).map_or(default, |l| l.1);
         let help = |url: &str| self.link_help.as_ref().and_then(|f| f(url)).unwrap_or_default();
         let hover_at = |a: usize, b: usize, url: &str| match self.code_link_color(a, b, inl) {

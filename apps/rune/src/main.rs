@@ -555,7 +555,9 @@ fn main() {
         // CoreText calls SF Pro "System Font" / ".SF NS"; the web's -apple-system.
         families: (
             "System Font, .SF NS, Segoe UI, sans-serif",
-            "ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace",
+            // CDP CSS.getPlatformFontsForNode resolves the web's mono stack to
+            // Menlo on macOS. Rune's ui-monospace instead selects SF NS Mono.
+            "Menlo, Consolas, Liberation Mono, monospace",
         ),
         min_size: Some((760.0, 560.0)),
         on_key: Some(|s, e, tx| {
