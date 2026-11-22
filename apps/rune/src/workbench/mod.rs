@@ -247,7 +247,9 @@ impl State {
         } else {
             self.sidebar_width()
         };
-        let available = self.window_size.0 - sidebar;
+        // The web workbench's max-width is relative to the workspace content
+        // box, inside the shell's half-point separator, not the outer window.
+        let available = self.window_size.0 - sidebar - 0.5;
         if self.workbench.expanded {
             available - 44.0
         } else {

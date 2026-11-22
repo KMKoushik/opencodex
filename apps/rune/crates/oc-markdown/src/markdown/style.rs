@@ -115,6 +115,7 @@ pub(super) struct TaskPaint {
     pub(super) left: f32,
     pub(super) top: Option<f32>,
     pub(super) inline_height: Option<f32>,
+    pub(super) inline_outline: Option<Color>,
 }
 
 /// A block quote's rule and text (see [`MarkdownStyle::quote`]).
@@ -257,6 +258,7 @@ impl MarkdownStyle {
                 left: 8.0,
                 top: None,
                 inline_height: None,
+                inline_outline: None,
             },
             diagram: DiagramPaint {
                 text: c.text_base,
@@ -386,6 +388,11 @@ impl MarkdownStyle {
     /// its bottom participates in the first line's baseline alignment.
     pub fn task_inline_height(mut self, height: f32) -> Self {
         self.task.inline_height = Some(height.max(0.0));
+        self
+    }
+    /// An inset CSS input ring around the replaced box, outside the native glyph.
+    pub fn task_inline_outline(mut self, color: Color) -> Self {
+        self.task.inline_outline = Some(color);
         self
     }
     pub fn rule(mut self, c: Color) -> Self {
@@ -713,7 +720,8 @@ impl std::hash::Hash for MarkdownStyle {
             highlight_current_ring.map(|(c, w)| (c, f32_bits(w))),
         )
             .hash(state);
-        let TaskPaint { fill_on, border_on, border_off, fill_off, hover, focus_ring, mark, check, radius, motion, size, left, top, inline_height } = task;
+        let TaskPaint { fill_on, border_on, border_off, fill_off, hover, focus_ring, mark, check, radius, motion, size, left, top, inline_height, inline_outline } = task;
+        inline_outline.hash(state);
         (fill_on, border_on, border_off, fill_off, hover, focus_ring, mark, check as *const Icon as usize, f32_bits(radius), f32_bits(motion.duration), f32_bits(motion.bounce)).hash(state);
         (f32_bits(size), f32_bits(left), top.map(f32_bits), inline_height.map(f32_bits)).hash(state);
         let DiagramPaint {

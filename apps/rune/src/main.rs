@@ -397,7 +397,7 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
                 } else {
                     composer::view(
                         s,
-                        w - width - s.panel_width() - if s.selected.is_some() { 44.0 } else { 0.0 },
+                        w - width - s.panel_width() - 0.5 - if s.selected.is_some() { 44.0 } else { 0.0 },
                         h,
                     )
                 }

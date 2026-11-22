@@ -418,6 +418,13 @@ impl Renderer {
         if interactive {
             control = control.hover(t.hover);
         }
+        if let (Some(height), Some(ink)) = (t.inline_height, t.inline_outline) {
+            // Blink paints the native 13px checkbox in the middle of the
+            // taller replaced input; the enclosing workbench's inset shadow
+            // still outlines the *entire* input box, not just that glyph.
+            control = control.child(el().absolute(0.0, (t.size - height) * 0.5)
+                .size(t.size, height).border(1.0, ink).a11y_hidden());
+        }
         let mut r = row()
             .key(format!("i{k}"))
             .role("checkbox")

@@ -7,7 +7,8 @@ use rune::{El, GrowthSpec, ScrollSpec, col, row};
 pub fn reader(s: &State, chat: &Chat, width: f32) -> El {
     let side = !chat.read_only();
     let row_width = (width - 1.0).min(768.0);
-    col()
+    let position = chat.position.clone();
+    let scroll = col()
         .key("workspace-conversation")
         .role("log")
         .label("Conversation")
@@ -15,6 +16,8 @@ pub fn reader(s: &State, chat: &Chat, width: f32) -> El {
         .min_h(0.0)
         .w_full()
         .scroll(ScrollSpec { stick_bottom: true })
+        .clip_fade_linear(0.0, 0.0, 0.0, if side { 32.0 } else { 0.0 })
+        .on_scroll_offset(move |at| position.set(at))
         .child(
             col()
                 .key("workspace-conversation-rows")
@@ -23,13 +26,13 @@ pub fn reader(s: &State, chat: &Chat, width: f32) -> El {
                 .growth(GrowthSpec::default())
                 .whole_rows()
                 .virtual_rows(
-                    chat.rows.len() + if side { 2 } else { 0 },
+                    chat.rows.len() + if side { 2 } else { 1 },
                     80.0,
                     move |s: &State, n| {
-                        if side && n == 0 {
+                        if n == 0 {
                             return "reader-history".into();
                         }
-                        let i = n - usize::from(side);
+                        let i = n - 1;
                         if i == s.workbench.reader_chat.rows.len() {
                             return "reader-footer".into();
                         }
@@ -37,7 +40,7 @@ pub fn reader(s: &State, chat: &Chat, width: f32) -> El {
                     },
                     move |s: &State, n| {
                         let chat = &s.workbench.reader_chat;
-                        if side && n == 0 {
+                        if n == 0 {
                             return row().w_full().h(44.0).center().role("status").child(
                                 crate::sidebar::label(
                                     &s.theme,
@@ -54,7 +57,7 @@ pub fn reader(s: &State, chat: &Chat, width: f32) -> El {
                                 ),
                             );
                         }
-                        let i = n - usize::from(side);
+                        let i = n - 1;
                         if i == chat.rows.len() {
                             // `.chat > .timeline .timeline-footer` overrides the
                             // row's 20px padding with 32px, below a 20px status
@@ -67,5 +70,12 @@ pub fn reader(s: &State, chat: &Chat, width: f32) -> El {
                 )
                 .virtual_rows_version(chat.data.revision.wrapping_add(chat.disclosure_revision)),
         )
-        .child(super::user::popover(s, true))
+        .child(super::user::popover(s, true));
+    let mut timeline = col().key("reader-timeline").grow(1.0).min_h(0.0).w_full()
+        .child(super::follow::viewport(scroll, true));
+    if chat.jump {
+        let height = rune::memo::layout_size("reader-timeline").map(|size| size[1]).unwrap_or(0.0);
+        timeline = timeline.child(super::jump_pill(s, width, height, true));
+    }
+    timeline
 }

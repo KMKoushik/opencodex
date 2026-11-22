@@ -96,9 +96,9 @@ pub(crate) fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
     }
     if s.selected.is_some() && !s.chat.rows.is_empty() {
         let at = s.chat.position.get();
-        let away = at.max[1] - at.offset[1] > 40.0;
-        if s.chat.jump != away {
-            s.chat.jump = away;
+        // Layout, pagination and programmatic scrolls never stop following.
+        // Only a reading gesture does; entering the 40px end band resumes it.
+        if chat::follow::resume(&mut s.chat.jump, at.max[1] - at.offset[1]) {
             changed = true;
         }
         if at.viewport[1] > 0.0 && s.chat.scroll_start != chat::ScrollStart::Applied {

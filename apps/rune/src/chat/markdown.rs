@@ -147,7 +147,7 @@ fn render_marked(
     if reader {
         // workbench.css applies its 28px input height to Markdown checkboxes
         // too. Blink baseline-aligns that replaced box, increasing these lines.
-        style = style.task_inline_height(28.0);
+        style = style.task_inline_height(28.0).task_inline_outline(t.c("border-heavy"));
     }
     let images = s.chat.media.images.clone();
     let reader_images = s.workbench.reader_chat.media.images.clone();

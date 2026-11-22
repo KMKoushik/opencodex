@@ -57,6 +57,9 @@ pub(super) fn poll_reader(s: &mut State, clock: f64, tx: &mut rune::Tx) -> bool 
         }
     }
     let chat = &mut s.workbench.reader_chat;
+    if crate::chat::follow::resume(&mut chat.jump, position.max[1] - position.offset[1]) {
+        changed = true;
+    }
     if visible && s.workbench.reader.is_some() && chat.data.running {
         if chat.tick_due.is_none_or(|due| clock >= due) {
             chat.tick_due = Some(clock + 1.0);
@@ -75,9 +78,7 @@ pub(super) fn poll_reader(s: &mut State, clock: f64, tx: &mut rune::Tx) -> bool 
 }
 
 pub(super) fn reader(s: &State) -> El {
-    let position = s.workbench.reader_chat.position.clone();
     crate::chat::reader(s, &s.workbench.reader_chat, s.panel_width().max(340.0))
-        .on_scroll_offset(move |at| position.set(at))
 }
 
 pub fn tabs(s: &State) -> El {

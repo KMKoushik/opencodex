@@ -205,12 +205,11 @@ pub fn area(s: &State, width: f32) -> El {
     if s.selected.is_some() {
         controls = controls.child(context::view(s));
     }
-    controls = controls.child(
-        t.shadow(
+    let model = t.shadow(
             t.paint(
                 row()
                     .shrink()
-                    .min_w(if inner <= 480.0 { 62.0 } else { 96.0 })
+                    .min_w(if inner <= 480.0 { 18.0 } else { 96.0 })
                     .h(30.0)
                     .px(8.0)
                     .gap(8.0)
@@ -239,15 +238,18 @@ pub fn area(s: &State, width: f32) -> El {
         .role("button")
         .label("Choose model")
         .focusable(true)
-        .on_press_tx(|s: &mut State, tx| menus::open(s, Menu::Models, tx)),
-    );
+        .on_press_tx(|s: &mut State, tx| menus::open(s, Menu::Models, tx));
+    // CSS shrinks the .select wrapper independently of its trigger's padding
+    // box. At very narrow widths that 18px box and its fixed icon overflow the
+    // wrapper; thinking retains its intrinsic width rather than being ellipsized.
+    controls = controls.child(if inner <= 480.0 {
+        row().shrink().min_w(0.0).child(model)
+    } else { model });
     controls = controls.child(
         row()
             .h(30.0)
-            // The web selector overflows its model neighbour below its icon's
-            // minimum width. Keep both hit targets separate and ellipsize here.
             .max_w(if inner <= 480.0 {
-                (inner - if s.selected.is_some() { 36.0 } else { 0.0 } - 66.0).max(32.0)
+                inner
             } else {
                 240.0
             })
