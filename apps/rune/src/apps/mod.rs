@@ -77,6 +77,14 @@ mod dialogs;
 pub use dialogs::view as dialog;
 mod glyphs;
 mod index;
+fn model_source(source: &str) -> &'static str {
+    match source {
+        "app" => "Picked for this app.",
+        "chat" => "Following the chat that made this app.",
+        "none" => "No model is available.",
+        _ => "OpenCode’s default model.",
+    }
+}
 #[derive(Default)]
 pub struct Apps {
     pub code: code::Code,
@@ -122,7 +130,8 @@ pub fn open_dialog(s: &mut State, kind: &'static str, tx: &mut rune::Tx) {
     );
 }
 pub fn close_dialog(s: &mut State) {
-    if !s.pages.apps.busy {
+    // Only Icon/Delete use Dialog's busy dismissal guard in React.
+    if !s.pages.apps.busy || s.pages.apps.dialog == Some("model") {
         s.pages.apps.dialog = None;
     }
 }

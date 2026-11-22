@@ -115,7 +115,7 @@ pub fn view(s: &State, task: &Value) -> El {
         let has_project = !task["project"].is_null();
         let pending = s.pages.pending.contains("task-start")
             && s.pages.tasks.starting.as_deref() == Some(&id);
-        let enabled = has_project && !pending;
+        let enabled = has_project && !s.pages.pending.contains("task-start");
         let foreground = if enabled {
             s.theme.blend("project-purple", "text", 0.6)
         } else {
@@ -140,7 +140,12 @@ pub fn view(s: &State, task: &Value) -> El {
                 } else {
                     s.theme.c("secondary")
                 })
-                .disabled(!has_project || pending)
+                .disabled(!enabled)
+                .help(if has_project {
+                    "Start a chat in this project with the task as its first message"
+                } else {
+                    "Choose a project for the agent to work in"
+                })
                 .child(rune::icon(&i::PLAY, 12.0).color(foreground))
                 .child(
                     label(
@@ -210,7 +215,7 @@ pub fn view(s: &State, task: &Value) -> El {
     row()
         .key(format!("task-card-{id}"))
         .hover_group_focus()
-        .on_layout_tx(move |s: &mut State, r, tx| {
+        .on_drawn_layout_tx(move |s: &mut State, r, tx| {
             s.pages.anchors.insert(format!("task-card-{anchor}"), r);
             tx.live_only();
         })
@@ -340,8 +345,12 @@ fn editor(s: &State) -> El {
     }
     col()
         .key("task-editor")
+        // Keep presses on form whitespace inside the editor; the board's
+        // background press saves only genuinely outside clicks.
+        .on_press(|_: &mut State| {})
         .w_full()
-        .padding(11.0)
+        .padding(13.0)
+        .items_start()
         .gap(10.0)
         .radius(10.0)
         .fill(s.theme.c("elevated"))
@@ -357,9 +366,10 @@ fn editor(s: &State) -> El {
             }
         })
         .child(
-            text_input(&e.title, TextStyle::new(13.0, 500.0))
+            text_input(&e.title, TextStyle::new(13.0, 500.0).lh(19.5))
                 .key("Edit task title")
                 .label("Task title")
+                .spellcheck(true)
                 .single_line()
                 .w_full()
                 .color(s.theme.c("text"))
@@ -389,6 +399,7 @@ fn editor(s: &State) -> El {
                 text_input(&e.notes, TextStyle::new(13.0, 400.0).lh(18.85))
                     .key("Edit task notes")
                     .label("Notes")
+                    .spellcheck(true)
                     .placeholder("Notes", s.theme.c("text-tertiary"))
                     .w_full()
                     .color(s.theme.c("text-secondary"))
@@ -499,7 +510,6 @@ fn editor(s: &State) -> El {
         )
         .child(
             row()
-                .w_full()
                 .gap(4.0)
                 .child(
                     ui::ghost_tone(s, "Delete", "error").on_press(move |s: &mut State| {
@@ -507,7 +517,6 @@ fn editor(s: &State) -> El {
                         s.page_mutate(&format!("tasks/{delete}"), Value::Null, "tasks", true);
                     }),
                 )
-                .child(el().grow(1.0))
                 .child(
                     ui::ghost(s, "Cancel").on_press_tx(move |s: &mut State, tx| {
                         s.pages.tasks.editor = None;

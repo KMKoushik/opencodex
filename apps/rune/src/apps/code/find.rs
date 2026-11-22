@@ -74,7 +74,21 @@ pub fn scoped(s: &State) -> bool {
     s.pages.route == pages::Route::Apps && s.pages.app.is_some() && s.pages.apps.tab == "code"
 }
 pub fn open(s: &mut State, tx: &mut Tx) {
+    if let Some(selection) = tx.text_selection().filter(|selection| {
+        selection
+            .texts()
+            .first()
+            .and_then(|text| text.key())
+            .is_some_and(|key| key.starts_with("app-code-text-"))
+    }) {
+        let text = selection.text();
+        if !text.is_empty() && text.encode_utf16().count() <= 100 {
+            s.pages.apps.code.find.query = TextEdit::new(text);
+        }
+    }
     s.pages.apps.code.find.open = true;
+    let len = s.pages.apps.code.find.query.text.len();
+    s.pages.apps.code.find.query.set_selection(0, len);
     tx.focus_when_shown("source-find", true);
     request(s, tx);
 }
@@ -108,8 +122,9 @@ fn close(s: &mut State, tx: &mut Tx) {
     tx.return_focus("app-code-reader", false);
 }
 fn scan(request: Request) -> ResultRow {
-    // Escaped literal query; use iterator truncation so pathological repeated text
-    // never allocates one range per byte. The worker owns the immutable source Arc.
+    // The gateway bounds each source to 512 KiB (index.html to 2 MiB).
+    // Keep all occurrences for navigation; only the displayed counter is capped,
+    // as in CodeMirror. Even a one-byte query is bounded by that source budget.
     let query = request.query.replace("\\n", "\n").replace("\\t", "\t");
     let mut matches = Vec::new();
     let mut capped = false;
@@ -129,12 +144,9 @@ fn scan(request: Request) -> ResultRow {
             }
         };
         for matched in pattern.find_iter(&request.file.text) {
-            if matches.len() == 2000 {
-                capped = true;
-                break;
-            }
             matches.push(matched.range());
         }
+        capped = matches.len() > 2000;
     }
     ResultRow {
         generation: request.generation,
@@ -142,6 +154,23 @@ fn scan(request: Request) -> ResultRow {
         capped,
         error: None,
     }
+}
+
+#[cfg(test)]
+#[test]
+fn counter_cap_does_not_truncate_navigation() {
+    let source = super::prepare(
+        serde_json::json!({"files":[{"name":"server.ts","text":"needle\n".repeat(2100)}]}),
+    )
+    .unwrap();
+    let result = scan(Request {
+        generation: 1,
+        file: source.files[0].clone(),
+        query: "needle".into(),
+    });
+    assert!(result.capped);
+    assert_eq!(result.matches.len(), 2100);
+    assert_eq!(result.matches[2099], 14693..14699);
 }
 fn request(s: &mut State, tx: &mut Tx) {
     let file = selected(s);
@@ -307,6 +336,7 @@ pub fn key(s: &mut State, event: &rune::KeyEvent, tx: &mut Tx) -> bool {
         close(s, tx);
         true
     } else if event.key == Key::Enter
+        || event.key == Key::Function(3)
         || event.key == Key::Command('g')
         || ((event.mods.cmd || event.mods.ctrl)
             && matches!(&event.key,Key::Text(value) if value.eq_ignore_ascii_case("g")))
@@ -328,8 +358,12 @@ pub fn view(s: &State) -> El {
     } else {
         format!(
             "{}/{}{}",
-            find.current + 1,
-            find.matches.len(),
+            if find.current >= 2000 {
+                "–".into()
+            } else {
+                (find.current + 1).to_string()
+            },
+            find.matches.len().min(2000),
             if find.capped { "+" } else { "" }
         )
     };

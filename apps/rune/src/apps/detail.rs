@@ -134,6 +134,7 @@ pub fn view(s: &State, app: &Value) -> El {
         let anchor = id.clone();
         header = header.child(
             pages::button(s, "Run")
+                .disabled(!s.snapshot.live)
                 .label("Run a function")
                 .key(format!("app-run-{id}"))
                 .on_layout_tx(move |s: &mut State, r, tx| {
@@ -452,33 +453,91 @@ fn settings(s: &State, app: &Value) -> El {
                 .to_string()
         })
         .unwrap_or_default();
-    let mut body = col().w_full().max_w(720.0).padding(24.0).gap(16.0).child(
-        group("App")
-            .child(
-                field("Icon", "").child(
-                    index::icon(s, app, 28.0)
-                        .role("button")
-                        .label("Change icon")
-                        .focusable(true)
-                        .on_press_tx(|s: &mut State, tx| super::open_dialog(s, "icon", tx)),
-                ),
-            )
-            .child(field("Name", app["title"].as_str().unwrap_or("")))
-            .child(field("Created", &created))
-            .child(field("Folder", app["path"].as_str().unwrap_or(""))),
-    );
+    let mut app_group = group("App")
+        .child(
+            field("Icon", "").child(
+                index::icon(s, app, 28.0)
+                    .role("button")
+                    .label("Change icon")
+                    .disabled(!s.snapshot.live)
+                    .focusable(true)
+                    .on_press_tx(|s: &mut State, tx| super::open_dialog(s, "icon", tx)),
+            ),
+        )
+        .child(field("Name", app["title"].as_str().unwrap_or("")));
+    if let Some(project) = s
+        .snapshot
+        .projects
+        .iter()
+        .find(|p| Some(p.id.as_str()) == app["projectID"].as_str())
+    {
+        app_group = app_group.child(field("Project", &project.canonical).child(label(
+            &s.theme,
+            project.display_name(),
+            13.0,
+            400.0,
+            "text-secondary",
+        )));
+    }
+    let mut created_row = field("Created", &created);
+    if let Some(session) = app["sessionID"].as_str() {
+        let session = session.to_owned();
+        created_row = created_row.child(
+            pages::button(s, "Open chat")
+                .on_press(move |s: &mut State| s.open_session(Some(session.clone()))),
+        );
+    }
+    app_group = app_group
+        .child(created_row)
+        .child(field("Folder", app["path"].as_str().unwrap_or("")));
+    let mut body = col()
+        .w_full()
+        .max_w(720.0)
+        .padding(24.0)
+        .gap(16.0)
+        .child(app_group);
     let model_path = format!("apps/{id}/model");
     let model = data(s, &model_path);
+    let model_name = model.and_then(|v| {
+        let id = v["model"]["id"].as_str()?;
+        Some(
+            v["directory"]
+                .as_str()
+                .and_then(|d| s.snapshot.models.get(d))
+                .and_then(|catalog| {
+                    catalog.data.iter().find(|m| {
+                        m.id == id
+                            && Some(m.provider_id.as_str()) == v["model"]["providerID"].as_str()
+                    })
+                })
+                .map(|m| m.name.as_str())
+                .unwrap_or(id),
+        )
+    });
+    let model_note = model
+        .map(|v| {
+            format!(
+                "{} Used by oc.ask and oc.run unless the code names one.",
+                super::model_source(v["source"].as_str().unwrap_or(""))
+            )
+        })
+        .unwrap_or_else(|| match s.pages.data.get(&model_path) {
+            Some(Err(e)) => e.clone(),
+            _ => String::new(),
+        });
     body = body.child(
         group("Model").child(
             field(
-                model
-                    .and_then(|m| m["model"]["id"].as_str())
-                    .unwrap_or("No model"),
-                "Used by oc.ask and oc.run unless the code names one.",
+                model_name.unwrap_or(if s.pages.pending.contains(&model_path) {
+                    "Loading…"
+                } else {
+                    "No model"
+                }),
+                &model_note,
             )
             .child(
                 pages::button(s, "Change")
+                    .disabled(!s.snapshot.live)
                     .on_press_tx(|s: &mut State, tx| super::open_dialog(s, "model", tx)),
             ),
         ),
@@ -493,19 +552,56 @@ fn settings(s: &State, app: &Value) -> El {
         .flatten()
         .filter_map(Value::as_str)
     {
-        let mut line = field(
-            name,
-            if app["triggers"][name].is_null() {
-                "On demand · never run"
-            } else {
-                "Scheduled"
-            },
-        );
-        if !app["triggers"][name].is_null() {
+        let running = app["running"]
+            .as_array()
+            .is_some_and(|rs| rs.iter().any(|r| r == name));
+        let runs = data(s, &format!("apps/{id}/runs")).and_then(Value::as_array);
+        let last = runs.and_then(|runs| runs.iter().find(|run| run["fn"] == name));
+        let every = app["triggers"][name]["every"].as_str();
+        let mut details = vec![
+            every
+                .map(super::index::every_label)
+                .map(|v| format!("{}{}", v[..1].to_uppercase(), &v[1..]))
+                .unwrap_or_else(|| "On demand".into()),
+        ];
+        if running {
+            details.push("running now".into());
+        } else if let Some(last) = last {
+            details.push(format!(
+                "{} {}",
+                if last["status"] == "error" {
+                    "failed"
+                } else {
+                    "ran"
+                },
+                index::ago(
+                    last["ended"]
+                        .as_i64()
+                        .or(last["started"].as_i64())
+                        .unwrap_or(0)
+                )
+            ));
+        } else if runs.is_some() {
+            details.push("never run".into());
+        }
+        if !running {
+            if let Some((ms, last)) = every.and_then(super::index::parse_every).zip(last) {
+                let now = chrono::Local::now().timestamp_millis();
+                details.push(format!(
+                    "next {}",
+                    index::ago(now.max(last["started"].as_i64().unwrap_or(now).saturating_add(ms)))
+                ));
+            }
+        }
+        let mut line = field(name, &details.join(" · "));
+        if every.is_some() {
             let id = id.to_owned();
             let name = name.to_owned();
-            line = line
-                .child(pages::button(s, "Run").on_press(move |s: &mut State| run(s, &id, &name)));
+            line = line.child(
+                pages::button(s, "Run")
+                    .disabled(!s.snapshot.live || running)
+                    .on_press(move |s: &mut State| run(s, &id, &name)),
+            );
         }
         functions = functions.child(line);
     }
