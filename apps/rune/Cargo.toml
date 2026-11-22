@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = [".", "crates/oc-gateway"]
+members = [".", "crates/oc-gateway", "crates/oc-webview"]
 
 [package]
 name = "opencodex"
