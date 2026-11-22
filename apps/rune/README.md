@@ -1,4 +1,4 @@
-# OpenCodex Rune — milestone 1
+# OpenCodex Rune — shell and chat transcript
 
 Standalone Rust workspace, pinned to Rune **7286a3c5** with its six required crates.io patches.
 The binary is a native client of the existing TypeScript gateway, not another OpenCode backend.
@@ -25,7 +25,7 @@ No default port, service discovery, bundled gateway, or service shutdown is hidd
 `OPENCODEX_BENCH_PROJECT` selects the initial project; `OPENCODEX_BENCH=1` enables the
 `OPENCODEX_BENCH first_content <unix_ms>` marker **after a frame containing mounted gateway
 thread rows is drawn**. A covered/offscreen window does not emit a fake marker. Session-open
-signals and markers belong to M2.
+signals and markers are described below.
 
 ## Screenshots and inspector
 
@@ -106,8 +106,53 @@ directory. Closing Rune never stops the gateway or OpenCode.
 
 ## Remaining gaps / framework notes
 
-- M2 owns sending, transcripts, functional model/thinking/access/attachment controls, and session
-  loading. M4 owns Tasks, Apps, Settings, search/history menus, and embedded HTML surfaces; those
+### Chat transcript
+
+Sidebar threads now open native transcripts; Back/Forward retains a bounded 64-entry route
+history, not server snapshots. The shared gateway worker loads the latest 50 messages, pages
+older history on demand, reduces native text/reasoning/tool events, and refreshes authoritative
+history after reconnect. Immutable message identities and memoized, lazy virtual rows keep
+finished turns out of streaming view work. Rune-kit's incremental Markdown parser reparses only
+the unfinished tail; code fences intentionally stay monochrome to match the current web UI.
+Work/answer grouping, interrupted turns, blank finished reasoning, independent thoughts/tool
+disclosures, and the greater-than-30-step nested virtualization rule follow `timeline-model.ts`.
+Images use gateway-checked local image routes or explicit image HTTP URLs, with decoding and
+mips off-thread, a 16-image/64 MiB decoded session budget and a native preview modal.
+
+```sh
+OPENCODEX_GATEWAY=http://127.0.0.1:4441 target/release/opencodex \
+  --session SESSION_ID --scroll top --at 1 --screenshot top.png --size 1280x800 --scale 2
+# --scroll bottom (default), top, or middle; history captures page to the beginning.
+# --work open, details, or thoughts expands work for deterministic inspection.
+OPENCODEX_GATEWAY=http://127.0.0.1:4441 target/perf/opencodex \
+  --profile-chat SESSION_ID --probe-ms 1500
+```
+
+`--profile-chat` profiles real HTTP/SSE and a headless CPU runtime, explicitly excluding GPU
+upload and presentation. With `OPENCODEX_BENCH=1`, SIGUSR1 opens `OPENCODEX_BENCH_SESSION`.
+After a presented frame with visible transcript rows, the app prints both `session_first_row`
+and the older harness's `session_loaded`; `session_settled` follows a 500 ms quiet history
+interval. `reply_rendered` requires visible assistant text containing `BENCH-END`, never the
+user's prompt. Covered windows do not emit fabricated presentation markers.
+
+`tools/isolated.sh` accepts `OPENCODEX_FIXTURE`, `OPENCODEX_FIXTURE_SERVICE_PORT`, and
+`OPENCODEX_FIXTURE_GATEWAY_PORT` without changing its M1 defaults. `goldens/seed.ts` accepts
+the fixture directory and gateway URL. `tools/chat-compare.mjs` captures both renderers from
+the same real fixture (Markdown/long, top/middle/bottom, both appearances and sizes).
+
+Composer integration is deliberately a layout-only branch in `composer::view`: the transcript
+occupies the remaining bounded height, and the existing composer stays docked. Sending and
+request docks remain the composer milestone's responsibility. `State::open_session` and
+`State::chat.data` expose the selected session, native info, running state and errors;
+`State::chat.read_only()` distinguishes native subagent readers from side chats. Workspace
+rail entries remain visual shell slots, not implemented panels; thread actions, full session
+details and file-link workbench routing are not complete. Rune's built-in Markdown has different
+paragraph/list spacing and numbered-marker baselines from the web, so these captures are not
+pixel-identical. A structured standalone diff editor is still a workspace feature; transcript
+diff fences and tool outputs are readable here.
+
+- M2 still owns sending, functional model/thinking/access/attachment controls, and request docks.
+  M4 owns Tasks, Apps, Settings, search/history menus, and embedded HTML surfaces; those
   navigation rows are visual shell entries only in M1.
 - Project chooser currently uses Rune's native popup, not the web's searchable popover. Custom
   project image URLs, per-project Focus exclusions, and full cross-project Focus pagination remain.

@@ -1,7 +1,7 @@
 import { mkdir, writeFile, realpath } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
-const root = '/tmp/ocr-goldens';
-const base = 'http://127.0.0.1:4432/api';
+const root = process.env.OPENCODEX_FIXTURE ?? '/tmp/ocr-goldens';
+const base = `${process.env.OPENCODEX_GATEWAY ?? 'http://127.0.0.1:4432'}/api`;
 const model = { providerID: 'opencode', id: 'big-pickle' };
 async function api(path: string, body?: unknown) {
   const r = await fetch(
@@ -91,6 +91,6 @@ for (let i = 1; i <= 40; i++) {
 }
 await writeFile(`${root}/permission-note.txt`, 'Fixture file outside both project directories.\n');
 await api(`/sessions/${sessions[7]!.id}/prompt`, {
-  text: 'Use the read tool to read /private/tmp/ocr-goldens/permission-note.txt outside this project. Do not use bash. Wait for permission if required.',
+  text: `Use the read tool to read ${await realpath(root)}/permission-note.txt outside this project. Do not use bash. Wait for permission if required.`,
   model,
 });
