@@ -6,6 +6,40 @@ use crate::{
 use rune::{El, TextEdit, TextStyle, col, row, text_input};
 use serde_json::{Value, json};
 
+/// Invoke once from the root view, before constructing the transcript. Rune exposes
+/// line-box geometry and retained selection marks through Cx, not through Tx.
+/// The chat/composer's existing view entry points don't currently receive that Cx.
+pub fn decorate(s: &State, cx: &mut rune::Cx<State>) {
+    let selecting = s.chat.selected_response.is_some();
+    let editing = s
+        .chat
+        .comment_editor
+        .as_ref()
+        .is_some_and(|e| e.target.get("messageID").is_some());
+    if !selecting && !editing {
+        return;
+    }
+    if selecting {
+        if let Some([x, y, _, h]) = cx.selection_rects().last().copied() {
+            s.chat.selection_point.set(Some([
+                x.clamp(12.0, (s.window_size.0 - 364.0).max(12.0)),
+                (y + h + 8.0).clamp(12.0, (s.window_size.1 - 48.0).max(12.0)),
+            ]));
+        }
+    }
+    cx.mark_texts(s.chat.selected_marks.clone());
+}
+pub fn selected_quote(text: &str) -> String {
+    let mut units = 0;
+    text.trim()
+        .chars()
+        .take_while(|ch| {
+            units += ch.len_utf16();
+            units <= 8000
+        })
+        .collect()
+}
+
 #[derive(Clone)]
 pub struct Comment {
     pub id: String,
@@ -56,7 +90,7 @@ pub fn save(s: &mut State) {
         return;
     };
     let text = editor.text.text.trim();
-    if text.is_empty() || text.chars().count() > 8000 {
+    if text.is_empty() || text.encode_utf16().count() > 8000 {
         return;
     }
     let comment = Comment {
@@ -76,6 +110,19 @@ pub fn save(s: &mut State) {
     s.touch_draft();
     s.chat.comment_editor = None;
     crate::workbench::refresh_comment_annotations(s);
+}
+fn save_quote(s: &mut State, target: Value) {
+    if s.draft().comments.len() >= 32 {
+        s.error = Some("Add up to 32 comments per message.".into());
+        return;
+    }
+    s.draft_mut().comments.push(Comment {
+        id: format!("comment-{}", crate::unix_ms()),
+        target,
+        text: String::new(),
+    });
+    s.touch_draft();
+    s.chat.selected_response = None;
 }
 pub fn annotated(text: &str, comments: &[Comment]) -> (String, Option<Value>) {
     if comments.is_empty() {
@@ -181,22 +228,26 @@ fn editor_view(s: &State, inline: bool) -> El {
     let width = if inline {
         (s.panel_width() - 100.0).max(180.0).min(520.0)
     } else {
-        (s.window_size.0 - 48.0).min(520.0)
+        (s.window_size.0 - 24.0).min(if editor.target.get("messageID").is_some() {
+            340.0
+        } else {
+            520.0
+        })
     };
     let mut panel = col()
         .w(width)
-        .padding(16.0)
-        .gap(10.0)
-        .radius(12.0)
-        .fill(t.c("elevated"))
-        .border(1.0, t.c("border-heavy"))
+        .padding(10.0)
+        .gap(8.0)
+        .radius(10.0)
+        .fill(t.c("surface"))
+        .border(1.0, t.c("border"))
         .role("group")
         .label("Comment editor")
         .child(label(
             t,
             source(&editor.target),
-            12.0,
-            500.0,
+            11.0,
+            400.0,
             "text-secondary",
         ));
     if editor.target.get("messageID").is_some() || editor.target.get("previewQuote").is_some() {
@@ -211,22 +262,22 @@ fn editor_view(s: &State, inline: bool) -> El {
                 400.0,
                 "text-secondary",
             )
-            .max_lines(6)
+            .max_h(90.0)
+            .pl(10.0)
+            .border_sides([0.0, 0.0, 0.0, 2.0], t.c("border"))
             .wrap(),
         );
     }
     panel = panel
         .child(
-            text_input(&editor.text, TextStyle::new(13.0, 400.0).lh(20.0))
+            text_input(&editor.text, TextStyle::new(13.0, 400.0).lh(19.5))
                 .key("review-comment")
                 .label("Review comment")
                 .placeholder("What should change?", t.c("text-tertiary"))
                 .w_full()
                 .min_h(64.0)
                 .max_h(200.0)
-                .padding(10.0)
-                .radius(8.0)
-                .fill(t.c("secondary"))
+                .py(4.0)
                 .color(t.c("text"))
                 .autofocus()
                 .on_edit(|s: &mut State| &mut s.chat.comment_editor.as_mut().unwrap().text)
@@ -241,13 +292,13 @@ fn editor_view(s: &State, inline: bool) -> El {
         )
         .child(
             row()
-                .gap(8.0)
+                .gap(6.0)
                 .center_y()
                 .child(
                     label(
                         t,
                         "Send with your next message",
-                        11.0,
+                        10.0,
                         400.0,
                         "text-tertiary",
                     )
@@ -275,6 +326,26 @@ fn editor_view(s: &State, inline: bool) -> El {
     if inline {
         return panel;
     }
+    if let Some(anchor) = editor.target["responseAnchor"].as_str() {
+        if let Some([x, y]) = s.chat.selection_point.get() {
+            return t
+                .shadow(panel, "shadow")
+                .absolute(
+                    x.min((s.window_size.0 - width - 12.0).max(12.0)),
+                    y.min((s.window_size.1 - 300.0).max(12.0)),
+                )
+                .modal(true, |s: &mut State| s.chat.comment_editor = None);
+        }
+        return t
+            .shadow(panel, "shadow")
+            .anchored(
+                anchor.to_owned(),
+                rune::Side::Bottom,
+                rune::Align::Start,
+                8.0,
+            )
+            .modal(true, |s: &mut State| s.chat.comment_editor = None);
+    }
     t.shadow(panel, "shadow")
         .absolute(
             (s.window_size.0 - width) / 2.0,
@@ -297,7 +368,18 @@ pub fn chips(s: &State) -> El {
                 .child(
                     label(
                         &s.theme,
-                        format!("{} · {}", source(&comment.target), comment.text),
+                        format!(
+                            "{} · {}",
+                            source(&comment.target),
+                            if comment.text.is_empty() {
+                                comment.target["previewQuote"]
+                                    .as_str()
+                                    .or_else(|| comment.target["quote"].as_str())
+                                    .unwrap_or("")
+                            } else {
+                                &comment.text
+                            }
+                        ),
                         12.0,
                         400.0,
                         "text-secondary",
@@ -340,45 +422,71 @@ pub fn selected_actions(s: &State) -> El {
     let Some(target) = &s.chat.selected_response else {
         return rune::el();
     };
+    if target["scroll"]
+        .as_f64()
+        .is_some_and(|at| (at - s.chat.position.get().offset[1] as f64).abs() > 0.5)
+    {
+        return rune::el();
+    }
     let comment = target.clone();
     let quote = target["quote"].as_str().unwrap_or("").to_owned();
-    let copy = quote.clone();
-    s.theme
-        .shadow(
-            row()
-                .gap(4.0)
-                .padding(4.0)
-                .radius(10.0)
-                .fill(s.theme.c("elevated"))
-                .border(1.0, s.theme.c("border-heavy"))
-                .role("group")
-                .label("Selected response actions")
-                .child(
-                    crate::workbench::comment_button(s, "Copy")
-                        .on_press_tx(move |_: &mut State, tx| tx.copy(copy.clone())),
-                )
-                .child(
-                    crate::workbench::comment_button(s, "Add comment")
-                        .on_press(move |s: &mut State| begin(s, comment.clone())),
-                )
-                .child(
-                    crate::workbench::comment_button(s, "Ask in side chat").on_press(
-                        move |s: &mut State| {
-                            s.chat.selected_response = None;
-                            s.create_workspace_side(
-                                quote
-                                    .split('\n')
-                                    .map(|l| format!("> {l}"))
-                                    .collect::<Vec<_>>()
-                                    .join("\n")
-                                    + "\n\n",
-                            );
-                        },
-                    ),
+    let toolbar = s.theme.shadow(
+        row()
+            .gap(4.0)
+            .padding(4.0)
+            .radius(8.0)
+            .fill(s.theme.c("surface"))
+            .border(1.0, s.theme.c("border"))
+            .keeps_text_selection()
+            .role("group")
+            .label("Selected response actions")
+            .child(
+                crate::workbench::comment_button(s, "Quote")
+                    .key("response-selection-quote")
+                    .on_press_tx(move |s: &mut State, tx| {
+                        save_quote(s, comment.clone());
+                        tx.focus("message", false);
+                    }),
+            )
+            .child(
+                crate::workbench::comment_button(s, "Comment")
+                    .key("response-selection-comment")
+                    .on_press({
+                        let target = target.clone();
+                        move |s: &mut State| begin(s, target.clone())
+                    }),
+            )
+            .child(
+                crate::workbench::comment_button(s, "Ask in side chat").on_press(
+                    move |s: &mut State| {
+                        s.chat.selected_response = None;
+                        s.create_workspace_side(
+                            quote
+                                .split('\n')
+                                .map(|l| format!("> {l}"))
+                                .collect::<Vec<_>>()
+                                .join("\n")
+                                + "\n\n",
+                        );
+                    },
                 ),
-            "shadow",
+            ),
+        "shadow",
+    );
+    if let Some(anchor) = target["responseAnchor"].as_str() {
+        if let Some([x, y]) = s.chat.selection_point.get() {
+            let [left, top, _, _] = rune::memo::layout("timeline").unwrap_or([0.0; 4]);
+            return toolbar.absolute(x - left, y - top);
+        }
+        toolbar.anchored(
+            anchor.to_owned(),
+            rune::Side::Bottom,
+            rune::Align::Start,
+            8.0,
         )
-        .absolute(24.0, 12.0)
+    } else {
+        toolbar.absolute(24.0, 12.0)
+    }
 }
 
 #[cfg(test)]

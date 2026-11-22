@@ -12,11 +12,15 @@ pub(crate) mod comments;
 pub(crate) mod icons;
 mod markdown;
 pub(crate) use markdown::render as markdown_view;
+mod attachments;
+mod copy;
+mod details;
 mod media;
 pub mod preview;
 pub mod probe;
 mod reader;
 mod tools;
+mod user;
 pub use reader::reader;
 
 pub struct Chat {
@@ -34,11 +38,17 @@ pub struct Chat {
     pub context: bool,
     pub comment_editor: Option<comments::Editor>,
     pub selected_response: Option<serde_json::Value>,
+    pub selected_marks: Vec<rune::TextMark>,
+    pub selection_point: Cell<Option<[f32; 2]>>,
+    pub annotation_preview: Option<Arc<oc_gateway::types::Message>>,
     pub media: media::Media,
     pub preview: Option<String>,
+    pub preview_name: String,
     pub tick_due: Option<f64>,
     pub now_ms: f64,
     pub copied: Option<(String, f64)>,
+    pub copy_pending: Option<String>,
+    pub copy_error: Option<String>,
 }
 
 /// Bench evidence must be visible new assistant output, not the prompt or forked history.
@@ -80,11 +90,17 @@ impl Default for Chat {
             context: false,
             comment_editor: None,
             selected_response: None,
+            selected_marks: Vec::new(),
+            selection_point: Cell::new(None),
+            annotation_preview: None,
             media: media::Media::default(),
             preview: None,
+            preview_name: "Image".into(),
             tick_due: None,
             now_ms: crate::unix_ms() as f64,
             copied: None,
+            copy_pending: None,
+            copy_error: None,
         }
     }
 }
@@ -309,7 +325,7 @@ pub fn view(s: &State, width: f32) -> El {
                 .wrap(),
         );
     }
-    body
+    body.child(user::popover(s, false))
 }
 pub fn scroll_key(s: &State) -> String {
     format!("conversation-{}", s.selected.as_deref().unwrap_or(""))
@@ -388,6 +404,10 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
             r.version,
             chat.disclosure_revision,
             chat.copied.as_ref().map(|(id, _)| id.as_str()),
+            &chat.copy_pending,
+            &chat.copy_error,
+            s.draft().revision,
+            s.prefs.chat_font_size.unwrap_or(14.0).to_bits(),
             crate::docks::active(s),
             width.to_bits(),
             s.theme.dark,
@@ -414,12 +434,18 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
                 } => {
                     let message_id = message.id.clone();
                     let ordinal = *ordinal;
-                    let mut content = col().w_full().gap(14.0).child(markdown::render(
-                        s,
-                        text,
-                        message.time.completed.is_none() && !crate::docks::active(s),
-                        width - 48.0,
-                    ));
+                    let response_key = format!("response-{reader}-{message_id}-{ordinal}");
+                    let mut content = col().w_full().gap(14.0).child(
+                        markdown::response(
+                            s,
+                            text,
+                            message.time.completed.is_none() && !crate::docks::active(s),
+                            width - 48.0,
+                            &message_id,
+                            ordinal,
+                        )
+                        .key(response_key.clone()),
+                    );
                     if message.time.completed.is_none()
                         && chat.data.running
                         && !crate::docks::active(s)
@@ -427,33 +453,27 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
                         content = content.child(el().size(5.0, 15.0).fill(t.c("text-secondary")));
                     }
                     if *copyable {
-                        let copy = text.clone();
-                        let copy_id = r.id.clone();
-                        let copied = chat.copied.as_ref().is_some_and(|(id, _)| id == &copy_id);
-                        content = content.child(
-                            icon_button(
-                                t,
-                                if copied { &icons::CHECK } else { &icons::COPY },
-                                if copied { "Copied" } else { "Copy response" },
-                            )
-                            .group_opacity(if copied { 1.0 } else { 0.0 }, 1.0)
-                            .on_press_tx(move |s: &mut State, tx| {
-                                tx.copy(copy.clone());
-                                let chat = if reader {
-                                    &mut s.workbench.reader_chat
-                                } else {
-                                    &mut s.chat
-                                };
-                                chat.copied = Some((copy_id.clone(), tx.clock() + 2.0));
-                                tx.wake_after(std::time::Duration::from_secs(2));
-                            }),
-                        );
+                        content = content.child(copy::view(s, &r.id, text, reader));
                     }
                     content.hover_group().selection_group(true)
+                        .on_key(|s: &mut State, key, tx| {
+                            if key.key == rune::Key::Escape {
+                                s.chat.selected_response = None;
+                                return true;
+                            }
+                            if rune::Chord::parse("mod+shift+m").is_ok_and(|chord| chord.matches_tx(key, tx)) {
+                                if let Some(target) = s.chat.selected_response.clone() {
+                                    comments::begin(s, target);
+                                    return true;
+                                }
+                            }
+                            false
+                        })
                         .on_selection_change(move |s: &mut State, change, _| {
                             if reader || change.dragging() || s.chat.comment_editor.is_some() { return; }
+                            s.chat.selected_marks = change.selection().map(|selection| selection.texts().iter().filter(|t| t.is_selected()).map(|t| t.mark()).collect()).unwrap_or_default();
                             let quote = change.selection().map(|v| v.text().trim()).filter(|v| !v.is_empty());
-                            s.chat.selected_response = quote.map(|quote| serde_json::json!({"messageID":message_id,"ordinal":ordinal,"quote":quote.chars().take(8000).collect::<String>()}));
+                            s.chat.selected_response = quote.map(|quote| serde_json::json!({"messageID":message_id,"ordinal":ordinal,"quote":comments::selected_quote(quote), "responseAnchor":response_key, "scroll":s.chat.position.get().offset[1]}));
                         })
                 }
                 Kind::Message(m) if m.r#type == "user" => {
@@ -465,8 +485,14 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
                     {
                         let side = side.to_owned();
                         bubble = bubble.child(
-                            label(t, "From side chat", 11.0, 400.0, "text-tertiary")
+                            row()
+                                .gap(5.0)
+                                .center_y()
+                                .mb(-2.0)
+                                .child(icon(&icons::CHAT, 13.0).color(t.c("text-tertiary")))
+                                .child(label(t, "From side chat", 12.0, 400.0, "text-tertiary"))
                                 .role("button")
+                                .label("From side chat")
                                 .focusable(true)
                                 .on_press(move |s: &mut State| {
                                     s.workbench.open = true;
@@ -476,79 +502,20 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
                                 }),
                         );
                     }
-                    let mut attachments = row().gap(8.0).max_w(width - 48.0).scroll_x();
-                    if let Some(files) = m.fields.get("files").and_then(serde_json::Value::as_array)
-                    {
-                        for file in files {
-                            if !file["mention"].is_null() {
-                                continue;
-                            }
-                            if let (Some(mime), Some(data)) =
-                                (file["mime"].as_str(), file["data"].as_str())
-                            {
-                                if mime.starts_with("image/") {
-                                    let source = format!("data:{mime};base64,{data}");
-                                    if let Some(Ok(image)) = chat.media.images.get(&source) {
-                                        attachments = attachments.child(
-                                            el().size(96.0, 76.0)
-                                                .radius(10.0)
-                                                .pixels_fit(image.pixels(), rune::SurfaceFit::Fill)
-                                                .role("button")
-                                                .label(
-                                                    file["name"]
-                                                        .as_str()
-                                                        .unwrap_or("Attached image"),
-                                                )
-                                                .focusable(true)
-                                                .on_press(move |s: &mut State| {
-                                                    s.chat.preview = Some(source.clone())
-                                                }),
-                                        );
-                                        continue;
-                                    }
-                                }
-                            }
-                            let name = file["name"]
-                                .as_str()
-                                .or_else(|| file["mime"].as_str())
-                                .unwrap_or("");
-                            let kind = if file["mime"] == "application/pdf" {
-                                "PDF".into()
-                            } else {
-                                name.rsplit_once('.')
-                                    .map(|(_, ext)| ext.to_uppercase())
-                                    .unwrap_or("File".into())
-                            };
-                            attachments = attachments.child(
-                                row()
-                                    .w(240.0)
-                                    .h(76.0)
-                                    .px(12.0)
-                                    .center_y()
-                                    .radius(10.0)
-                                    .border(1.0, t.c("border-heavy"))
-                                    .gap(10.0)
-                                    .child(
-                                        icon(&icons::ATTACHMENT, 20.0).color(t.c("text-secondary")),
-                                    )
-                                    .child(
-                                        col()
-                                            .min_w(0.0)
-                                            .child(label(t, name, 14.0, 400.0, "text").truncate())
-                                            .child(label(t, kind, 12.0, 400.0, "text-tertiary")),
-                                    ),
-                            );
-                        }
-                    }
+                    let attachments = attachments::sent(s, m, width, reader);
                     let txt = m
                         .fields
                         .get("text")
                         .and_then(serde_json::Value::as_str)
                         .unwrap_or("");
+                    if let Some(chip) = user::chip(s, m, reader) {
+                        bubble = bubble.child(chip);
+                    }
+                    let txt = user::own(txt, &m.fields);
                     if !txt.is_empty() {
                         bubble = bubble.child(
                             text(txt)
-                                .spans(crate::find::highlights(s, txt))
+                                .spans(user::spans(s, txt, &m.fields))
                                 .font(
                                     TextStyle::new(s.prefs.chat_font_size.unwrap_or(14.0), 400.0)
                                         .lh(s.prefs.chat_font_size.unwrap_or(14.0) * 1.625),
@@ -563,7 +530,15 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
                                 .fill(t.c("user-message")),
                         );
                     }
-                    bubble.child(attachments)
+                    if m.fields
+                        .get("files")
+                        .and_then(serde_json::Value::as_array)
+                        .is_some_and(|files| files.iter().any(|file| file["mention"].is_null()))
+                    {
+                        bubble.child(attachments)
+                    } else {
+                        bubble
+                    }
                 }
                 Kind::Turn {
                     status,
@@ -702,7 +677,9 @@ pub fn toolbar(s: &State) -> El {
         )
         .child(
             icon_button(t, &icons::INFO, "Session details")
-                .on_press(|s: &mut State| s.toggle_session_details()),
+                .key("session-details-toggle")
+                .checked(s.chat.details)
+                .on_press(details::toggle),
         )
         .child(
             icon_button(t, &icons::PANEL, "Toggle workspace").on_press(|s: &mut State| {
@@ -712,7 +689,7 @@ pub fn toolbar(s: &State) -> El {
         )
 }
 fn details(s: &State, width: f32) -> El {
-    crate::workbench::details_view(s, width)
+    details::view(s, width)
 }
 fn format_duration(ms: f64) -> String {
     let seconds = (ms / 1000.0).round() as u64;

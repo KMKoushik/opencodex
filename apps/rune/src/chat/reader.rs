@@ -4,7 +4,7 @@ use super::Chat;
 use crate::State;
 use rune::{El, GrowthSpec, ScrollSpec, col};
 
-pub fn reader(_s: &State, chat: &Chat, width: f32) -> El {
+pub fn reader(s: &State, chat: &Chat, width: f32) -> El {
     col()
         .key("workspace-conversation")
         .role("log")
@@ -28,4 +28,5 @@ pub fn reader(_s: &State, chat: &Chat, width: f32) -> El {
                 )
                 .virtual_rows_version(chat.data.revision.wrapping_add(chat.disclosure_revision)),
         )
+        .child(super::user::popover(s, true))
 }

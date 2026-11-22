@@ -7,6 +7,7 @@ use std::{collections::BTreeMap, sync::Arc};
 type Images = BTreeMap<String, Result<Image, String>>;
 #[derive(Default)]
 pub struct Media {
+    pub details: super::details::Data,
     pending: Latest<Images>,
     pub images: Arc<Images>,
     revision: Option<u64>,
@@ -29,6 +30,10 @@ impl Media {
             .request(data, move |data| load(client, &data, old));
     }
     pub fn capture(&mut self, data: Arc<Messages>, gateway: &str) -> Result<(), String> {
+        if let Some(info) = &data.info {
+            self.details
+                .capture(gateway, &data.session_id, &info.location.directory)?;
+        }
         let client = Gateway::new(gateway, None)?;
         self.images = Arc::new(
             std::thread::spawn(move || load(client, &data, Arc::default()))
@@ -38,14 +43,15 @@ impl Media {
         Ok(())
     }
     pub fn take(&mut self) -> bool {
+        let details = self.details.take();
         if let Some(images) = self.pending.take() {
             if images.is_empty() && self.images.is_empty() {
-                return false;
+                return details;
             }
             self.images = Arc::new(images);
             true
         } else {
-            false
+            details
         }
     }
 }
