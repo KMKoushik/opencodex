@@ -551,7 +551,10 @@ fn main() {
     let mut marked = false;
     let mut session_marked: Option<String> = None;
     let mut settled_marked: Option<String> = None;
+    let mut settled_geometry: Option<(String, usize, u32, u32)> = None;
+    let settle_handle = handle.clone();
     let mut reply_marked = false;
+    let mut reply_after = f64::MAX;
     app.init(|| {
         let mut s = State::new();
         if OPTIONS.get().unwrap().headless {
@@ -647,9 +650,10 @@ fn main() {
         }
     })
     .on_frame_drawn(move |rt| {
+        let elements = if bench { rt.elements() } else { Vec::new() };
         if bench {
             if let Some(id) = &rt.state.selected {
-                let mounted = rt.elements().iter().any(|e| {
+                let mounted = elements.iter().any(|e| {
                     if e.visible[2] <= 0.0 || e.visible[3] <= 0.0 {
                         return false;
                     }
@@ -658,21 +662,43 @@ fn main() {
                         .is_some_and(|key| rt.state.chat.rows.iter().any(|row| &row.id == key))
                 });
                 if mounted && session_marked.as_ref() != Some(id) {
+                    reply_after = unix_ms() as f64;
+                    reply_marked = false;
                     eprintln!("OPENCODEX_BENCH session_first_row {}", unix_ms());
                     eprintln!("OPENCODEX_BENCH session_loaded {}", unix_ms());
                     session_marked = Some(id.clone());
                 }
-                if mounted && rt.state.chat_settled && settled_marked.as_ref() != Some(id) {
+                let position = rt.state.chat.position.get();
+                let geometry = (
+                    id.clone(),
+                    rt.state.chat.rows.len(),
+                    position.max[1].to_bits(),
+                    position.viewport[1].to_bits(),
+                );
+                let geometry_changed = settled_geometry.as_ref() != Some(&geometry);
+                if mounted && geometry_changed && settled_marked.as_ref() != Some(id) {
+                    settled_geometry = Some(geometry);
+                    let id = id.clone();
+                    settle_handle.update(move |s, tx| {
+                        if s.selected.as_ref() != Some(&id) {
+                            return;
+                        }
+                        s.chat_settled = false;
+                        s.chat_settle_due = Some(tx.clock() + 0.5);
+                        tx.wake_after(std::time::Duration::from_millis(500));
+                        tx.live_only();
+                    });
+                }
+                if mounted
+                    && !geometry_changed
+                    && rt.state.chat_settled
+                    && settled_marked.as_ref() != Some(id)
+                {
                     eprintln!("OPENCODEX_BENCH session_settled {}", unix_ms());
                     settled_marked = Some(id.clone());
                 }
                 if !reply_marked
-                    && rt.elements().iter().any(|e| {
-                        e.path.contains(":text:")
-                            && e.visible[2] > 0.0
-                            && e.visible[3] > 0.0
-                            && e.text.as_deref().is_some_and(|t| t.contains("BENCH-END"))
-                    })
+                    && chat::rendered_reply(&elements, &rt.state.chat.data, reply_after)
                 {
                     eprintln!("OPENCODEX_BENCH reply_rendered {}", unix_ms());
                     reply_marked = true;
@@ -689,8 +715,7 @@ fn main() {
         }
         if bench
             && !marked
-            && rt
-                .elements()
+            && elements
                 .iter()
                 .any(|e| e.key.as_deref().is_some_and(|k| k.starts_with("thread-")))
         {

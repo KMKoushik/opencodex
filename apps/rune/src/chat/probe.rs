@@ -22,6 +22,7 @@ pub fn run(url: &str, id: String, duration: Duration) -> Result<(), String> {
     let mut rt = rune::Runtime::new(s, view, (1280.0, 800.0), rune::Env::new(true, 2.0));
     rt.frame(0.0);
     let start = Instant::now();
+    let reply_after = crate::unix_ms() as f64;
     rt.update(|s, tx| {
         s.open_session(Some(id));
         tx.settle();
@@ -63,13 +64,7 @@ pub fn run(url: &str, id: String, duration: Duration) -> Result<(), String> {
                     rt.state.chat.data.messages.len()
                 );
             }
-            if !rendered
-                && rt.elements().iter().any(|e| {
-                    e.path.contains(":text:")
-                        && e.visible[2] > 0.0
-                        && e.visible[3] > 0.0
-                        && e.text.as_deref().is_some_and(|t| t.contains("BENCH-END"))
-                })
+            if !rendered && super::rendered_reply(&rt.elements(), &rt.state.chat.data, reply_after)
             {
                 println!(
                     "OPENCODEX_HEADLESS reply_rendered_ms {:.3}",

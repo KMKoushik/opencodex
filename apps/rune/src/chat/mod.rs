@@ -32,6 +32,29 @@ pub struct Chat {
     pub tick_due: Option<f64>,
     pub now_ms: f64,
 }
+
+/// Bench evidence must be visible new assistant output, not the prompt or forked history.
+pub fn rendered_reply(elements: &[rune::ElementInfo], data: &Messages, after: f64) -> bool {
+    elements.iter().any(|element| {
+        element.visible[2] > 0.0
+            && element.visible[3] > 0.0
+            && element
+                .text
+                .as_deref()
+                .is_some_and(|text| text.contains("BENCH-END"))
+            && element
+                .path
+                .split('/')
+                .filter_map(|part| part.split_once(":text:"))
+                .any(|(id, _)| {
+                    data.messages.iter().any(|message| {
+                        message.id == id
+                            && message.r#type == "assistant"
+                            && message.time.created >= after
+                    })
+                })
+    })
+}
 impl Default for Chat {
     fn default() -> Self {
         Self {

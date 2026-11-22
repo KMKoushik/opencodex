@@ -131,9 +131,10 @@ OPENCODEX_GATEWAY=http://127.0.0.1:4441 target/perf/opencodex \
 `--profile-chat` profiles real HTTP/SSE and a headless CPU runtime, explicitly excluding GPU
 upload and presentation. With `OPENCODEX_BENCH=1`, SIGUSR1 opens `OPENCODEX_BENCH_SESSION`.
 After a presented frame with visible transcript rows, the app prints both `session_first_row`
-and the older harness's `session_loaded`; `session_settled` follows a 500 ms quiet history
-interval. `reply_rendered` requires visible assistant text containing `BENCH-END`, never the
-user's prompt. Covered windows do not emit fabricated presentation markers.
+and the older harness's `session_loaded`; `session_settled` follows a 500 ms quiet history,
+row-count, and scroll-geometry interval. `reply_rendered` requires visible new assistant text
+containing `BENCH-END`, never the user's prompt or old history. Covered windows do not emit
+fabricated presentation markers.
 
 `tools/isolated.sh` accepts `OPENCODEX_FIXTURE`, `OPENCODEX_FIXTURE_SERVICE_PORT`, and
 `OPENCODEX_FIXTURE_GATEWAY_PORT` without changing its M1 defaults. `goldens/seed.ts` accepts
