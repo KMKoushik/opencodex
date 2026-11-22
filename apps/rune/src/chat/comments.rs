@@ -16,6 +16,11 @@ pub fn decorate(s: &State, cx: &mut rune::Cx<State>) {
         .comment_editor
         .as_ref()
         .is_some_and(|e| e.target.get("messageID").is_some());
+    // Preserve the actual selected node/ranges, not a search for the first
+    // occurrence of the quote. Identical text elsewhere must never light up.
+    for comment in &s.draft().comments {
+        cx.mark_texts(native_marks(&comment.target));
+    }
     if !selecting && !editing {
         return;
     }
@@ -28,6 +33,20 @@ pub fn decorate(s: &State, cx: &mut rune::Cx<State>) {
         }
     }
     cx.mark_texts(s.chat.selected_marks.clone());
+}
+pub fn native_marks(target: &Value) -> Vec<rune::TextMark> {
+    target["nativeMarks"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|mark| {
+            Some(rune::TextMark::new(
+                mark["path"].as_str()?,
+                mark["start"].as_u64()? as usize..mark["end"].as_u64()? as usize,
+                mark["text"].as_str()?,
+            ))
+        })
+        .collect()
 }
 pub fn selected_quote(text: &str) -> String {
     let mut units = 0;
@@ -513,5 +532,11 @@ mod tests {
             .unwrap(),
             "Fix 🚀"
         );
+        let target = json!({"quote":"same quote","nativeMarks":[{"path":"response/b2","start":11,"end":21,"text":"same quote"}]});
+        let marks = native_marks(&target);
+        assert_eq!(marks.len(), 1);
+        assert_eq!(marks[0].path(), "response/b2");
+        assert_eq!(marks[0].range(), 11..21);
+        assert_eq!(marks[0].text(), "same quote");
     }
 }

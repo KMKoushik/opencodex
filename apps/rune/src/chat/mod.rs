@@ -14,13 +14,13 @@ mod markdown;
 pub(crate) use markdown::render as markdown_view;
 mod attachments;
 mod copy;
-#[cfg(target_os = "macos")]
-mod pasteboard;
 mod detail_events;
 mod detail_usage;
 pub(crate) mod details;
 mod document;
 mod media;
+#[cfg(target_os = "macos")]
+mod pasteboard;
 pub mod preview;
 pub mod probe;
 mod reader;
@@ -478,7 +478,8 @@ pub(super) fn conversation_row(s: &State, r: &Row, width: f32, reader: bool) -> 
                             if reader || change.dragging() || s.chat.comment_editor.is_some() { return; }
                             s.chat.selected_marks = change.selection().map(|selection| selection.texts().iter().filter(|t| t.is_selected()).map(|t| t.mark()).collect()).unwrap_or_default();
                             let quote = change.selection().map(|v| v.text().trim()).filter(|v| !v.is_empty());
-                            s.chat.selected_response = quote.map(|quote| serde_json::json!({"messageID":message_id,"ordinal":ordinal,"quote":comments::selected_quote(quote), "responseAnchor":response_key, "scroll":s.chat.position.get().offset[1]}));
+                             let native_marks = s.chat.selected_marks.iter().map(|m| serde_json::json!({"path":m.path(),"start":m.range().start,"end":m.range().end,"text":m.text()})).collect::<Vec<_>>();
+                             s.chat.selected_response = quote.map(|quote| serde_json::json!({"messageID":message_id,"ordinal":ordinal,"quote":comments::selected_quote(quote), "nativeMarks":native_marks, "responseAnchor":response_key, "scroll":s.chat.position.get().offset[1]}));
                         })
                 }
                 Kind::Message(m) if m.r#type == "user" => {

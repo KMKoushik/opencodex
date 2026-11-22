@@ -20,6 +20,11 @@ pub fn response(
         {
             continue;
         }
+        // Exact native ranges are painted from the root Cx, including quotes
+        // spanning blocks. Never fall back to first-occurrence search for them.
+        if comment.target["nativeMarks"].is_array() {
+            continue;
+        }
         let Some(quote) = comment.target["quote"].as_str().filter(|s| !s.is_empty()) else {
             continue;
         };
