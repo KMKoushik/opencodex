@@ -67,14 +67,27 @@ pub fn schedule(app: &Value) -> String {
     }
     every
         .iter()
-        .map(|e| match e.as_str() {
-            "1h" => "hourly".into(),
-            "1d" => "daily".into(),
-            "7d" => "weekly".into(),
-            _ => format!("every {e}"),
-        })
+        .map(|e| every_label(e))
         .collect::<Vec<String>>()
         .join(", ")
+}
+pub fn every_label(every: &str) -> String {
+    match every {
+        "1h" => "hourly".into(),
+        "1d" => "daily".into(),
+        "7d" => "weekly".into(),
+        _ => format!("every {every}"),
+    }
+}
+pub fn parse_every(every: &str) -> Option<i64> {
+    let unit = every.as_bytes().last()?;
+    let n = every.get(..every.len() - 1)?.parse::<i64>().ok()?;
+    n.checked_mul(match unit {
+        b'm' => 60_000,
+        b'h' => 3_600_000,
+        b'd' => 86_400_000,
+        _ => return None,
+    })
 }
 pub fn icon(s: &State, app: &Value, size: f32) -> El {
     let hash = app["id"]

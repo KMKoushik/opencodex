@@ -36,7 +36,7 @@ pub fn view(s: &State) -> Option<El> {
                 .child(label(&s.theme, title, 16.0, 600.0, "text").grow(1.0))
                 .child(
                     crate::sidebar::icon_button(&s.theme, &crate::icons::CLOSE, "Close dialog")
-                        .disabled(s.pages.apps.busy)
+                        .disabled(s.pages.apps.busy && kind != "model")
                         .on_press(close_dialog),
                 ),
         )
@@ -289,6 +289,7 @@ fn model(s: &State, app: &Value) -> El {
     let current = data(s, &path);
     let directory = current.and_then(|v| v["directory"].as_str());
     let catalog = directory.and_then(|d| s.snapshot.models.get(d));
+    let disabled = !s.snapshot.live || s.pages.apps.busy;
     let mut body = col().w_full().gap(16.0).child(
         label(
             &s.theme,
@@ -310,8 +311,14 @@ fn model(s: &State, app: &Value) -> El {
                 )
             })
             .unwrap_or_default();
-        let options = catalog
-            .data
+        let mut models: Vec<_> = catalog.data.iter().filter(|m| m.enabled).collect();
+        models.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        let selected_model = models.iter().find(|m| {
+            Some(m.id.as_str()) == current.and_then(|v| v["model"]["id"].as_str())
+                && Some(m.provider_id.as_str())
+                    == current.and_then(|v| v["model"]["providerID"].as_str())
+        });
+        let options = models
             .iter()
             .map(|m| ui::Choice {
                 value: format!("{}/{}", m.provider_id, m.id),
@@ -319,29 +326,129 @@ fn model(s: &State, app: &Value) -> El {
             })
             .collect();
         let appid = id.to_owned();
-        body = body.child(
-            ui::select(
+        let previous = selected.clone();
+        let mut controls = row().w_full().center_y().gap(4.0);
+        controls = controls.child(
+            model_control(
                 s,
                 "App model",
                 "App model",
                 &selected,
                 options,
                 move |s, v| {
+                    if v == previous {
+                        return;
+                    }
                     if let Some((provider, id)) = v.split_once('/') {
+                        let mut model = json!({"providerID":provider,"id":id});
+                        if let Some(Some(variant)) = s.prefs.model_variants.get(v) {
+                            model["variant"] = json!(variant);
+                        }
                         write(
                             s,
                             "app-model",
                             format!("apps/{appid}/model"),
                             "PUT",
-                            json!({"model":{"providerID":provider,"id":id}}),
+                            json!({"model":model}),
                         );
                     }
                 },
             )
-            .w_full(),
+            .disabled(disabled || models.is_empty())
+            .dim(if disabled || models.is_empty() {
+                0.4
+            } else {
+                1.0
+            }),
         );
+        let mut variants = vec![ui::Choice {
+            value: String::new(),
+            label: "Default".into(),
+        }];
+        if let Some(model) = selected_model {
+            variants.extend(model.variants.iter().map(|variant| {
+                ui::Choice {
+                    value: variant.id.clone(),
+                    label: variant
+                        .id
+                        .chars()
+                        .next()
+                        .map(|c| c.to_uppercase().to_string() + &variant.id[c.len_utf8()..])
+                        .unwrap_or_default(),
+                }
+            }));
+        }
+        let has_variants = variants.len() > 1;
+        if !has_variants {
+            variants[0].label = "No thinking options".into();
+        }
+        let variant = current
+            .and_then(|v| v["model"]["variant"].as_str())
+            .filter(|v| *v != "default")
+            .unwrap_or("");
+        let model = current.map(|v| v["model"].clone());
+        let appid = id.to_owned();
+        controls = controls.child(
+            model_control(
+                s,
+                "Thinking level",
+                if has_variants {
+                    "Default"
+                } else {
+                    "No thinking options"
+                },
+                variant,
+                variants,
+                move |s, variant| {
+                    if let Some(mut model) = model.clone().filter(|m| !m.is_null()) {
+                        if let Some(fields) = model.as_object_mut() {
+                            fields.remove("variant");
+                        }
+                        if !variant.is_empty() {
+                            model["variant"] = json!(variant);
+                        }
+                        let key = format!(
+                            "{}/{}",
+                            model["providerID"].as_str().unwrap_or(""),
+                            model["id"].as_str().unwrap_or("")
+                        );
+                        s.prefs
+                            .model_variants
+                            .insert(key, (!variant.is_empty()).then(|| variant.to_owned()));
+                        while s.prefs.model_variants.len() > 64
+                            || serde_json::to_vec(&s.prefs.model_variants)
+                                .is_ok_and(|bytes| bytes.len() > 16_384)
+                        {
+                            s.prefs.model_variants.pop_first();
+                        }
+                        s.save();
+                        write(
+                            s,
+                            "app-model",
+                            format!("apps/{appid}/model"),
+                            "PUT",
+                            json!({"model":model}),
+                        );
+                    }
+                },
+            )
+            .disabled(disabled || !has_variants)
+            .dim(if disabled || !has_variants { 0.4 } else { 1.0 }),
+        );
+        body = body.child(controls);
     } else {
-        body = body.child(label(&s.theme, "Loading…", 13.0, 400.0, "text-tertiary"));
+        let failed = matches!(s.pages.data.get(&path), Some(Err(_)));
+        body = body.child(label(
+            &s.theme,
+            if failed {
+                "Models unavailable"
+            } else {
+                "Loading models…"
+            },
+            13.0,
+            400.0,
+            "text-tertiary",
+        ));
     }
     let source = current.and_then(|v| v["source"].as_str());
     if let Some(source) = source {
@@ -376,4 +483,102 @@ fn model(s: &State, app: &Value) -> El {
         );
     }
     error(s, body).child(buttons.child(pages::primary_button(s, "Done").on_press(close_dialog)))
+}
+
+fn model_control(
+    s: &State,
+    id: &str,
+    name: &str,
+    selected: &str,
+    options: Vec<ui::Choice>,
+    choose: impl Fn(&mut State, &str) + 'static,
+) -> El {
+    let current = options
+        .iter()
+        .find(|o| o.value == selected)
+        .map(|o| o.label.as_str())
+        .unwrap_or("Choose model")
+        .to_owned();
+    let select = ui::Select {
+        id: id.into(),
+        selected: selected.into(),
+        active: options
+            .iter()
+            .position(|o| o.value == selected)
+            .unwrap_or(0),
+        options,
+        choose: std::sync::Arc::new(choose),
+    };
+    let keyboard = select.clone();
+    let anchor = id.to_owned();
+    let mut control = row()
+        .key(id)
+        .label(name)
+        .role("combobox")
+        .focusable(true)
+        .h(30.0)
+        .px(8.0)
+        .gap(8.0)
+        .center_y()
+        .radius(8.0)
+        .max_w(240.0)
+        .on_layout_tx(move |s: &mut State, rect, tx| {
+            s.pages.anchors.insert(anchor.clone(), rect);
+            tx.live_only();
+        })
+        .on_key(move |s: &mut State, e, tx| {
+            if !matches!(e.key, rune::Key::Down | rune::Key::Up)
+                && !matches!(&e.key, rune::Key::Text(k) if k == " ")
+            {
+                return false;
+            }
+            s.menus.open = Some(crate::menus::Menu::Choice(keyboard.clone()));
+            tx.focus_when_shown(format!("choice-{}", keyboard.active), true);
+            true
+        })
+        .on_press_tx(move |s: &mut State, tx| {
+            tx.focus_when_shown(format!("choice-{}", select.active), false);
+            s.menus.open = Some(crate::menus::Menu::Choice(select.clone()));
+        });
+    if id == "App model" {
+        if let Some(provider) = selected.split_once('/').map(|(provider, _)| provider) {
+            if let Some(image) = s.composer.providers.get(provider) {
+                control = control.child(el().size(18.0, 18.0).pixels(image.pixels()));
+            } else if provider == "opencode" {
+                static LOGO: rune::Icon = rune::Icon {
+                    name: "app-opencode",
+                    view: 24.0,
+                    body: include_str!(
+                        "../../../web/src/features/chat/provider-logos/opencode.svg"
+                    ),
+                };
+                control = control.child(rune::icon(&LOGO, 18.0).color(s.theme.c("text")));
+            }
+        }
+    }
+    control = control
+        .child(
+            label(
+                &s.theme,
+                current,
+                12.5,
+                500.0,
+                if id == "App model" {
+                    "text"
+                } else {
+                    "text-secondary"
+                },
+            )
+            .truncate(),
+        )
+        .child(rune::icon(&crate::icons::DOWN, 14.0).color(s.theme.c("text-tertiary")));
+    if id == "App model" {
+        s.theme.shadow(
+            s.theme
+                .paint(control.border(1.0, s.theme.c("chip-border")), "chip"),
+            "chip-shadow",
+        )
+    } else {
+        control
+    }
 }
