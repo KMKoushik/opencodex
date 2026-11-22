@@ -19,3 +19,5 @@ apps/ios/OpenCodex.xcodeproj/
 apps/ios/OpenCodex/Core/Theme/themes.json
 apps/rune/target/
 apps/rune/assets/wordmark.svg
+bench/.build/
+bench/results/

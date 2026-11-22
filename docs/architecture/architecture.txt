@@ -84,6 +84,6 @@
      │ Prompt/workbench workers: bounded /api, safe writes, diffs    │
      │ Native menus/notifications/find; oc-terminal PTY drawer       │
      │ oc-webview: sandbox canvas/apps bridge + isolated browser     │
+     │ Bundled gateway child (--parent-stdin): dies with the app     │
      │ UI/model/theme prefs: OPENCODEX_DATA_DIR or ~/.opencodex/rune │
-     │                                                               │
      └───────────────────────────────────────────────────────────────┘

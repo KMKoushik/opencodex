@@ -1,5 +1,19 @@
 # OpenCodex Rune — chat and composer
 
+## macOS bundle and benchmarks
+
+From the repository root, `bash apps/rune/tools/bundle.sh` builds the arm64 release and compiled
+gateway, reuses the desktop icon/version/minimum macOS version, and ad-hoc signs
+`apps/rune/dist/OpenCodex Rune.app` (`dev.opencodex.rune`). Optional:
+`--identity 'Developer ID Application: …'`. The distinct name/id lets it coexist with Electron.
+Finder launches resolve login-shell PATH on a bounded startup worker. Gateway stderr rotates
+under `OPENCODEX_DATA_DIR` (two 1 MiB files). Quitting closes only the owned sidecar's stdin.
+
+See [`../../bench/README.md`](../../bench/README.md) for the isolated fixture, both app drivers,
+frame/typing metrics, and the locked-screen-safe subset. Fullscreen/locked-screen results are
+not visible-startup measurements. `OPENCODEX_BENCH_LOG` mirrors markers to a worker-written file
+for LaunchServices; `OPENCODEX_BENCH_FRAMES=1` enables frame diagnostics without forcing redraws.
+
 Standalone Rust workspace, pinned to Rune **7286a3c5** with its six required crates.io patches.
 The binary is a native client of the existing TypeScript gateway, not another OpenCode backend.
 
@@ -20,7 +34,9 @@ Or launch the built binary directly:
 OPENCODEX_GATEWAY=http://127.0.0.1:4431 apps/rune/target/release/opencodex
 ```
 
-No default port, service discovery, bundled gateway, or service shutdown is hidden in the Rust app.
+Without `OPENCODEX_GATEWAY`, Rune starts its bundled gateway after the first frame, or uses
+`packages/gateway/dist/opencodex-gateway` in a development checkout. The gateway owns service
+discovery; Rune owns only the child and closes its stdin on quit. OpenCode is never stopped.
 `OPENCODEX_DATA_DIR` selects its presentation-preference directory (default `~/.opencodex/rune`).
 `OPENCODEX_BENCH_PROJECT` selects the initial project; `OPENCODEX_BENCH=1` enables the
 `OPENCODEX_BENCH first_content <unix_ms>` marker **after a frame containing mounted gateway
@@ -107,7 +123,7 @@ that fixture, the perf binary, and an unobstructed logged-in Mac for presentatio
 The larger web reference corpus and measured oracle are documented in `goldens/README.md` and
 `goldens/SPEC.md`; the M1 paired comparison is in `goldens/m1/README.md`. PNGs remain local/ignored.
 Stop only recorded fixture PIDs whose environment contains `/tmp/ocr-m1`, then delete that temp
-directory. Closing Rune never stops the gateway or OpenCode.
+directory. Closing Rune stops only its bundled gateway, never an explicit gateway or OpenCode.
 
 ## Composer validation and integration
 
