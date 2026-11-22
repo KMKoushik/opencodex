@@ -17,7 +17,7 @@
         "Shell, chat, drafts, docks; settings/tasks/apps page routes",
         "Live sidebar/chat worker: /api + SSE; reconnect refresh",
         "Prompt worker: sends, page reads/writes, attachment I/O",
-        "Native menus + OS notifications; virtual transcript/find",
+        "oc-native: AppKit color panel; menus + OS notifications",
         "UI/model/theme prefs: OPENCODEX_DATA_DIR or ~/.opencodex/rune"
       ]
     },

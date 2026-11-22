@@ -200,3 +200,11 @@ Files and skills use OpenCode's native mentions. A file becomes a `file://` atta
 # Sent annotations
 
 Review comments still reach the model as ordinary prompt text. Chat and page selections are numbered "Annotation N" and code comments "Comment N", so the agent can cite them. Like Codex, the sent message shows them as a compact chip, such as "1 annotation, 2 comments", with the user's own text in the bubble. The chip opens a numbered list with each comment's source, selected text, and comment. The UI sends the character ranges of the user's text, each quote, and each comment in that same prompt text. The gateway stores them in OpenCode's native message `metadata` under `opencodexAnnotations`, so the text is never duplicated. Both the contract and the renderer reject ranges that don't fit the text, so a mismatched message falls back to plain text. Native commands take no metadata, so expanded slash commands render as plain text. Undo still restores the original sent text.
+# Rune native controls
+
+`apps/rune/crates/oc-native` is a narrow main-thread AppKit boundary for the
+system color panel. The safe UI remains `forbid(unsafe_code)`. The panel publishes
+only its latest color and wakes Rune; appearance preferences (separate light/dark
+seeds and system mode) stay in the existing presentation profile, not the gateway.
+There is no polling of OS appearance: Rune's environment change redraw notifies
+the client, which updates once if the system variant changed.

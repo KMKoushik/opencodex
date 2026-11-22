@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = [".", "crates/oc-gateway", "crates/oc-terminal", "crates/oc-webview"]
+members = [".", "crates/oc-gateway", "crates/oc-terminal", "crates/oc-webview", "crates/oc-native"]
 
 [package]
 name = "opencodex"
@@ -16,6 +16,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rune-notify = { git = "https://github.com/anomalyco/rune", rev = "7286a3c5fe525bcbdb5a1188a4046ff4eff5f0de" }
 qrcode = { version = "0.14", default-features = false }
+oc-native = { path = "crates/oc-native" }
+chrono = "0.4"
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3"
