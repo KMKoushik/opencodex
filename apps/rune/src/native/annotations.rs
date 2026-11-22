@@ -98,6 +98,12 @@ fn valid(v: &Value) -> bool {
     a["comment"]
         .as_str()
         .is_some_and(|v| v.chars().count() <= 4000)
+        && a["url"]
+            .as_str()
+            .is_some_and(|v| v.encode_utf16().count() <= 8192)
+        && a["title"]
+            .as_str()
+            .is_some_and(|v| v.encode_utf16().count() <= 300)
         && a["elements"].as_array().is_some_and(|es| {
             es.len() <= 20
                 && es.iter().all(|e| {
@@ -134,10 +140,10 @@ pub fn poll(s: &mut State) -> bool {
             value["context"] = c.map(|c| c["path"].clone()).unwrap_or(Value::Null);
             s.native.canvas.as_ref().map(|c| c.web.clone())
         } else {
-            s.native
-                .browsers
-                .get(s.native.browser)
-                .map(|b| b.web.clone())
+            s.native.browsers.get(s.native.browser).map(|b| {
+                value["annotation"]["url"] = json!(b.web.state().url);
+                b.web.clone()
+            })
         };
         let Some(web) = web else {
             cancel(s);
@@ -161,6 +167,14 @@ pub fn poll(s: &mut State) -> bool {
             && rect[3] <= 16384.0
         {
             web.snapshot_region(rect, move |result| {
+                captures.borrow_mut().push((target, value, result));
+                if let Some(w) = wake {
+                    w();
+                }
+            });
+        } else if crop.is_null() {
+            // No crop means the whole page viewport, not a capture failure.
+            web.snapshot(move |result| {
                 captures.borrow_mut().push((target, value, result));
                 if let Some(w) = wake {
                     w();

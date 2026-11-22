@@ -14,6 +14,7 @@ use raw_window_handle::RawWindowHandle;
 use std::{cell::RefCell, collections::VecDeque};
 
 mod delegate;
+mod local_pages;
 use delegate::{Delegate, Shared};
 
 const BRIDGE: &str = include_str!("bridge.js");
@@ -41,7 +42,6 @@ pub struct Surface {
 }
 
 enum Content {
-    File(String, String),
     Url(String),
     Html(String, Option<String>),
 }
@@ -49,6 +49,8 @@ struct Native {
     view: Retained<AnyObject>,
     container: Retained<AnyObject>,
     delegate: Retained<Delegate>,
+    _local_pages: Retained<local_pages::Handler>,
+    annotation_world: Retained<AnyObject>,
     monitor: Option<Retained<AnyObject>>,
     visible: bool,
 }
@@ -175,6 +177,8 @@ impl Surface {
         let options = self.options.borrow();
         unsafe {
             let config = object(c"WKWebViewConfiguration");
+            let local_pages = local_pages::Handler::new(self.shared.navigation.files.clone());
+            let _: () = msg_send![&*config,setURLSchemeHandler:&*local_pages,forURLScheme:&*NSString::from_str("opencodex-preview")];
             let store: Retained<AnyObject> = if options.persistent {
                 msg_send![
                     AnyClass::get(c"WKWebsiteDataStore").unwrap(),
@@ -236,6 +240,8 @@ impl Surface {
                 view,
                 container,
                 delegate,
+                _local_pages: local_pages,
+                annotation_world: msg_send![AnyClass::get(c"WKContentWorld").unwrap(),worldWithName:&*NSString::from_str("OpenCodex annotations")],
                 monitor,
                 visible: true,
             });
@@ -342,14 +348,30 @@ impl Surface {
             return Err("Invalid local page grant".into());
         }
         let mut grants = self.shared.navigation.files.borrow_mut();
-        if !grants.iter().any(|g| g == root.as_str()) {
+        let token = if let Some((token, _)) = grants.iter().find(|(_, r)| r == root.as_str()) {
+            token.clone()
+        } else {
             if grants.len() >= 12 {
                 grants.remove(0);
             }
-            grants.push(root.to_string());
-        }
+            let token = unsafe {
+                let uuid: Retained<AnyObject> = msg_send![AnyClass::get(c"NSUUID").unwrap(), UUID];
+                string(msg_send![&*uuid, UUIDString]).to_ascii_lowercase()
+            };
+            grants.push((token.clone(), root.to_string()));
+            token
+        };
         drop(grants);
-        self.load(Content::File(file.into(), root.into()))
+        let mut target =
+            url::Url::parse(&format!("opencodex-preview://{token}/")).map_err(|e| e.to_string())?;
+        target.set_path(
+            file.path()
+                .strip_prefix(root.path())
+                .ok_or("Invalid preview file")?,
+        );
+        target.set_query(file.query());
+        target.set_fragment(file.fragment());
+        self.load(Content::Url(target.into()))
     }
     pub fn load_html(&self, html: &str, base: Option<&str>) -> Result<(), String> {
         if let Some(base) = base {
@@ -370,9 +392,6 @@ impl Surface {
                 msg_send![AnyClass::get(c"NSURL").unwrap(), URLWithString: &*NSString::from_str(s)]
             };
             match content {
-                Content::File(file, root) => {
-                    let _: *mut AnyObject = msg_send![&*n.view,loadFileURL:url(&file),allowingReadAccessToURL:url(&root)];
-                }
                 Content::Url(s) => {
                     let request: Retained<AnyObject> =
                         msg_send![AnyClass::get(c"NSURLRequest").unwrap(), requestWithURL: url(&s)];
@@ -407,10 +426,28 @@ impl Surface {
         }
     }
     pub fn state(&self) -> PageState {
-        self.shared.state.borrow().clone()
+        let mut state = self.shared.state.borrow().clone();
+        state.url = local_pages::display(&self.shared.navigation.files.borrow(), &state.url);
+        state
     }
     pub fn drain_events(&self) -> Vec<Event> {
-        self.shared.events.borrow_mut().drain(..).collect()
+        self.shared
+            .events
+            .borrow_mut()
+            .drain(..)
+            .map(|event| match event {
+                Event::Changed(mut state) => {
+                    state.url =
+                        local_pages::display(&self.shared.navigation.files.borrow(), &state.url);
+                    Event::Changed(state)
+                }
+                Event::NewWindow(url) => Event::NewWindow(local_pages::display(
+                    &self.shared.navigation.files.borrow(),
+                    &url,
+                )),
+                event => event,
+            })
+            .collect()
     }
     pub fn focus(&self, web: bool) {
         let parent = self.parent.borrow();
@@ -487,9 +524,8 @@ impl Surface {
             }
         });
         unsafe {
-            let world: Retained<AnyObject> = msg_send![AnyClass::get(c"WKContentWorld").unwrap(),worldWithName:&*NSString::from_str("OpenCodex annotations")];
             let args = object(c"NSDictionary");
-            let _: () = msg_send![&*n.view,callAsyncJavaScript:&*NSString::from_str(js),arguments:&*args,inFrame:std::ptr::null::<AnyObject>(),inContentWorld:&*world,completionHandler:&*block];
+            let _: () = msg_send![&*n.view,callAsyncJavaScript:&*NSString::from_str(js),arguments:&*args,inFrame:std::ptr::null::<AnyObject>(),inContentWorld:&*n.annotation_world,completionHandler:&*block];
         }
     }
     pub fn snapshot(&self, crop: Option<Rect>, callback: SnapshotCompletion) {

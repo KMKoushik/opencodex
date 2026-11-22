@@ -38,6 +38,7 @@ enum Stage {
     Ready,
     Initial(EvalSlot),
     Isolated(EvalSlot),
+    RetainedWorld(EvalSlot),
     PageWorld(EvalSlot),
     Snapshot(mpsc::Receiver<Result<PathBuf, String>>),
     Move {
@@ -153,6 +154,20 @@ impl Check {
                 };
                 if result? != "isolated-ready" {
                     return Err("isolated async evaluation did not await its result".into());
+                }
+                let slot = Rc::new(RefCell::new(None));
+                let out = slot.clone();
+                web.evaluate_isolated("return globalThis.__ocPrivateCheck;", move |result| {
+                    *out.borrow_mut() = Some(result)
+                });
+                self.stage = Stage::RetainedWorld(slot);
+            }
+            Stage::RetainedWorld(slot) => {
+                let Some(result) = slot.borrow_mut().take() else {
+                    return Ok(());
+                };
+                if result? != "private" {
+                    return Err("private content world was released between evaluations".into());
                 }
                 self.stage = Stage::PageWorld(evaluate(web, "typeof globalThis.__ocPrivateCheck"));
             }

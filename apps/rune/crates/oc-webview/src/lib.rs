@@ -63,7 +63,7 @@ pub enum Decision {
 #[derive(Clone)]
 pub struct Navigation {
     /// Explicitly granted canonical local HTML directories, shared with the owning surface.
-    pub files: Rc<std::cell::RefCell<Vec<String>>>,
+    pub files: Rc<std::cell::RefCell<Vec<(String, String)>>>,
     /// Empty allows HTTP(S); otherwise exact normalized origins (including ports).
     pub origins: Vec<String>,
     pub external_links: bool,
@@ -89,12 +89,12 @@ impl Navigation {
         let Ok(url) = url::Url::parse(value) else {
             return Decision::Block;
         };
-        if url.scheme() == "file" && url.host_str().is_none_or(|h| h == "localhost") {
+        if url.scheme() == "opencodex-preview" {
             return if self
                 .files
                 .borrow()
                 .iter()
-                .any(|root| url.as_str().starts_with(root))
+                .any(|(token, _)| url.host_str() == Some(token.as_str()))
             {
                 Decision::Allow
             } else {

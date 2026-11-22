@@ -51,9 +51,13 @@ load rather than queueing unbounded work.
   `snapshot` and `snapshot_region` asynchronously return PNG bytes; write them on a worker,
   not the frame thread.
 - Local HTML requires an explicit file URL and directory grant. The application canonicalizes
-  these on its worker before calling `load_local_file`; WebKit uses `loadFileURL` with that
-  read-access directory. This is not Electron's opaque local-preview scheme, and does not
-  establish equivalent subresource or origin isolation.
+  these on its worker before calling `load_local_file`. A per-surface, opaque preview origin
+  serves resources through `WKURLSchemeHandler`; no `file://` origin or WebKit directory read
+  grant reaches the guest. A bounded worker canonicalizes every resource and rejects symlink
+  escapes, traversal, NUL/backslash paths and non-GET/HEAD methods. Twelve grants per surface,
+  sixteen concurrent requests and 64 MiB per resource bound retention and work.
+- The annotation `WKContentWorld` is retained for the whole native surface lifetime, so separate
+  evaluations share overlay state without exposing globals to page scripts.
 - Browser downloads use a native save panel and WebKit's download delegate. Cancellation
   declines the destination; errors are reported through the event queue.
 - `set_background([r,g,b,a])` changes WebKit's loading/under-page color, in sRGB 0–1.
