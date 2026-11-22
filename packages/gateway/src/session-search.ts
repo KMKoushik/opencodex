@@ -10,6 +10,7 @@ import {
 import type { OpenCodeBackend } from './opencode';
 import { opencodeDatabases } from './opencode-databases';
 import { GatewayError } from './errors';
+import { sqliteDatabase } from './sqlite';
 
 const anchorSchema = z.object({
   query: z.string().max(256),
@@ -105,7 +106,7 @@ export function readSearchPage(input: SearchInput, signal: AbortSignal): Promise
   const worker = new Worker(
     `
     const { workerData, parentPort } = require('node:worker_threads');
-    const { DatabaseSync } = require('node:sqlite');
+    const DatabaseSync = (${sqliteDatabase.toString()})(require);
     (${searchWorker.toString()})(workerData, parentPort, DatabaseSync);
   `,
     { eval: true, workerData: input, execArgv: [] },
@@ -147,17 +148,28 @@ export function readSearchPage(input: SearchInput, signal: AbortSignal): Promise
 function searchWorker(input: SearchInput, parentPort: MessagePort, Database: typeof DatabaseSync) {
   const { paths, query, anchor, sample } = input;
   let database: InstanceType<typeof DatabaseSync> | undefined;
+  let table = 'session';
   for (const path of paths) {
     try {
       const candidate = new Database(path, { readOnly: true, timeout: 1000 });
       try {
-        const found = candidate
-          .prepare('SELECT time_created FROM session WHERE id = ?')
-          .get(sample.id);
-        if (found?.time_created === sample.created) {
-          database = candidate;
-          break;
+        // OpenCode 2.3 renamed this projection. Match a native session, even if
+        // an older table remains in a migrated database; never accept user SQL.
+        for (const name of ['session', 'session_v2']) {
+          try {
+            const found = candidate
+              .prepare(`SELECT time_created FROM ${name} WHERE id = ?`)
+              .get(sample.id);
+            if (found?.time_created === sample.created) {
+              database = candidate;
+              table = name;
+              break;
+            }
+          } catch {
+            // This release may have only one of the two known projections.
+          }
         }
+        if (database) break;
       } finally {
         if (database !== candidate) candidate.close();
       }
@@ -166,6 +178,7 @@ function searchWorker(input: SearchInput, parentPort: MessagePort, Database: typ
     }
   }
   if (!database) throw new Error('No database for the connected service');
+  let result: Match[];
   try {
     database.exec('BEGIN');
     const root = `s.parent_id IS NULL
@@ -180,7 +193,7 @@ function searchWorker(input: SearchInput, parentPort: MessagePort, Database: typ
         ...(database
           .prepare(
             `
-        SELECT s.id, s.time_created AS created, 0 AS rank FROM session s
+        SELECT s.id, s.time_created AS created, 0 AS rank FROM ${table} s
         WHERE ${root} AND instr(lower(s.title), lower($query)) > 0 ${after}
         ORDER BY s.time_created DESC, s.id DESC LIMIT 51
       `,
@@ -207,7 +220,7 @@ function searchWorker(input: SearchInput, parentPort: MessagePort, Database: typ
           SELECT s.id, s.time_created AS created, 1 AS rank,
             (SELECT substr(text, max(1, instr(lower(text), lower($query)) - 60), 220)
              FROM (${text}) WHERE instr(lower(text), lower($query)) > 0 LIMIT 1) AS excerpt
-          FROM session s WHERE ${root} AND instr(lower(s.title), lower($query)) = 0
+          FROM ${table} s WHERE ${root} AND instr(lower(s.title), lower($query)) = 0
             ${anchor?.rank === 1 ? after : ''}
         ) WHERE excerpt IS NOT NULL
         ORDER BY created DESC, id DESC LIMIT $limit
@@ -220,13 +233,13 @@ function searchWorker(input: SearchInput, parentPort: MessagePort, Database: typ
           }) as Match[]),
       );
     }
-    parentPort.postMessage(
-      rows.map((row) => ({
-        ...row,
-        ...(row.excerpt ? { excerpt: row.excerpt.replace(/\s+/g, ' ').trim().slice(0, 220) } : {}),
-      })),
-    );
+    result = rows.map((row) => ({
+      ...row,
+      ...(row.excerpt ? { excerpt: row.excerpt.replace(/\s+/g, ' ').trim().slice(0, 220) } : {}),
+    }));
   } finally {
     database.close();
   }
+  // The receiver terminates this worker; release SQLite handles before notifying it.
+  parentPort.postMessage(result);
 }

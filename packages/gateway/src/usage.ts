@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -10,6 +11,7 @@ import type { UsageLimits, UsageProvider, UsageWindow } from '@opencodex/contrac
 import type { OpenCodeBackend } from './opencode';
 import { GatewayError } from './errors';
 import { opencodeDatabases } from './opencode-databases';
+import { sqliteDatabase } from './sqlite';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -265,9 +267,7 @@ async function upstream(target: Upstream, signal: AbortSignal) {
 
 /** Reads one credential by the ID OpenCode reports as active, from OpenCode's local database. */
 async function storedCredential(id: string): Promise<StoredCredential | undefined> {
-  const { DatabaseSync } = await import('node:sqlite').catch(() => {
-    throw new UsageError('Reading OpenCode credentials requires Node.js 22.13 or newer.');
-  });
+  const DatabaseSync = sqliteDatabase(createRequire(import.meta.url));
   for (const path of await opencodeDatabases()) {
     let database: InstanceType<typeof DatabaseSync> | undefined;
     try {
