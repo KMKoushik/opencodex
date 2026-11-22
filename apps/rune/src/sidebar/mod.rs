@@ -152,6 +152,10 @@ pub fn icon_button_size(t: &Theme, glyph: &'static rune::Icon, name: &str, size:
     el().role("button")
         .label(name)
         .help(name)
+        .on_hover_change(|s: &mut State, inside, _| {
+            s.native.tooltip = inside;
+            crate::native::coverage(s);
+        })
         .focusable(true)
         .size(28.0, 28.0)
         .radius(7.0)

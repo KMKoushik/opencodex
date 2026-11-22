@@ -91,8 +91,10 @@ impl Worker {
                                             match name.as_str() {
                                                 "ready" => {
                                                     let workspace_revision=snapshot.workspace_revision.wrapping_add(1);
+                                                    let native_revisions=snapshot.native_revisions.map(|v|v.wrapping_add(1));
                                                     snapshot = Snapshot::load(&client).await?;
                                                     snapshot.workspace_revision=workspace_revision;
+                                                    snapshot.native_revisions=native_revisions;
                                                     snapshot.live = true;
                                                     delay = Duration::from_millis(500);
                                                     publish(&mut snapshot);
@@ -121,6 +123,12 @@ impl Worker {
                                                     if projects { snapshot.projects=client.projects().await?;changed=true; }
                                                     if changed { publish(&mut snapshot); }
                                                 }
+                                                "canvas" => {
+                                                    let value:serde_json::Value=serde_json::from_str(&data).map_err(|e|e.to_string())?;
+                                                    let index=match value["type"].as_str(){Some("list")=>Some(0),Some("source")=>Some(1),Some("data")=>Some(2),Some("app")=>Some(3),_=>None};
+                                                    if let Some(i)=index {snapshot.native_revisions[i]=snapshot.native_revisions[i].wrapping_add(1);publish(&mut snapshot);}
+                                                },
+                                                "tasks" => {snapshot.native_revisions[4]=snapshot.native_revisions[4].wrapping_add(1);publish(&mut snapshot);},
                                                 "unavailable" => return Err("OpenCode is unavailable".into()),
                                                 _ => {}
                                             }

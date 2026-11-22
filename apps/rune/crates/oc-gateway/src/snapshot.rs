@@ -16,6 +16,8 @@ pub struct Snapshot {
     pub branches: BTreeMap<String, String>,
     pub attention: BTreeMap<String, String>,
     pub workspace_revision: u64,
+    /// List, source, data, app runs, tasks, PTYs: token deltas invalidate none of these.
+    pub native_revisions: [u64; 6],
     pub workspace_directory: Option<String>,
 }
 impl Snapshot {
@@ -85,6 +87,13 @@ impl Snapshot {
     }
     /// Returns true for sidebar/workspace changes. Token deltas never publish or wake UI.
     pub fn reduce(&mut self, event: Event) -> bool {
+        if matches!(
+            event.r#type.as_str(),
+            "pty.created" | "pty.updated" | "pty.deleted"
+        ) {
+            self.native_revisions[5] = self.native_revisions[5].wrapping_add(1);
+            return true;
+        }
         if matches!(
             event.r#type.as_str(),
             "filesystem.changed" | "vcs.branch.updated"

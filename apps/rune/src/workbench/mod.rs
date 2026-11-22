@@ -21,15 +21,17 @@ pub enum Panel {
     Subagents,
     Side,
     Canvas,
+    Browser,
     Terminal,
 }
 impl Panel {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Files,
         Self::Changes,
         Self::Subagents,
         Self::Side,
         Self::Canvas,
+        Self::Browser,
         Self::Terminal,
     ];
     pub fn id(self) -> &'static str {
@@ -39,6 +41,7 @@ impl Panel {
             Self::Subagents => "subagents",
             Self::Side => "side-chat",
             Self::Canvas => "canvas",
+            Self::Browser => "browser",
             Self::Terminal => "terminal",
         }
     }
@@ -50,6 +53,7 @@ impl Panel {
                 Self::Changes => "Changes",
                 Self::Subagents => "Subagents",
                 Self::Canvas => "Canvas",
+                Self::Browser => "Browser",
                 _ => "Terminal",
             },
         }
@@ -188,6 +192,10 @@ impl State {
         }
     }
     pub fn select_panel(&mut self, panel: Panel) {
+        if panel == Panel::Terminal {
+            self.toggle_terminal();
+            return;
+        }
         self.workbench.open = !self.workbench.open || self.workbench.panel != panel;
         self.workbench.panel = panel;
         self.workbench.reader = None;
@@ -534,6 +542,10 @@ pub fn capture(s: &mut State) -> Result<(), String> {
         .ok_or("Panel capture needs OPENCODEX_GATEWAY")?;
     s.workbench.open = true;
     s.workbench.panel = panel;
+    if panel == Panel::Terminal {
+        s.workbench.open = false;
+        return crate::terminal::capture(s);
+    }
     let directory = s.workspace_directory();
     let id = s.selected.clone().unwrap_or_default();
     let (tag, path, query) = match panel {
@@ -576,7 +588,7 @@ pub fn capture(s: &mut State) -> Result<(), String> {
     }
     Ok(())
 }
-fn capture_get(
+pub(crate) fn capture_get(
     url: &str,
     path: String,
     query: Vec<(String, String)>,

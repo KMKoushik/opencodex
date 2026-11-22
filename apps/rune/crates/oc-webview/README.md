@@ -1,7 +1,7 @@
 # oc-webview
 
 Standalone macOS WKWebView host for Rune **7286a3c5**, with a compiling no-op host on other
-platforms. This crate is not yet wired into the OpenCodex application. No gateway or OpenCode
+platforms. The application mounts it through `src/native` for canvases, Apps, and browser tabs. No gateway or OpenCode
 process is started by the demo/check.
 
 ```rust,ignore

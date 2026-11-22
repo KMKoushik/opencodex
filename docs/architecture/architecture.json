@@ -17,7 +17,8 @@
         "Shell/chat/drafts/docks; settings/tasks/apps/workbench",
         "Live sidebar/chat worker: /api + SSE; reconnect refresh",
         "Prompt/workbench workers: bounded /api, safe writes, diffs",
-        "Native menus, notifications, find; HTML/terminal slots",
+        "Native menus/notifications/find; oc-terminal PTY drawer",
+        "oc-webview: sandbox canvas/apps bridge + isolated browser",
         "UI/model/theme prefs: OPENCODEX_DATA_DIR or ~/.opencodex/rune"
       ]
     },

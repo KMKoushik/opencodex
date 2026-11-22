@@ -10,6 +10,11 @@ static EXPAND: rune::Icon = rune::Icon {
     view: 24.0,
     body: r#"<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>"#,
 };
+static BROWSER: rune::Icon = rune::Icon {
+    name: "workspace-browser",
+    view: 24.0,
+    body: r#"<rect x="3" y="4" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 9h18M6 6.5h.01M9 6.5h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>"#,
+};
 
 pub fn kit(s: &State) -> rune_kit::Kit {
     let t = &s.theme;
@@ -37,7 +42,11 @@ pub fn layout(s: &State, main: El, cx: &mut rune::Cx<State>) -> El {
     if s.selected.is_some() {
         body = body.child(panel(s, cx)).child(rail(s));
     }
-    body
+    let mut stacked = col().grow(1.0).h_full().min_w(0.0).min_h(0.0).child(body);
+    if s.terminal.open {
+        stacked = stacked.child(terminal_host(s, cx));
+    }
+    stacked
 }
 pub fn rail(s: &State) -> El {
     let t = &s.theme;
@@ -71,9 +80,14 @@ pub fn rail(s: &State) -> El {
             Panel::Subagents => &ci::SUBAGENTS,
             Panel::Side => &ci::CHAT,
             Panel::Canvas => &ci::CANVAS,
+            Panel::Browser => &BROWSER,
             Panel::Terminal => &ci::TERMINAL,
         };
-        let selected = s.workbench.open && s.workbench.panel == panel;
+        let selected = if panel == Panel::Terminal {
+            s.terminal.open
+        } else {
+            s.workbench.open && s.workbench.panel == panel
+        };
         rail = rail.child(
             el().key(format!("panel-{}", panel.id()))
                 .size(36.0, 36.0)
@@ -94,6 +108,10 @@ pub fn rail(s: &State) -> El {
                 .label(panel.label())
                 .focusable(true)
                 .help(panel.label())
+                .on_hover_change(|s: &mut State, inside, _| {
+                    s.native.tooltip = inside;
+                    crate::native::coverage(s);
+                })
                 .on_press(move |s: &mut State| s.select_panel(panel)),
         );
     }
@@ -132,6 +150,8 @@ fn panel(s: &State, cx: &mut rune::Cx<State>) -> El {
         .border_sides([0.0, 0.0, 1.0, 0.0], t.c("border"));
     if files && !s.workbench.docs.is_empty() {
         header = header.child(documents::tabs(s).grow(1.0).min_w(0.0));
+    } else if s.workbench.panel == Panel::Canvas {
+        header = header.child(crate::native::canvas_tabs(s));
     } else {
         header = header.child(
             label(t, s.workbench.panel.label(), 12.0, 400.0, "text")
@@ -180,6 +200,7 @@ fn panel(s: &State, cx: &mut rune::Cx<State>) -> El {
         Panel::Subagents => sessions::view(s, false),
         Panel::Side => sessions::view(s, true),
         Panel::Canvas => canvas_host(s, cx),
+        Panel::Browser => crate::native::browser_panel(s),
         Panel::Terminal => terminal_host(s, cx),
     };
     panel = panel.child(content);
@@ -472,17 +493,7 @@ pub fn empty(s: &State, message: &str) -> El {
 }
 /// Mount `oc_webview`'s element here. The host is a keyed, bounded layout slot.
 pub fn canvas_host(s: &State, _cx: &mut rune::Cx<State>) -> El {
-    col()
-        .key("canvas-host")
-        .grow(1.0)
-        .min_h(0.0)
-        .w_full()
-        .child(empty_state(
-            s,
-            &ci::CANVAS,
-            "No canvases in this chat",
-            "Ask the agent for a dashboard, chart, diagram, or report and it can make one.",
-        ))
+    crate::native::canvas_panel(s)
 }
 pub fn empty_state(s: &State, glyph: &'static rune::Icon, title: &str, message: &str) -> El {
     col()
@@ -502,11 +513,6 @@ pub fn empty_state(s: &State, glyph: &'static rune::Icon, title: &str, message: 
 }
 /// Mount `TerminalView::element("terminal-host", cx, accessor)` here; poll its
 /// `poll_tx(clock, tx)` from the app poll and forward focused IME through `ime()`.
-pub fn terminal_host(s: &State, _cx: &mut rune::Cx<State>) -> El {
-    col()
-        .key("terminal-host")
-        .grow(1.0)
-        .min_h(0.0)
-        .w_full()
-        .child(empty(s, "Terminal\nOpen a terminal in this workspace."))
+pub fn terminal_host(s: &State, cx: &mut rune::Cx<State>) -> El {
+    crate::terminal::view(s, cx)
 }

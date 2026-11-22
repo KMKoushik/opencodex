@@ -117,5 +117,6 @@ not sustained native-window FPS measurements.
 - The requested web terminal PNG goldens were absent from the worktree; visual
   review used real PTY screenshots, without claiming a pixel-diff parity score.
 
-The app-side architecture and canonical app diagram are unchanged: this crate is
-not yet mounted by the application. Integration should add it to that diagram.
+The application mounts this crate in `src/terminal.rs`, below the chat and side panel.
+Inactive tabs detach their workers; reopening attaches to the same gateway-owned PTY.
+The canonical architecture diagram records this boundary.

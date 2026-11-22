@@ -237,8 +237,8 @@ wired. The page cache is disposable and bounded; gateway writes use the existing
 
 Integration points:
 
-- `src/apps/mod.rs::canvas_host` is the WKWebView embedding hook (currently a loading placeholder).
-- `src/shortcuts/mod.rs::execute` leaves workspace/terminal commands to their owning integration.
+- `src/apps/mod.rs::canvas_host` mounts the native canvas host described below.
+- `src/shortcuts/mod.rs::execute` routes workspace/terminal commands to their owning integration.
 - `src/notifications/mod.rs` uses `rune-notify`; macOS delivery requires an application bundle.
   Foreground, ancestry, mute and app-session exclusions are wired; actual banners were not verified.
 
@@ -264,6 +264,7 @@ Images are intentionally ignored and remain under `goldens/pages/`. Representati
 - `pair-apps-empty-light-1600x1000-reviewed.png`
 
 Testing used only `/tmp/ocr-pages`, service port 4951 and gateway port 4481.
+
 ## Native workbench
 
 `src/workbench` owns the 44-point rail, spring-sized inspector (340-point minimum,
@@ -291,10 +292,8 @@ fn canvas_host(s: &State, cx: &mut rune::Cx<State>) -> rune::El
 fn terminal_host(s: &State, cx: &mut rune::Cx<State>) -> rune::El
 ```
 
-Their keyed, bounded `canvas-host` / `terminal-host` slots are ready for the separately
-owned native crates. Terminal integration should call `TerminalView::element(key, cx,
-accessor)` there, `poll_tx(clock, tx)` from app polling, and its focused `ime()` handler.
-No placeholder claims to be a connected terminal or loaded web page.
+Their keyed, bounded slots now mount `oc-webview` and `oc-terminal`. The terminal hook
+lives in the bottom drawer rather than consuming the side panel; both can be open together.
 
 Headless capture accepts `--panel files|changes|subagents|side-chat|canvas|terminal` and
 `--file PATH` to open a document (or a child session ID for a conversation reader).
@@ -319,3 +318,76 @@ and exact typography/controls/empty-state parity remain. The first diff frame st
 roughly 40 ms fixed overhead in Rune's layout/text path even for a tiny diff (view building
 itself was measured below 0.1 ms); native presentation and its precise cause remain
 unverified. No redraw loop, loading delay or optimistic performance marker hides this.
+
+## Integrated native surfaces
+
+- `src/terminal.rs`: the 280-point bottom drawer spans chat, inspector and rail. Cmd+J
+  and the rail toggle it independently of the inspector. Gateway PTYs are listed per
+  project, auto-created on an empty first opening, and explicitly closed by tab controls.
+  The splitter supports drag and keyboard resize. Only the visible tab attaches a worker;
+  hiding or switching tabs cancels the attachment, not the shell. Reopening replays the
+  same PTY. Native keyboard, committed IME and token-derived colours reach `oc-terminal`.
+- `src/native`: canvas lists/tabs and `apps::canvas_host` mount a WKWebView shell with the
+  same `/api/canvas-runtime/frame.html` inside `sandbox="allow-scripts"`. Agent HTML is
+  never loaded as a privileged gateway-origin page. Native message handling implements
+  init/theme/data/reload/scroll, coalesced per-key CAS writes and conflict adoption,
+  server function calls/results, task watch/mutations, running-function updates, errors,
+  external URLs and session navigation. Canvas/source/data/app/task/PTY invalidations
+  are separate counters on the existing SSE snapshot, not token-triggered blanket reads.
+- The Browser rail entry has native tabs, address/search input, Back/Forward/Reload,
+  popup-to-tab routing and Cmd+L focus handoff. Guests never receive `ocHost`. Chat links
+  to local HTTP servers open beside the chat; other HTTP(S) links and Cmd/Ctrl-clicks
+  open the system browser. `canvas:` links open the Canvas tab. Known native menus,
+  composer menus, session popovers, image previews and icon tooltips cover web surfaces
+  with `set_covered(true)` until dismissed.
+
+`--panel` now applies to normal launches too. `OPENCODEX_CANVAS=<id>` opens a canvas;
+`OPENCODEX_BROWSER_URL=<http(s) URL>` opens a browser tab. For headless captures,
+`OPENCODEX_TERMINAL_OPEN=1 --panel files --file README.md` shows the drawer and inspector
+together. `OPENCODEX_TERMINAL_CAPTURE_COMMAND` optionally sends a real shell command
+before the screenshot clock starts. Capture failures exit nonzero.
+
+### Integration verification
+
+Used only `/tmp/ocr-int`, OpenCode 4971 and gateway 4501, seeded with `goldens/seed.ts`.
+A gateway-created canvas called a real `server.ts` function through the native bridge,
+rendered `BRIDGE-OK: Rune`, and saved its result through the gateway CAS route in both
+themes. Offscreen WK snapshots and explicit coverage assertions passed. A temporary
+source edit also reloaded the live frame through scoped SSE invalidation and saved its
+new result; the Apps page's own host passed the same bridge/CAS check independently.
+All required checks pass: release workspace build, all 14 Rust tests, `bun check`,
+`bun format:check`, and `bun architecture:check`.
+A temporary real-gateway Rune runtime smoke verified terminal list/create/close, committed IME,
+hide/reopen retention and detachment of hidden/background tabs. Browser checks verified
+HTTP loading, no privileged bridge, Back/Forward/Reload and new-window tab routing.
+The finite smoke drivers were removed; no production timer or forced redraw was added.
+Only processes with the fixture path in their actual environment were stopped; the
+temporary fixture directory was deleted after verification.
+
+Reviewed 1280×800 (scale 2) screenshots live in ignored `goldens/integration/`:
+
+- `terminal-{dark,light}-1280x800-final.png`
+- `canvas-{dark,light}-1280x800-composite.png`
+- `browser-{dark,light}-1280x800-composite.png`
+- `review-pair-{terminal,canvas}-{dark,light}-final.png` (web oracle left)
+
+Headless Rune cannot capture native children. The composites place real WK `takeSnapshot`
+PNGs at their measured native rects (canvas 576,40,660,760; browser 576,112,660,688).
+They prove content and geometry, not atomic native/GPU presentation. Browser headless
+chrome shows an initial tab label, not the native page's asynchronously fetched title.
+The seeded conversation/sidebar differs from the old oracle; these are visual reviews,
+not valid pixel-identical scores. Terminal drawer geometry matches the oracle's bottom
+layout; tab buttons, icons, typography and existing inspector/chat styling still differ.
+
+### Remaining integration gaps
+
+Browser/canvas annotation overlays are not implemented. Browser local-HTML file routing,
+persistent/shared browser profiles, downloads and browser-specific context menus remain;
+WK stores are deliberately per-surface and nonpersistent. Browser/canvas tab layouts are
+not persisted per chat, and canvas-list deletion controls are absent. App canvases use
+the existing page's fixed-height host rather than the web's full app-page layout. Task
+bridge operations compile but were not exercised end to end; task Start currently uses
+the gateway default model rather than the web client's project-model preference. Canvas
+function execution limits remain server-owned, as in the web host. Native visible GPU
+presentation/IME candidate windows were not verified on this locked/offscreen host.
+The crate's documented native-slot transaction and hidden-JavaScript limitations remain.

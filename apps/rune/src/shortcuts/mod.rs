@@ -2,6 +2,13 @@
 use crate::{State, pages::Route};
 use rune::{KeyEvent, Tx};
 pub fn global(s: &mut State, event: &KeyEvent, tx: &mut Tx) -> bool {
+    if event.is_command('l')
+        && s.workbench.open
+        && s.workbench.panel == crate::workbench::Panel::Browser
+    {
+        tx.focus("browser-address", true);
+        return true;
+    }
     if event.is_command('s') && s.workbench.open {
         s.save_workspace_file();
         return true;
@@ -111,7 +118,7 @@ pub fn execute(s: &mut State, id: &str, tx: &mut Tx) -> bool {
             s.workbench.open = !s.workbench.open;
             s.load_panel(false);
         }
-        "terminal.toggle" => s.select_panel(crate::workbench::Panel::Terminal),
+        "terminal.toggle" => s.toggle_terminal(),
         _ => return false,
     }
     true

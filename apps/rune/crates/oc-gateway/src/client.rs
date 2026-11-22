@@ -61,6 +61,13 @@ impl Gateway {
         body: Option<Value>,
         stream: bool,
     ) -> Result<Response, String> {
+        // Like the web host, wait for server-function completion; the app server owns
+        // execution limits. Agent-backed functions routinely exceed ordinary HTTP reads.
+        let function_call = method == Method::POST
+            && path.strip_prefix("canvases/").is_some_and(|p| {
+                p.split_once("/functions/")
+                    .is_some_and(|(id, name)| !id.contains('/') && !name.contains('/'))
+            });
         let mut req = self.http.request(method, self.url(path, query));
         if let Some(token) = &self.token {
             req = req.bearer_auth(token);
@@ -70,7 +77,7 @@ impl Gateway {
         }
         if stream {
             req = req.header("Accept", "text/event-stream");
-        } else {
+        } else if !function_call {
             req = req.timeout(Duration::from_secs(30));
         }
         let res = req.send().await.map_err(|e| e.to_string())?;
@@ -128,6 +135,32 @@ impl Gateway {
             .json()
             .await
             .map_err(|e| e.to_string())
+    }
+    pub async fn canvas_write(&self, path: &str, body: Value) -> Result<Value, String> {
+        match self.put::<Value>(path, body).await {
+            Ok(mut v) => {
+                v["ok"] = true.into();
+                Ok(v)
+            }
+            Err(e) if e.starts_with("Gateway 409") => {
+                let mut v: Value = self.get(path, &[]).await?;
+                v["ok"] = false.into();
+                Ok(v)
+            }
+            Err(e) => Err(e),
+        }
+    }
+    pub async fn patch_json(&self, path: &str, body: Value) -> Result<Value, String> {
+        self.response(path, &[], Method::PATCH, Some(body), false)
+            .await?
+            .json()
+            .await
+            .map_err(|e| e.to_string())
+    }
+    pub async fn delete_json(&self, path: &str) -> Result<Value, String> {
+        self.response(path, &[], Method::DELETE, None, false)
+            .await?;
+        Ok(Value::Null)
     }
     /// Safe writes use the gateway's content-version precondition, never a local write.
     pub async fn put<T: DeserializeOwned>(&self, path: &str, body: Value) -> Result<T, String> {

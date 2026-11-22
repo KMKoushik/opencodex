@@ -3,6 +3,7 @@ use crate::Options;
 use std::time::Instant;
 fn state() -> State {
     OPTIONS.get_or_init(|| Options {
+        page: String::new(),
         gateway: None,
         preset: String::new(),
         dark: true,

@@ -1,0 +1,465 @@
+//! Project-scoped PTYs survive drawer dismissal; only closing a tab terminates a shell.
+use crate::workbench::worker::{Operation, Request, Worker};
+use crate::{
+    State, icons,
+    sidebar::{icon_button, label},
+};
+use oc_terminal::{Palette, Size, TerminalView};
+use rune::{Cx, El, Tx, col, el, row};
+use serde_json::Value;
+
+pub struct Tab {
+    pub id: String,
+    pub directory: String,
+    pub view: TerminalView,
+}
+pub struct Drawer {
+    pub open: bool,
+    pub height: f32,
+    pub tabs: Vec<Tab>,
+    pub selected: usize,
+    worker: Option<Worker>,
+    directory: String,
+    loaded: bool,
+    creating: bool,
+    listing: bool,
+    pub error: Option<String>,
+    theme: std::collections::BTreeMap<String, String>,
+    revision: u64,
+}
+impl Default for Drawer {
+    fn default() -> Self {
+        Self {
+            open: false,
+            height: 280.0,
+            tabs: vec![],
+            selected: 0,
+            worker: None,
+            directory: String::new(),
+            loaded: false,
+            creating: false,
+            listing: false,
+            error: None,
+            theme: Default::default(),
+            revision: 0,
+        }
+    }
+}
+impl State {
+    pub fn toggle_terminal(&mut self) {
+        self.terminal.open = !self.terminal.open;
+        if self.terminal.open {
+            self.load_terminals();
+        }
+    }
+    fn terminal_request(&mut self, tag: String, op: Operation) -> bool {
+        if let Some(w) = &self.terminal.worker {
+            if let Err(e) = w.request(Request { epoch: 0, tag, op }) {
+                self.terminal.error = Some(e);
+                return false;
+            }
+            return true;
+        }
+        false
+    }
+    fn load_terminals(&mut self) {
+        if self.terminal.listing {
+            return;
+        }
+        let directory = self.workspace_directory();
+        if directory.is_empty() {
+            return;
+        }
+        self.terminal.directory = directory.clone();
+        self.terminal.listing = self.terminal_request(
+            format!("list:{directory}"),
+            Operation::Get {
+                path: "terminals".into(),
+                query: vec![("directory".into(), directory)],
+            },
+        );
+        self.terminal.revision = self.snapshot.native_revisions[5];
+    }
+    fn create_terminal(&mut self) {
+        if self.terminal.tabs.len() >= 32 {
+            self.terminal.error = Some("Close a terminal tab before opening another.".into());
+            return;
+        }
+        if self.terminal.creating {
+            return;
+        }
+        let d = self.workspace_directory();
+        self.terminal.creating =
+            self.terminal_request(format!("create:{d}"), Operation::TerminalCreate(d));
+    }
+    fn attach_terminal(&mut self, value: &Value, directory: &str) {
+        let Some(id) = value["id"].as_str() else {
+            return;
+        };
+        if self.terminal.tabs.iter().any(|t| t.id == id) {
+            return;
+        }
+        let view = TerminalView::new(Palette::from_tokens(|n| self.theme.c(n)));
+        self.terminal.tabs.push(Tab {
+            id: id.into(),
+            directory: directory.into(),
+            view,
+        });
+        self.terminal.selected = self.terminal.tabs.len() - 1;
+    }
+    fn close_terminal_tab(&mut self, index: usize) {
+        let t = &self.terminal.tabs[index];
+        self.terminal_request(
+            format!("close:{}", t.id),
+            Operation::TerminalClose {
+                directory: t.directory.clone(),
+                id: t.id.clone(),
+            },
+        );
+    }
+}
+pub fn start(s: &mut State, client: oc_gateway::Gateway, wake: rune::Waker) {
+    s.terminal.worker = Some(Worker::start(client, wake));
+    if s.terminal.open {
+        s.load_terminals();
+    }
+}
+pub fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
+    let mut changed = false;
+    if s.terminal.open && s.terminal.revision != s.snapshot.native_revisions[5] {
+        s.load_terminals();
+    }
+    if s.terminal.open && s.terminal.directory != s.workspace_directory() {
+        s.terminal.loaded = false;
+        s.load_terminals();
+    }
+    let replies = s
+        .terminal
+        .worker
+        .as_ref()
+        .map(Worker::take)
+        .unwrap_or_default();
+    for r in replies {
+        changed = true;
+        if r.tag.starts_with("list:") {
+            s.terminal.listing = false;
+        }
+        if r.tag.starts_with("create:") {
+            s.terminal.creating = false;
+        }
+        match r.result {
+            Err(e) => s.terminal.error = Some(e),
+            Ok(p) => {
+                s.terminal.error = None;
+                if let Some(d) = r.tag.strip_prefix("list:") {
+                    if d != s.terminal.directory {
+                        continue;
+                    }
+                    s.terminal.loaded = true;
+                    let items = p.value.as_array().cloned().unwrap_or_default();
+                    s.terminal
+                        .tabs
+                        .retain(|t| t.directory != d || items.iter().any(|v| v["id"] == t.id));
+                    for item in items.iter().take(32) {
+                        s.attach_terminal(item, d);
+                    }
+                    if items.is_empty() {
+                        s.create_terminal();
+                    }
+                } else if let Some(d) = r.tag.strip_prefix("create:") {
+                    s.attach_terminal(&p.value, d);
+                } else if let Some(id) = r.tag.strip_prefix("close:") {
+                    s.terminal.tabs.retain(|t| t.id != id);
+                    s.terminal.selected = s
+                        .terminal
+                        .selected
+                        .min(s.terminal.tabs.len().saturating_sub(1));
+                }
+            }
+        }
+    }
+    let recolor = s.terminal.theme != s.theme.tokens;
+    if recolor {
+        s.terminal.theme = s.theme.tokens.clone();
+    }
+    let active = if s.terminal.open && s.pages.route == crate::pages::Route::Chat {
+        active(s)
+    } else {
+        None
+    };
+    let focused = tx.focused().is_some_and(|k| k == "terminal-host");
+    for (i, t) in s.terminal.tabs.iter_mut().enumerate() {
+        let visible =
+            s.terminal.open && s.pages.route == crate::pages::Route::Chat && active == Some(i);
+        if visible && !crate::OPTIONS.get().unwrap().headless && t.view.worker.is_none() {
+            if let (Some(url), Some(wake)) =
+                (&crate::OPTIONS.get().unwrap().gateway, s.waker.clone())
+            {
+                match oc_gateway::Gateway::new(url, None) {
+                    Ok(client) => t.view.attach(oc_terminal::Worker::start(
+                        client,
+                        t.directory.clone(),
+                        Some(t.id.clone()),
+                        Size { cols: 80, rows: 24 },
+                        move || wake(),
+                    )),
+                    Err(e) => s.terminal.error = Some(e),
+                }
+            }
+        } else if !visible {
+            t.view.worker = None;
+        }
+        if recolor {
+            t.view.set_palette(Palette::from_tokens(|n| s.theme.c(n)));
+        }
+        t.view
+            .set_focused(s.terminal.open && active == Some(i) && focused);
+        let update = t.view.poll_tx(clock, tx);
+        changed |= update && s.terminal.open && active == Some(i);
+    }
+    changed
+}
+fn active(s: &State) -> Option<usize> {
+    let directory = s.workspace_directory();
+    s.terminal
+        .tabs
+        .get(s.terminal.selected)
+        .filter(|t| t.directory == directory)
+        .map(|_| s.terminal.selected)
+        .or_else(|| {
+            s.terminal
+                .tabs
+                .iter()
+                .position(|t| t.directory == directory)
+        })
+}
+pub fn ime(s: &mut State, ime: &rune::Ime, tx: &mut Tx) -> bool {
+    if !s.terminal.open || !tx.focused().is_some_and(|k| k == "terminal-host") {
+        return false;
+    }
+    if let Some(i) = active(s) {
+        return s.terminal.tabs[i].view.ime(ime);
+    }
+    false
+}
+pub fn view(s: &State, cx: &mut Cx<State>) -> El {
+    let t = &s.theme;
+    let directory = s.workspace_directory();
+    let current = active(s);
+    let mut header = row().h(40.0).w_full().px(8.0).center_y().gap(4.0);
+    for (i, _tab) in s
+        .terminal
+        .tabs
+        .iter()
+        .enumerate()
+        .filter(|(_, tab)| tab.directory == directory)
+    {
+        header = header.child(
+            row()
+                .h(32.0)
+                .center_y()
+                .radius(6.0)
+                .fill(if current == Some(i) {
+                    t.c("selected")
+                } else {
+                    rune::Color::TRANSPARENT
+                })
+                .child(
+                    label(t, format!("Terminal {}", i + 1), 12.0, 400.0, "text")
+                        .px(10.0)
+                        .h(30.0)
+                        .center_y()
+                        .focusable(true)
+                        .on_press_tx(move |s: &mut State, tx| {
+                            s.terminal.selected = i;
+                            tx.focus("terminal-host", false);
+                        }),
+                )
+                .child(
+                    icon_button(t, &icons::CLOSE, "Close terminal and end shell")
+                        .on_press(move |s: &mut State| s.close_terminal_tab(i)),
+                ),
+        );
+    }
+    header = header
+        .child(el().grow(1.0))
+        .child(
+            crate::pages::button(s, "+")
+                .label("New terminal")
+                .on_press(|s: &mut State| s.create_terminal()),
+        )
+        .child(
+            icon_button(t, &icons::CLOSE, "Close terminal panel")
+                .on_press(|s: &mut State| s.terminal.open = false),
+        );
+    let mut body = col()
+        .key("terminal-drawer")
+        .w_full()
+        .h(s.terminal.height.min(s.window_size.1 * 0.6))
+        .min_h(120.0)
+        .fill(t.c("surface"))
+        .border_sides([1.0, 0.0, 0.0, 0.0], t.c("border"))
+        .child(header);
+    if let Some(e) = &s.terminal.error {
+        body = body.child(label(t, e, 12.0, 400.0, "error").px(12.0));
+    }
+    if let Some(i) = active(s) {
+        body = body
+            .child(
+                label(
+                    t,
+                    &s.terminal.tabs[i].directory,
+                    11.0,
+                    400.0,
+                    "text-tertiary",
+                )
+                .px(12.0)
+                .h(24.0)
+                .center_y(),
+            )
+            .child(
+                s.terminal.tabs[i]
+                    .view
+                    .element("terminal-host", cx, |s| {
+                        let i = active(s).expect("mounted terminal");
+                        &mut s.terminal.tabs[i].view
+                    })
+                    .grow(1.0)
+                    .min_h(0.0)
+                    .mx(10.0)
+                    .mb(10.0)
+                    .mt(4.0),
+            );
+    } else {
+        body = body.child(
+            crate::pages::button(
+                s,
+                if s.terminal.loaded {
+                    "New terminal"
+                } else {
+                    "Loading terminals…"
+                },
+            )
+            .on_press(|s: &mut State| s.create_terminal()),
+        );
+    }
+    body.child(
+        el().key("terminal-resize")
+            .w_full()
+            .h(6.0)
+            .absolute(0.0, 0.0)
+            .cursor(rune::Cursor::ResizeRow)
+            .role("separator")
+            .label("Resize terminal panel")
+            .focusable(true)
+            .on_drag(|s: &mut State, d, tx| match d.phase {
+                rune::Phase::Down => d.data = s.terminal.height,
+                rune::Phase::Move => {
+                    s.terminal.height = (d.data - d.dy).clamp(120.0, s.window_size.1 * 0.6);
+                    tx.instant();
+                }
+                rune::Phase::Up => {
+                    if d.cancelled() {
+                        s.terminal.height = d.data;
+                    }
+                }
+            })
+            .on_key(|s: &mut State, key, _| {
+                let d = match key.key {
+                    rune::Key::Up => 32.0,
+                    rune::Key::Down => -32.0,
+                    _ => return false,
+                };
+                s.terminal.height = (s.terminal.height + d).clamp(120.0, s.window_size.1 * 0.6);
+                true
+            }),
+    )
+}
+/// Screenshot-only acquisition, completed before the headless layout clock starts.
+pub fn capture(s: &mut State) -> Result<(), String> {
+    let directory = s.workspace_directory();
+    let d = directory.clone();
+    let url = crate::OPTIONS
+        .get()
+        .unwrap()
+        .gateway
+        .clone()
+        .ok_or("Terminal capture needs gateway")?;
+    let (id, frame) = std::thread::spawn(move || -> Result<_, String> {
+        use std::{
+            sync::{Arc, Condvar, Mutex},
+            time::{Duration, Instant},
+        };
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| e.to_string())?;
+        let client = oc_gateway::Gateway::new(&url, None)?;
+        let terminal = rt.block_on(async {
+            let items = client.terminals(&d).await?;
+            if let Some(t) = items.into_iter().next() {
+                Ok(t)
+            } else {
+                client.create_terminal(&d).await
+            }
+        })?;
+        let wake = Arc::new((Mutex::new(false), Condvar::new()));
+        let notify = wake.clone();
+        let w = oc_terminal::Worker::start(
+            client,
+            d,
+            Some(terminal.id.clone()),
+            Size {
+                cols: 116,
+                rows: 12,
+            },
+            move || {
+                *notify.0.lock().unwrap() = true;
+                notify.1.notify_one();
+            },
+        );
+        let end = Instant::now() + Duration::from_secs(20);
+        let mut frame = None;
+        let mut last = Instant::now();
+        let mut sent = false;
+        loop {
+            let ready = wake.0.lock().unwrap();
+            let _ = wake
+                .1
+                .wait_timeout(ready, Duration::from_millis(100))
+                .unwrap();
+            if let Some(f) = w.take() {
+                if let Some(e) = &f.error {
+                    return Err(e.clone());
+                }
+                frame = Some(f);
+                last = Instant::now();
+                if !sent {
+                    if let Ok(cmd) = std::env::var("OPENCODEX_TERMINAL_CAPTURE_COMMAND") {
+                        w.command(oc_terminal::Command::Input(format!("{cmd}\r")))?;
+                    }
+                    sent = true;
+                }
+            }
+            if frame.is_some() && last.elapsed() > Duration::from_millis(800) {
+                return Ok((terminal.id, frame.unwrap()));
+            }
+            if Instant::now() > end {
+                return Err("Terminal capture timed out".into());
+            }
+        }
+    })
+    .join()
+    .map_err(|_| "Terminal capture worker panicked")??;
+    let mut view = TerminalView::new(Palette::from_tokens(|n| s.theme.c(n)));
+    view.frame = frame;
+    s.terminal.tabs.push(Tab {
+        id,
+        directory,
+        view,
+    });
+    s.terminal.selected = 0;
+    s.terminal.open = true;
+    s.terminal.loaded = true;
+    Ok(())
+}

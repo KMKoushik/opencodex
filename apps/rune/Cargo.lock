@@ -2500,6 +2500,8 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "oc-gateway",
+ "oc-terminal",
+ "oc-webview",
  "qrcode",
  "rune",
  "rune-kit",
@@ -2508,6 +2510,7 @@ dependencies = [
  "serde_json",
  "signal-hook 0.3.18",
  "tokio",
+ "url",
 ]
 
 [[package]]

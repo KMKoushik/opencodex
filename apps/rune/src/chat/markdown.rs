@@ -50,6 +50,7 @@ pub fn render(s: &State, source: &str, streaming: bool, width: f32) -> El {
     let hover = t.c("hover");
     let images = s.chat.media.images.clone();
     Markdown::new(source)
+        .on_link_tx(|s: &mut State, href, tx| s.open_link(href, tx))
         .highlights(if s.find.open {
             rune_kit::markdown::find(
                 source,

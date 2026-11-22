@@ -7,15 +7,7 @@ use rune::{El, ScrollSpec, col};
 use serde_json::Value;
 
 pub fn view(s: &State) -> El {
-    let mut body = col()
-        .w_full()
-        .grow(1.0)
-        .min_h(0.0)
-        .padding(28.0)
-        .gap(16.0)
-        .scroll(ScrollSpec {
-            stick_bottom: false,
-        });
+    let mut body = col().w_full().grow(1.0).min_h(0.0).padding(28.0).gap(16.0);
     if let Some(id) = &s.pages.app {
         body = body.child(button(s, "All apps").on_press(|s: &mut State| s.pages.app = None));
         body = body.child(canvas_host(s, id));
@@ -94,6 +86,9 @@ pub fn view(s: &State) -> El {
         }
         return body;
     }
+    body = body.scroll(ScrollSpec {
+        stick_bottom: false,
+    });
     if let Some(status) = pages::status(s, "apps") {
         return body.child(status);
     }
@@ -132,18 +127,5 @@ pub fn view(s: &State) -> El {
 /// WKWebView integration point: mount the gateway canvas surface in this keyed rectangle.
 /// The embedding agent should keep the native view's frame synchronized to this element.
 pub fn canvas_host(s: &State, id: &str) -> El {
-    col()
-        .key(format!("canvas-host-{id}"))
-        .w_full()
-        .h(360.0)
-        .center()
-        .border(1.0, s.theme.c("border"))
-        .radius(10.0)
-        .child(label(
-            &s.theme,
-            "Loading canvas…",
-            13.0,
-            400.0,
-            "text-secondary",
-        ))
+    crate::native::app_host(s, id).h(360.0)
 }

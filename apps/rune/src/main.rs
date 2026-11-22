@@ -7,6 +7,7 @@ mod docks;
 mod find;
 mod icons;
 mod menus;
+mod native;
 mod notifications;
 mod pages;
 mod profile;
@@ -14,6 +15,7 @@ mod settings;
 mod shortcuts;
 mod sidebar;
 mod tasks;
+mod terminal;
 mod theme;
 mod workbench;
 
@@ -63,6 +65,8 @@ struct State {
     composer: composer::state::Composer,
     docks: docks::Docks,
     workbench: workbench::Workbench,
+    terminal: terminal::Drawer,
+    native: native::Native,
     error: Option<String>,
     window_size: (f32, f32),
     waker: Option<rune::Waker>,
@@ -99,6 +103,8 @@ impl State {
             composer: Default::default(),
             docks: Default::default(),
             workbench: Default::default(),
+            terminal: Default::default(),
+            native: Default::default(),
             error: None,
             window_size: options.size,
             waker: None,
@@ -211,6 +217,7 @@ impl State {
     }
 }
 fn view(s: &State, cx: &mut Cx<State>) -> El {
+    native::coverage(s);
     let t = &s.theme;
     cx.caption_color(if t.dark {
         t.c("text-secondary")
@@ -518,6 +525,12 @@ fn poll(s: &mut State, clock: f64, tx: &mut Tx) -> bool {
         changed = true;
         tx.instant();
     }
+    let terminal_changed = terminal::poll(s, clock, tx);
+    let native_changed = native::poll(s, tx);
+    if terminal_changed || native_changed {
+        changed = true;
+        tx.instant();
+    }
     changed
 }
 pub fn unix_ms() -> u128 {
@@ -615,6 +628,7 @@ fn main() {
         ..AppSpec::new("OpenCodex", (1240.0, 840.0), State::new, view)
     };
     let app = menus::native::install(rune::App::new(spec))
+        .on_ime(terminal::ime)
         .args(args)
         .font_smoothing(rune::FontSmoothing::Off)
         .chrome(Chrome {
@@ -623,6 +637,7 @@ fn main() {
             drag_regions: true,
         });
     let handle = app.handle();
+    let window_handle = handle.clone();
     let notify_handle = handle.clone();
     rune_notify::on_click(move |click| {
         if let Some(id) = click.get("session") {
@@ -722,11 +737,26 @@ fn main() {
             composer::capture::setup(&mut s);
             settings::capture(&mut s);
             if let Err(error) = workbench::capture(&mut s) {
-                s.error = Some(error);
+                eprintln!("{error}");
+                std::process::exit(1);
+            }
+            if std::env::var_os("OPENCODEX_TERMINAL_OPEN").is_some() && !s.terminal.open {
+                if let Err(e) = terminal::capture(&mut s) {
+                    eprintln!("{e}");
+                    std::process::exit(1);
+                }
+            }
+            if let Err(e) = native::capture(&mut s) {
+                eprintln!("{e}");
+                std::process::exit(1);
             }
             sidebar::rebuild(&mut s);
         }
         s
+    })
+    .on_window(move |w| {
+        let w = w.clone();
+        window_handle.update(move |s, _| native::attach_window(s, w.clone()));
     })
     .on_ready(move |_| {
         handle.update(|s, tx| {
@@ -743,12 +773,29 @@ fn main() {
                     Ok(client) => {
                         composer::state::start(s, client.clone(), wake.clone());
                         workbench::start(s, client.clone(), wake.clone());
+                        terminal::start(s, client.clone(), wake.clone());
+                        native::start(s, client.clone(), wake.clone());
                         s.worker =
                             Some(Worker::start(client, s.prefs.project.clone(), move || {
                                 wake()
                             }));
                         if let Some(id) = &OPTIONS.get().unwrap().session {
                             s.open_session(Some(id.clone()));
+                        }
+                        if let Some(panel) = OPTIONS
+                            .get()
+                            .unwrap()
+                            .panel
+                            .as_deref()
+                            .and_then(workbench::Panel::parse)
+                        {
+                            s.select_panel(panel);
+                        }
+                        if let Ok(id) = std::env::var("OPENCODEX_CANVAS") {
+                            s.open_canvas(id);
+                        }
+                        if let Ok(url) = std::env::var("OPENCODEX_BROWSER_URL") {
+                            s.open_browser(&url);
                         }
                     }
                     Err(e) => s.error = Some(e),

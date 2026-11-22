@@ -9,6 +9,24 @@ use std::{
 };
 
 pub enum Operation {
+    CanvasWrite {
+        path: String,
+        body: Value,
+    },
+    Patch {
+        path: String,
+        body: Value,
+    },
+    Delete(String),
+    Post {
+        path: String,
+        body: Value,
+    },
+    TerminalCreate(String),
+    TerminalClose {
+        directory: String,
+        id: String,
+    },
     Get {
         path: String,
         query: Vec<(String, String)>,
@@ -97,6 +115,18 @@ impl Worker {
 }
 async fn run(client: &Gateway, op: Operation) -> Result<Value, String> {
     match op {
+        Operation::CanvasWrite { path, body } => client.canvas_write(&path, body).await,
+        Operation::Patch { path, body } => client.patch_json(&path, body).await,
+        Operation::Delete(path) => client.delete_json(&path).await,
+        Operation::Post { path, body } => client.post(&path, body).await,
+        Operation::TerminalCreate(directory) => {
+            let t = client.create_terminal(&directory).await?;
+            Ok(serde_json::json!({"id":t.id,"cwd":t.cwd,"title":t.title,"status":t.status}))
+        }
+        Operation::TerminalClose { directory, id } => {
+            client.close_terminal(&directory, &id).await?;
+            Ok(Value::Null)
+        }
         Operation::Get { path, query } => {
             let query: Vec<_> = query
                 .iter()
