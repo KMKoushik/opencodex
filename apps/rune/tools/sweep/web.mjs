@@ -39,9 +39,7 @@ export async function reach(page, state, c, extras) {
   const menu = (name) => page.getByRole('menuitem', { name, exact: true }).click();
   await page.goto(base);
   await page.locator('.sidebar').waitFor();
-  await page.evaluate(() => {
-    document.documentElement.dataset.platform = 'darwin';
-  });
+  await page.waitForFunction(() => document.documentElement.dataset.platform === 'darwin');
   await page.addStyleTag({
     content:
       '*,*::before,*::after { animation-delay:0s!important;animation-play-state:paused!important;transition:none!important;caret-color:transparent!important }',

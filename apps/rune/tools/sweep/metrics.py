@@ -5,7 +5,7 @@ import sys
 from PIL import Image, ImageChops, ImageFilter, ImageStat
 
 stem = pathlib.Path(sys.argv[1])
-a = Image.open(str(stem) + '.web.png').convert('RGB')
+a = Image.open(str(stem) + '.electron.png').convert('RGB')
 b = Image.open(str(stem) + '.rune.png').convert('RGB')
 if a.size != b.size:
     raise ValueError(f'Unequal capture dimensions: {a.size} versus {b.size}')

@@ -1,4 +1,4 @@
-"""Create fresh-name, worst-first review sheets (web left, Rune right)."""
+"""Create fresh-name, worst-first review sheets (Electron left, Rune right)."""
 import json
 import pathlib
 import time
@@ -18,7 +18,7 @@ for batch in range((len(rows) + 3) // 4):
     for i, row in enumerate(rows[batch * 4:batch * 4 + 4]):
         suffix = '' if row['size'] == '1280x800' else '-' + row['size']
         stem = row.get('stem', f"{row['state']}-{row['theme']}{suffix}")
-        draw.text((8, i * 624 + 4), f"{batch*4+i+1}. {stem} | blur {row['blurMAE']} | WEB LEFT / RUNE RIGHT", fill='white')
+        draw.text((8, i * 624 + 4), f"{batch*4+i+1}. {stem} | blur {row['blurMAE']} | ELECTRON LEFT / RUNE RIGHT", fill='white')
         image = Image.open(out / (stem + '.pair.png')).convert('RGB')
         image.thumbnail((1920,600), Image.Resampling.LANCZOS)
         sheet.paste(image, (0, i * 624 + 24))

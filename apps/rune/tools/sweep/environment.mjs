@@ -122,3 +122,13 @@ export async function cleanup() {
     }
   rmSync(fixture, { recursive: true, force: true });
 }
+export async function stopProcess(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  if (!owned(child.pid)) throw new Error('Refusing to stop a process without the sweep HOME');
+  child.kill('SIGTERM');
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (child.exitCode !== null || child.signalCode !== null) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  if (owned(child.pid)) child.kill('SIGKILL');
+}

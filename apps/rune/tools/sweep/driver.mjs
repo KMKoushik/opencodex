@@ -4,7 +4,8 @@ import { parseArgs } from 'node:util';
 import { root, fixture, env, command, setup, cleanup, now } from './environment.mjs';
 import { seed, api, beginState } from './fixture.mjs';
 import { states, config } from './states.mjs';
-import { prepare, reach } from './web.mjs';
+import { reach } from './web.mjs';
+import { installElectron, launchElectron } from './electron.mjs';
 const { values } = parseArgs({
   options: {
     states: { type: 'string' },
@@ -35,6 +36,8 @@ const sourceFiles = command('git', [
   'apps/rune/Cargo.toml',
   'apps/web/src',
   'packages/gateway/src',
+  'apps/desktop/src',
+  'apps/desktop/package.json',
 ])
   .toString()
   .trim()
@@ -47,7 +50,10 @@ function report(rows) {
   const review = existsSync(reviewPath) ? JSON.parse(readFileSync(reviewPath)) : {};
   const groups = new Map();
   for (const row of rows) {
-    const r = review.$source === (row.source ?? sourceKey) ? review[row.state] : undefined;
+    const r =
+      review.$reference === row.reference && review.$source === (row.source ?? sourceKey)
+        ? review[row.state]
+        : undefined;
     row.classification = row.reason
       ? 'not capturable'
       : (r?.classification ??
@@ -60,15 +66,6 @@ function report(rows) {
       row.reason ??
       r?.description ??
       'Unreviewed metric-based classification; not a visual sign-off.';
-    const extraBrowser =
-      /^(chat-|find-|panel-|tool-|tools-|thoughts-|question-|side-chat-|subagents-|subagent-)/.test(
-        row.state,
-      ) ||
-      ['thread-actions-open', 'thread-context-menu', 'session-details-open'].includes(row.state);
-    if (!row.reason && r && extraBrowser) {
-      row.classification = 'missing/extra UI';
-      row.description += ' Extra native Browser rail button (host-only).';
-    }
     const old = groups.get(row.state);
     if (
       !old ||
@@ -80,11 +77,8 @@ function report(rows) {
   const worst = [...groups.values()].sort((a, b) => (b.blurMAE ?? -1) - (a.blurMAE ?? -1));
   const counts = {};
   for (const row of worst) counts[row.classification] = (counts[row.classification] ?? 0) + 1;
-  const hostDriven = worst.filter((row) =>
-    row.description.endsWith('Extra native Browser rail button (host-only).'),
-  ).length;
   const lines = [
-    '# Same-data web / Rune parity sweep',
+    '# Same-data Electron / Rune parity sweep',
     '',
     `Revision: \`${command('git', ['rev-parse', 'HEAD']).toString().trim()}\`. Clock: ${new Date(now).toISOString()}.`,
     `UI/backend source fingerprint: \`${rows[0]?.source ?? sourceKey}\`. Reviewed observations are used only for matching fingerprints.`,
@@ -92,19 +86,16 @@ function report(rows) {
     `**${worst.length} states; ${rows.length} state/theme/size attempts.** ${Object.entries(counts)
       .map(([k, v]) => `${v} ${k}`)
       .join(' · ')}.`,
-    ...(hostDriven
-      ? [
-          `**${hostDriven} of the missing/extra classifications are driven by the additional native Browser rail button**, not different transcript data. See the per-state layout observations below.`,
-          '',
-        ]
-      : []),
     '',
-    'Both clients use gateway **4507**, isolated OpenCode **4977**, and the same authored fixture. No model calls or historical screenshots. Web is LEFT in every pair. Fixtures include Markdown, 40-turn history, completed tools/reasoning, a real native form and permission, source diff/files, native child, side fork, tasks, and an app/canvas. Tasks/Apps empty states temporarily remove their data before the pair and restore it afterwards; both captures and their digests use the same empty lists. New side chat creates a real gateway fork before capturing that selected conversation (including inherited context) in both clients; this compares the rendered result, not native mutation behavior.',
+    'Both clients use gateway **4507**, isolated OpenCode **4977**, and the same authored fixture. No model calls or historical screenshots. **Real Electron is LEFT**, Rune RIGHT. Electron runs this checkout’s built main and sandboxed preload with `ELECTRON_RENDERER_URL=http://127.0.0.1:4507`, isolated HOME/XDG and a per-capture temporary user-data directory. Its genuine desktop bridge supplies Browser and Updates capabilities; no preload substitute or host-capability mock is installed. Fixtures include Markdown, 40-turn history, completed tools/reasoning, a real native form and permission, source diff/files, native child, side fork, tasks, and an app/canvas. Tasks/Apps empty states temporarily remove their data before the pair and restore it afterwards; both captures and their digests use the same empty lists. New side chat creates a real gateway fork before capturing that selected conversation (including inherited context) in both clients; this compares the rendered result, not native mutation behavior.',
     '',
     '## Method and limits',
     '',
-    ...(review.$source === (rows[0]?.source ?? sourceKey) ? [review.$note, ''] : []),
-    '- Logical size 1280×800 (unless requested otherwise), device scale 2. Chrome channel, gateway `/`, macOS titlebar CSS inset. Native release `--screenshot --at 0.7` with identical size/theme.',
+    ...(review.$reference === rows[0]?.reference &&
+    review.$source === (rows[0]?.source ?? sourceKey)
+      ? [review.$note, '']
+      : []),
+    '- Logical size 1280×800 (unless requested otherwise), device scale 2. Installed Electron binary runs this checkout’s actual built desktop main, preload and IPC handlers; Playwright connects through its ephemeral remote-debugging port/CDP. A finite temporary bootstrap imports that real main and only sets window content size, theme and hidden state. CDP device metrics match the content size. `Page.captureScreenshot` captures the hidden renderer surface, excluding OS titlebar traffic lights. The genuine preload enables the macOS titlebar inset. Native release `--screenshot --at 0.7` uses the same size/theme. Each scored record verifies the real bridge, viewport and scale and records Electron/Chromium versions.',
     '- Fixed browser Date and verified native realtime-clock interposer; monotonic/network time remains real. Web CSS animations paused at their initial phase and input caret hidden; native animation/caret phase uses the fixed virtual capture clock. Pointer parked except explicit hover. Transcript scroll fraction explicit. No redraw loops.',
     '- Each pair brackets capture with a SHA-256 digest of the same gateway projects, session info/history, forms, permissions, children, side forks, tasks, apps and canvas data. A changing digest invalidates the pair (no score). Captures are sequential over an unchanged snapshot, **not atomic simultaneous GPU presentation**.',
     '- RGB MAE is 0–255; over16 is the percentage of pixels whose maximum channel error exceeds 16. Structural metric is grayscale MAE after a 2-physical-pixel Gaussian blur and 2× downsampling (lower is better). No alignment correction, masks or cropping. Heatmap magnifies errors 4×.',
@@ -141,7 +132,7 @@ function report(rows) {
     '# Optional: --states home-empty,chat-markdown-top --themes dark,light --sizes 1280x800',
     '```',
     '',
-    'Requires Bun, Node, Chrome, Rust/macOS toolchain and Python Pillow. Builds web and Rune incrementally; isolated CLI pinned to 2.3.2. Only processes whose actual environment contains `HOME=/tmp/ocr-sweep/home` are terminated. The temporary environment is removed in finally; `--keep-env` is for diagnosis only. PNGs, logs, DOM observations, fixture manifest and full per-theme metrics stay local/ignored. `--report-only` regenerates this report from local results and checked-in review descriptions.',
+    'Requires Bun, Node, the pinned Electron dependency, Rust/macOS toolchain and Python Pillow. Builds the shared renderer, real desktop main/preload, and Rune incrementally; isolated CLI pinned to 2.3.2. Each Electron instance is closed after capture. Only processes whose actual environment contains `HOME=/tmp/ocr-sweep/home` are terminated during fallback cleanup. The temporary environment is removed in finally; `--keep-env` is for diagnosis only. PNGs, logs, DOM observations, fixture manifest and full per-theme metrics stay local/ignored. Reference PNGs are `.electron.png`, never historical `.web.png` files. `--report-only` regenerates this report from local results and checked-in review descriptions.',
     '',
   );
   writeFileSync(out + '/REPORT.md', lines.join('\n'));
@@ -152,13 +143,15 @@ if (values['report-only']) {
   process.exit(0);
 }
 Object.assign(process.env, env);
-let browser;
+let electron;
 try {
   await setup();
   console.log('Isolated services connected');
   const extras = await seed();
   writeFileSync(out + '/fixture.json', JSON.stringify(extras, null, 2));
   command('bun', ['run', 'build:web']);
+  command('bun', ['run', '--cwd', 'apps/desktop', 'build']);
+  const executablePath = installElectron();
   command('cargo', [
     'build',
     '--release',
@@ -180,10 +173,9 @@ try {
   ]);
   command(fixture + '/clock-probe', [], { DYLD_INSERT_LIBRARIES: fixture + '/clock.dylib' });
   const pw = readdirSync(root + '/node_modules/.bun').find((n) => n.startsWith('playwright-core@'));
-  const { chromium } = await import(
+  const playwright = await import(
     `${root}/node_modules/.bun/${pw}/node_modules/playwright-core/index.mjs`
   );
-  browser = await chromium.launch({ channel: 'chrome' });
   async function digest() {
     const paths = [
       '/projects',
@@ -242,28 +234,31 @@ try {
         const name = `${state}-${theme}${sizes.length > 1 || size !== '1280x800' ? '-' + size : ''}`;
         const stem = out + '/' + name;
         const c = config(state, extras);
-        const row = { state, theme, size, stem: name, source: sourceKey };
+        const row = { state, theme, size, stem: name, source: sourceKey, reference: 'electron' };
         results.splice(
           0,
           results.length,
           ...results.filter((r) => !(r.state === state && r.theme === theme && r.size === size)),
         );
-        let context, restore;
+        let restore;
         try {
           if (c.reason) throw new Error(c.reason);
           restore = await beginState(state, extras);
-          context = await browser.newContext({
-            viewport: { width, height },
-            deviceScaleFactor: 2,
-            colorScheme: theme,
-            permissions: ['clipboard-write'],
-          });
-          await prepare(context, extras, state);
-          const page = await context.newPage();
+          electron = await launchElectron(
+            playwright,
+            executablePath,
+            extras,
+            state,
+            theme,
+            width,
+            height,
+          );
+          const { page } = electron;
           page.setDefaultTimeout(6000);
           const extraEnv = await reach(page, state, c, extras);
           row.before = await digest();
-          await page.screenshot({ path: stem + '.web.png', caret: 'hide', animations: 'disabled' });
+          row.desktop = await electron.capture(stem + '.electron.png');
+          row.versions = { electron: electron.versions.electron, chrome: electron.versions.chrome };
           writeFileSync(stem + '.dom.txt', await page.locator('body').innerText());
           const args = [
             ...c.flags,
@@ -299,7 +294,8 @@ try {
         } catch (error) {
           row.reason = String(error.message).slice(0, 1000);
         } finally {
-          await context?.close();
+          await electron?.app.close();
+          electron = undefined;
           if (c.createdSide)
             await api('/sessions/ses_parity_0/side-chats/' + c.createdSide, {}, 'DELETE');
           await restore?.();
@@ -314,6 +310,6 @@ try {
       }
   report(results);
 } finally {
-  await browser?.close();
+  await electron?.app.close();
   if (!values['keep-env']) await cleanup();
 }

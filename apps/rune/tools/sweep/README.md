@@ -5,20 +5,31 @@ bun apps/rune/tools/sweep/run.ts
 bun apps/rune/tools/sweep/run.ts --states home-empty,chat-tools-bottom --themes dark --sizes 1280x800
 ```
 
-Run from this checkout with Chrome, Bun, Node, the macOS Rust/clang toolchain,
+Run from this checkout with its pinned Electron dependency, Bun, Node, the macOS Rust/clang toolchain,
 and Python Pillow installed. No model credentials or model calls are required.
 The command installs pinned OpenCode 2.3.2 under `/tmp/ocr-sweep`, starts or
 validates/reuses its service on 4977 and gateway on 4507, seeds authored data,
-builds the web UI and Rune (incrementally), captures both clients, computes metrics,
+builds the shared renderer, real desktop main/preload and Rune (incrementally), captures both clients, computes metrics,
 and writes `apps/rune/goldens/sweep/REPORT.md`. PNGs and machine-readable evidence
 are ignored; the report and reviewed observations are committed.
 
 The 69 names are explicit in `states.mjs`, not inferred from an old PNG corpus.
-Every state starts in a fresh browser context and native process. `web.mjs`
+Every state starts in fresh Electron and Rune processes. `web.mjs`
 uses real accessible controls, while `states.mjs` maps the same operation to
 existing native capture flags. Failed locators fail the state rather than
 capturing whatever happens to be visible. Snapshot digests invalidate data that
 changes between the two sequential captures. They are **not atomic captures**.
+
+`electron.mjs` launches the actual Electron binary in this checkout's `node_modules`
+with `ELECTRON_RENDERER_URL=http://127.0.0.1:4507`, isolated HOME/XDG, a temporary
+`--user-data-dir`, and an ephemeral loopback `--remote-debugging-port`. Playwright
+connects over CDP, and `Page.captureScreenshot` captures the hidden renderer.
+A finite temporary bootstrap imports the **actual built desktop main** and only
+sets BrowserWindow content size, theme and hidden state. That main loads its own
+sandboxed preload and registers the real IPC handlers. Preferences are seeded
+through the real `window.desktop.setPreference` bridge before reloading; Browser
+and Updates capabilities are never mocked. CDP sets scale 2 and verifies the
+bridge, viewport and device scale on every scored capture. No redraw loop is added.
 
 `clock.c` is a test-process-only macOS dyld interposer; only realtime clocks are
 frozen. No app code, shared service, user HOME, or other worktree is changed.
@@ -33,12 +44,15 @@ retain the populated fixture. There is no model-driven task start or app refresh
 Form, permission and child fixtures use OpenCode's native APIs,
 as `parity-fixture.ts` already does; all client reads use the same gateway.
 
-Full-resolution outputs: `<state>-<theme>.web.png`, `.rune.png`, `.diff.png`,
+Full-resolution outputs: `<state>-<theme>.electron.png`, `.rune.png`, `.diff.png`,
 `.pair.png`; explicit nondefault/multiple sizes add `-<width>x<height>`.
 `results.json` contains all theme/size metrics and before/after digests.
+It records `reference: "electron"` and runtime/bridge evidence. Old Chrome
+`.web.png` files, if present locally, are never read by the corrected metrics.
 DOM text and native capture logs accompany each pair. Classification uses the
 worst theme/size; reviewed descriptions/overrides live in `review.json`.
-Observations are pinned to a hash of the UI/backend source files; changed source
+Observations are pinned to the reference host and a hash of the shared renderer,
+desktop main/preload, and native/backend source files; changed source
 automatically falls back to explicitly provisional metric classifications.
 `python3 apps/rune/tools/sweep/review.py` builds fresh-name, worst-first review sheets.
 Before inspecting a pair, copy it to a fresh filename to avoid image-reader
