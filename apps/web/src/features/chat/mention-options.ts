@@ -10,7 +10,7 @@ export type MentionOption = Readonly<{
   mention: DraftMention;
 }>;
 
-/** Skills and files of this chat's project, and recent chats across projects. */
+/** Skills and files of this chat's project, canvases, and recent chats across projects. */
 export function useMentionOptions(
   directory: string | undefined,
   sessionID: string,
@@ -44,6 +44,13 @@ export function useMentionOptions(
     queryFn: ({ signal }) => api.searchSessions('', undefined, signal),
     initialPageParam: undefined,
     getNextPageParam: () => undefined,
+    enabled: open,
+    staleTime: 30_000,
+  });
+  // The same list as the canvas panel and the session panel's Canvases, newest first.
+  const canvases = useQuery({
+    queryKey: ['canvases'],
+    queryFn: ({ signal }) => api.canvases(signal),
     enabled: open,
     staleTime: 30_000,
   });
@@ -89,12 +96,23 @@ export function useMentionOptions(
         detail: chat.directory.split(/[\\/]/).at(-1),
         mention: { type: 'chat', id: chat.id, token: `@${chat.title}` },
       }));
-    return [...ranked, ...found, ...recent];
-  }, [open, search, skills.data, fileQuery, files.data, chats.data, sessionID]);
-  const failed = [skills, files, chats].filter((item) => item.isError);
+    const boards = (canvases.data ?? [])
+      .filter((canvas) => canvas.title.toLowerCase().includes(search))
+      .slice(0, 4)
+      .map((canvas): MentionOption => ({
+        key: `canvas:${canvas.id}`,
+        label: canvas.title,
+        detail: canvas.sessionID === sessionID ? 'Canvas · this chat' : 'Canvas',
+        mention: { type: 'canvas', id: canvas.id, token: `@${canvas.title}` },
+      }));
+    return [...ranked, ...boards, ...found, ...recent];
+  }, [open, search, skills.data, fileQuery, files.data, canvases.data, chats.data, sessionID]);
+  const failed = [skills, files, canvases, chats].filter((item) => item.isError);
   return {
     options,
-    loading: [skills, chats].some((item) => item.isPending && item.isFetching) || files.isFetching,
+    loading:
+      [skills, canvases, chats].some((item) => item.isPending && item.isFetching) ||
+      files.isFetching,
     failed: failed.length > 0,
     retry: () => failed.forEach((item) => void item.refetch()),
   };

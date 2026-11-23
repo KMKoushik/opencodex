@@ -504,8 +504,7 @@ private struct ComposerBody: View {
         items: options.map { option in
           .init(
             id: option.id,
-            icon: option.kind == .skill
-              ? "square.stack.3d.up" : option.kind == .file ? "doc" : "bubble.left.and.bubble.right",
+            icon: option.kind.icon,
             title: option.label, detail: option.detail
           ) { choose(option, at: query.start) }
         }

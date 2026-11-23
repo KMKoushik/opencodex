@@ -93,7 +93,8 @@ nonisolated struct SentMessage: Decodable, Sendable {
   var files: [File]?
   var skills: [Skill]?
 
-  /// Port of `sentMentions`: mentioned files, chats and skills return as draft mentions.
+  /// Port of `sentMentions`: mentioned files, chats, canvases and skills return as draft
+  /// mentions.
   var mentions: [DraftMention] {
     let files: [DraftMention] = (files ?? []).compactMap { file in
       guard let token = file.mention?.text else { return nil }
@@ -101,7 +102,10 @@ nonisolated struct SentMessage: Decodable, Sendable {
       guard let description = file.description,
         let match = description.range(of: #"\(([^()\s]+)\)$"#, options: .regularExpression)
       else { return nil }
-      return .chat(id: String(description[match].dropFirst().dropLast()), token: token)
+      let id = String(description[match].dropFirst().dropLast())
+      // The gateway describes an attached canvas as `Canvas "<title>" (<id>)`.
+      return description.hasPrefix("Canvas \"")
+        ? .canvas(id: id, token: token) : .chat(id: id, token: token)
     }
     let skills: [DraftMention] = (skills ?? []).compactMap { skill in
       skill.mention.map { .skill(id: skill.id, token: $0.text) }

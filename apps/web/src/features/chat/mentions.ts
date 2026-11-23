@@ -5,6 +5,7 @@ export type DraftMention = Readonly<
   | { type: 'file'; path: string; token: string }
   | { type: 'skill'; id: string; token: string }
   | { type: 'chat'; id: string; token: string }
+  | { type: 'canvas'; id: string; token: string }
 >;
 export const EMPTY_MENTIONS: readonly DraftMention[] = [];
 
@@ -56,6 +57,11 @@ type SentMentions = {
   skills?: readonly { id: string; mention?: PromptMention['mention'] }[];
 };
 
+/** A chat or canvas the gateway attached at a mention, told apart by its description. */
+function attachedKind(file: PromptFileAttachment) {
+  return file.description?.startsWith('Canvas "') ? ('canvas' as const) : ('chat' as const);
+}
+
 /** Mentions of a sent message, restored into the composer by undo. */
 export function sentMentions(message: SentMentions): DraftMention[] {
   return [
@@ -64,7 +70,7 @@ export function sentMentions(message: SentMentions): DraftMention[] {
       const token = file.mention.text;
       if (file.source.type === 'uri') return [{ type: 'file', path: token.slice(1), token }];
       const id = /\(([^()\s]+)\)$/.exec(file.description ?? '')?.[1];
-      return id ? [{ type: 'chat', id, token }] : [];
+      return id ? [{ type: attachedKind(file), id, token }] : [];
     }),
     ...(message.skills ?? []).flatMap((skill): DraftMention[] =>
       skill.mention ? [{ type: 'skill', id: skill.id, token: skill.mention.text }] : [],
@@ -76,7 +82,9 @@ export function sentMentions(message: SentMentions): DraftMention[] {
 export function sentMentionRanges(text: string, message: SentMentions) {
   const ranges = [
     ...(message.files ?? []).flatMap((file) =>
-      file.mention ? [{ ...file.mention, kind: file.source.type === 'uri' ? 'file' : 'chat' }] : [],
+      file.mention
+        ? [{ ...file.mention, kind: file.source.type === 'uri' ? 'file' : attachedKind(file) }]
+        : [],
     ),
     ...(message.skills ?? []).flatMap((skill) =>
       skill.mention ? [{ ...skill.mention, kind: 'skill' }] : [],

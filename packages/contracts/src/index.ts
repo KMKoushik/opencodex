@@ -411,6 +411,11 @@ export const promptMentionSchema = z.discriminatedUnion('type', [
     id: z.string().min(1).max(256),
     mention: mentionRangeSchema,
   }),
+  z.object({
+    type: z.literal('canvas'),
+    id: z.string().min(1).max(256),
+    mention: mentionRangeSchema,
+  }),
 ]);
 export type PromptMention = z.infer<typeof promptMentionSchema>;
 export const MESSAGE_ANNOTATIONS_KEY = 'opencodexAnnotations';
@@ -488,8 +493,10 @@ export const promptInputSchema = z
   )
   .refine(
     (input) =>
-      (input.mentions?.filter((item) => item.type === 'chat').length ?? 0) <= MAX_CHAT_MENTIONS,
-    `Mention up to ${MAX_CHAT_MENTIONS} chats per message.`,
+      // Each becomes an attachment of up to 40,000 characters.
+      (input.mentions?.filter((item) => item.type === 'chat' || item.type === 'canvas').length ??
+        0) <= MAX_CHAT_MENTIONS,
+    `Mention up to ${MAX_CHAT_MENTIONS} chats and canvases per message.`,
   )
   .superRefine((input, context) => {
     const error = attachmentLimitError(

@@ -1,9 +1,19 @@
-import { BubbleChatIcon, File01Icon, Layers01Icon } from '@hugeicons/core-free-icons';
+import {
+  BubbleChatIcon,
+  DashboardSquare02Icon,
+  File01Icon,
+  Layers01Icon,
+} from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { findMention, type DraftMention } from './mentions';
 import type { MentionOption } from './mention-options';
 
-const icons = { skill: Layers01Icon, file: File01Icon, chat: BubbleChatIcon };
+const icons = {
+  skill: Layers01Icon,
+  file: File01Icon,
+  chat: BubbleChatIcon,
+  canvas: DashboardSquare02Icon,
+};
 
 export function MentionMenu({
   id,

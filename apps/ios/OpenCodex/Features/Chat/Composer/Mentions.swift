@@ -7,10 +7,12 @@ nonisolated enum DraftMention: Hashable, Sendable {
   case file(path: String, token: String)
   case skill(id: String, token: String)
   case chat(id: String, token: String)
+  case canvas(id: String, token: String)
 
   var token: String {
     switch self {
-    case .file(_, let token), .skill(_, let token), .chat(_, let token): token
+    case .file(_, let token), .skill(_, let token), .chat(_, let token), .canvas(_, let token):
+      token
     }
   }
 }
@@ -87,6 +89,7 @@ nonisolated enum Mentions {
       case .file(let path, _): return PromptMention(type: "file", path: path, mention: range)
       case .skill(let id, _): return PromptMention(type: "skill", id: id, mention: range)
       case .chat(let id, _): return PromptMention(type: "chat", id: id, mention: range)
+      case .canvas(let id, _): return PromptMention(type: "canvas", id: id, mention: range)
       }
     }
   }

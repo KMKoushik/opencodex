@@ -56,7 +56,7 @@ export function folder(root: string, id: string) {
   return join(root, id);
 }
 
-async function readManifest(directory: string, id: string): Promise<CanvasInfo> {
+export async function readManifest(directory: string, id: string): Promise<CanvasInfo> {
   let text: string;
   try {
     text = await readFile(join(directory, MANIFEST), 'utf8');
