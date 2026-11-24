@@ -16,6 +16,7 @@ import { Button } from '../../components/ui/button';
 import { useDraftStore } from '../chat/draft-context';
 import type { PanelContext } from '../workbench/panels';
 import { useWorkbenchStore, workbenchKey } from '../workbench/workbench-context';
+import { useTabCloser } from '../workbench/tab-close';
 import { defaultBrowserState } from '../workbench/workbench-store';
 import {
   browserRuntime,
@@ -109,6 +110,11 @@ export function BrowserPanel({
     else if (view && !(page.error && isBrowserFileURL(tab?.url ?? ''))) view.reload();
     else if (tab?.url) navigate(tab.url);
   };
+  useTabCloser(active, () => {
+    if (!tab) return false;
+    update((state) => closeTab(state, tab.id));
+    return true;
+  });
   const label = (index: number) => {
     const item = state.tabs[index]!;
     return item.url ? item.url : 'New tab';

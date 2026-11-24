@@ -7,6 +7,7 @@ import type { PanelDefinition, SideChatRequest, SubagentRequest } from './panels
 import type { FileRequest } from './file-link';
 import { useWorkbenchStore, workbenchKey } from './workbench-context';
 import { defaultWorkbenchLayout } from './workbench-store';
+import { TabCloseSlot, TabSlot, useTabHost } from './tab-close';
 import './workbench.css';
 
 export function WorkbenchPanel({
@@ -52,6 +53,8 @@ export function WorkbenchPanel({
     setVisited([...visited.filter((entry) => (entry.stateKey ?? entry.id) !== stateKey), panel]);
   }
   const ref = useRef<HTMLElement>(null);
+  const [tabSlot] = useState(() => new TabSlot());
+  useTabHost(ref, tabSlot, onClose);
   const drag = useRef<{ x: number; width: number } | null>(null);
   const frame = useRef(0);
   useEffect(() => () => cancelAnimationFrame(frame.current), []);
@@ -139,34 +142,36 @@ export function WorkbenchPanel({
         </Button>
       </header>
       <div className="wb-content" id="wb-content" role="region" aria-label={panel.label}>
-        {visited.map((entry) => (
-          <div
-            className="wb-surface"
-            key={entry.stateKey ?? entry.id}
-            hidden={entry.id !== panel.id}
-          >
-            <Suspense
-              fallback={
-                <p className="wb-empty" role="status">
-                  Loading {entry.label.toLowerCase()}…
-                </p>
-              }
+        <TabCloseSlot value={tabSlot}>
+          {visited.map((entry) => (
+            <div
+              className="wb-surface"
+              key={entry.stateKey ?? entry.id}
+              hidden={entry.id !== panel.id}
             >
-              {entry.render({
-                directory,
-                sessionID,
-                live,
-                active: open && entry.id === panel.id,
-                headerElement,
-                selectView: onSelectPanel,
-                fileRequest,
-                subagentRequest,
-                sideChatRequest,
-                onSideChatRequestHandled,
-              })}
-            </Suspense>
-          </div>
-        ))}
+              <Suspense
+                fallback={
+                  <p className="wb-empty" role="status">
+                    Loading {entry.label.toLowerCase()}…
+                  </p>
+                }
+              >
+                {entry.render({
+                  directory,
+                  sessionID,
+                  live,
+                  active: open && entry.id === panel.id,
+                  headerElement,
+                  selectView: onSelectPanel,
+                  fileRequest,
+                  subagentRequest,
+                  sideChatRequest,
+                  onSideChatRequestHandled,
+                })}
+              </Suspense>
+            </div>
+          ))}
+        </TabCloseSlot>
       </div>
     </aside>
   );

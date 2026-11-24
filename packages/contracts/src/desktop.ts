@@ -13,6 +13,9 @@ export interface DesktopBridge {
   checkForUpdates(): Promise<void>;
   downloadUpdate(): Promise<void>;
   installUpdate(): Promise<void>;
+  /** Cmd+W anywhere in the window, including browser pages and canvases, which the main
+   * process takes before the menu's Close Window; the renderer closes a tab or the window. */
+  onCloseTab(callback: () => void): () => void;
   /** A browser panel page asked for a new tab (a popup or "Open link in new tab"). */
   onBrowserOpenTab(callback: (request: BrowserOpenTabRequest) => void): () => void;
   /** Loads a local HTML file in a sandboxed browser guest, not the app's origin. */
@@ -165,6 +168,7 @@ export const desktopChannels = {
   downloadUpdate: 'desktop:download-update',
   installUpdate: 'desktop:install-update',
   browserOpenTab: 'desktop:browser-open-tab',
+  closeTab: 'desktop:close-tab',
   loadBrowserFile: 'desktop:load-browser-file',
   annotateBrowserPage: 'desktop:annotate-browser-page',
   cancelBrowserAnnotation: 'desktop:cancel-browser-annotation',

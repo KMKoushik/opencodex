@@ -7,6 +7,7 @@ import type { Pty } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { api } from '../../lib/api';
 import type { PanelContext } from '../workbench/panels';
+import { useTabCloser } from '../workbench/tab-close';
 import { TerminalView } from './terminal-view';
 import './terminal.css';
 
@@ -58,6 +59,11 @@ export function TerminalPanel({
       client.setQueryData<Pty[]>(key, (previous = []) => previous.filter((item) => item.id !== id));
       void client.invalidateQueries({ queryKey: key });
     },
+  });
+  useTabCloser(active, () => {
+    if (!current) return false;
+    if (!(remove.isPending && remove.variables === current.id)) remove.mutate(current.id);
+    return true;
   });
   const error = create.error ?? remove.error ?? terminals.error;
   return (

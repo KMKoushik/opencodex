@@ -3,6 +3,7 @@ import { FitAddon, Terminal } from 'ghostty-web';
 import type { Pty } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { api } from '../../lib/api';
+import { isMac } from '../shortcuts/commands';
 import { loadGhostty, terminalTheme } from './ghostty';
 
 // Both WASM and WebSocket encode strings as UTF-8; do not cut a surrogate pair.
@@ -171,6 +172,13 @@ export function TerminalView({
       event.stopPropagation();
       term?.paste(text);
     };
+    // Cmd chords belong to the app on macOS, as in Terminal and Ghostty: ghostty-web would
+    // otherwise send Cmd+W as "w" and keep the key from the app menu. Cmd+C/V still reach the
+    // copy and paste handlers above, which are separate events.
+    const appChord = (event: KeyboardEvent) => {
+      if (isMac && event.metaKey && event.key.length === 1) event.stopPropagation();
+    };
+    element.addEventListener('keydown', appChord, true);
     element.addEventListener('copy', copy, true);
     element.addEventListener('paste', paste, true);
     void loadGhostty()
@@ -250,6 +258,7 @@ export function TerminalView({
       for (const item of disposables) item.dispose();
       term?.dispose();
       element.replaceChildren();
+      element.removeEventListener('keydown', appChord, true);
       element.removeEventListener('copy', copy, true);
       element.removeEventListener('paste', paste, true);
     };

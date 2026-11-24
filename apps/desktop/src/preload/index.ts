@@ -27,6 +27,11 @@ const desktop: DesktopBridge = {
   checkForUpdates: () => ipcRenderer.invoke(desktopChannels.checkForUpdates),
   downloadUpdate: () => ipcRenderer.invoke(desktopChannels.downloadUpdate),
   installUpdate: () => ipcRenderer.invoke(desktopChannels.installUpdate),
+  onCloseTab: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on(desktopChannels.closeTab, listener);
+    return () => ipcRenderer.removeListener(desktopChannels.closeTab, listener);
+  },
   onBrowserOpenTab: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
       callback(request);

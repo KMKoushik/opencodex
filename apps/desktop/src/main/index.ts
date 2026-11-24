@@ -7,6 +7,7 @@ import { createPreferences } from './preferences';
 import { registerLinkHandlers } from './links';
 import { registerBrowser } from './browser';
 import { renderCanvasPreview } from './canvas-preview';
+import { routeCloseTab } from './close-tab';
 import { loadShellEnvironment } from './shell-env';
 import { createUpdates } from './updates';
 
@@ -61,6 +62,7 @@ async function createWindow() {
   });
   registerLinkHandlers(window, new URL(origin).origin);
   registerBrowser(window);
+  routeCloseTab(window, window.webContents);
   window.webContents.on('will-prevent-unload', (event) => {
     // The update dialog explicitly warned about unsaved files and drafts.
     if (restartingForUpdate) event.preventDefault();

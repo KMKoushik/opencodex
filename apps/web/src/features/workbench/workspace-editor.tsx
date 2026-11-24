@@ -22,6 +22,7 @@ import { editorKey, useEditorDrafts } from './editor-drafts';
 import { resolveFileLink, type FileRequest } from './file-link';
 import { useWorkbenchStore, workbenchKey } from './workbench-context';
 import { defaultWorkspaceState, type WorkspaceTab } from './workbench-store';
+import { useTabCloser } from './tab-close';
 
 const DiffPreview = lazy(() =>
   import('./diff-preview').then((module) => ({ default: module.DiffPreview })),
@@ -144,6 +145,13 @@ export function WorkspaceEditor({
     setTabs(next);
     if (selected === id) setSelected(next[Math.min(index, next.length - 1)]?.id ?? '');
   }
+  useTabCloser(active, () => {
+    if (!current) return false;
+    // Like its close button: unsaved edits are saved or discarded first.
+    if (!(current.kind === 'file' && dirty.has(editorKey(current.directory, current.path))))
+      close(current.id);
+    return true;
+  });
   const parts = current
     ? `${current.directory === directory ? '' : `${current.directory}/`}${current.path}`
         .split('/')

@@ -94,6 +94,14 @@ export const commands = [
     inInput: true,
   },
   {
+    id: 'tab.close',
+    label: 'Close tab (terminal, file, canvas, browser)',
+    group: 'App',
+    // The desktop app routes it from its main process (`close-tab.ts`); browsers keep Cmd+W.
+    bindings: [{ key: 'w', mod: true, mac: true }],
+    inInput: true,
+  },
+  {
     id: 'view.dismiss',
     label: 'Close sidebar overlay / leave settings or tasks',
     group: 'App',

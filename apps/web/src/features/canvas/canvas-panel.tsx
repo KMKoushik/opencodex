@@ -19,6 +19,7 @@ import { addPageComment } from '../browser/page-comment';
 import { useDraftStore } from '../chat/draft-context';
 import type { PanelContext } from '../workbench/panels';
 import { useWorkbenchStore, workbenchKey } from '../workbench/workbench-context';
+import { useTabCloser } from '../workbench/tab-close';
 import { defaultCanvasTabs, type CanvasTabs } from '../workbench/workbench-store';
 import { CanvasFrame } from './canvas-frame';
 import './canvas.css';
@@ -75,6 +76,12 @@ export function CanvasPanel({ sessionID, directory, active, headerElement }: Pan
             : current.selected,
       };
     });
+
+  useTabCloser(active, () => {
+    if (!selected) return false;
+    close(selected);
+    return true;
+  });
 
   return (
     <div className="canvas-panel">

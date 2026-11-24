@@ -4,6 +4,14 @@ import { ShortcutContext } from './shortcut-context';
 
 export function ShortcutsProvider({ children }: { children: ReactNode }) {
   const [registry] = useState(() => new CommandRegistry());
+  // The desktop app's Cmd+W (see `tab.close`); with no panel to close, the window closes.
+  useEffect(
+    () =>
+      window.desktop?.onCloseTab?.(() => {
+        if (!registry.execute('tab.close')) window.close();
+      }),
+    [registry],
+  );
   useEffect(() => {
     const reset = () => registry.resetSequence();
     let hintsHeld = false;

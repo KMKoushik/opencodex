@@ -10,6 +10,7 @@ import {
   type WebContents,
 } from 'electron';
 import { z } from 'zod';
+import { routeCloseTab } from './close-tab';
 import { pathToFileURL } from 'node:url';
 import {
   browserPartition,
@@ -94,6 +95,7 @@ export function registerBrowser(window: BrowserWindow) {
     });
   });
   embedder.on('did-attach-webview', (_event, guest) => {
+    routeCloseTab(window, guest);
     const openTab = (url: string) => {
       if ((isWebURL(url) || localPages.owns(guest.id, url)) && !embedder.isDestroyed())
         embedder.send(desktopChannels.browserOpenTab, {

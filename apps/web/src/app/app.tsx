@@ -64,6 +64,7 @@ import { FileLinkContext } from '../features/workbench/file-link-context';
 import { resolveFileLink, type FileRequest } from '../features/workbench/file-link';
 import { useWorkbenchStore, workbenchKey } from '../features/workbench/workbench-context';
 import { defaultWorkbenchLayout } from '../features/workbench/workbench-store';
+import { closeFocusedTab } from '../features/workbench/tab-close';
 import { browserFileURL, isHTMLPath, isLocalWebURL } from '../features/browser/browser-url';
 import { openTab } from '../features/browser/browser-runtime';
 import { openFind } from '../features/find/find-scope';
@@ -516,6 +517,7 @@ export function App() {
   useCommand('tasks.open', openTasks);
   useCommand('settings.open', () => navigate('general'));
   useCommand('shortcuts.open', () => navigate('shortcuts'));
+  useCommand('tab.close', () => (closeFocusedTab() ? undefined : false));
   useCommand('view.dismiss', () => {
     if (sidebarOpen && matchMedia('(max-width: 720px)').matches) {
       setSidebarOpen(false);

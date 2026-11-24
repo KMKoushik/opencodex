@@ -3,6 +3,7 @@ import { Cancel01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '../../components/ui/button';
 import { shortcutProps } from '../shortcuts/commands';
+import { TabCloseSlot, TabSlot, useTabHost } from '../workbench/tab-close';
 import { TerminalPanel } from './terminal-panel';
 import '../workbench/workbench.css';
 import './terminal-drawer.css';
@@ -21,6 +22,8 @@ export function TerminalDrawer({
   const [headerElement, setHeaderElement] = useState<HTMLDivElement | null>(null);
   const [height, setHeight] = useState(280);
   const root = useRef<HTMLElement>(null);
+  const [tabSlot] = useState(() => new TabSlot());
+  useTabHost(root, tabSlot, onClose);
   const drag = useRef<{ y: number; height: number } | null>(null);
   const frame = useRef(0);
   useEffect(() => () => cancelAnimationFrame(frame.current), []);
@@ -84,13 +87,14 @@ export function TerminalDrawer({
         </Button>
       </header>
       <div className="wb-content">
-        <TerminalPanel
-          directory={directory}
-
-          live={live}
-          active={open}
-          headerElement={headerElement}
-        />
+        <TabCloseSlot value={tabSlot}>
+          <TerminalPanel
+            directory={directory}
+            live={live}
+            active={open}
+            headerElement={headerElement}
+          />
+        </TabCloseSlot>
       </div>
     </section>
   );
