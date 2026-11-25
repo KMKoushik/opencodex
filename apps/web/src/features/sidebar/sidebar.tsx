@@ -240,8 +240,8 @@ export function Sidebar({
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label="Usage limits"
-                title="Usage limits"
+                aria-label="Usage"
+                title="Usage"
                 onClick={() => onSettings('usage')}
               >
                 <HugeiconsIcon icon={DashboardSpeed01Icon} size={16} />

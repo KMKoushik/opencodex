@@ -39,6 +39,8 @@ import {
   type ShellOutputOutput,
   type SideChatPluginStatus,
   type UsageLimits,
+  type UsagePeriod,
+  type UsageStats,
   type WorktreeDirectory,
   type Task,
   type TaskCreate,
@@ -339,6 +341,18 @@ export const api = {
   deleteTask: (id: string) =>
     nativeRequest<{ ok: true }>(`/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   usageLimits: (signal: AbortSignal) => nativeRequest<UsageLimits>('/usage/limits', { signal }),
+  usageStats: (
+    input: { period: UsagePeriod; project?: string; timeZone: string },
+    signal: AbortSignal,
+  ) =>
+    nativeRequest<UsageStats>(
+      `/usage/stats?${new URLSearchParams({
+        period: input.period,
+        timeZone: input.timeZone,
+        ...(input.project ? { project: input.project } : {}),
+      })}`,
+      { signal },
+    ),
   remote: (signal: AbortSignal) => nativeRequest<RemoteStatus>('/remote', { signal }),
   configureRemote: (config: RemoteConfig) =>
     nativeRequest<RemoteStatus>('/remote', { method: 'PUT', body: JSON.stringify(config) }),

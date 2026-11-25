@@ -6,6 +6,7 @@ import type {
   SessionInfo,
   SessionPromptInput,
   SkillInfo,
+  TokenUsageInfo,
   VcsInfo,
   VcsFileStatus,
 } from '@opencode/client';
@@ -129,6 +130,48 @@ export type UsageProvider = {
   error?: string;
 };
 export type UsageLimits = { providers: UsageProvider[] };
+export const usagePeriods = ['24h', '7d', '30d', '90d'] as const;
+export type UsagePeriod = (typeof usagePeriods)[number];
+/** One model's usage over a period, with its thinking variants merged. */
+export type UsageModel = {
+  id: string;
+  providerID: string;
+  name: string;
+  provider: string;
+  steps: number;
+  /** USD, as OpenCode priced each step. */
+  cost: number;
+  tokens: TokenUsageInfo;
+  /** False when the model has no per-token price, as on a subscription plan: its cost is 0 but it isn't free. */
+  priced: boolean;
+};
+/** One hour or local calendar day of the chart. */
+export type UsageBucket = {
+  /** Epoch milliseconds. */
+  start: number;
+  end: number;
+  cost: number;
+  /** Every token processed: input, output, reasoning and cache reads and writes. */
+  tokens: number;
+  steps: number;
+  providers: Record<string, { cost: number; tokens: number }>;
+};
+export type UsageStats = {
+  period: UsagePeriod;
+  unit: 'hour' | 'day';
+  from: number;
+  to: number;
+  sessions: number;
+  subagents: number;
+  prompts: number;
+  steps: number;
+  cost: number;
+  tokens: TokenUsageInfo;
+  tools: { calls: number; succeeded: number; failed: number };
+  models: UsageModel[];
+  providers: { id: string; name: string }[];
+  buckets: UsageBucket[];
+};
 export type WorkspaceFile =
   | { kind: 'text'; text: string; version: string; bytes: number }
   | { kind: 'image'; uri: string; bytes: number }

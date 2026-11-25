@@ -10,6 +10,7 @@ import type { UsageLimits, UsageProvider, UsageWindow } from '@opencodex/contrac
 import type { OpenCodeBackend } from './opencode';
 import { GatewayError } from './errors';
 import { opencodeDatabases } from './opencode-databases';
+import { usageStats } from './usage-stats';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -53,6 +54,19 @@ export function usageRoutes(backend: OpenCodeBackend) {
       providers: providers.filter((provider) => provider !== undefined),
     } satisfies UsageLimits);
   });
+  app.get('/stats', async (c) =>
+    c.json(
+      await usageStats(
+        backend,
+        {
+          period: c.req.query('period'),
+          project: c.req.query('project') || undefined,
+          timeZone: c.req.query('timeZone') || undefined,
+        },
+        c.req.raw.signal,
+      ),
+    ),
+  );
   return app;
 }
 

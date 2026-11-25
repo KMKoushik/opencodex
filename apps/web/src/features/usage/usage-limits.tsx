@@ -6,7 +6,6 @@ import type { UsageProvider, UsageWindow } from '@opencodex/contracts';
 import { Button } from '../../components/ui/button';
 import { api } from '../../lib/api';
 import { ProviderLogo } from '../chat/provider-logo';
-import './usage.css';
 
 const logos: Record<UsageProvider['id'], string> = {
   codex: 'openai',
@@ -14,7 +13,7 @@ const logos: Record<UsageProvider['id'], string> = {
   'opencode-go': 'opencode',
 };
 
-export function UsageLimitsPage({ connected }: { connected: boolean }) {
+export function UsageLimitsView({ connected }: { connected: boolean }) {
   const limits = useQuery({
     queryKey: ['usage-limits'],
     queryFn: ({ signal }) => api.usageLimits(signal),
@@ -26,15 +25,19 @@ export function UsageLimitsPage({ connected }: { connected: boolean }) {
   const providers = limits.data?.providers;
   return (
     <>
-      <header className="usage-header">
-        <h1 className="usage-breadcrumb">
-          <span>Usage</span>
-          <span aria-hidden="true">/</span>
-          <span>Limits</span>
-        </h1>
+      <div className="usage-toolbar">
+        {limits.dataUpdatedAt > 0 && (
+          <span
+            className="usage-checked"
+            data-tooltip={`Checked ${new Date(limits.dataUpdatedAt).toLocaleString()}`}
+          >
+            Checked {ago(now - limits.dataUpdatedAt)}
+          </span>
+        )}
         <Button
           variant="ghost"
           size="icon"
+          className="usage-refresh"
           title="Refresh limits"
           disabled={!connected || limits.isFetching}
           onClick={() => void limits.refetch()}
@@ -45,7 +48,7 @@ export function UsageLimitsPage({ connected }: { connected: boolean }) {
             className={limits.isFetching ? 'spin' : undefined}
           />
         </Button>
-      </header>
+      </div>
       {connected && limits.error && (
         <p className="usage-note text-error" role="alert">
           {limits.error.message}
@@ -177,6 +180,13 @@ function usagePace(window: UsageWindow, now: number) {
       ? `Using faster than the limit resets: ${Math.round(window.usedPercent)}% used with ${share}% of the window elapsed`
       : `On pace: ${Math.round(window.usedPercent)}% used with ${share}% of the window elapsed`,
   };
+}
+
+function ago(ms: number) {
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  return `${Math.floor(minutes / 60)}h ago`;
 }
 
 function countdown(ms: number) {

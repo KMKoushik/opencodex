@@ -43,7 +43,6 @@ import { api } from '../lib/api';
 import { useCommand } from '../features/shortcuts/use-command';
 import { shortcutProps } from '../features/shortcuts/commands';
 import { ShortcutsSettings } from '../features/shortcuts/shortcuts-settings';
-import { UsageLimitsPage } from '../features/usage/usage-limits';
 import { SessionPanelToggle } from '../features/session-panel/session-panel-toggle';
 import { SessionActionsToggle } from '../features/sessions/session-actions-toggle';
 import { SessionTitle } from '../features/sessions/session-title';
@@ -89,6 +88,9 @@ const BrowserHost = lazy(() =>
 const browserPanel = panels.find((panel) => panel.id === 'browser');
 const TaskBoard = lazy(() =>
   import('../features/tasks/task-board').then((module) => ({ default: module.TaskBoard })),
+);
+const UsagePage = lazy(() =>
+  import('../features/usage/usage-page').then((module) => ({ default: module.UsagePage })),
 );
 const AppsPage = lazy(() =>
   import('../features/apps/apps-page').then((module) => ({ default: module.AppsPage })),
@@ -734,7 +736,9 @@ export function App() {
                     ) : settings === 'remote' ? (
                       <RemoteSettings />
                     ) : settings === 'usage' ? (
-                      <UsageLimitsPage connected={connected} />
+                      <Suspense fallback={null}>
+                        <UsagePage connected={connected} />
+                      </Suspense>
                     ) : settings === 'projects' ? (
                       <ProjectsSettings
                         connected={connected}
