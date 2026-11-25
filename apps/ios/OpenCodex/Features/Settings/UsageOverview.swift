@@ -225,23 +225,29 @@ struct UsageOverview: View {
 
 /// Numbers in the desktop's formats: `$1,429.44`, `13.5B`, `97.6%`.
 nonisolated enum UsageFormat {
-  /// OpenCode prices in US dollars; "$" reads as that everywhere, unlike "US$" or "USD".
-  private static let dollars = Locale(identifier: "en_US")
+  /// Like the desktop, US English: "$" for OpenCode's US-dollar prices (not "US$" or "USD"),
+  /// and thousands, millions and billions (not lakh and crore) for token counts.
+  private static let english = Locale(identifier: "en_US")
 
   static func money(_ value: Double) -> String {
     value > 0 && value < 0.01
-      ? "<$0.01" : value.formatted(.currency(code: "USD").locale(dollars))
+      ? "<$0.01" : value.formatted(.currency(code: "USD").locale(english))
   }
   static func moneyShort(_ value: Double) -> String {
     value >= 1000
-      ? "$" + value.formatted(.number.notation(.compactName).precision(.fractionLength(0...1)))
-      : value.formatted(.currency(code: "USD").locale(dollars).precision(.fractionLength(0)))
+      ? "$" + compact(value)
+      : value.formatted(.currency(code: "USD").locale(english).precision(.fractionLength(0)))
   }
   static func compact(_ value: Double) -> String {
-    value.formatted(.number.notation(.compactName).precision(.fractionLength(0...1)))
+    value.formatted(
+      .number.notation(.compactName).locale(english).precision(.fractionLength(0...1)))
+  }
+  static func whole(_ value: Int) -> String {
+    value.formatted(.number.locale(english))
   }
   static func percent(_ value: Double) -> String {
-    (value.isFinite ? value : 0).formatted(.percent.precision(.fractionLength(0...1)))
+    (value.isFinite ? value : 0).formatted(
+      .percent.locale(english).precision(.fractionLength(0...1)))
   }
 }
 
@@ -270,7 +276,7 @@ private struct StatGrid: View {
       divider(vertical: false)
       HStack(spacing: 0) {
         stat(
-          "Sessions", stats.sessions.formatted(),
+          "Sessions", UsageFormat.whole(stats.sessions),
           "\(UsageFormat.compact(Double(stats.prompts))) prompts · \(UsageFormat.compact(Double(stats.subagents))) subagents"
         )
         divider(vertical: true)
