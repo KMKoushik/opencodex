@@ -201,8 +201,10 @@ struct ThreadList: View {
           .tint(palette.color("success"))
       }
       if !item.markedUnread {
+        // Swipe actions always draw their label in white, which `accent` can't carry in dark
+        // themes; blue, like Mail's Unread.
         Button("Unread", systemImage: "circlebadge") { actions.markUnread(item.target) }
-          .tint(palette.color("accent"))
+          .tint(palette.color("project-blue"))
       }
     }
     .contextMenu {

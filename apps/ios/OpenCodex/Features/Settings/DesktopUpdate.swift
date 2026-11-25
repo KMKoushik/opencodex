@@ -63,6 +63,8 @@ struct DesktopUpdateRow: View {
         Button("Restart") { confirmRestart = true }
           .buttonStyle(.borderedProminent)
           .tint(palette.color("accent"))
+          // The form's ink is `text`, which matches `accent` in dark themes.
+          .foregroundStyle(palette.color("on-accent"))
           .accessibilityIdentifier("desktop-update-restart")
       case "disabled":
         EmptyView()
