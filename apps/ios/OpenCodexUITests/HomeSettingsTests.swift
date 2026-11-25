@@ -106,6 +106,7 @@ nonisolated final class HomeSettingsTests: XCTestCase {
     // Usage: the plans' limits, or why there are none, and Refresh.
     app.buttons["settings-usage"].tap()
     XCTAssertTrue(app.navigationBars["Usage"].waitForExistence(timeout: 5))
+    app.buttons["Limits"].tap()
     let refresh = app.buttons["Refresh limits"]
     XCTAssertTrue(refresh.waitForExistence(timeout: 5))
     let settled = NSPredicate(format: "enabled == true")

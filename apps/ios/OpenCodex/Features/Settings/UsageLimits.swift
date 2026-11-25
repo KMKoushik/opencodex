@@ -88,17 +88,67 @@ final class UsageModel {
   }
 }
 
-/// Settings → Usage: each plan's windows with what's left, its pace, and when it resets.
+/// Settings → Usage: spend and tokens over time (Overview), and each plan's windows with
+/// what's left, its pace, and when it resets (Limits).
 struct UsageSettings: View {
+  enum Tab: String, CaseIterable, Identifiable {
+    case overview = "Overview", limits = "Limits"
+    var id: String { rawValue }
+  }
+
+  @State private var tab = Tab.overview
   @State private var model: UsageModel
+  @State private var stats: UsageStatsModel
   @Environment(\.palette) private var palette
 
   init(client: GatewayClient) {
     _model = State(initialValue: UsageModel(client: client))
+    _stats = State(initialValue: UsageStatsModel(client: client))
   }
 
   var body: some View {
     SettingsPage {
+      Picker("Usage view", selection: $tab) {
+        ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
+      }
+      .pickerStyle(.segmented)
+      .accessibilityIdentifier("usage-tab")
+      .padding(.bottom, 8)
+      if tab == .overview {
+        UsageOverview(model: stats)
+      } else {
+        limits
+      }
+    }
+    .overlay {
+      // The first load: a centered native spinner, only if it takes a moment.
+      if tab == .limits ? model.limits == nil && model.error == nil
+        : stats.shown == nil && stats.error == nil
+      {
+        Delayed {
+          ProgressView(tab == .limits ? "Checking limits…" : "Adding up usage…")
+            .foregroundStyle(palette.color("text-secondary"))
+        }
+        .accessibilityIdentifier("usage-loading")
+      }
+    }
+    .navigationTitle("Usage")
+    .navigationBarTitleDisplayMode(.inline)
+    .toolbar {
+      ToolbarItem(placement: .primaryAction) {
+        let fetching = tab == .limits ? model.fetching : stats.fetching
+        Button(tab == .limits ? "Refresh limits" : "Refresh usage", systemImage: "arrow.clockwise") {
+          Task { tab == .limits ? await model.load() : await stats.load() }
+        }
+        .disabled(fetching)
+        .symbolEffect(.rotate, isActive: fetching)
+      }
+    }
+  }
+
+  private var limits: some View {
+    // One view, so its task runs once (a Group would give each child its own).
+    VStack(alignment: .leading, spacing: 16) {
       if let error = model.error {
         Text(error)
           .font(.subheadline)
@@ -125,27 +175,6 @@ struct UsageSettings: View {
             }
           }
         }
-      }
-    }
-    .overlay {
-      // The first load: a centered native spinner, only if it takes a moment.
-      if model.limits == nil, model.error == nil {
-        Delayed {
-          ProgressView("Checking limits…")
-            .foregroundStyle(palette.color("text-secondary"))
-        }
-        .accessibilityIdentifier("usage-loading")
-      }
-    }
-    .navigationTitle("Usage")
-    .navigationBarTitleDisplayMode(.inline)
-    .toolbar {
-      ToolbarItem(placement: .primaryAction) {
-        Button("Refresh limits", systemImage: "arrow.clockwise") {
-          Task { await model.load() }
-        }
-        .disabled(model.fetching)
-        .symbolEffect(.rotate, isActive: model.fetching)
       }
     }
     .task {

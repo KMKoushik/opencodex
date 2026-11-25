@@ -15,6 +15,8 @@ struct ProviderLogo: View {
     "codex": "openai",
     "chatgpt": "openai",
     "claude": "anthropic",
+    "claude-agent": "anthropic",
+    "claude-code": "anthropic",
     "gemini": "google",
     "google-vertex": "google",
     "copilot": "github-copilot",
