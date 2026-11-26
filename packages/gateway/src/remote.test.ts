@@ -7,7 +7,7 @@ import { streamSSE } from 'hono/streaming';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createApp } from './app';
 import { OpenCodeBackend } from './opencode';
-import { RemoteAccess } from './remote';
+import { Connector, RemoteAccess } from './remote';
 
 const HOST = 'ox.example.test';
 const ORIGIN = `https://${HOST}`;
@@ -191,5 +191,25 @@ describe('remote access', () => {
     await remote.revoke(remote.status().devices[0]!.id);
     await other.close();
     expect(remote.status().devices).toEqual([]);
+  });
+});
+
+describe('Connector status', () => {
+  it('counts only connection drops, not failed requests, as lost connections', () => {
+    const connector = new Connector(join(tmpdir(), 'unused.pid'));
+    const log = (line: string) => (connector as unknown as { log(line: string): void }).log(line);
+    for (const index of [0, 1])
+      log(`2026-11-25T21:48:30Z INF Registered tunnel connection connIndex=${index} event=0`);
+    log(
+      `2026-11-25T21:50:00Z ERR Request failed error="stream 353 canceled by remote with error code 0" connIndex=0 dest=https://${HOST}/api/events event=0 ip=198.41.192.7 type=http`,
+    );
+    log(
+      `2026-11-25T21:50:01Z ERR  error="Unable to reach the origin service." cfRay=8f1-MEL connIndex=1 event=1 ingressRule=0 originService=http://127.0.0.1:4317`,
+    );
+    expect(connector.status()).toMatchObject({ state: 'connected', connections: 2 });
+    log(
+      `2026-11-25T21:51:00Z ERR Connection terminated error="control stream error: context deadline exceeded" connIndex=0`,
+    );
+    expect(connector.status()).toMatchObject({ state: 'connected', connections: 1 });
   });
 });

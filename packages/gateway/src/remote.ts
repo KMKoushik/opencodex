@@ -200,7 +200,7 @@ async function connectorStartedAt(pid: number) {
 }
 
 /** Runs one cloudflared connector for a tunnel token and restarts it when it exits. */
-class Connector {
+export class Connector {
   state: RemoteStatus['connector']['state'] = 'off';
   message?: string;
   private connections = new Set<string>();
@@ -333,6 +333,11 @@ class Connector {
   }
 
   private log(line: string) {
+    // A failed request (`Request failed … dest=…`, or an origin error with `originService=` and
+    // `cfRay=`, such as a phone closing its event stream) names the connection it used, but that
+    // connection stays up and never registers again: counting it as lost would drain the count
+    // to "Connecting…" while traffic flows.
+    if (/Request failed| dest=| originService=| cfRay=/.test(line)) return;
     const index = /connIndex=(\d+)/.exec(line)?.[1];
     if (index && line.includes('Registered tunnel connection')) {
       this.connections.add(index);
