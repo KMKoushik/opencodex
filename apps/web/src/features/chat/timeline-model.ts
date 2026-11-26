@@ -191,7 +191,8 @@ export function createTurnGrouper() {
       let end = user ? start + 1 : start;
       while (end < rows.length && !isUser(rows[end]!)) end++;
       const turn = rows.slice(user ? start + 1 : start, end);
-      const live = running && end === rows.length;
+      const latest = end === rows.length;
+      const live = running && latest;
       let answer = -1;
       for (let i = turn.length - 1; i >= 0; i--) {
         const row = turn[i]!;
@@ -218,7 +219,9 @@ export function createTurnGrouper() {
       claimed.add(id);
       const time = times.get(user?.id ?? '');
       const status = live ? 'working' : time?.outcome === 'interrupted' ? 'stopped' : 'worked';
-      const open = overrides.get(id) ?? live;
+      // The newest turn stays open once it finishes, so its work is in view with the answer;
+      // it folds when the next prompt makes it history.
+      const open = overrides.get(id) ?? latest;
       const old = previous.get(id);
       const header: TurnRow =
         old &&

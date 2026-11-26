@@ -113,7 +113,7 @@ nonisolated final class TranscriptInteractionTests: XCTestCase {
 
   // MARK: Disclosure
 
-  /// Turn headers fold earlier work; groups and tools open to their details.
+  /// Turn headers fold work (the newest turn starts open); groups and tools open to details.
   @MainActor
   func testTurnsGroupsAndToolsExpand() throws {
     let app = XCUIApplication.chat(markdownChat)
@@ -123,7 +123,9 @@ nonisolated final class TranscriptInteractionTests: XCTestCase {
     let turn = app.buttons["transcript.turn"].firstMatch
     for _ in 0..<6 where !turn.exists || !turn.isHittable { app.transcript.swipeDown(velocity: .slow) }
     XCTAssertTrue(turn.isHittable)
-    XCTAssertEqual(turn.value as? String, "Collapsed")
+    XCTAssertEqual(turn.value as? String, "Expanded")
+    turn.tap()
+    XCTAssertTrue(turn.wait(until: "value == 'Collapsed'"))
     turn.tap()
     XCTAssertTrue(turn.wait(until: "value == 'Expanded'"))
     let group = app.buttons["transcript.activity"].firstMatch

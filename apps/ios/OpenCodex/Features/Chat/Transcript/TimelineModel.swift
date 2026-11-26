@@ -219,7 +219,8 @@ nonisolated final class TurnGrouper {
       var end = user != nil ? start + 1 : start
       while end < rows.count && !rows[end].isUser { end += 1 }
       let turn = rows[(user != nil ? start + 1 : start)..<end]
-      let live = running && end == rows.count
+      let latest = end == rows.count
+      let live = running && latest
       var answer: Int?
       for index in turn.indices.reversed() {
         if case .text = turn[index] {
@@ -255,7 +256,9 @@ nonisolated final class TurnGrouper {
       let time = times[userID ?? ""]
       let status: TurnRow.Status =
         live ? .working : time?.outcome == "interrupted" ? .stopped : .worked
-      let open = overrides[id] ?? live
+      // The newest turn stays open once it finishes, so its work is in view with the answer;
+      // it folds when the next prompt makes it history.
+      let open = overrides[id] ?? latest
       let header = TurnRow(
         id: id, status: status, start: time?.start ?? 0, end: live ? nil : time?.end, open: open)
       let memberSet = Set(members)

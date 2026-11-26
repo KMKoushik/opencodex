@@ -71,7 +71,7 @@ export function Timeline({
 }) {
   const [project] = useState(createTimelineProjector);
   const [group] = useState(createTurnGrouper);
-  // Explicit open/closed choices per turn; otherwise a turn is open only while it works.
+  // Explicit open/closed choices per turn; otherwise only the newest turn is open.
   const [overrides, setOverrides] = useState<ReadonlyMap<string, boolean>>(() => new Map());
   const projected = useMemo(() => project(messages), [project, messages]);
   const rows = useMemo(

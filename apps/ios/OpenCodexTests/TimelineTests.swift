@@ -22,26 +22,32 @@ struct TimelineTests {
   @Test func finishedTurnFoldsWorkUnderHeader() throws {
     let messages = try messages("messages-shell.json")
     let rows = project(messages)
-    // The user prompt, a collapsed "Worked for" header, and the final answer with Copy.
-    #expect(rows.count == 3)
-    #expect(rows[0].isUser)
-    guard case .turn(let turn) = rows[1], case .text(let answer) = rows[2] else {
-      Issue.record("expected a turn header and the answer: \(rows.map(\.id))")
+    // The newest turn stays open once it finishes: its work shows between header and answer.
+    guard case .turn(let turn) = rows[1] else {
+      Issue.record("expected a turn header: \(rows.map(\.id))")
       return
     }
-    #expect(turn.status == .worked && !turn.open && turn.end != nil)
+    #expect(turn.status == .worked && turn.open && turn.end != nil)
     #expect(DisclosureCell.label(turn) == "Worked for 35s")
-    #expect(answer.copyable && answer.text.hasPrefix("Done"))
-
-    // Opening it shows one activity group across both assistant steps: reasoning and 2 shells.
-    let open = project(messages, overrides: [turn.id: true])
-    let activities = open.compactMap { row -> ActivityRow? in
+    // One activity group across both assistant steps: reasoning and 2 shells.
+    let activities = rows.compactMap { row -> ActivityRow? in
       if case .activity(let activity) = row { activity } else { nil }
     }
     #expect(activities.count == 1)
     #expect(activities.first?.entries.count == 3)
     #expect(activities.first?.summary == "Ran 2 commands")
-    #expect(open.last == rows.last)
+
+    // Folded (as it is once it's no longer the newest): the prompt, the "Worked for" header,
+    // and the final answer with Copy.
+    let folded = project(messages, overrides: [turn.id: false])
+    #expect(folded.count == 3)
+    #expect(folded[0].isUser)
+    guard case .text(let answer) = folded[2] else {
+      Issue.record("expected the answer: \(folded.map(\.id))")
+      return
+    }
+    #expect(answer.copyable && answer.text.hasPrefix("Done"))
+    #expect(folded.last == rows.last)
   }
 
   @Test func idsStayStableAcrossRefreshesAndOlderPages() throws {
